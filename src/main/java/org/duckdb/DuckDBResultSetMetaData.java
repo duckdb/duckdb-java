@@ -1,9 +1,12 @@
-package nl.cwi.da.duckdb;
+package org.duckdb;
 
 import java.math.BigInteger;
+import java.sql.Date;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.sql.Types;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
@@ -37,24 +40,31 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
 	public int getColumnType(int column) throws SQLException {
 		String type_name = getColumnTypeName(column);
-		switch (type_name) {
-		case "BOOLEAN":
+		if (type_name.equals("BOOLEAN")) {
 			return Types.BOOLEAN;
-		case "TINYINT":
+		} else if (type_name.equals("TINYINT")) {
 			return Types.TINYINT;
-		case "SMALLINT":
+		} else if (type_name.equals("SMALLINT")) {
 			return Types.SMALLINT;
-		case "INTEGER":
+		} else if (type_name.equals("INTEGER")) {
 			return Types.INTEGER;
-		case "BIGINT":
+		} else if (type_name.equals("BIGINT")) {
 			return Types.BIGINT;
-		case "FLOAT":
+		} else if (type_name.equals("FLOAT")) {
 			return Types.FLOAT;
-		case "DOUBLE":
+		} else if (type_name.equals("DOUBLE")) {
 			return Types.DOUBLE;
-		case "VARCHAR":
+		} else if (type_name.equals("VARCHAR")) {
 			return Types.VARCHAR;
-		default:
+		}  else if (type_name.equals("TIME")) {
+			return Types.TIME;
+		}  else if (type_name.equals("DATE")) {
+			return Types.DATE;
+		}  else if (type_name.equals("TIMESTAMP")) {
+			return Types.TIMESTAMP;
+		}  else if (type_name.equals("INTERVAL")) {
+			return Types.VARCHAR;
+		} else {
 			throw new SQLException("Unknown type " + type_name);
 		}
 	}
@@ -77,6 +87,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Double.class.toString();
 		case Types.VARCHAR:
 			return String.class.toString();
+		case Types.TIME:
+			return Time.class.toString();
+		case Types.DATE:
+			return Date.class.toString();
+		case Types.TIMESTAMP:
+			return Timestamp.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}

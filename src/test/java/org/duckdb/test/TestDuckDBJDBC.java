@@ -1,12 +1,27 @@
-package nl.cwi.da.duckdb.test;
+package org.duckdb.test;
 
+import java.io.File;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.Date;
+import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Properties;
+
+import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDriver;
+
 
 public class TestDuckDBJDBC {
 
@@ -28,7 +43,6 @@ public class TestDuckDBJDBC {
 		assertTrue(a == null);
 	}
 
-	
 	private static void assertEquals(double a, double b, double epsilon) throws Exception {
 		assertTrue(Math.abs(a - b) < epsilon);
 	}
@@ -39,7 +53,7 @@ public class TestDuckDBJDBC {
 
 	static {
 		try {
-			Class.forName("nl.cwi.da.duckdb.DuckDBDriver");
+			Class.forName("org.duckdb.DuckDBDriver");
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
 		}
@@ -181,7 +195,14 @@ public class TestDuckDBJDBC {
 		rs.close();
 
 		stmt.close();
+		// test duplication
+		Connection conn2 = ((DuckDBConnection) conn).duplicate();
+		ResultSet rs_conn2 = conn2.createStatement().executeQuery("SELECT 42");
+		rs_conn2.next();
+		assertEquals(42, rs_conn2.getInt(1));
+		rs_conn2.close();
 		conn.close();
+		conn2.close();
 	}
 
 	public static void test_empty_table() throws Exception {
@@ -410,12 +431,11 @@ public class TestDuckDBJDBC {
 				+ "SELECT t0.c0 FROM t0, t1;";
 		Connection con = DriverManager.getConnection("jdbc:duckdb:");
 		for (String s : fileContent.split("\n")) {
-			try (Statement st = con.createStatement()) {
-				try {
-					st.execute(s);
-				} catch (Exception e) {
-					// e.printStackTrace();
-				}
+			Statement st = con.createStatement();
+			try {
+				st.execute(s);
+			} catch (Exception e) {
+				// e.printStackTrace();
 			}
 		}
 		con.close();
@@ -579,8 +599,173 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_read_only() throws Exception {
+		Path database_file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb");
+		database_file.toFile().delete();
+
+		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		Properties ro_prop = new Properties();
+		ro_prop.setProperty("duckdb.read_only", "true");
+
+		Connection conn_rw = DriverManager.getConnection(jdbc_url);
+		assertFalse(conn_rw.isReadOnly());
+		Statement stmt = conn_rw.createStatement();
+		stmt.execute("CREATE TABLE test (i INTEGER)");
+		stmt.execute("INSERT INTO test VALUES (42)");
+		stmt.close();
+		// we cannot create other connections, be it read-write or read-only right now
+		try {
+			Connection conn2 = DriverManager.getConnection(jdbc_url);
+			fail();
+		} catch (Exception e) {
+		}
+
+		try {
+			Connection conn2 = DriverManager.getConnection(jdbc_url, ro_prop);
+			fail();
+		} catch (Exception e) {
+		}
+
+		// hard shutdown to not have to wait on gc
+		((DuckDBConnection) conn_rw).getDatabase().shutdown();
+
+		try {
+			Statement stmt2 = conn_rw.createStatement();
+			stmt2.executeQuery("SELECT 42");
+			stmt2.close();
+			fail();
+		} catch (Exception e) {
+		}
+
+		try {
+			Connection conn_dup = ((DuckDBConnection) conn_rw).duplicate();
+			conn_dup.close();
+			fail();
+		} catch (Exception e) {
+		}
+
+		// we can create two parallel read only connections and query them, too
+		Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
+		Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop);
+
+		assertTrue(conn_ro1.isReadOnly());
+		assertTrue(conn_ro2.isReadOnly());
+
+		Statement stmt1 = conn_ro1.createStatement();
+		ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test");
+		rs1.next();
+		assertEquals(rs1.getInt(1), 42);
+		rs1.close();
+		stmt1.close();
+
+		Statement stmt2 = conn_ro2.createStatement();
+		ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test");
+		rs2.next();
+		assertEquals(rs2.getInt(1), 42);
+		rs2.close();
+		stmt2.close();
+
+		conn_ro1.close();
+		conn_ro2.close();
+
+	}
+
+	public static void test_hugeint() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT 42::hugeint hi1, -42::hugeint hi2, 454564646545646546545646545::hugeint hi3, -454564646545646546545646545::hugeint hi4");
+		assertTrue(rs.next());
+		assertEquals(rs.getObject("hi1"), new BigInteger("42"));
+		assertEquals(rs.getObject("hi2"), new BigInteger("-42"));
+		assertEquals(rs.getLong("hi1"), 42L);
+		assertEquals(rs.getLong("hi2"), -42L);
+		assertEquals(rs.getObject("hi3"), new BigInteger("454564646545646546545646545"));
+		assertEquals(rs.getObject("hi4"), new BigInteger("-454564646545646546545646545"));
+		assertEquals(rs.getBigDecimal("hi1"), new BigDecimal("42"));
+		assertEquals(rs.getBigDecimal("hi2"), new BigDecimal("-42"));
+		assertEquals(rs.getBigDecimal("hi3"), new BigDecimal("454564646545646546545646545"));
+		assertEquals(rs.getBigDecimal("hi4"), new BigDecimal("-454564646545646546545646545"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_exotic_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '2019-11-26 21:11:00'::timestamp ts, '2019-11-26'::date dt, interval '5 days' iv, '21:11:00'::time te");
+		assertTrue(rs.next());
+		assertEquals(rs.getObject("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
+		assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
+
+		assertEquals(rs.getObject("dt"), Date.valueOf("2019-11-26"));
+		assertEquals(rs.getDate("dt"), Date.valueOf("2019-11-26"));
+
+		assertEquals(rs.getObject("iv"), "5 days");
+
+		assertEquals(rs.getObject("te"), Time.valueOf("21:11:00"));
+		assertEquals(rs.getTime("te"), Time.valueOf("21:11:00"));
+
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	public static void test_exotic_nulls() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT NULL::timestamp ts, NULL::date dt, NULL::time te");
+		assertTrue(rs.next());
+		assertNull(rs.getObject("ts"));
+		assertNull(rs.getTimestamp("ts"));
+
+		assertNull(rs.getObject("dt"));
+		assertNull(rs.getDate("dt"));
+		
+		assertNull(rs.getObject("te"));
+		assertNull(rs.getTime("te"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	public static void test_evil_date() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '513125-08-05 (BC)'::date d");
+	
+		assertTrue(rs.next());
+		assertNull(rs.getDate("d"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	public static void test_connect_wrong_url_bug848() throws Exception {
+		Driver d = new DuckDBDriver();
+		assertNull(d.connect("jdbc:h2:", null));
+	}
+
 	public static void main(String[] args) throws Exception {
-				
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
 		for (Method m : methods) {
