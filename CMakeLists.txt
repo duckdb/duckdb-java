@@ -17,6 +17,8 @@ endif()
 include(UseJava)
 project(DuckDBJava)
 
+include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
+
 include_directories(src/duckdb/src/include src/duckdb/third_party/concurrentqueue src/duckdb/third_party/fast_float src/duckdb/third_party/fastpforlib src/duckdb/third_party/fmt/include src/duckdb/third_party/fsst src/duckdb/third_party/httplib src/duckdb/third_party/hyperloglog src/duckdb/third_party/jaro_winkler src/duckdb/third_party/jaro_winkler/details src/duckdb/third_party/libpg_query src/duckdb/third_party/libpg_query/include src/duckdb/third_party/lz4 src/duckdb/third_party/mbedtls src/duckdb/third_party/mbedtls/include src/duckdb/third_party/mbedtls/library src/duckdb/third_party/miniz src/duckdb/third_party/pcg src/duckdb/third_party/re2 src/duckdb/third_party/skiplist src/duckdb/third_party/tdigest src/duckdb/third_party/utf8proc src/duckdb/third_party/utf8proc/include src/duckdb/extension/parquet/include src/duckdb/third_party/parquet src/duckdb/third_party/thrift src/duckdb/third_party/lz4 src/duckdb/third_party/snappy src/duckdb/third_party/zstd/include src/duckdb/third_party/mbedtls src/duckdb/third_party/mbedtls/include src/duckdb/extension/icu/include src/duckdb/extension/icu/third_party/icu/common src/duckdb/extension/icu/third_party/icu/i18n src/duckdb/extension/json/include src/duckdb/extension/json/yyjson/include)
 add_definitions(-DDUCKDB_EXTENSION_PARQUET_LINKED -DDUCKDB_EXTENSION_ICU_LINKED -DDUCKDB_EXTENSION_JSON_LINKED)
 
@@ -45,6 +47,7 @@ endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
+
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
