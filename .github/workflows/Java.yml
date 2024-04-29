@@ -25,7 +25,9 @@ jobs:
 
       - name: Build
         shell: bash
-        run: ls -R
+        run: |
+          pwd
+          ls -la .
 
       - uses: ./.github/actions/manylinux_2014_setup
         with:
@@ -61,7 +63,8 @@ jobs:
   java-linux-aarch64:
     name: Java Linux (aarch64)
     runs-on: ubuntu-latest
-    container: ubuntu:18.04
+    container:
+      image: quay.io/pypa/manylinux2014_arm64
     needs: java-linux-amd64
     env:
       GEN: ninja
