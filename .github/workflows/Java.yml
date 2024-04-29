@@ -1,56 +1,5 @@
 name: Java JDBC
-on:
-  workflow_call:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: string
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: string
-  repository_dispatch:
-  push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
-    tags:
-      - '**'
-    paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/jdbc/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Java.yml'
 
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/jdbc/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Java.yml'
-
-concurrency:
-  group: java-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
-    github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha
-    }}-${{ inputs.override_git_describe }}
-  cancel-in-progress: true
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
@@ -63,12 +12,6 @@ jobs:
       image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      BUILD_JDBC: 1
-      BUILD_JEMALLOC: 1
-      BUILD_JSON: 1
-      FORCE_WARN_UNUSED: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -85,13 +28,12 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: make build
 
       - name: Java Tests
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
-        working-directory: tools/jdbc
-        run: make test_release
+        run: make test
 
       - name: Deploy
         shell: bash
@@ -99,13 +41,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
+        #  ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-linux-amd64
           path: |
-            build/release/tools/jdbc/duckdb_jdbc.jar
+            build/release/duckdb_jdbc.jar
 
   java-linux-aarch64:
     name: Java Linux (aarch64)
@@ -114,11 +56,6 @@ jobs:
     needs: java-linux-amd64
     env:
       GEN: ninja
-      BUILD_JDBC: 1
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      OVERRIDE_JDBC_OS_ARCH: arm64
-      JAVA_HOME: ../../jdk8u345-b01
       DUCKDB_PLATFORM: linux_arm64
     steps:
       - uses: actions/checkout@v3
@@ -138,7 +75,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make build
 
       - name: Deploy
         shell: bash
@@ -146,14 +83,14 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
+         # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
 
       - uses: actions/upload-artifact@v3
         with:
           name: java-linux-aarch64
           path: |
-            build/release/tools/jdbc/duckdb_jdbc.jar
+            build/release/duckdb_jdbc.jar
 
 
   java-windows-amd64:
@@ -231,7 +168,6 @@ jobs:
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
-        working-directory: tools/jdbc
         run: make test_release
       - name: Java Example
         shell: bash
@@ -243,13 +179,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
           ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-osx-universal
           path: |
-            build/release/tools/jdbc/duckdb_jdbc.jar
+            build/release/duckdb_jdbc.jar
 
 
   java-combine:
@@ -312,7 +248,7 @@ jobs:
             echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
             echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
             gpg --import maven_pgp_key
-            python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
+            python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts .
           fi
           ls -lahR jdbc-artifacts
 
@@ -363,4 +299,4 @@ jobs:
 
       - name: Test
         shell: bash
-        run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+        run: (cd jdbccts && make DUCKDB_JAR=../build/release/duckdb_jdbc.jar test)

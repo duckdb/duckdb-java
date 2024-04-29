@@ -35,17 +35,16 @@ add_library(duckdb_java SHARED src/jni/duckdb_java.cpp src/jni/functions.cpp ${D
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native )
 
-#
-#if(APPLE)
-#  set(OS_ARCH universal)
-#endif()
+if(APPLE)
+  set(OS_NAME osx)
+  set(OS_ARCH universal)
+endif()
 #if(OVERRIDE_JDBC_OS_ARCH)
 #  set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
 #endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
-
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
