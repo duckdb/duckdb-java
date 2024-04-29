@@ -1,4 +1,9 @@
 name: Java JDBC
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  repository_dispatch:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
