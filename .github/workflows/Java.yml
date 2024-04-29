@@ -33,7 +33,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make build
+        run: make release
 
       - name: Java Tests
         shell: bash
@@ -58,7 +58,7 @@ jobs:
     name: Java Linux (aarch64)
     runs-on: ubuntu-latest
     container:
-      image: quay.io/pypa/manylinux2014_arm64
+      image: ubuntu:18.04
   #  needs: java-linux-amd64
     env:
       GEN: ninja
@@ -81,7 +81,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make build
+        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make release
 
       - name: Deploy
         shell: bash
@@ -119,7 +119,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make build
+        run: make release
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
@@ -159,7 +159,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Build
         shell: bash
-        run: make build
+        run: make release
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash

@@ -26,7 +26,7 @@ CP=$(JAR)$(SEP)$(TEST_JAR)
 test: 
 	java -cp $(CP) org.duckdb.TestDuckDBJDBC
 
-build:
+release:
 	mkdir -p build/release
 	cd build/release && cmake $(GENERATOR) ../.. && cmake --build .
 
