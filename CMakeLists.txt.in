@@ -51,6 +51,7 @@ endif()
 
 if(APPLE)
   set(OS_NAME "osx")
+    set(OS_ARCH "universal")
 endif()
 if(WIN32)
   set(OS_NAME "windows")
