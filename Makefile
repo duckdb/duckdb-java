@@ -1,18 +1,34 @@
+.PHONY: build test clean
+
+SEP=
+JARS=
+
 ifeq ($(OS),Windows_NT)
 	# windows is weird
 	SEP=";"
-	JARS=tools/jdbc
+	JARS=.
 else
 	SEP=":"
-	JARS=build/debug/tools/jdbc
+	JARS=build/release
+endif
+
+
+GENERATOR=
+ifeq ($(GEN),ninja)
+	GENERATOR=-G "Ninja"
+	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
 endif
 
 JAR=$(JARS)/duckdb_jdbc.jar
 TEST_JAR=$(JARS)/duckdb_jdbc_tests.jar
 CP=$(JAR)$(SEP)$(TEST_JAR)
 
-test_debug: ../../$(JAR) ../../$(TEST_JAR)
-	cd ../.. && java -cp $(CP) org.duckdb.TestDuckDBJDBC
+test: 
+	java -cp $(CP) org.duckdb.TestDuckDBJDBC
 
-test_release: ../../$(subst debug,release,$(JAR)) ../../$(subst debug,release,$(TEST_JAR))
-	cd ../.. && java -cp $(subst debug,release,$(CP)) org.duckdb.TestDuckDBJDBC
+build:
+	mkdir -p build/release
+	cd build/release && cmake $(GENERATOR) ../.. && cmake --build .
+
+clean:
+	rm -rf build
