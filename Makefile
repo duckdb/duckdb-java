@@ -28,7 +28,7 @@ test:
 
 release:
 	mkdir -p build/release
-	cd build/release && cmake $(GENERATOR) ../.. && cmake --build .
+	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) ../.. && cmake --build . --config Release
 
 clean:
 	rm -rf build
