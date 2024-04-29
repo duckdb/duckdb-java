@@ -17,6 +17,8 @@ endif()
 include(UseJava)
 project(DuckDBJava)
 
+include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
+
 include_directories(${INCLUDE_FILES})
 add_definitions(${DEFINES})
 
