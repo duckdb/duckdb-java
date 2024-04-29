@@ -28,10 +28,13 @@ set(DUCKDB_SRC_FILES ${SOURCE_FILES})
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
+if(MSVC)
+  add_definitions(/bigobj)
+endif()
+
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
         GENERATE_NATIVE_HEADERS duckdb-native)
 add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
-
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp src/jni/functions.cpp ${DUCKDB_SRC_FILES})
 target_compile_options(duckdb_java PRIVATE -fexceptions)
