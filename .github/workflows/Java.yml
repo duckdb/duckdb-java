@@ -23,13 +23,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - name: Build
-        shell: bash
-        run: |
-          pwd
-          ls -la .
-          cat ./.github/actions/manylinux_2014_setup
-
       - uses: ./.github/actions/manylinux_2014_setup
         with:
           ninja-build: 1
