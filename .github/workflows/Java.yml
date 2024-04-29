@@ -132,7 +132,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           cp tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
+         # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-windows-amd64
@@ -171,7 +171,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
+        #  ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-osx-universal
