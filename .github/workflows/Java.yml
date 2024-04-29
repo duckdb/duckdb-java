@@ -164,6 +164,9 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
         run: make test
+      - name: See if this actually universal
+        shell: bash
+        run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
       - name: Deploy
         shell: bash
         env:
