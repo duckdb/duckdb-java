@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ubuntu:18.04
-  #  needs: java-linux-amd64
+    needs: java-linux-amd64
     env:
       GEN: ninja
       DUCKDB_PLATFORM: linux_arm64
@@ -102,7 +102,7 @@ jobs:
   java-windows-amd64:
     name: Java Windows (arm64)
     runs-on: windows-latest
-#    needs: java-linux-amd64
+    needs: java-linux-amd64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -115,7 +115,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
 
       - name: Build
         shell: bash
@@ -144,7 +144,7 @@ jobs:
   java-osx-universal:
     name: Java OSX (Universal)
     runs-on: macos-14
-#    needs: java-linux-amd64
+    needs: java-linux-amd64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -225,7 +225,7 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb-java" ]] ; then
           export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -257,7 +257,7 @@ jobs:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
     if: ${{ inputs.skip_tests != 'true' }}
- #   needs: java-linux-amd64
+    needs: java-linux-amd64
     container: quay.io/pypa/manylinux2014_x86_64
     env:
       BUILD_JDBC: 1
@@ -286,7 +286,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
 
       - name: Build
         shell: bash

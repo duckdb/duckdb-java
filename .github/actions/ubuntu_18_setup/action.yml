@@ -91,7 +91,7 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
 
     - name: Instal OpenSSL through vcpkg
       if: ${{ inputs.openssl == 1 }}
