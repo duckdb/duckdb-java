@@ -3507,6 +3507,16 @@ public class TestDuckDBJDBC {
                 assertTrue(rs.next());
                 assertEquals(arrayToList(rs.getArray(1)), singletonList(new BigDecimal("0.000")));
             }
+            try (PreparedStatement stmt = connection.prepareStatement("select ?")) {
+                Array array = connection.createArrayOf("INTEGER", new Object[] {1});
+
+                stmt.setObject(1, array);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals(singletonList(1), arrayToList(rs.getArray(1)));
+                }
+            }
         }
     }
 

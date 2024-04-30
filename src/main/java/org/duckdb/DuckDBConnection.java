@@ -327,7 +327,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        throw new SQLFeatureNotSupportedException("createArrayOf");
+        return new MyArray(typeName, elements);
     }
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {

@@ -72,6 +72,10 @@ static jclass J_Struct;
 static jmethodID J_Struct_getSQLTypeName;
 static jmethodID J_Struct_getAttributes;
 
+static jclass J_Array;
+static jmethodID J_Array_getBaseTypeName;
+static jmethodID J_Array_getArray;
+
 static jclass J_Object;
 static jmethodID J_Object_toString;
 
@@ -222,6 +226,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_Struct = GetClassRef(env, "java/sql/Struct");
 	J_Struct_getSQLTypeName = env->GetMethodID(J_Struct, "getSQLTypeName", "()Ljava/lang/String;");
 	J_Struct_getAttributes = env->GetMethodID(J_Struct, "getAttributes", "()[Ljava/lang/Object;");
+
+	J_Array = GetClassRef(env, "java/sql/Array");
+	J_Array_getArray = env->GetMethodID(J_Array, "getArray", "()Ljava/lang/Object;");
+	J_Array_getBaseTypeName = env->GetMethodID(J_Array, "getBaseTypeName", "()Ljava/lang/String;");
 
 	J_Object = GetClassRef(env, "java/lang/Object");
 	J_Object_toString = env->GetMethodID(J_Object, "toString", "()Ljava/lang/String;");
@@ -675,6 +683,24 @@ static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray para
 				}
 
 				duckdb_params.push_back(Value::STRUCT(std::move(values)));
+			} else if (env->IsInstanceOf(param, J_Array)) {
+				auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_Array_getBaseTypeName));
+				auto jvalues = (jobjectArray)env->CallObjectMethod(param, J_Array_getArray);
+				int size = env->GetArrayLength(jvalues);
+
+				auto &context = stmt_ref->stmt->context;
+				LogicalType type;
+				context->RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, *context); });
+
+				duckdb::vector<Value> values;
+				for (int i = 0; i < size; i++) {
+					auto value = env->GetObjectArrayElement(jvalues, i);
+					auto value_string = env->CallObjectMethod(value, J_Object_toString);
+					values.emplace_back(jstring_to_string(env, (jstring)value_string));
+				}
+
+				duckdb_params.push_back(Value::LIST(type, values));
+
 			} else {
 				throw InvalidInputException("Unsupported parameter type");
 			}
