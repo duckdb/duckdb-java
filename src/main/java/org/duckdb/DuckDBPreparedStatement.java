@@ -248,6 +248,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             x = new DuckDBTimestampTZ((OffsetDateTime) x);
         } else if (x instanceof Date) {
             x = new DuckDBDate((Date) x);
+        } else if (x instanceof Time) {
+            x = new DuckDBTime((Time) x);
         }
         params[parameterIndex - 1] = x;
     }
@@ -609,7 +611,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setTime(int parameterIndex, Time x) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setTime");
+        setObject(parameterIndex, x);
     }
 
     @Override
