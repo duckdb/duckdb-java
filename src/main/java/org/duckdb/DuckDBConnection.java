@@ -1,5 +1,8 @@
 package org.duckdb;
 
+import org.duckdb.user.DuckDBUserArray;
+import org.duckdb.user.DuckDBUserStruct;
+
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -327,11 +330,11 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        return new MyArray(typeName, elements);
+        return new DuckDBUserArray(typeName, elements);
     }
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-        return new MyStruct(typeName, attributes);
+        return new DuckDBUserStruct(typeName, attributes);
     }
 
     public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
