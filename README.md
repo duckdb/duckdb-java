@@ -10,18 +10,19 @@ because the [`FindJNI.cmake`](https://cmake.org/cmake/help/latest/module/FindJNI
 
 ### Development
 
-Be sure to build with `DISABLE_SANITIZER=1` and `BUILD_JDBC=1` enabled
+To build the driver, run `make release`. 
+
 
 This will produce two jars in the build folder:
-`build/<build_type>/tools/jdbc/duckdb_jdbc.jar`
-`build/<build_type>/tools/jdbc/duckdb_jdbc_tests.jar`
+`build/release/duckdb_jdbc.jar`
+`build/release/duckdb_jdbc_tests.jar`
 
-The tests can be ran using this command (taking a `debug` build for example)
+The tests can be ran using using `make test` or this command
 ```
-java -cp "build/debug/tools/jdbc/duckdb_jdbc_tests.jar:build/debug/tools/jdbc/duckdb_jdbc.jar" org/duckdb/TestDuckDBJDBC
+java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar" org/duckdb/TestDuckDBJDBC
 ```
 
 This optionally takes an argument to only run a single test, for example:
 ```
-java -cp "build/debug/tools/jdbc/duckdb_jdbc_tests.jar:build/debug/tools/jdbc/duckdb_jdbc.jar"  org/duckdb/TestDuckDBJDBC test_valid_but_local_config_throws_exception
+java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar"  org/duckdb/TestDuckDBJDBC test_valid_but_local_config_throws_exception
 ```

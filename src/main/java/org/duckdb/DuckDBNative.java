@@ -50,7 +50,7 @@ class DuckDBNative {
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
             if (lib_res == null) {
                 System.load(
-                    Paths.get("../../build/debug/tools/jdbc", lib_res_name).normalize().toAbsolutePath().toString());
+                    Paths.get("../../build/release", lib_res_name).normalize().toAbsolutePath().toString());
             } else {
                 try (final InputStream lib_res_input_stream = lib_res.openStream()) {
                     Files.copy(lib_res_input_stream, lib_file, StandardCopyOption.REPLACE_EXISTING);
