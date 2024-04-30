@@ -68,6 +68,13 @@ static jfieldID J_DuckVector_varlen;
 static jclass J_DuckArray;
 static jmethodID J_DuckArray_init;
 
+static jclass J_Struct;
+static jmethodID J_Struct_getSQLTypeName;
+static jmethodID J_Struct_getAttributes;
+
+static jclass J_Object;
+static jmethodID J_Object_toString;
+
 static jclass J_DuckStruct;
 static jmethodID J_DuckStruct_init;
 
@@ -207,13 +214,17 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	D_ASSERT(J_DuckArray_init);
 	env->DeleteLocalRef(tmpLocalRef);
 
-	tmpLocalRef = env->FindClass("org/duckdb/DuckDBStruct");
-	D_ASSERT(tmpLocalRef);
-	J_DuckStruct = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_DuckStruct = GetClassRef(env, "org/duckdb/DuckDBStruct");
 	J_DuckStruct_init =
 	    env->GetMethodID(J_DuckStruct, "<init>", "([Ljava/lang/String;[Lorg/duckdb/DuckDBVector;ILjava/lang/String;)V");
 	D_ASSERT(J_DuckStruct_init);
-	env->DeleteLocalRef(tmpLocalRef);
+
+	J_Struct = GetClassRef(env, "java/sql/Struct");
+	J_Struct_getSQLTypeName = env->GetMethodID(J_Struct, "getSQLTypeName", "()Ljava/lang/String;");
+	J_Struct_getAttributes = env->GetMethodID(J_Struct, "getAttributes", "()[Ljava/lang/Object;");
+
+	J_Object = GetClassRef(env, "java/lang/Object");
+	J_Object_toString = env->GetMethodID(J_Object, "toString", "()Ljava/lang/String;");
 
 	tmpLocalRef = env->FindClass("java/util/Map$Entry");
 	J_Entry_getKey = env->GetMethodID(tmpLocalRef, "getKey", "()Ljava/lang/Object;");
@@ -557,11 +568,27 @@ struct ResultHolder {
 	duckdb::unique_ptr<DataChunk> chunk;
 };
 
+static string GetString(JNIEnv *env, jobject key) {
+	auto str = (jstring)env->CallObjectMethod(key, J_Object_toString);
+	D_ASSERT(str);
+	return jstring_to_string(env, str);
+}
+
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
 		throw InvalidInputException("Invalid statement");
 	}
+
+	try {
+		return execute(env, stmt_ref, params);
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return nullptr;
+	}
+}
+
+static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray params) {
 	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
@@ -625,6 +652,29 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
 				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
 				duckdb_params.push_back(Value::UUID(hugeint_t(most_significant, least_significant)));
+			} else if (env->IsInstanceOf(param, J_Struct)) {
+				auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_Struct_getSQLTypeName));
+
+				auto &context = stmt_ref->stmt->context;
+				LogicalType type;
+				context->RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, *context); });
+
+				auto jvalues = (jobjectArray)env->CallObjectMethod(param, J_Struct_getAttributes);
+
+				int size = env->GetArrayLength(jvalues);
+
+				child_list_t<Value> values;
+
+				for (int i = 0; i < size; i++) {
+					auto name = StructType::GetChildName(type, i);
+
+					auto value = env->GetObjectArrayElement(jvalues, i);
+					auto value_string = env->CallObjectMethod(value, J_Object_toString);
+
+					values.emplace_back(name, Value(jstring_to_string(env, (jstring)value_string)));
+				}
+
+				duckdb_params.push_back(Value::STRUCT(std::move(values)));
 			} else {
 				throw InvalidInputException("Unsupported parameter type");
 			}

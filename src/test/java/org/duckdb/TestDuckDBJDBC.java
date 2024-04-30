@@ -3432,6 +3432,30 @@ public class TestDuckDBJDBC {
             Struct struct = (Struct) resultSet.getObject(1);
             assertEquals(toJavaObject(struct), mapOf("a", 1));
             assertEquals(struct.getSQLTypeName(), "STRUCT(a INTEGER)");
+
+            String definition = "STRUCT(i INTEGER, j INTEGER)";
+            String typeName = "POINT";
+            try (PreparedStatement stmt =
+                     connection.prepareStatement("CREATE TYPE " + typeName + " AS " + definition)) {
+                stmt.execute();
+            }
+
+            testStruct(connection, connection.createStruct(definition, new Object[] {1, 2}));
+            testStruct(connection, connection.createStruct(typeName, new Object[] {1, 2}));
+        }
+    }
+
+    private static void testStruct(Connection connection, Struct struct) throws SQLException, Exception {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+            stmt.setObject(1, struct);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                assertTrue(rs.next());
+
+                Struct result = (Struct) rs.getObject(1);
+
+                assertEquals(Arrays.asList("1", "2"), Arrays.asList(result.getAttributes()));
+            }
         }
     }
 
