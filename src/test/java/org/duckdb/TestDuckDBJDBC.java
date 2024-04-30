@@ -3446,6 +3446,38 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_struct_with_timestamp() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
+            LocalDateTime now = LocalDateTime.of(LocalDate.of(2020, 5, 12), LocalTime.of(16, 20, 0, 0));
+            Struct struct1 = connection.createStruct("STRUCT(start TIMESTAMP)", new Object[] {now});
+
+            try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, struct1);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    assertTrue(rs.next());
+
+                    Struct result = (Struct) rs.getObject(1);
+
+                    assertEquals(Timestamp.valueOf(now), result.getAttributes()[0]);
+                }
+            }
+        }
+    }
+
+    public static void test_struct_with_bad_type() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
+            Struct struct1 = connection.createStruct("BAD TYPE NAME", new Object[0]);
+
+            try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, struct1);
+                String message = assertThrows(stmt::executeQuery, SQLException.class);
+
+                assertTrue(message.contains("Parser Error: syntax error at or near \"TYPE\""));
+            }
+        }
+    }
+
     private static void testStruct(Connection connection, Struct struct) throws SQLException, Exception {
         try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
             stmt.setObject(1, struct);
