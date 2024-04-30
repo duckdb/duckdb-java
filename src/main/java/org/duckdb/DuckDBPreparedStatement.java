@@ -239,18 +239,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (params.length == 0) {
             params = new Object[getParameterMetaData().getParameterCount()];
         }
-        // Change sql.Timestamp to DuckDBTimestamp
-        if (x instanceof Timestamp) {
-            x = new DuckDBTimestamp((Timestamp) x);
-        } else if (x instanceof LocalDateTime) {
-            x = new DuckDBTimestamp((LocalDateTime) x);
-        } else if (x instanceof OffsetDateTime) {
-            x = new DuckDBTimestampTZ((OffsetDateTime) x);
-        } else if (x instanceof Date) {
-            x = new DuckDBDate((Date) x);
-        } else if (x instanceof Time) {
-            x = new DuckDBTime((Time) x);
-        }
         params[parameterIndex - 1] = x;
     }
 

@@ -3455,7 +3455,7 @@ public class TestDuckDBJDBC {
 
                 Struct result = (Struct) rs.getObject(1);
 
-                assertEquals(Arrays.asList("1", "2"), Arrays.asList(result.getAttributes()));
+                assertEquals(Arrays.asList(1, 2), Arrays.asList(result.getAttributes()));
             }
         }
     }
