@@ -640,7 +640,7 @@ Value ToValue(JNIEnv *env, jobject param, shared_ptr<ClientContext> context) {
 		auto entrySet = env->CallObjectMethod(param, J_Map_entrySet);
 		auto iterator = env->CallObjectMethod(entrySet, J_Set_iterator);
 		duckdb::vector<Value> entries;
-		while (env->CallObjectMethod(iterator, J_Iterator_hasNext)) {
+		while (env->CallBooleanMethod(iterator, J_Iterator_hasNext)) {
 			auto entry = env->CallObjectMethod(iterator, J_Iterator_next);
 
 			auto key = env->CallObjectMethod(entry, J_Entry_getKey);
