@@ -28,26 +28,62 @@ set(DUCKDB_SRC_FILES src/duckdb/ub_src_catalog.cpp src/duckdb/ub_src_catalog_cat
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
+add_definitions(-DDUCKDB_BUILD_LIBRARY)
+
+if(MSVC)
+  add_definitions(/bigobj)
+else()
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+endif()
+
+
+set(OS_NAME "unknown")
+set(OS_ARCH "amd64")
+
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
+if(IS_ARM)
+  set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
+endif()
+
+if(APPLE)
+  set(OS_NAME "osx")
+  set(OS_ARCH "universal")
+  SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+endif()
+if(WIN32)
+  set(OS_NAME "windows")
+endif()
+if(UNIX AND NOT APPLE)
+  set(OS_NAME "linux") # sorry BSD
+endif()
+
+if(OVERRIDE_JDBC_OS_ARCH)
+  set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
+endif()
+
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
         GENERATE_NATIVE_HEADERS duckdb-native)
 add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 
 
+
+set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
+
+if(MSVC)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr bcrypt)
+endif()
+
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp src/jni/functions.cpp ${DUCKDB_SRC_FILES})
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native )
+target_link_libraries(duckdb_java ${DUCKDB_SYSTEM_LIBS})
 
-if(APPLE)
-  set(OS_NAME osx)
-  set(OS_ARCH universal)
-endif()
-#if(OVERRIDE_JDBC_OS_ARCH)
-#  set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
-#endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
-
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
