@@ -81,7 +81,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make release
+        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ OVERRIDE_JDBC_OS_ARCH=arm64 make release
 
       - name: Deploy
         shell: bash
@@ -123,7 +123,9 @@ jobs:
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
-        run: make test
+        run: |
+          ls -R .
+          make test
       - name: Deploy
         shell: bash
         env:

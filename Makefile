@@ -6,10 +6,15 @@ JARS=
 ifeq ($(OS),Windows_NT)
 	# windows is weird
 	SEP=";"
-	JARS=.
+	JARS=build/release
 else
 	SEP=":"
 	JARS=build/release
+endif
+
+ARCH_OVERRIDE=
+ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
+	ARCH_OVERRIDE=-DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
 endif
 
 
@@ -28,7 +33,7 @@ test:
 
 release:
 	mkdir -p build/release
-	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) ../.. && cmake --build . --config Release
+	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
 
 clean:
 	rm -rf build
