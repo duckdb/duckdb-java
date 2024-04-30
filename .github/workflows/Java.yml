@@ -242,7 +242,7 @@ jobs:
             mkdir ~/.m2
             echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
             echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
-            gpg --import maven_pgp_key
+            gpg --batch --import maven_pgp_key
             python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts .
           fi
           ls -lahR jdbc-artifacts
