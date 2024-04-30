@@ -84,6 +84,9 @@ static jmethodID J_DuckStruct_init;
 
 static jclass J_ByteBuffer;
 
+static jclass J_DuckMap;
+static jmethodID J_DuckMap_getSQLTypeName;
+
 static jmethodID J_Map_entrySet;
 static jmethodID J_Set_iterator;
 static jmethodID J_Iterator_hasNext;
@@ -191,6 +194,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("[B");
 	J_ByteArray = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
+
+	J_DuckMap = GetClassRef(env, "org/duckdb/user/DuckDBMap");
+	D_ASSERT(J_DuckMap);
+	J_DuckMap_getSQLTypeName = env->GetMethodID(J_DuckMap, "getSQLTypeName", "()Ljava/lang/String;");
+	D_ASSERT(J_DuckMap_getSQLTypeName);
 
 	tmpLocalRef = env->FindClass("java/util/Map");
 	J_Map_entrySet = env->GetMethodID(tmpLocalRef, "entrySet", "()Ljava/util/Set;");
@@ -588,15 +596,6 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		throw InvalidInputException("Invalid statement");
 	}
 
-	try {
-		return execute(env, stmt_ref, params);
-	} catch (const exception &e) {
-		env->ThrowNew(J_SQLException, e.what());
-		return nullptr;
-	}
-}
-
-static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray params) {
 	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
@@ -604,6 +603,8 @@ static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray para
 	if (param_len != stmt_ref->stmt->n_param) {
 		throw InvalidInputException("Parameter count mismatch");
 	}
+
+	auto &context = stmt_ref->stmt->context;
 
 	if (param_len > 0) {
 		for (idx_t i = 0; i < param_len; i++) {
@@ -660,10 +661,31 @@ static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray para
 				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
 				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
 				duckdb_params.push_back(Value::UUID(hugeint_t(most_significant, least_significant)));
+			} else if (env->IsInstanceOf(param, J_DuckMap)) {
+				auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_DuckMap_getSQLTypeName));
+
+				LogicalType type;
+				context->RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, *context); });
+
+				auto entrySet = env->CallObjectMethod(param, J_Map_entrySet);
+				auto iterator = env->CallObjectMethod(entrySet, J_Set_iterator);
+				duckdb::vector<Value> entries;
+				while (env->CallObjectMethod(iterator, J_Iterator_hasNext)) {
+					auto entry = env->CallObjectMethod(iterator, J_Iterator_next);
+
+					auto key = env->CallObjectMethod(entry, J_Entry_getKey);
+					auto value = env->CallObjectMethod(entry, J_Entry_getValue);
+					D_ASSERT(key);
+					D_ASSERT(value);
+
+					entries.push_back(Value::STRUCT({{"key", GetString(env, key)}, {"value", GetString(env, value)}}));
+				}
+
+				duckdb_params.push_back(Value::MAP(ListType::GetChildType(type), entries));
+
 			} else if (env->IsInstanceOf(param, J_Struct)) {
 				auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_Struct_getSQLTypeName));
 
-				auto &context = stmt_ref->stmt->context;
 				LogicalType type;
 				context->RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, *context); });
 
@@ -677,9 +699,9 @@ static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray para
 					auto name = StructType::GetChildName(type, i);
 
 					auto value = env->GetObjectArrayElement(jvalues, i);
-					auto value_string = env->CallObjectMethod(value, J_Object_toString);
 
-					values.emplace_back(name, Value(jstring_to_string(env, (jstring)value_string)));
+					// FIXME: use real type
+					values.emplace_back(name, GetString(env, value));
 				}
 
 				duckdb_params.push_back(Value::STRUCT(std::move(values)));
@@ -688,15 +710,15 @@ static jobject execute(JNIEnv *env, StatementHolder *stmt_ref, jobjectArray para
 				auto jvalues = (jobjectArray)env->CallObjectMethod(param, J_Array_getArray);
 				int size = env->GetArrayLength(jvalues);
 
-				auto &context = stmt_ref->stmt->context;
 				LogicalType type;
 				context->RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, *context); });
 
 				duckdb::vector<Value> values;
 				for (int i = 0; i < size; i++) {
 					auto value = env->GetObjectArrayElement(jvalues, i);
-					auto value_string = env->CallObjectMethod(value, J_Object_toString);
-					values.emplace_back(jstring_to_string(env, (jstring)value_string));
+
+					// FIXME: use real type
+					values.emplace_back(GetString(env, value));
 				}
 
 				duckdb_params.push_back(Value::LIST(type, values));

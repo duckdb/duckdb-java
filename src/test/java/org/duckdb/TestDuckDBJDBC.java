@@ -3459,6 +3459,24 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_write_map() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE test (thing MAP(string, integer));");
+            }
+            Map<Object, Object> map = mapOf("hello", 42);
+            try (PreparedStatement stmt = conn.prepareStatement("INSERT INTO test VALUES (?)")) {
+                stmt.setObject(1, conn.createMap("MAP(string, integer)", map));
+                assertEquals(stmt.executeUpdate(), 1);
+            }
+            try (PreparedStatement stmt = conn.prepareStatement("FROM test"); ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    assertEquals(rs.getObject(1), map);
+                }
+            }
+        }
+    }
+
     public static void test_union() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              Statement statement = connection.createStatement()) {
