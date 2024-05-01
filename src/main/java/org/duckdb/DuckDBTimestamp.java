@@ -2,6 +2,7 @@ package org.duckdb;
 
 import java.sql.Timestamp;
 import java.sql.Time;
+import java.util.Date;
 import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.LocalDateTime;
