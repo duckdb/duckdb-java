@@ -77,9 +77,6 @@ static jclass J_Array;
 static jmethodID J_Array_getBaseTypeName;
 static jmethodID J_Array_getArray;
 
-static jclass J_Object;
-static jmethodID J_Object_toString;
-
 static jclass J_DuckStruct;
 static jmethodID J_DuckStruct_init;
 
@@ -102,6 +99,7 @@ static jmethodID J_UUID_getLeastSignificantBits;
 static jclass J_DuckDBDate;
 static jmethodID J_DuckDBDate_getDaysSinceEpoch;
 
+static jclass J_Object;
 static jmethodID J_Object_toString;
 
 static jclass J_DuckDBTime;
