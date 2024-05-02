@@ -1162,6 +1162,18 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_set_time() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT ?::VARCHAR")) {
+            Time time = Time.valueOf("12:40:00");
+            stmt.setTime(1, time);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                assertEquals(rs.getTime(1), time);
+            }
+        }
+    }
+
     public static void test_lots_of_decimals() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
