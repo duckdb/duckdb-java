@@ -646,7 +646,7 @@ Value ToValue(JNIEnv *env, jobject param, shared_ptr<ClientContext> context) {
 			D_ASSERT(key);
 			D_ASSERT(value);
 
-			entries.push_back(Value::STRUCT({{"key", GetString(env, key)}, {"value", GetString(env, value)}}));
+			entries.push_back(Value::STRUCT({{"key", ToValue(env, key, context)}, {"value", ToValue(env, value, context)}}));
 		}
 
 		return (Value::MAP(ListType::GetChildType(type), entries));
@@ -668,8 +668,7 @@ Value ToValue(JNIEnv *env, jobject param, shared_ptr<ClientContext> context) {
 
 			auto value = env->GetObjectArrayElement(jvalues, i);
 
-			// FIXME: use real type
-			values.emplace_back(name, GetString(env, value));
+			values.emplace_back(name, ToValue(env, value, context));
 		}
 
 		return (Value::STRUCT(std::move(values)));
@@ -685,8 +684,7 @@ Value ToValue(JNIEnv *env, jobject param, shared_ptr<ClientContext> context) {
 		for (int i = 0; i < size; i++) {
 			auto value = env->GetObjectArrayElement(jvalues, i);
 
-			// FIXME: use real type
-			values.emplace_back(GetString(env, value));
+			values.emplace_back(ToValue(env, value, context));
 		}
 
 		return (Value::LIST(type, values));
