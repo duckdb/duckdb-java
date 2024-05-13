@@ -21,9 +21,13 @@ public class Assertions {
     }
 
     public static void assertEquals(Object actual, Object expected) throws Exception {
+        assertEquals(actual, expected, "");
+    }
+    public static void assertEquals(Object actual, Object expected, String label) throws Exception {
         Function<Object, String> getClass = (Object a) -> a == null ? "null" : a.getClass().toString();
 
-        String message = String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual),
+        String message = label.isEmpty() ? "" : label + ": ";
+        message += String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual),
                                        expected, getClass.apply(expected));
         assertTrue(Objects.equals(actual, expected), message);
     }
