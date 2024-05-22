@@ -6,6 +6,8 @@
 
 #include "src/main/client_context.cpp"
 
+#include "src/main/client_context_wrapper.cpp"
+
 #include "src/main/client_data.cpp"
 
 #include "src/main/client_verify.cpp"
@@ -29,6 +31,8 @@
 #include "src/main/error_manager.cpp"
 
 #include "src/main/extension.cpp"
+
+#include "src/main/extension_install_info.cpp"
 
 #include "src/main/materialized_query_result.cpp"
 

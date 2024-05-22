@@ -10,6 +10,8 @@
 
 #include "src/parser/parsed_data/comment_on_column_info.cpp"
 
+#include "src/parser/parsed_data/copy_info.cpp"
+
 #include "src/parser/parsed_data/create_info.cpp"
 
 #include "src/parser/parsed_data/create_index_info.cpp"
@@ -28,6 +30,8 @@
 
 #include "src/parser/parsed_data/create_sequence_info.cpp"
 
+#include "src/parser/parsed_data/create_schema_info.cpp"
+
 #include "src/parser/parsed_data/create_scalar_function_info.cpp"
 
 #include "src/parser/parsed_data/create_table_function_info.cpp"
@@ -44,9 +48,15 @@
 
 #include "src/parser/parsed_data/extra_drop_info.cpp"
 
+#include "src/parser/parsed_data/load_info.cpp"
+
 #include "src/parser/parsed_data/sample_options.cpp"
 
+#include "src/parser/parsed_data/parse_info.cpp"
+
 #include "src/parser/parsed_data/transaction_info.cpp"
+
+#include "src/parser/parsed_data/pragma_info.cpp"
 
 #include "src/parser/parsed_data/vacuum_info.cpp"
 
