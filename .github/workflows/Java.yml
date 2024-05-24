@@ -225,6 +225,8 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
+          mkdir -p ~/.gnupg
+          echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb-java" ]] ; then
           export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
