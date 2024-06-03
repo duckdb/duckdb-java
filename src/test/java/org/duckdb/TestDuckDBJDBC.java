@@ -3228,6 +3228,26 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_autoloading_config() throws Exception {
+        Properties config = new Properties();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('autoload_known_extensions')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("true", rs.getString(1));
+        }
+    }
+
+    public static void test_autoinstall_config() throws Exception {
+        Properties config = new Properties();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('autoinstall_known_extensions')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("true", rs.getString(1));
+        }
+    }
+
     public static void test_readonly_remains_bug5593() throws Exception {
         Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
         database_file.toFile().delete();
