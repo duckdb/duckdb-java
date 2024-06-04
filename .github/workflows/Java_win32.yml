@@ -1,4 +1,4 @@
-name: Java JDBC
+name: Java JDBC Win 32
 on:
   push:
   pull_request:
