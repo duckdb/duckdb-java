@@ -1,0 +1,54 @@
+name: Java JDBC
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  repository_dispatch:
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+
+  java-windows-amd64:
+    name: Java Windows (amd64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
+
+      - name: Build
+        shell: bash
+        run: make release
+      - name: Java Tests
+        if: ${{ inputs.skip_tests != 'true' }}
+        shell: bash
+        run: |
+          ls -R .
+          make test
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-windows-amd64
+          path: |
+            build/release/duckdb_jdbc.jar
+
+
