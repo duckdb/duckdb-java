@@ -1,0 +1,36 @@
+name: cache_java
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    env:
+      JAVA_HOME_17_X64: 'C:\hostedtoolcache\windows\Java_Microsoft_jdk\17.0.3\x64'
+
+    steps:
+      - name: Cache JDK
+        id: cache-jdk
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.JAVA_HOME_17_X64 }}
+          key: ${{ runner.os }}-jdk-17
+          restore-keys: ${{ runner.os }}-jdk-
+
+      - name: Install Java
+        if: ${{ steps.cache-jdk.outputs.cache-hit != 'true' }}
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'microsoft'
+          java-version: '17'
+
+      - name: Check default Java version
+        run: java -version
+
+      - name: Set installed/cached Java path [${{ env.JAVA_HOME_17_X64 }}]
+        run: echo "${{ env.JAVA_HOME_17_X64 }}\bin" | Out-File -FilePath $ENV:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Check installed/cached Java version
+        run: java -version
