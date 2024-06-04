@@ -25,7 +25,7 @@ jobs:
         with:
           distribution: 'microsoft'
           java-version: '11'
-          architecture: 'x86'
+          architecture: 'x64'
 
       - name: Check default Java version
         run: java -version
