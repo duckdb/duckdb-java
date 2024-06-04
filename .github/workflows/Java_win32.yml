@@ -28,12 +28,13 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
 
-      - name: Build
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_x86
-      #  shell: bash
-      - run: | 
+            arch: amd64_x86
+      
+      - name: Build
+        shell: bash
+        run: | 
           OVERRIDE_JDBC_OS_ARCH=i386 make release 
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
