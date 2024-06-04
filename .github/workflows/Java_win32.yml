@@ -11,8 +11,8 @@ env:
 
 jobs:
 
-  java-windows-amd64:
-    name: Java Windows (amd64)
+  java-windows-i386:
+    name: Java Windows (i386)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -30,7 +30,8 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make release
+        run: | 
+          OVERRIDE_JDBC_OS_ARCH=i386 make release
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
@@ -43,11 +44,11 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-i386.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-i386.jar
       - uses: actions/upload-artifact@v3
         with:
-          name: java-windows-amd64
+          name: java-windows-i386
           path: |
             build/release/duckdb_jdbc.jar
 
