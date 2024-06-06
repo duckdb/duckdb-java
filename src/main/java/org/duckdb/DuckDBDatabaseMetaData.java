@@ -1041,7 +1041,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
                 ", NULL AS CARDINALITY " +
                 ", NULL AS PAGES " +
                 ", NULL AS FILTER_CONDITION " +
-                "FROM duckdb_indexes() WHERE TRUE AND ");
+                "FROM duckdb_indexes() WHERE TRUE ");
         if (catalog != null) {
             sb.append(" AND database_name = ?");
         }
