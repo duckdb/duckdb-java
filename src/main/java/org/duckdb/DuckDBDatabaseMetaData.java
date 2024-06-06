@@ -171,27 +171,76 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public String getSQLKeywords() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getSQLKeywords");
+        Statement statement = conn.createStatement();
+        statement.closeOnCompletion();
+        ResultSet rs = statement.executeQuery(
+                "SELECT keyword_name FROM duckdb_keywords()");
+        StringBuilder sb = new StringBuilder();
+        while (rs.next()) {
+            sb.append(rs.getString(1));
+            sb.append(',');
+        }
+        return sb.toString();
     }
 
     @Override
     public String getNumericFunctions() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getNumericFunctions");
+        Statement statement = conn.createStatement();
+        statement.closeOnCompletion();
+        ResultSet rs = statement.executeQuery(
+                "SELECT DISTINCT function_name FROM duckdb_functions() " +
+                        "WHERE parameter_types[1] ='DECIMAL'" +
+                        "OR parameter_types[1] ='DOUBLE'" +
+                        "OR parameter_types[1] ='SMALLINT'" +
+                        "OR parameter_types[1] = 'BIGINT'");
+        StringBuilder sb = new StringBuilder();
+        while (rs.next()) {
+            sb.append(rs.getString(1));
+            sb.append(',');
+        }
+        return sb.toString();
     }
 
     @Override
     public String getStringFunctions() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getStringFunctions");
+        Statement statement = conn.createStatement();
+        statement.closeOnCompletion();
+        ResultSet rs = statement.executeQuery(
+                "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] = 'VARCHAR'");
+        StringBuilder sb = new StringBuilder();
+        while (rs.next()) {
+            sb.append(rs.getString(1));
+            sb.append(',');
+        }
+        return sb.toString();
     }
 
     @Override
     public String getSystemFunctions() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getSystemFunctions");
+        Statement statement = conn.createStatement();
+        statement.closeOnCompletion();
+        ResultSet rs = statement.executeQuery(
+                "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] IS NULL");
+        StringBuilder sb = new StringBuilder();
+        while (rs.next()) {
+            sb.append(rs.getString(1));
+            sb.append(',');
+        }
+        return sb.toString();
     }
 
     @Override
     public String getTimeDateFunctions() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getTimeDateFunctions");
+        Statement statement = conn.createStatement();
+        statement.closeOnCompletion();
+        ResultSet rs = statement.executeQuery(
+                "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] LIKE 'TIME%'");
+        StringBuilder sb = new StringBuilder();
+        while (rs.next()) {
+            sb.append(rs.getString(1));
+            sb.append(',');
+        }
+        return sb.toString();
     }
 
     @Override
@@ -979,7 +1028,44 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     @Override
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate)
         throws SQLException {
-        throw new SQLFeatureNotSupportedException("getIndexInfo(");
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT database_name AS TABLE_CAT " +
+                ", schema_name AS TABLE_SCHEM " +
+                ", table_name AS TABLE_NAME " +
+                ", index_name AS INDEX_NAME " +
+                ", CASE WHEN is_unique THEN 0 ELSE 1 END AS NON_UNIQUE " +
+                ", NULL AS TYPE " +
+                ", NULL AS ORDINAL_POSITION " +
+                ", NULL AS COLUMN_NAME " +
+                ", NULL AS ASC_OR_DESC " +
+                ", NULL AS CARDINALITY " +
+                ", NULL AS PAGES " +
+                ", NULL AS FILTER_CONDITION " +
+                "FROM duckdb_indexes() WHERE TRUE AND ");
+        if (catalog != null) {
+            sb.append(" AND database_name = ?");
+        }
+        if (schema != null) {
+            sb.append(" AND schema_name = ?");
+        }
+        if (table != null) {
+            sb.append(" AND table_name = ?");
+        }
+        sb.append(" ORDER BY TABLE_CAT, TABLE_SCHEM, TABLE_NAME, NON_UNIQUE, INDEX_NAME, ORDINAL_POSITION");
+        PreparedStatement ps = conn.prepareStatement(sb.toString());
+        int paramIndex = 1;
+        if (catalog != null) {
+            ps.setString(paramIndex++, catalog);
+        }
+        if (schema != null) {
+            ps.setString(paramIndex++, schema);
+        }
+        if (table != null) {
+            ps.setString(paramIndex++, table);
+        }
+        ps.closeOnCompletion();
+        return ps.executeQuery();
+
     }
 
     @Override
