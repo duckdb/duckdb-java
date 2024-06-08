@@ -4306,6 +4306,80 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_metadata_get_sql_keywords() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            String rs = conn.getMetaData().getSQLKeywords();
+            String[] keywords = rs.split(",");
+            List<String> list = asList(keywords);
+            assertTrue(list.contains("select"));
+            assertTrue(list.contains("update"));
+            assertTrue(list.contains("delete"));
+            assertTrue(list.contains("drop"));
+        }
+    }
+
+    public static void test_metadata_get_numeric_functions() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            String rs = conn.getMetaData().getNumericFunctions();
+            // print out rs
+            String[] functions = rs.split(",");
+            List<String> list = asList(functions);
+            assertTrue(list.contains("abs"));
+            assertTrue(list.contains("ceil"));
+            assertTrue(list.contains("floor"));
+            assertTrue(list.contains("round"));
+        }
+    }
+
+    public static void test_metadata_get_string_functions() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            String rs = conn.getMetaData().getStringFunctions();
+            String[] functions = rs.split(",");
+            List<String> list = asList(functions);
+            assertTrue(list.contains("md5"));
+            assertTrue(list.contains("json_keys"));
+            assertTrue(list.contains("repeat"));
+            assertTrue(list.contains("from_base64"));
+        }
+    }
+
+    public static void test_metadata_get_system_functions() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            String rs = conn.getMetaData().getSystemFunctions();
+            String[] functions = rs.split(",");
+            List<String> list = asList(functions);
+            assertTrue(list.contains("current_date"));
+            assertTrue(list.contains("now"));
+        }
+    }
+
+    public static void test_metadata_get_time_date_functions() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            String rs = conn.getMetaData().getTimeDateFunctions();
+            String[] functions = rs.split(",");
+            List<String> list = asList(functions);
+            assertTrue(list.contains("day"));
+            assertTrue(list.contains("dayname"));
+            assertTrue(list.contains("timezone_hour"));
+        }
+    }
+
+    public static void test_metadata_get_index_info() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE test (id INT PRIMARY KEY, ok INT)");
+                stmt.execute("CREATE INDEX idx_test_ok ON test(ok)");
+            }
+
+            try (ResultSet rs = conn.getMetaData().getIndexInfo(null, null, "test", false, false)) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString("TABLE_NAME"), "test");
+                assertEquals(rs.getString("INDEX_NAME"), "idx_test_ok");
+                assertEquals(rs.getBoolean("NON_UNIQUE"), true);
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
