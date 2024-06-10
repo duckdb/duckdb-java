@@ -157,7 +157,7 @@ struct CastInterpolation {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = hi - lo;
-		return lo + delta * d;
+		return UnsafeNumericCast<TARGET_TYPE>(lo + delta * d);
 	}
 };
 
@@ -295,7 +295,8 @@ bool operator==(const QuantileValue &x, const QuantileValue &y) {
 template <bool DISCRETE>
 struct Interpolator {
 	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
+	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(UnsafeNumericCast<idx_t>(floor(RN))),
+	      CRN(UnsafeNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -356,14 +357,16 @@ struct Interpolator<true> {
 			//	Integer arithmetic for accuracy
 			const auto integral = q.integral;
 			const auto scaling = q.scaling;
-			const auto scaled_q = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, integral);
-			const auto scaled_n = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, scaling);
+			const auto scaled_q =
+			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), integral);
+			const auto scaled_n =
+			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), scaling);
 			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
 		default:
 			const auto scaled_q = (double)(n * q.dbl);
-			floored = floor(n - scaled_q);
+			floored = UnsafeNumericCast<idx_t>(floor(n - scaled_q));
 			break;
 		}
 
@@ -1506,12 +1509,20 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 		throw BinderException("QUANTILE argument must not be NULL");
 	}
 	vector<Value> quantiles;
-	if (quantile_val.type().id() != LogicalTypeId::LIST) {
-		quantiles.push_back(CheckQuantile(quantile_val));
-	} else {
+	switch (quantile_val.type().id()) {
+	case LogicalTypeId::LIST:
 		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckQuantile(element_val));
 		}
+		break;
+	case LogicalTypeId::ARRAY:
+		for (const auto &element_val : ArrayValue::GetChildren(quantile_val)) {
+			quantiles.push_back(CheckQuantile(element_val));
+		}
+		break;
+	default:
+		quantiles.push_back(CheckQuantile(quantile_val));
+		break;
 	}
 
 	Function::EraseArgument(function, arguments, arguments.size() - 1);

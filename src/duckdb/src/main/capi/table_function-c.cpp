@@ -179,7 +179,7 @@ void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChun
 duckdb_table_function duckdb_create_table_function() {
 	auto function = new duckdb::TableFunction("", {}, duckdb::CTableFunction, duckdb::CTableFunctionBind,
 	                                          duckdb::CTableFunctionInit, duckdb::CTableFunctionLocalInit);
-	function->function_info = duckdb::make_shared<duckdb::CTableFunctionInfo>();
+	function->function_info = duckdb::make_shared_ptr<duckdb::CTableFunctionInfo>();
 	function->cardinality = duckdb::CTableFunctionCardinality;
 	return function;
 }
@@ -284,13 +284,17 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	if (tf->name.empty() || !info->bind || !info->init || !info->function) {
 		return DuckDBError;
 	}
-	con->context->RunFunctionInTransaction([&]() {
-		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-		duckdb::CreateTableFunctionInfo tf_info(*tf);
+	try {
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateTableFunctionInfo tf_info(*tf);
 
-		// create the function in the catalog
-		catalog.CreateTableFunction(*con->context, tf_info);
-	});
+			// create the function in the catalog
+			catalog.CreateTableFunction(*con->context, tf_info);
+		});
+	} catch (...) { // LCOV_EXCL_START
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
 }
 

@@ -8,24 +8,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.Date;
-import java.sql.Driver;
+
 import java.util.Arrays;
+
+import java.sql.*;
+
 import java.util.concurrent.Future;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Struct;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -3244,6 +3232,26 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_autoloading_config() throws Exception {
+        Properties config = new Properties();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('autoload_known_extensions')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("true", rs.getString(1));
+        }
+    }
+
+    public static void test_autoinstall_config() throws Exception {
+        Properties config = new Properties();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('autoinstall_known_extensions')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("true", rs.getString(1));
+        }
+    }
+
     public static void test_readonly_remains_bug5593() throws Exception {
         Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
         database_file.toFile().delete();
@@ -4340,6 +4348,49 @@ public class TestDuckDBJDBC {
              ResultSet rs = stmt.executeQuery()) {
             assertTrue(rs.next());
             assertEquals(rs.getTime(1), Time.valueOf(LocalTime.of(1, 2, 3, 123)));
+        }
+    }
+
+    public static void test_column_metadata() throws Exception {
+        Map<String, JDBCType> expectedTypes = new HashMap<>();
+        expectedTypes.put("bool", JDBCType.BOOLEAN);
+        expectedTypes.put("tinyint", JDBCType.TINYINT);
+        expectedTypes.put("smallint", JDBCType.SMALLINT);
+        expectedTypes.put("int", JDBCType.INTEGER);
+        expectedTypes.put("bigint", JDBCType.BIGINT);
+        expectedTypes.put("date", JDBCType.DATE);
+        expectedTypes.put("time", JDBCType.TIME);
+        expectedTypes.put("timestamp", JDBCType.TIMESTAMP);
+        expectedTypes.put("time_tz", JDBCType.TIME_WITH_TIMEZONE);
+        expectedTypes.put("timestamp_tz", JDBCType.TIMESTAMP_WITH_TIMEZONE);
+        expectedTypes.put("float", JDBCType.FLOAT);
+        expectedTypes.put("double", JDBCType.DOUBLE);
+        expectedTypes.put("varchar", JDBCType.VARCHAR);
+        expectedTypes.put("blob", JDBCType.BLOB);
+        expectedTypes.put("bit", JDBCType.BIT);
+        expectedTypes.put("struct", JDBCType.STRUCT);
+        expectedTypes.put("struct_of_arrays", JDBCType.STRUCT);
+        expectedTypes.put("struct_of_fixed_array", JDBCType.STRUCT);
+        expectedTypes.put("dec_4_1", JDBCType.DECIMAL);
+        expectedTypes.put("dec_9_4", JDBCType.DECIMAL);
+        expectedTypes.put("dec_18_6", JDBCType.DECIMAL);
+        expectedTypes.put("dec38_10", JDBCType.DECIMAL);
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE test_all_types_metadata AS SELECT * from test_all_types()");
+            }
+
+            try (ResultSet rs = conn.getMetaData().getColumns(null, null,  "test_all_types_metadata", null)) {
+                while (rs.next()) {
+                    String column = rs.getString("COLUMN_NAME");
+                    JDBCType expectedType = expectedTypes.get(column);
+                    if (expectedType == null) {
+                        expectedType = JDBCType.JAVA_OBJECT;
+                    }
+                    assertEquals(rs.getInt("DATA_TYPE"), expectedType.getVendorTypeNumber(), column);
+                }
+            }
         }
     }
 

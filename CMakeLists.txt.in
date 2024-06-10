@@ -21,6 +21,7 @@ include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 
 include_directories(${INCLUDE_FILES})
 add_definitions(${DEFINES})
+add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1 -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
 
 file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)

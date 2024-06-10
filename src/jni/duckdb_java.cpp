@@ -1,16 +1,18 @@
 #include "functions.hpp"
 #include "duckdb.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/main/appender.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/main/appender.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+
 
 using namespace duckdb;
 using namespace std;
@@ -1238,27 +1240,18 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 
 void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 
-	auto connection = get_connection(env, conn_buf);
-	if (!connection) {
-		return;
-	}
+    auto connection = get_connection(env, conn_buf);
+    if (!connection) {
+        return;
+    }
 
-	connection->BeginTransaction();
+    auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
+    child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
+    auto hello_world_type = LogicalType::STRUCT(children);
+    hello_world_type.SetAlias("test_type");
+    ExtensionUtil::RegisterType(db_instance, "test_type", hello_world_type);
 
-	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
-	auto id = LogicalType::STRUCT(children);
-	auto type_name = "test_type";
-	id.SetAlias(type_name);
-	CreateTypeInfo info(type_name, id);
-
-	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
-	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
-	catalog.CreateType(*connection->context, info);
-
-	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
-	byte_test_type_type.SetAlias("byte_test_type");
-	CreateTypeInfo byte_test_type("byte_test_type", byte_test_type_type);
-	catalog.CreateType(*connection->context, byte_test_type);
-
-	connection->Commit();
+    LogicalType byte_test_type_type = LogicalTypeId::BLOB;
+    byte_test_type_type.SetAlias("byte_test_type");
+    ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
 }
