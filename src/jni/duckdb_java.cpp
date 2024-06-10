@@ -588,7 +588,7 @@ struct ResultHolder {
 	duckdb::unique_ptr<DataChunk> chunk;
 };
 
-Value ToValue(JNIEnv *env, jobject param, shared_ptr<ClientContext> context) {
+Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> context) {
 	param = env->CallStaticObjectMethod(J_Timestamp, J_Timestamp_valueOf, param);
 
 	if (param == nullptr) {
