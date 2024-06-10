@@ -101,6 +101,7 @@ public class DuckDBTimestamp {
         return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
     }
 
+    // TODO: move this to C++ side
     public static Object valueOf(Object x) {
         // Change sql.Timestamp to DuckDBTimestamp
         if (x instanceof Timestamp) {
