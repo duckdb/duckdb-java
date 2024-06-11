@@ -1148,6 +1148,7 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_set_time() throws Exception {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
         try (Connection conn = DriverManager.getConnection(JDBC_URL);
              PreparedStatement stmt = conn.prepareStatement("SELECT ?::VARCHAR")) {
             Time time = Time.valueOf("12:40:00");
@@ -1906,6 +1907,7 @@ public class TestDuckDBJDBC {
 
     public static void test_time_tz() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
+            s.execute("set timezone = 'UTC'");
             s.executeUpdate("create table t (i time with time zone)");
             try (ResultSet rs = conn.getMetaData().getColumns(null, "%", "t", "i");) {
                 rs.next();
