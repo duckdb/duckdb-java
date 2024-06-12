@@ -1,6 +1,8 @@
 package org.duckdb;
 
 import java.sql.Timestamp;
+import java.sql.Time;
+import java.sql.Date;
 import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -97,6 +99,23 @@ public class DuckDBTimestamp {
 
     public static long localDateTime2Micros(LocalDateTime localDateTime) {
         return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
+    }
+
+    // TODO: move this to C++ side
+    public static Object valueOf(Object x) {
+        // Change sql.Timestamp to DuckDBTimestamp
+        if (x instanceof Timestamp) {
+            x = new DuckDBTimestamp((Timestamp) x);
+        } else if (x instanceof LocalDateTime) {
+            x = new DuckDBTimestamp((LocalDateTime) x);
+        } else if (x instanceof OffsetDateTime) {
+            x = new DuckDBTimestampTZ((OffsetDateTime) x);
+        } else if (x instanceof Date) {
+            x = new DuckDBDate((Date) x);
+        } else if (x instanceof Time) {
+            x = new DuckDBTime((Time) x);
+        }
+        return x;
     }
 
     public Timestamp toSqlTimestamp() {

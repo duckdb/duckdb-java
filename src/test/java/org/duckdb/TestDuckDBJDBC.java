@@ -8,7 +8,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import java.util.Arrays;
+
 import java.sql.*;
+
 import java.util.concurrent.Future;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -3437,6 +3441,80 @@ public class TestDuckDBJDBC {
             Struct struct = (Struct) resultSet.getObject(1);
             assertEquals(toJavaObject(struct), mapOf("a", 1));
             assertEquals(struct.getSQLTypeName(), "STRUCT(a INTEGER)");
+
+            String definition = "STRUCT(i INTEGER, j INTEGER)";
+            String typeName = "POINT";
+            try (PreparedStatement stmt =
+                     connection.prepareStatement("CREATE TYPE " + typeName + " AS " + definition)) {
+                stmt.execute();
+            }
+
+            testStruct(connection, connection.createStruct(definition, new Object[] {1, 2}));
+            testStruct(connection, connection.createStruct(typeName, new Object[] {1, 2}));
+        }
+    }
+
+    public static void test_struct_with_timestamp() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
+            LocalDateTime now = LocalDateTime.of(LocalDate.of(2020, 5, 12), LocalTime.of(16, 20, 0, 0));
+            Struct struct1 = connection.createStruct("STRUCT(start TIMESTAMP)", new Object[] {now});
+
+            try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, struct1);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    assertTrue(rs.next());
+
+                    Struct result = (Struct) rs.getObject(1);
+
+                    assertEquals(Timestamp.valueOf(now), result.getAttributes()[0]);
+                }
+            }
+        }
+    }
+
+    public static void test_struct_with_bad_type() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
+            Struct struct1 = connection.createStruct("BAD TYPE NAME", new Object[0]);
+
+            try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, struct1);
+                String message = assertThrows(stmt::executeQuery, SQLException.class);
+
+                assertTrue(message.contains("Parser Error: syntax error at or near \"TYPE\""));
+            }
+        }
+    }
+
+    private static void testStruct(Connection connection, Struct struct) throws SQLException, Exception {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
+            stmt.setObject(1, struct);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                assertTrue(rs.next());
+
+                Struct result = (Struct) rs.getObject(1);
+
+                assertEquals(Arrays.asList(1, 2), Arrays.asList(result.getAttributes()));
+            }
+        }
+    }
+
+    public static void test_write_map() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE test (thing MAP(string, integer));");
+            }
+            Map<Object, Object> map = mapOf("hello", 42);
+            try (PreparedStatement stmt = conn.prepareStatement("INSERT INTO test VALUES (?)")) {
+                stmt.setObject(1, conn.createMap("MAP(string, integer)", map));
+                assertEquals(stmt.executeUpdate(), 1);
+            }
+            try (PreparedStatement stmt = conn.prepareStatement("FROM test"); ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    assertEquals(rs.getObject(1), map);
+                }
+            }
         }
     }
 
@@ -3487,6 +3565,16 @@ public class TestDuckDBJDBC {
             try (ResultSet rs = statement.executeQuery("SELECT [0.0]::DECIMAL[]")) {
                 assertTrue(rs.next());
                 assertEquals(arrayToList(rs.getArray(1)), singletonList(new BigDecimal("0.000")));
+            }
+            try (PreparedStatement stmt = connection.prepareStatement("select ?")) {
+                Array array = connection.createArrayOf("INTEGER", new Object[] {1});
+
+                stmt.setObject(1, array);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals(singletonList(1), arrayToList(rs.getArray(1)));
+                }
             }
         }
     }

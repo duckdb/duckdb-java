@@ -1,5 +1,9 @@
 package org.duckdb;
 
+import org.duckdb.user.DuckDBMap;
+import org.duckdb.user.DuckDBUserArray;
+import org.duckdb.user.DuckDBUserStruct;
+
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -327,11 +331,15 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        throw new SQLFeatureNotSupportedException("createArrayOf");
+        return new DuckDBUserArray(typeName, elements);
     }
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-        throw new SQLFeatureNotSupportedException("createStruct");
+        return new DuckDBUserStruct(typeName, attributes);
+    }
+
+    public <K, V> Map<K, V> createMap(String typeName, Map<K, V> map) {
+        return new DuckDBMap<>(typeName, map);
     }
 
     public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
