@@ -4344,6 +4344,25 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_bytes_jakob() throws Exception {
+        try(Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+            PreparedStatement s = connection.prepareStatement("select ?")) {
+
+            s.setObject(1, "these are some bytes".getBytes());
+            byte [] out;
+
+            try (ResultSet rs = s.executeQuery()) {
+                assertTrue(rs instanceof DuckDBResultSet);
+                while(rs.next()) {
+                    out = rs.getBytes(1);
+                    assertEquals(out, "these are some bytes".getBytes());
+                }
+            }
+
+        }
+
+    }
+
     public static void test_fractional_time() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL);
              PreparedStatement stmt = conn.prepareStatement("SELECT '01:02:03.123'::TIME");
