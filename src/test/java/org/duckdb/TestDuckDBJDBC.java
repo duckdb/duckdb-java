@@ -4357,7 +4357,7 @@ public class TestDuckDBJDBC {
             byte[][] arrays = new byte[][] {allTheBytes, {}};
 
             for(byte [] array : arrays ) {
-                s.setObject(1, array);
+                s.setBytes(1, array);
 
                 int rowsReturned = 0;
                 try (ResultSet rs = s.executeQuery()) {
