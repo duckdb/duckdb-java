@@ -359,7 +359,11 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public byte[] getBytes(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getBytes");
+        if (check_and_null(columnIndex)) {
+            return null;
+        }
+
+        return current_chunk[columnIndex - 1].getBytes(chunk_idx - 1);
     }
 
     public Date getDate(int columnIndex) throws SQLException {

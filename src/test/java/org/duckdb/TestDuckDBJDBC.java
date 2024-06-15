@@ -4344,21 +4344,32 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_get_bytes_jakob() throws Exception {
+    public static void test_get_bytes() throws Exception {
         try(Connection connection = DriverManager.getConnection("jdbc:duckdb:");
             PreparedStatement s = connection.prepareStatement("select ?")) {
 
-            s.setObject(1, "these are some bytes".getBytes());
-            byte [] out;
-
-            try (ResultSet rs = s.executeQuery()) {
-                assertTrue(rs instanceof DuckDBResultSet);
-                while(rs.next()) {
-                    out = rs.getBytes(1);
-                    assertEquals(out, "these are some bytes".getBytes());
-                }
+            byte[] allTheBytes = new byte[256];
+            for(int b = -128; b <= 127; b++) {
+                allTheBytes[b + 128] = (byte)b;
             }
 
+            // Test both all the possible bytes and with an empty array.
+            byte[][] arrays = new byte[][] {allTheBytes, {}};
+
+            for(byte [] array : arrays ) {
+                s.setObject(1, array);
+
+                int rowsReturned = 0;
+                try (ResultSet rs = s.executeQuery()) {
+                    assertTrue(rs instanceof DuckDBResultSet);
+                    while (rs.next()) {
+                        rowsReturned++;
+                        byte[] result = rs.getBytes(1);
+                        assertEquals(array, result, "Bytes were not the same after round trip.");
+                    }
+                }
+                assertEquals(1, rowsReturned, "Got unexpected number of rows back.");
+            }
         }
 
     }
