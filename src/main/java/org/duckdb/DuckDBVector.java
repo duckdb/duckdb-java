@@ -284,6 +284,22 @@ class DuckDBVector {
         throw new SQLFeatureNotSupportedException("getBlob");
     }
 
+    byte[] getBytes(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.BLOB)) {
+            ByteBuffer bb = (ByteBuffer) varlen_data[idx];
+            bb.position(0);
+            byte [] bytes = new byte[bb.remaining()];
+            bb.get(bytes);
+            return bytes;
+        }
+
+        throw new SQLFeatureNotSupportedException("getBytes");
+    }
+
     JsonNode getJsonObject(int idx) {
         if (check_and_null(idx)) {
             return null;

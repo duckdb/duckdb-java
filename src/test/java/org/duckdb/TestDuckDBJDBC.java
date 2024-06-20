@@ -4344,6 +4344,36 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_bytes() throws Exception {
+        try(Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+            PreparedStatement s = connection.prepareStatement("select ?")) {
+
+            byte[] allTheBytes = new byte[256];
+            for(int b = -128; b <= 127; b++) {
+                allTheBytes[b + 128] = (byte)b;
+            }
+
+            // Test both all the possible bytes and with an empty array.
+            byte[][] arrays = new byte[][] {allTheBytes, {}};
+
+            for(byte [] array : arrays ) {
+                s.setBytes(1, array);
+
+                int rowsReturned = 0;
+                try (ResultSet rs = s.executeQuery()) {
+                    assertTrue(rs instanceof DuckDBResultSet);
+                    while (rs.next()) {
+                        rowsReturned++;
+                        byte[] result = rs.getBytes(1);
+                        assertEquals(array, result, "Bytes were not the same after round trip.");
+                    }
+                }
+                assertEquals(1, rowsReturned, "Got unexpected number of rows back.");
+            }
+        }
+
+    }
+
     public static void test_fractional_time() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL);
              PreparedStatement stmt = conn.prepareStatement("SELECT '01:02:03.123'::TIME");
