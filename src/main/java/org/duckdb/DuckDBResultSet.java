@@ -311,7 +311,7 @@ public class DuckDBResultSet implements ResultSet {
             throw new SQLException("ResultSet was closed");
         }
         for (int col_idx = 0; col_idx < meta.column_count; col_idx++) {
-            if (meta.column_names[col_idx].contentEquals(columnLabel)) {
+            if (meta.column_names[col_idx].equalsIgnoreCase(columnLabel)) {
                 return col_idx + 1;
             }
         }
