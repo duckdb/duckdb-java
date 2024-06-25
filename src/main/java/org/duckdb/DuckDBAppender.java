@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
-import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {
 
@@ -49,6 +48,10 @@ public class DuckDBAppender implements AutoCloseable {
 
     public void append(long value) throws SQLException {
         DuckDBNative.duckdb_jdbc_appender_append_long(appender_ref, value);
+    }
+
+    public void appendBytes(byte[] value) throws SQLException {
+        DuckDBNative.duckdb_jdbc_appender_append_string(appender_ref, value);
     }
 
     // New naming schema for object params to keep compatibility with calling "append(null)"

@@ -2635,6 +2635,27 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_bytes() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a BLOB)");
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+        appender.beginRow();
+        appender.appendBytes("test".getBytes(StandardCharsets.UTF_8));
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+        assertEquals(new String(results.getBytes(1), StandardCharsets.UTF_8), "test");
+
+        stmt.close();
+        conn.close();
+    }
+
     public static void test_get_catalog() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         ResultSet rs = conn.getMetaData().getCatalogs();
