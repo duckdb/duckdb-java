@@ -31,6 +31,10 @@ CP=$(JAR)$(SEP)$(TEST_JAR)
 test: 
 	java -cp $(CP) org.duckdb.TestDuckDBJDBC
 
+debug:
+	mkdir -p build/debug
+	cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Debug
+
 release:
 	mkdir -p build/release
 	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
