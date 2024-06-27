@@ -1,9 +1,5 @@
 package org.duckdb;
 
-import org.duckdb.user.DuckDBMap;
-import org.duckdb.user.DuckDBUserArray;
-import org.duckdb.user.DuckDBUserStruct;
-
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +23,9 @@ import java.sql.Struct;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
+import org.duckdb.user.DuckDBMap;
+import org.duckdb.user.DuckDBUserArray;
+import org.duckdb.user.DuckDBUserStruct;
 
 public final class DuckDBConnection implements java.sql.Connection {
 

@@ -1,14 +1,14 @@
 package org.duckdb;
 
-import java.sql.Timestamp;
-import java.sql.Time;
 import java.sql.Date;
-import java.time.ZoneOffset;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {

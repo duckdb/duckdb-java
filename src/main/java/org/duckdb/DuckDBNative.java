@@ -3,6 +3,7 @@ package org.duckdb;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -11,7 +12,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.math.BigDecimal;
 
 class DuckDBNative {
     static {
@@ -49,8 +49,7 @@ class DuckDBNative {
             Path lib_file = Files.createTempFile("libduckdb_java", ".so");
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
             if (lib_res == null) {
-                System.load(
-                    Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString());
+                System.load(Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString());
             } else {
                 try (final InputStream lib_res_input_stream = lib_res.openStream()) {
                     Files.copy(lib_res_input_stream, lib_file, StandardCopyOption.REPLACE_EXISTING);

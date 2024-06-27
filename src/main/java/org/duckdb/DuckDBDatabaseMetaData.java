@@ -1,7 +1,6 @@
 package org.duckdb;
 
-import javax.sql.rowset.CachedRowSet;
-import javax.sql.rowset.RowSetProvider;
+import static java.lang.System.lineSeparator;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -15,8 +14,8 @@ import java.sql.Types;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static java.lang.System.lineSeparator;
+import javax.sql.rowset.CachedRowSet;
+import javax.sql.rowset.RowSetProvider;
 
 public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     DuckDBConnection conn;
@@ -825,7 +824,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
                                   + "table_catalog AS 'TABLE_CAT', "
                                   + "table_schema AS 'TABLE_SCHEM', "
                                   + "table_name AS 'TABLE_NAME', "
-                                  + "column_name as 'COLUMN_NAME', " + makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE") + ", "
+                                  + "column_name as 'COLUMN_NAME', " +
+                                  makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE") + ", "
                                   + "c.data_type AS 'TYPE_NAME', "
                                   + "NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', "
                                   + "numeric_precision AS 'DECIMAL_DIGITS', "
