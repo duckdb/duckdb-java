@@ -1,4 +1,3 @@
-#include "functions.hpp"
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
@@ -12,7 +11,7 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-
+#include "functions.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -604,17 +603,14 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 	} else if (env->IsInstanceOf(param, J_Long)) {
 		return (Value::BIGINT(env->CallLongMethod(param, J_Long_longValue)));
 	} else if (env->IsInstanceOf(param, J_TimestampTZ)) { // Check for subclass before superclass!
-		return (
-			Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
+		return (Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 	} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
-		return (
-			Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+		return (Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
 
 	} else if (env->IsInstanceOf(param, J_DuckDBTime)) {
 		return (Value::TIME((dtime_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
 	} else if (env->IsInstanceOf(param, J_Timestamp)) {
-		return (
-			Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
+		return (Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
 	} else if (env->IsInstanceOf(param, J_Float)) {
 		return (Value::FLOAT(env->CallFloatMethod(param, J_Float_floatValue)));
 	} else if (env->IsInstanceOf(param, J_Double)) {
@@ -648,7 +644,8 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 			D_ASSERT(key);
 			D_ASSERT(value);
 
-			entries.push_back(Value::STRUCT({{"key", ToValue(env, key, context)}, {"value", ToValue(env, value, context)}}));
+			entries.push_back(
+			    Value::STRUCT({{"key", ToValue(env, key, context)}, {"value", ToValue(env, value, context)}}));
 		}
 
 		return (Value::MAP(ListType::GetChildType(type), entries));
@@ -1240,18 +1237,18 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 
 void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 
-    auto connection = get_connection(env, conn_buf);
-    if (!connection) {
-        return;
-    }
+	auto connection = get_connection(env, conn_buf);
+	if (!connection) {
+		return;
+	}
 
-    auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
-    child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
-    auto hello_world_type = LogicalType::STRUCT(children);
-    hello_world_type.SetAlias("test_type");
-    ExtensionUtil::RegisterType(db_instance, "test_type", hello_world_type);
+	auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
+	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
+	auto hello_world_type = LogicalType::STRUCT(children);
+	hello_world_type.SetAlias("test_type");
+	ExtensionUtil::RegisterType(db_instance, "test_type", hello_world_type);
 
-    LogicalType byte_test_type_type = LogicalTypeId::BLOB;
-    byte_test_type_type.SetAlias("byte_test_type");
-    ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
+	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
+	byte_test_type_type.SetAlias("byte_test_type");
+	ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
 }

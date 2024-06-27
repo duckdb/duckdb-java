@@ -1,50 +1,5 @@
 package org.duckdb;
 
-import javax.sql.rowset.CachedRowSet;
-import javax.sql.rowset.RowSetProvider;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import java.util.Arrays;
-
-import java.sql.*;
-
-import java.util.concurrent.Future;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.ResolverStyle;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TimeZone;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
 import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
@@ -64,6 +19,48 @@ import static org.duckdb.test.Assertions.assertThrowsMaybe;
 import static org.duckdb.test.Assertions.assertTrue;
 import static org.duckdb.test.Assertions.fail;
 import static org.duckdb.test.Runner.runTests;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TimeZone;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+import javax.sql.rowset.CachedRowSet;
+import javax.sql.rowset.RowSetProvider;
 
 public class TestDuckDBJDBC {
 
@@ -4345,18 +4342,18 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_get_bytes() throws Exception {
-        try(Connection connection = DriverManager.getConnection("jdbc:duckdb:");
-            PreparedStatement s = connection.prepareStatement("select ?")) {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement s = connection.prepareStatement("select ?")) {
 
             byte[] allTheBytes = new byte[256];
-            for(int b = -128; b <= 127; b++) {
-                allTheBytes[b + 128] = (byte)b;
+            for (int b = -128; b <= 127; b++) {
+                allTheBytes[b + 128] = (byte) b;
             }
 
             // Test both all the possible bytes and with an empty array.
             byte[][] arrays = new byte[][] {allTheBytes, {}};
 
-            for(byte [] array : arrays ) {
+            for (byte[] array : arrays) {
                 s.setBytes(1, array);
 
                 int rowsReturned = 0;
@@ -4371,7 +4368,6 @@ public class TestDuckDBJDBC {
                 assertEquals(1, rowsReturned, "Got unexpected number of rows back.");
             }
         }
-
     }
 
     public static void test_fractional_time() throws Exception {
@@ -4413,7 +4409,7 @@ public class TestDuckDBJDBC {
                 stmt.execute("CREATE TABLE test_all_types_metadata AS SELECT * from test_all_types()");
             }
 
-            try (ResultSet rs = conn.getMetaData().getColumns(null, null,  "test_all_types_metadata", null)) {
+            try (ResultSet rs = conn.getMetaData().getColumns(null, null, "test_all_types_metadata", null)) {
                 while (rs.next()) {
                     String column = rs.getString("COLUMN_NAME");
                     JDBCType expectedType = expectedTypes.get(column);

@@ -21,9 +21,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -292,7 +292,7 @@ class DuckDBVector {
         if (isType(DuckDBColumnType.BLOB)) {
             ByteBuffer bb = (ByteBuffer) varlen_data[idx];
             bb.position(0);
-            byte [] bytes = new byte[bb.remaining()];
+            byte[] bytes = new byte[bb.remaining()];
             bb.get(bytes);
             return bytes;
         }

@@ -1,12 +1,12 @@
 package org.duckdb;
 
+import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
+
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Map;
-
-import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
 
 public class DuckDBArray implements Array {
     private final Object[] array;

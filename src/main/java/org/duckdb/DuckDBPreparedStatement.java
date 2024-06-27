@@ -1,8 +1,8 @@
 package org.duckdb;
 
-import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
@@ -28,15 +28,14 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-
-import java.util.logging.Logger;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
     private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());

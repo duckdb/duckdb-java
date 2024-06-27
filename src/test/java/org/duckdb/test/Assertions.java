@@ -1,10 +1,9 @@
 package org.duckdb.test;
 
-import org.duckdb.test.Thrower;
-
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Function;
+import org.duckdb.test.Thrower;
 
 public class Assertions {
     public static void assertTrue(boolean val) throws Exception {
@@ -29,13 +28,13 @@ public class Assertions {
         Function<Object, String> getClass = (Object a) -> a == null ? "null" : a.getClass().toString();
 
         String message = label.isEmpty() ? "" : label + ": ";
-        message += String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual),
-                                       expected, getClass.apply(expected));
+        message += String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual), expected,
+                                 getClass.apply(expected));
         // Note this will fail for arrays, which do not implement .equals and so fall back to reference equality checks.
         assertTrue(Objects.equals(actual, expected), message);
     }
 
-    public static void assertEquals(byte [] actual, byte [] expected, String message) throws Exception {
+    public static void assertEquals(byte[] actual, byte[] expected, String message) throws Exception {
         assertTrue(Arrays.equals(actual, expected), message);
     }
 
