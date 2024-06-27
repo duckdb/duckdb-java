@@ -39,5 +39,8 @@ release:
 	mkdir -p build/release
 	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
 
+format:
+	python3 scripts/format.py
+
 clean:
 	rm -rf build
