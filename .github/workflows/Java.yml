@@ -10,6 +10,17 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+  format_check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - run: make format-check
+
   java-linux-amd64:
     name: Java Linux (amd64)
     runs-on: ubuntu-latest

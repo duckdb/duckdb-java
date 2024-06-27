@@ -42,5 +42,8 @@ release:
 format:
 	python3 scripts/format.py
 
+format-check:
+	python3 scripts/format.py --check
+
 clean:
 	rm -rf build
