@@ -1,0 +1,58 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/Nightly.yml"
+      - "vendor.py"
+#  workflow_dispatch:
+#    inputs:
+#      # Git ref of the duckdb repo
+#      duckdb-ref:
+#        required: true
+#        type: string
+  schedule:
+    - cron: "17 0 * * *"
+
+name: Vendor upstream DuckDB sources
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+
+    name: "Update vendored sources"
+
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb
+          path: .git/duckdb
+          fetch-depth: 0
+
+      - name: Vendor sources
+        id: vendor
+        run: |
+          git pull --rebase
+          python vendor.py --duckdb .git/duckdb
+          rm -rf .git/duckdb
+          git push --dry-run
+          # Check if ahead of upstream branch
+          # If yes, set a step output
+          if [ $(git rev-list HEAD...origin/main --count) -gt 0 ]; then
+            # Avoid set-output, it's deprecated
+            echo "vendor=ok" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
+        run: |
+          git push -u origin HEAD
