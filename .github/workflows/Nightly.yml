@@ -42,9 +42,12 @@ jobs:
       - name: Vendor sources
         id: vendor
         run: |
-          git pull --rebase
+          git rm -rf src/duckdb
           python vendor.py --duckdb .git/duckdb
+          git add src/duckdb
           rm -rf .git/duckdb
+          export REV=`git rev-parse --short HEAD`
+          git commit -m "Update vendored DuckDB sources to $REV"
           git push --dry-run
           # Check if ahead of upstream branch
           # If yes, set a step output
