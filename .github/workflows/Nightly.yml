@@ -39,8 +39,6 @@ jobs:
           path: .git/duckdb
           fetch-depth: 0
 
-      - uses: ./.github/workflows/git-identity
-
       - name: Vendor sources
         id: vendor
         run: |
