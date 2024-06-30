@@ -220,7 +220,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         Statement statement = conn.createStatement();
         statement.closeOnCompletion();
         ResultSet rs = statement.executeQuery(
-                "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] IS NULL");
+                "SELECT DISTINCT function_name FROM duckdb_functions() WHERE length(parameter_types) = 0");
         StringBuilder sb = new StringBuilder();
         while (rs.next()) {
             sb.append(rs.getString(1));
