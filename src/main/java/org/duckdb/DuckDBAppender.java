@@ -1,10 +1,10 @@
 package org.duckdb;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.math.BigDecimal;
 import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {

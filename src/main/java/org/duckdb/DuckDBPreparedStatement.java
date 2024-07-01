@@ -1,8 +1,8 @@
 package org.duckdb;
 
-import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
@@ -28,15 +28,14 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-
-import java.util.logging.Logger;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
     private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
@@ -238,18 +237,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
         if (params.length == 0) {
             params = new Object[getParameterMetaData().getParameterCount()];
-        }
-        // Change sql.Timestamp to DuckDBTimestamp
-        if (x instanceof Timestamp) {
-            x = new DuckDBTimestamp((Timestamp) x);
-        } else if (x instanceof LocalDateTime) {
-            x = new DuckDBTimestamp((LocalDateTime) x);
-        } else if (x instanceof OffsetDateTime) {
-            x = new DuckDBTimestampTZ((OffsetDateTime) x);
-        } else if (x instanceof Date) {
-            x = new DuckDBDate((Date) x);
-        } else if (x instanceof Time) {
-            x = new DuckDBTime((Time) x);
         }
         params[parameterIndex - 1] = x;
     }

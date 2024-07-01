@@ -2,8 +2,8 @@ package org.duckdb;
 
 import java.sql.SQLException;
 import java.sql.Struct;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 public class DuckDBStruct implements Struct {
     private final Object[] attributes;

@@ -21,9 +21,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -282,6 +282,22 @@ class DuckDBVector {
         }
 
         throw new SQLFeatureNotSupportedException("getBlob");
+    }
+
+    byte[] getBytes(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.BLOB)) {
+            ByteBuffer bb = (ByteBuffer) varlen_data[idx];
+            bb.position(0);
+            byte[] bytes = new byte[bb.remaining()];
+            bb.get(bytes);
+            return bytes;
+        }
+
+        throw new SQLFeatureNotSupportedException("getBytes");
     }
 
     JsonNode getJsonObject(int idx) {

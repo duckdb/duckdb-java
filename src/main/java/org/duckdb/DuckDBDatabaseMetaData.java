@@ -18,6 +18,7 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
 
 public class DuckDBDatabaseMetaData implements DatabaseMetaData {
+
   DuckDBConnection conn;
 
   public DuckDBDatabaseMetaData(DuckDBConnection conn) { this.conn = conn; }
