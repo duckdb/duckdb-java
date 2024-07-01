@@ -23,6 +23,7 @@ jobs:
       sha: ${{ steps.commit.outputs.sha }}
 
     name: "Update vendored sources"
+    if: github.repository == 'duckdb/duckdb-java'
 
     steps:
       - uses: actions/setup-python@v5
