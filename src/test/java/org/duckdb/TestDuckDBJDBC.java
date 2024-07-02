@@ -346,7 +346,7 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_timestamp_ns() throws Exception {
-        String expectedString = "2022-08-17 12:11:10.999999";
+        String expectedString = "2022-08-17 12:11:10.999999999";
         String sql = "SELECT '2022-08-17T12:11:10.999999999'::TIMESTAMP_NS as ts_ns";
         assert_timestamp_match(sql, expectedString, "TIMESTAMP_NS");
     }
@@ -3889,14 +3889,14 @@ public class TestDuckDBJDBC {
             "time_tz", asList(OffsetTime.parse("00:00+15:59:59"), OffsetTime.parse("23:59:59.999999-15:59:59"), null));
         correct_answer_map.put("interval", asList("00:00:00", "83 years 3 months 999 days 00:16:39.999999", null));
         correct_answer_map.put("timestamp", asList(DuckDBTimestamp.toSqlTimestamp(-9223372022400000000L),
-                                                   DuckDBTimestamp.toSqlTimestamp(9223372036854775807L), null));
+                                                   DuckDBTimestamp.toSqlTimestamp(9223372036854775806L), null));
         correct_answer_map.put("date", asList(LocalDate.of(-5877641, 6, 25), LocalDate.of(5881580, 7, 10), null));
         correct_answer_map.put("timestamp_s",
                                asList(Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0)),
                                       Timestamp.valueOf(LocalDateTime.of(294247, 1, 10, 4, 0, 54)), null));
         correct_answer_map.put("timestamp_ns",
-                               asList(Timestamp.valueOf(LocalDateTime.parse("1677-09-21T00:12:43.145225")),
-                                      Timestamp.valueOf(LocalDateTime.parse("2262-04-11T23:47:16.854775")), null));
+                               asList(Timestamp.valueOf(LocalDateTime.parse("1677-09-22T00:00:00.0")),
+                                      Timestamp.valueOf(LocalDateTime.parse("2262-04-11T23:47:16.854775806")), null));
         correct_answer_map.put("timestamp_ms",
                                asList(Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0, 0)),
                                       Timestamp.valueOf(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775000000)), null));
@@ -3955,9 +3955,7 @@ public class TestDuckDBJDBC {
 
                         Object actual = toJavaObject(rs.getObject(i + 1));
 
-                        if (actual instanceof Timestamp && expected instanceof Timestamp) {
-                            assertEquals(((Timestamp) actual).getTime(), ((Timestamp) expected).getTime(), 500);
-                        } else if (actual instanceof List) {
+                        if (actual instanceof List) {
                             assertListsEqual((List) actual, (List) expected);
                         } else {
                             assertEquals(actual, expected);
