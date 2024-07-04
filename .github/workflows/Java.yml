@@ -260,7 +260,9 @@ jobs:
           fi
           ls -lahR jdbc-artifacts
 
-      - uses: actions/upload-artifact@v3
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
         with:
           name: java-jars
           path: |
