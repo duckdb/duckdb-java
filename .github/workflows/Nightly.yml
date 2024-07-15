@@ -5,12 +5,7 @@ on:
     paths:
       - ".github/workflows/Nightly.yml"
       - "vendor.py"
-#  workflow_dispatch:
-#    inputs:
-#      # Git ref of the duckdb repo
-#      duckdb-ref:
-#        required: true
-#        type: string
+  workflow_dispatch:
   schedule:
     - cron: "17 0 * * *"
 
@@ -20,7 +15,7 @@ jobs:
   vendor:
     runs-on: ubuntu-latest
     outputs:
-      sha: ${{ steps.commit.outputs.sha }}
+      did_vendor: ${{ steps.vendor.outputs.vendor }}
 
     name: "Update vendored sources"
     if: github.repository == 'duckdb/duckdb-java'
@@ -62,3 +57,9 @@ jobs:
       - if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
         run: |
           git push -u origin HEAD
+
+  rebuild:
+    needs: vendor
+    if: ${{ needs.vendor.outputs.did_vendor != '' }}
+    uses: ./.github/workflows/Java.yml
+    secrets: inherit
