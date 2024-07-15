@@ -2,6 +2,7 @@ name: Java JDBC
 on:
   push:
   pull_request:
+  workflow_call:
   workflow_dispatch:
   repository_dispatch:
 
