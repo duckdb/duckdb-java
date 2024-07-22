@@ -1301,12 +1301,8 @@ public class DuckDBResultSet implements ResultSet {
         if (columnLabel == null || columnLabel.isEmpty()) {
             throw new SQLException("columnLabel is null");
         }
-        int index = -1;
-        for (int i = 0; i < meta.column_names.length; i++) {
-            if (columnLabel.equals(meta.column_names[i])) index=i;
-        }
-        if (index == -1) throw new SQLException(columnLabel + " is not in " + meta.column_names);
-        index = index + 1;
+        
+        int index = findColumn(columnLabel);
         return getObject(index, type);
     }
 
