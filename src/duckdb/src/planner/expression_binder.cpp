@@ -66,7 +66,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::COLLATE:
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression);
 	case ExpressionClass::LAMBDA_REF:
 		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
@@ -92,9 +92,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
-	case ExpressionClass::POSITIONAL_REFERENCE: {
+	case ExpressionClass::POSITIONAL_REFERENCE:
 		return BindPositionalReference(expr, depth, root_expression);
-	}
 	case ExpressionClass::STAR:
 		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
 	default:
@@ -389,6 +388,10 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
+}
+
+bool ExpressionBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+	return false;
 }
 
 } // namespace duckdb

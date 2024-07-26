@@ -21,6 +21,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -343,7 +344,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
-	if (context.config.enable_optimizer && OptimizeCTEs(node)) {
+	if (context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
+	        context.db->config.options.disabled_optimizers.end() &&
+	    context.config.enable_optimizer && OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());
@@ -416,6 +419,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
 		break;
+	case TableReferenceType::DELIM_GET:
+		result = Bind(ref.Cast<DelimGetRef>());
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:
@@ -454,6 +460,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		root = CreatePlan(ref.Cast<BoundPivotRef>());
+		break;
+	case TableReferenceType::DELIM_GET:
+		root = CreatePlan(ref.Cast<BoundDelimGetRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:
