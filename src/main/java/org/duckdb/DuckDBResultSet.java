@@ -27,6 +27,7 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
@@ -1249,6 +1250,16 @@ public class DuckDBResultSet implements ResultSet {
             } else {
                 throw new SQLException("Can't convert value to Timestamp " + type.toString());
             }
+        } else if (type == LocalDate.class) {
+            if (sqlType == DuckDBColumnType.DATE) {
+                final Date date = getDate(columnIndex);
+                if (date == null) {
+                    return null;
+                }
+                return type.cast(date.toLocalDate());
+            } else {
+                throw new SQLException("Can't convert value to LocalDate " + type.toString());
+            }
         } else if (type == LocalDateTime.class) {
             if (isTimestamp(sqlType)) {
                 return type.cast(getLocalDateTime(columnIndex));
@@ -1286,7 +1297,15 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getObject");
+        if (type == null) {
+            throw new SQLException("type is null");
+        }
+        if (columnLabel == null || columnLabel.isEmpty()) {
+            throw new SQLException("columnLabel is null");
+        }
+
+        int index = findColumn(columnLabel);
+        return getObject(index, type);
     }
 
     @Override

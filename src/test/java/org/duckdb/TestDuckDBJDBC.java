@@ -883,6 +883,33 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_duckdb_localdate() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE x (dt Date)");
+
+        LocalDate ld = LocalDate.of(2024, 7, 22);
+        Date date = Date.valueOf(ld);
+
+        PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
+        ps1.setObject(1, date);
+        ps1.execute();
+        ps1.close();
+
+        PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM x");
+        ResultSet rs2 = ps2.executeQuery();
+
+        rs2.next();
+        assertEquals(rs2.getDate(1), rs2.getObject(1, Date.class));
+        assertEquals(rs2.getObject(1, LocalDate.class), ld);
+        assertEquals(rs2.getObject("dt", LocalDate.class), ld);
+
+        rs2.close();
+        ps2.close();
+        stmt.close();
+        conn.close();
+    }
+
     public static void test_duckdb_getObject_with_class() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
