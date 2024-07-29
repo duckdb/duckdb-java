@@ -882,7 +882,7 @@ public class TestDuckDBJDBC {
         stmt.close();
         conn.close();
     }
-    
+
     public static void test_duckdb_localdate() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
