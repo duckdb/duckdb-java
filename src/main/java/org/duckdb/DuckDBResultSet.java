@@ -1251,11 +1251,13 @@ public class DuckDBResultSet implements ResultSet {
                 throw new SQLException("Can't convert value to Timestamp " + type.toString());
             }
         } else if (type == LocalDate.class) {
-            if(sqlType == DuckDBColumnType.DATE) {
+            if (sqlType == DuckDBColumnType.DATE) {
                 final Date date = getDate(columnIndex);
-                if (date == null) return null;
+                if (date == null) {
+                    return null;
+                }
                 return type.cast(date.toLocalDate());
-            }else {
+            } else {
                 throw new SQLException("Can't convert value to LocalDate " + type.toString());
             }
         } else if (type == LocalDateTime.class) {
@@ -1301,7 +1303,7 @@ public class DuckDBResultSet implements ResultSet {
         if (columnLabel == null || columnLabel.isEmpty()) {
             throw new SQLException("columnLabel is null");
         }
-        
+
         int index = findColumn(columnLabel);
         return getObject(index, type);
     }
