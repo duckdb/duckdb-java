@@ -703,7 +703,8 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
-	if (param_len != stmt_ref->stmt->n_param) {
+
+	if (param_len != stmt_ref->stmt->named_param_map.size()) {
 		throw InvalidInputException("Parameter count mismatch");
 	}
 
@@ -827,8 +828,9 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 	}
 
 	auto &stmt = stmt_ref->stmt;
+	auto n_param = stmt->named_param_map.size();
 
-	return build_meta(env, stmt->ColumnCount(), stmt->n_param, stmt->GetNames(), stmt->GetTypes(),
+	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
 	                  stmt->GetStatementProperties());
 }
 
