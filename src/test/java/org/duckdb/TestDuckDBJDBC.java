@@ -3506,8 +3506,10 @@ public class TestDuckDBJDBC {
             try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
                 stmt.setObject(1, struct1);
                 String message = assertThrows(stmt::executeQuery, SQLException.class);
-
-                assertTrue(message.contains("Parser Error: syntax error at or near \"TYPE\""));
+                String expected = "Invalid Input Error: Value \"BAD TYPE NAME\" can not be converted to a DuckDB Type.";
+                assertTrue(
+                    message.contains(expected),
+                    String.format("The message \"%s\" does not contain the expected string \"%s\"", message, expected));
             }
         }
     }
