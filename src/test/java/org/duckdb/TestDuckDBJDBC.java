@@ -3506,8 +3506,10 @@ public class TestDuckDBJDBC {
             try (PreparedStatement stmt = connection.prepareStatement("SELECT ?")) {
                 stmt.setObject(1, struct1);
                 String message = assertThrows(stmt::executeQuery, SQLException.class);
-
-                assertTrue(message.contains("Parser Error: syntax error at or near \"TYPE\""));
+                String expected = "Invalid Input Error: Value \"BAD TYPE NAME\" can not be converted to a DuckDB Type.";
+                assertTrue(
+                    message.contains(expected),
+                    String.format("The message \"%s\" does not contain the expected string \"%s\"", message, expected));
             }
         }
     }
@@ -3889,6 +3891,12 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("usmallint", asList(0, 65535, null));
         correct_answer_map.put("uint", asList(0L, 4294967295L, null));
         correct_answer_map.put("ubigint", asList(BigInteger.ZERO, new BigInteger("18446744073709551615"), null));
+        correct_answer_map.put(
+            "varint",
+            asList(
+                "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
+                "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
+                null));
         correct_answer_map.put("time", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
         correct_answer_map.put("float", asList(-3.4028234663852886e+38f, 3.4028234663852886e+38f, null));
         correct_answer_map.put("double", asList(-1.7976931348623157e+308d, 1.7976931348623157e+308d, null));
@@ -3978,6 +3986,8 @@ public class TestDuckDBJDBC {
                     for (int i = 0; i < metaData.getColumnCount(); i++) {
                         String columnName = metaData.getColumnName(i + 1);
                         List<Object> answers = correct_answer_map.get(columnName);
+                        assertTrue(answers != null,
+                                   String.format("correct_answer_map lacks value for column \"%s\"", columnName));
                         Object expected = answers.get(rowIdx);
 
                         Object actual = toJavaObject(rs.getObject(i + 1));
