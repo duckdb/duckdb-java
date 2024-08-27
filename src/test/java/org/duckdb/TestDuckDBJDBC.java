@@ -3022,7 +3022,7 @@ public class TestDuckDBJDBC {
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Unrecognized configuration property \"invalid config name\""));
+        assertTrue(message.contains("The following options were not recognized: invalid config name"));
     }
 
     public static void test_valid_but_local_config_throws_exception() throws Exception {
