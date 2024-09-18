@@ -371,4 +371,15 @@ public final class DuckDBConnection implements java.sql.Connection {
         long array_stream_address = getArrowStreamAddress(arrow_array_stream);
         DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
     }
+
+    public String getDuckDBMemoryAddress() {
+        if (this.conn_ref != null) {
+            return DuckDBNative.duckdb_jdbc_db_memory_address(this.conn_ref);
+        }
+        return null;
+    }
+
+    public String getDuckDBResourceFile() {
+        return DuckDBNative.getDuckDBResourceFile();
+    }
 }

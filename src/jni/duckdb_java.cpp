@@ -397,6 +397,15 @@ struct ConnectionHolder {
 	}
 };
 
+// Returns the pointer's memory address of duckdb::DuckDB as a string
+jstring _duckdb_jdbc_db_memory_address(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto db_ptr = conn_ref->db.get();
+	std::ostringstream db_ptr_address;
+	db_ptr_address << db_ptr;
+	return env->NewStringUTF(db_ptr_address.str().c_str());
+}
+
 /**
  * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
  */
