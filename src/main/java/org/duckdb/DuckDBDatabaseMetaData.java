@@ -243,7 +243,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public String getSearchStringEscape() throws SQLException {
-        return null;
+        return "\\";
     }
 
     @Override
@@ -719,7 +719,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             if (schemaPattern.isEmpty()) {
                 sb.append("schema_name IS NULL");
             } else {
-                sb.append("schema_name LIKE ?");
+                sb.append("schema_name LIKE ? ESCAPE '\\'");
             }
             sb.append(lineSeparator());
         }
@@ -784,7 +784,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             // non-standard behavior.
             tableNamePattern = "%";
         }
-        str.append("WHERE table_name LIKE ?").append(lineSeparator());
+        str.append("WHERE table_name LIKE ? ESCAPE '\\'").append(lineSeparator());
 
         // catalog - a catalog name; must match the catalog name as it is stored in
         // the database;
@@ -811,7 +811,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             if (schemaPattern.isEmpty()) {
                 str.append("IS NULL").append(lineSeparator());
             } else {
-                str.append("LIKE ?").append(lineSeparator());
+                str.append("LIKE ? ESCAPE '\\'").append(lineSeparator());
                 hasSchemaParam = true;
             }
         }
@@ -896,10 +896,10 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
                                   + "'' AS 'IS_AUTOINCREMENT', "
                                   + "'' AS 'IS_GENERATEDCOLUMN' "
                                   + "FROM information_schema.columns c "
-                                  + "WHERE table_catalog LIKE ? AND "
-                                  + "table_schema LIKE ? AND "
-                                  + "table_name LIKE ? AND "
-                                  + "column_name LIKE ? "
+                                  + "WHERE table_catalog LIKE ? ESCAPE '\\' AND "
+                                  + "table_schema LIKE ? ESCAPE '\\' AND "
+                                  + "table_name LIKE ? ESCAPE '\\' AND "
+                                  + "column_name LIKE ? ESCAPE '\\' "
                                   + "ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
         ps.setString(1, catalogPattern);
         ps.setString(2, schemaPattern);
