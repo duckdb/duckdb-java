@@ -1866,8 +1866,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32); // this should 10 for INTEGER
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
 
@@ -1889,8 +1889,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
         assertEquals(rs.getString("REMARKS"), "a column");
@@ -1911,8 +1911,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
 
@@ -1930,6 +1930,48 @@ public class TestDuckDBJDBC {
         assertFalse(rs.next());
         rs.close();
 
+        conn.close();
+    }
+
+    public static void test_column_reflection() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE a (a DECIMAL(20,5), b CHAR(10), c VARCHAR(30), d LONG)");
+
+        DatabaseMetaData md = conn.getMetaData();
+        ResultSet rs;
+        rs = md.getColumns(null, null, "a", null);
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "a");
+        assertEquals(rs.getString("COLUMN_NAME"), "a");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.DECIMAL);
+        assertEquals(rs.getString("TYPE_NAME"), "DECIMAL(20,5)");
+        assertEquals(rs.getString(6), "DECIMAL(20,5)");
+        assertEquals(rs.getInt("COLUMN_SIZE"), 20);
+        assertEquals(rs.getInt("DECIMAL_DIGITS"), 5);
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "b");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.VARCHAR);
+        assertEquals(rs.getString("TYPE_NAME"), "VARCHAR");
+        assertNull(rs.getObject("COLUMN_SIZE"));
+        assertNull(rs.getObject("DECIMAL_DIGITS"));
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "c");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.VARCHAR);
+        assertEquals(rs.getString("TYPE_NAME"), "VARCHAR");
+        assertNull(rs.getObject("COLUMN_SIZE"));
+        assertNull(rs.getObject("DECIMAL_DIGITS"));
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "d");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.BIGINT);
+        assertEquals(rs.getString("TYPE_NAME"), "BIGINT");
+        assertEquals(rs.getInt("COLUMN_SIZE"), 64); // should be 19
+        assertEquals(rs.getInt("DECIMAL_DIGITS"), 0);
+
+        rs.close();
         conn.close();
     }
 
