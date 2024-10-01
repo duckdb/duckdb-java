@@ -1746,6 +1746,29 @@ public class TestDuckDBJDBC {
         stmt.close();
         conn.close();
     }
+    public static void test_wildcard_reflection() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE _a (_i INTEGER, xi INTEGER)");
+        stmt.execute("CREATE TABLE xa (i INTEGER)");
+
+        DatabaseMetaData md = conn.getMetaData();
+        ResultSet rs;
+        rs = md.getTables(null, null, "\\_a", null);
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "_a");
+        assertFalse(rs.next());
+        rs.close();
+
+        rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "\\_a", "\\_i");
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "_a");
+        assertEquals(rs.getString("COLUMN_NAME"), "_i");
+        assertFalse(rs.next());
+
+        rs.close();
+        conn.close();
+    }
 
     public static void test_schema_reflection() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
