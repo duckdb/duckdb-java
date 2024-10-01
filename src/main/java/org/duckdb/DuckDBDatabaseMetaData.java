@@ -878,8 +878,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
                                   + "column_name as 'COLUMN_NAME', " +
                                   makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE") + ", "
                                   + "c.data_type AS 'TYPE_NAME', "
-                                  + "NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', "
-                                  + "numeric_precision AS 'DECIMAL_DIGITS', "
+                                  + "numeric_precision AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', "
+                                  + "numeric_scale AS 'DECIMAL_DIGITS', "
                                   + "10 AS 'NUM_PREC_RADIX', "
                                   + "CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', "
                                   + "COLUMN_COMMENT as 'REMARKS', "
