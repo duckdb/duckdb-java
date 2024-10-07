@@ -894,10 +894,18 @@ public class TestDuckDBJDBC {
         PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
         ps1.setObject(1, date);
         ps1.execute();
+
+        ps1.setObject(1, ld);
+        ps1.execute();
         ps1.close();
 
         PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM x");
         ResultSet rs2 = ps2.executeQuery();
+
+        rs2.next();
+        assertEquals(rs2.getDate(1), rs2.getObject(1, Date.class));
+        assertEquals(rs2.getObject(1, LocalDate.class), ld);
+        assertEquals(rs2.getObject("dt", LocalDate.class), ld);
 
         rs2.next();
         assertEquals(rs2.getDate(1), rs2.getObject(1, Date.class));
