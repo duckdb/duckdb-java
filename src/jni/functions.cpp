@@ -26,6 +26,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 	}
 }
 
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1memory_1address(JNIEnv * env, jclass param0, jobject param1) {
+	try {
+		return _duckdb_jdbc_db_memory_address(env, param0, param1);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+		return nullptr;
+	}
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv * env, jclass param0, jobject param1, jboolean param2) {
 	try {
 		return _duckdb_jdbc_set_auto_commit(env, param0, param1, param2);
