@@ -240,6 +240,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.gnupg
+          echo -e "use-agent\npinentry-mode loopback\n" > ~/.gnupg/gpg.conf
+          echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb-java" ]] ; then
           export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
