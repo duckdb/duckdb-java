@@ -30,9 +30,9 @@ jobs:
       - name: Get dummy JAR
         shell: bash
         run: |
-          wget https://artifacts.duckdb.org/duckdb-java/main/java-jars.zip
-          unzip java-jars.zip
-          ls -R .
+          wget -quiet https://artifacts.duckdb.org/duckdb-java/main/java-jars.zip
+          unzip -d jdbc-artifacts java-jars.zip
+          ls -R  jdbc-artifacts
 
       - name: Combine JARs
         shell: bash
