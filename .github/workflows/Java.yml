@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           mkdir -m  700 -p ~/.gnupg
-          echo -e "passphrase go_sign_yourself\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           #echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
 
           export XML='
