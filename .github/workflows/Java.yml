@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir -p ~/.gnupg
           touch passphrase
-          echo -e "pinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          echo -e "passphrase \npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           #echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
 
           export XML='
@@ -61,11 +61,3 @@ jobs:
             gpg --batch --import maven_pgp_key
             python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts .
           ls -lahR jdbc-artifacts
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: java-jars
-          path: |
-            jdbc-artifacts
