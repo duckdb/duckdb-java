@@ -38,8 +38,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.gnupg
-          touch ~/.gnupg/passphrase
-          echo -e "passphrase-file ~/.gnupg/passphrase\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          echo -e "passphrase \"\"\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           #echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
 
           export XML='
