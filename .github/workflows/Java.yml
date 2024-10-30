@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir -p ~/.gnupg
           touch passphrase
-          echo -e "passphrase \npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          echo -e "passphrase-file passphrase\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           #echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
 
           export XML='
