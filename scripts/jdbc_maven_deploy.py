@@ -53,7 +53,7 @@ elif version_regex.match(release_tag):
     release_version = version_regex.search(release_tag).group(1)
 else:
     print("Not running on %s" % release_tag)
-    exit(0)
+    #exit(0)
 
 jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
