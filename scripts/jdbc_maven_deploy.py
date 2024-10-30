@@ -179,7 +179,7 @@ for jar in [binary_jar, sources_jar, javadoc_jar]:
     shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
 
 print("JARs created, uploading (this can take a while!)")
-deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
+deploy_cmd_prefix = 'mvn --no-transfer-progress gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
