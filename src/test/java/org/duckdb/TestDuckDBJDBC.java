@@ -46,6 +46,7 @@ import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
@@ -4600,6 +4601,22 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getString("TABLE_NAME"), "test");
                 assertEquals(rs.getString("INDEX_NAME"), "idx_test_ok");
                 assertEquals(rs.getBoolean("NON_UNIQUE"), true);
+            }
+        }
+    }
+
+    public static void test_blob_after_rs_next() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("SELECT 'AAAA'::BLOB;")) {
+                    Blob blob = null;
+                    while (rs.next()) {
+                        blob = rs.getBlob(1);
+                    }
+                    String expected = HexFormat.of().formatHex(new byte[]{'A', 'A', 'A', 'A'});
+                    String actual = HexFormat.of().formatHex(blob.getBinaryStream().readAllBytes());
+                    assertEquals(actual, expected);
+                }
             }
         }
     }
