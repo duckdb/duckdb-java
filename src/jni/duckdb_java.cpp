@@ -105,7 +105,6 @@ static jmethodID J_Object_toString;
 
 static jclass J_DuckDBTime;
 
-
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);

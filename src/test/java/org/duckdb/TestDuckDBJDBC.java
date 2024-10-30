@@ -46,7 +46,6 @@ import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
@@ -4613,9 +4612,7 @@ public class TestDuckDBJDBC {
                     while (rs.next()) {
                         blob = rs.getBlob(1);
                     }
-                    String expected = HexFormat.of().formatHex(new byte[]{'A', 'A', 'A', 'A'});
-                    String actual = HexFormat.of().formatHex(blob.getBinaryStream().readAllBytes());
-                    assertEquals(actual, expected);
+                    assertEquals(blob_to_string(blob), "AAAA");
                 }
             }
         }
