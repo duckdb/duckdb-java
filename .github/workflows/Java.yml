@@ -37,8 +37,8 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          mkdir -p ~/.gnupg
-          echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          mkdir -m 400 -p ~/.gnupg
+          echo -e "passphrase go_sign_yourself\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           #echo -e "allow-loopback-pinentry\n" > ~/.gnupg/gpg-agent.conf
 
           export XML='
