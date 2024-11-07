@@ -4604,6 +4604,20 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_blob_after_rs_next() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("SELECT 'AAAA'::BLOB;")) {
+                    Blob blob = null;
+                    while (rs.next()) {
+                        blob = rs.getBlob(1);
+                    }
+                    assertEquals(blob_to_string(blob), "AAAA");
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
