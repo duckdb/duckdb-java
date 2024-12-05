@@ -603,7 +603,7 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 	} else if (env->IsInstanceOf(param, J_Long)) {
 		return (Value::BIGINT(env->CallLongMethod(param, J_Long_longValue)));
 	} else if (env->IsInstanceOf(param, J_TimestampTZ)) { // Check for subclass before superclass!
-		return (Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
+		return (Value::TIMESTAMPTZ((timestamp_tz_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 	} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
 		return (Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
 
