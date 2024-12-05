@@ -3129,7 +3129,7 @@ public class TestDuckDBJDBC {
             assertEquals(rs.getString("column_type"), "INTEGER");
             assertEquals(rs.getString("null"), "YES");
             assertNull(rs.getString("key"));
-            assertNull(rs.getString("default"));
+            assertEquals(rs.getString("default"), "42");
             assertNull(rs.getString("extra"));
         }
     }
