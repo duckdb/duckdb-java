@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -2692,7 +2693,11 @@ public class TestDuckDBJDBC {
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
         appender.beginRow();
-        appender.append(null);
+
+        // int foo = null won't compile
+        // Integer foo = null will compile, but NPE on cast to int
+        // So, use the String appender to pass an arbitrary null value
+        appender.append((String) null);
         appender.endRow();
         appender.flush();
         appender.close();
@@ -2717,7 +2722,7 @@ public class TestDuckDBJDBC {
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
         appender.beginRow();
-        appender.append(null);
+        appender.append((String) null);
         appender.endRow();
         appender.flush();
         appender.close();
@@ -2726,6 +2731,58 @@ public class TestDuckDBJDBC {
         assertTrue(results.next());
         assertNull(results.getString(1));
         assertTrue(results.wasNull());
+
+        results.close();
+        stmt.close();
+        conn.close();
+    }
+
+    public static void test_appender_null_blob() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a BLOB)");
+
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+        appender.beginRow();
+        appender.append((byte[]) null);
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+        assertNull(results.getString(1));
+        assertTrue(results.wasNull());
+
+        results.close();
+        stmt.close();
+        conn.close();
+    }
+
+    public static void test_appender_roundtrip_blob() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a BLOB)");
+
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+        SecureRandom random = SecureRandom.getInstanceStrong();
+        byte[] data = new byte[512];
+        random.nextBytes(data);
+
+        appender.beginRow();
+        appender.append(data);
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+
+        byte[] resultBlob = results.getBlob(1).getBinaryStream().readAllBytes();
+        assertTrue(Arrays.equals(resultBlob, data), "byte[] data is round tripped untouched");
 
         results.close();
         stmt.close();

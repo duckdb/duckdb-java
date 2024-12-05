@@ -85,6 +85,14 @@ public class DuckDBAppender implements AutoCloseable {
         }
     }
 
+    public void append(byte[] value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            DuckDBNative.duckdb_jdbc_appender_append_bytes(appender_ref, value);
+        }
+    }
+
     protected void finalize() throws Throwable {
         close();
     }

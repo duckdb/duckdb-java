@@ -347,6 +347,16 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	}
 }
 
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1bytes(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2) {
+	try {
+		return _duckdb_jdbc_appender_append_bytes(env, param0, param1, param2);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+	}
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1timestamp(JNIEnv * env, jclass param0, jobject param1, jlong param2) {
 	try {
 		return _duckdb_jdbc_appender_append_timestamp(env, param0, param1, param2);

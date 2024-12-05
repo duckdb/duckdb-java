@@ -141,6 +141,10 @@ void _duckdb_jdbc_appender_append_string(JNIEnv * env, jclass param0, jobject pa
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
 
+void _duckdb_jdbc_appender_append_bytes(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1bytes(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
+
 void _duckdb_jdbc_appender_append_timestamp(JNIEnv * env, jclass param0, jobject param1, jlong param2);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1timestamp(JNIEnv * env, jclass param0, jobject param1, jlong param2);

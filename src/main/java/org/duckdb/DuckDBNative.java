@@ -154,6 +154,9 @@ class DuckDBNative {
     protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value)
         throws SQLException;
 
+    protected static native void duckdb_jdbc_appender_append_bytes(ByteBuffer appender_ref, byte[] value)
+        throws SQLException;
+
     protected static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value)
         throws SQLException;
 
