@@ -26,7 +26,7 @@ jobs:
     name: Java Linux (amd64)
     runs-on: ubuntu-latest
     container:
-      image: quay.io/pypa/manylinux2014_x86_64
+      image: quay.io/pypa/manylinux_2_34
     env:
       GEN: ninja
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
@@ -276,7 +276,7 @@ jobs:
     runs-on: ubuntu-20.04
     if: ${{ inputs.skip_tests != 'true' }}
     needs: java-linux-amd64
-    container: quay.io/pypa/manylinux2014_x86_64
+    container: quay.io/pypa/manylinux_2_34
     env:
       BUILD_JDBC: 1
       GEN: ninja
