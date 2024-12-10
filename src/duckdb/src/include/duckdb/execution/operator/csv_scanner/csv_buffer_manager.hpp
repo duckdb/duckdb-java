@@ -22,7 +22,9 @@ class CSVStateMachine;
 class CSVBufferManager {
 public:
 	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, const string &file_path,
-	                 const idx_t file_idx, bool per_file_single_threaded = false);
+	                 const idx_t file_idx, bool per_file_single_threaded = false,
+	                 unique_ptr<CSVFileHandle> file_handle = nullptr);
+
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	shared_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx);
@@ -35,15 +37,19 @@ public:
 
 	void UnpinBuffer(const idx_t cache_idx);
 	//! Returns the buffer size set for this CSV buffer manager
-	idx_t GetBufferSize();
+	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
-	idx_t BufferCount();
+	idx_t BufferCount() const;
 	//! If this buffer manager is done. In the context of a buffer manager it means that it read all buffers at least
 	//! once.
-	bool Done();
+	bool Done() const;
 
 	void ResetBufferManager();
-	string GetFilePath();
+	string GetFilePath() const;
+
+	bool IsBlockUnloaded(idx_t block_idx);
+
+	idx_t GetBytesRead() const;
 
 	ClientContext &context;
 	idx_t skip_rows = 0;

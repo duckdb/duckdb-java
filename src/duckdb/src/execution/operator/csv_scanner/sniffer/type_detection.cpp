@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/time.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
 namespace duckdb {
 struct TryCastFloatingOperator {
@@ -93,6 +93,10 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	StrpTimeFormat strpformat;
 	StrTimeFormat::ParseFormatSpecifier(format_specifier, strpformat);
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
+}
+
+idx_t CSVSniffer::LinesSniffed() const {
+	return lines_sniffed;
 }
 
 bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
@@ -488,7 +492,7 @@ void CSVSniffer::DetectTypes() {
 	if (!best_candidate) {
 		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
 		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

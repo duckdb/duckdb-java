@@ -32,6 +32,7 @@ public:
 	explicit ColumnDataAllocator(BufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
+	~ColumnDataAllocator();
 
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
@@ -60,6 +61,12 @@ public:
 	}
 	idx_t AllocationSize() const {
 		return allocated_size;
+	}
+	//! Sets the partition index of this tuple data collection
+	void SetPartitionIndex(idx_t index) {
+		D_ASSERT(!partition_index.IsValid());
+		D_ASSERT(blocks.empty() && allocated_data.empty());
+		partition_index = index;
 	}
 
 public:
@@ -106,6 +113,8 @@ private:
 	mutex lock;
 	//! Total allocated size
 	idx_t allocated_size = 0;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 } // namespace duckdb

@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -15,6 +14,7 @@ using Filter = FilterPushdown::Filter;
 
 void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.join_type != JoinType::MARK) {
@@ -32,7 +32,6 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// when we encounter a projection, replace the table_bindings with
 		// the tables in the projection
-		auto plan_bindings = op.GetColumnBindings();
 		auto &proj = op.Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
 		unordered_set<idx_t> new_table_bindings;
@@ -41,8 +40,8 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 			auto &expr = proj.expressions.at(col_index);
 			vector<ColumnBinding> bindings_to_keep;
 			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = expr->Cast<BoundColumnRefExpression>();
+				if (child.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = child.Cast<BoundColumnRefExpression>();
 					bindings_to_keep.push_back(col_ref.binding);
 				}
 			});
@@ -93,15 +92,22 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(std::move(op->children[0]));
 		return op;
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		// we can't push filters into the materialized CTE (LHS), but we do want to recurse into it
+		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		// we can push filters into the rest of the query plan (RHS)
 		op->children[1] = Rewrite(std::move(op->children[1]));
 		return op;
+	}
 	case LogicalOperatorType::LOGICAL_GET:
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		return PushdownLimit(std::move(op));
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return PushdownWindow(std::move(op));
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		return PushdownUnnest(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
@@ -116,7 +122,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
-	if (!join.left_projection_map.empty() || !join.right_projection_map.empty()) {
+	if (join.HasProjectionMap()) {
 		// cannot push down further otherwise the projection maps won't be preserved
 		return FinishPushdown(std::move(op));
 	}
@@ -127,6 +133,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	switch (join.join_type) {
 	case JoinType::INNER:
+		//	AsOf joins can't push anything into the RHS, so treat it as a left join
+		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
+		}
 		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);

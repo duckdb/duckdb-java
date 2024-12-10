@@ -278,7 +278,7 @@ class DuckDBVector {
             return null;
         }
         if (isType(DuckDBColumnType.BLOB)) {
-            return new DuckDBResultSet.DuckDBBlobResult((ByteBuffer) varlen_data[idx]);
+            return new DuckDBResultSet.DuckDBBlobResult(ByteBuffer.wrap((byte[]) varlen_data[idx]));
         }
 
         throw new SQLFeatureNotSupportedException("getBlob");
@@ -290,11 +290,7 @@ class DuckDBVector {
         }
 
         if (isType(DuckDBColumnType.BLOB)) {
-            ByteBuffer bb = (ByteBuffer) varlen_data[idx];
-            bb.position(0);
-            byte[] bytes = new byte[bb.remaining()];
-            bb.get(bytes);
-            return bytes;
+            return (byte[]) varlen_data[idx];
         }
 
         throw new SQLFeatureNotSupportedException("getBytes");

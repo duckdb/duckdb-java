@@ -35,9 +35,9 @@ string Exception::ToJSON(ExceptionType type, const string &message, const unorde
 #ifdef DUCKDB_DEBUG_STACKTRACE
 	auto extended_extra_info = extra_info;
 	extended_extra_info["stack_trace"] = Exception::GetStackTrace();
-	return StringUtil::ToJSONMap(type, message, extended_extra_info);
+	return StringUtil::ExceptionToJSONMap(type, message, extended_extra_info);
 #else
-	return StringUtil::ToJSONMap(type, message, extra_info);
+	return StringUtil::ExceptionToJSONMap(type, message, extra_info);
 #endif
 }
 
@@ -290,6 +290,9 @@ PermissionException::PermissionException(const string &msg) : Exception(Exceptio
 }
 
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
+}
+
+ExecutorException::ExecutorException(const string &msg) : Exception(ExceptionType::EXECUTOR, msg) {
 }
 
 ConstraintException::ConstraintException(const string &msg) : Exception(ExceptionType::CONSTRAINT, msg) {

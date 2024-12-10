@@ -920,10 +920,18 @@ public class TestDuckDBJDBC {
         PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
         ps1.setObject(1, date);
         ps1.execute();
+
+        ps1.setObject(1, ld);
+        ps1.execute();
         ps1.close();
 
         PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM x");
         ResultSet rs2 = ps2.executeQuery();
+
+        rs2.next();
+        assertEquals(rs2.getDate(1), rs2.getObject(1, Date.class));
+        assertEquals(rs2.getObject(1, LocalDate.class), ld);
+        assertEquals(rs2.getObject("dt", LocalDate.class), ld);
 
         rs2.next();
         assertEquals(rs2.getDate(1), rs2.getObject(1, Date.class));
@@ -1773,6 +1781,29 @@ public class TestDuckDBJDBC {
         stmt.close();
         conn.close();
     }
+    public static void test_wildcard_reflection() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE _a (_i INTEGER, xi INTEGER)");
+        stmt.execute("CREATE TABLE xa (i INTEGER)");
+
+        DatabaseMetaData md = conn.getMetaData();
+        ResultSet rs;
+        rs = md.getTables(null, null, "\\_a", null);
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "_a");
+        assertFalse(rs.next());
+        rs.close();
+
+        rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "\\_a", "\\_i");
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "_a");
+        assertEquals(rs.getString("COLUMN_NAME"), "_i");
+        assertFalse(rs.next());
+
+        rs.close();
+        conn.close();
+    }
 
     public static void test_schema_reflection() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
@@ -1893,8 +1924,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32); // this should 10 for INTEGER
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
 
@@ -1916,8 +1947,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
         assertEquals(rs.getString("REMARKS"), "a column");
@@ -1938,8 +1969,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(5), Types.INTEGER);
         assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
         assertEquals(rs.getString(6), "INTEGER");
-        assertNull(rs.getObject("COLUMN_SIZE"));
-        assertNull(rs.getObject(7));
+        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+        assertEquals(rs.getInt(7), 32);
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
 
@@ -1957,6 +1988,48 @@ public class TestDuckDBJDBC {
         assertFalse(rs.next());
         rs.close();
 
+        conn.close();
+    }
+
+    public static void test_column_reflection() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE a (a DECIMAL(20,5), b CHAR(10), c VARCHAR(30), d LONG)");
+
+        DatabaseMetaData md = conn.getMetaData();
+        ResultSet rs;
+        rs = md.getColumns(null, null, "a", null);
+        assertTrue(rs.next());
+        assertEquals(rs.getString("TABLE_NAME"), "a");
+        assertEquals(rs.getString("COLUMN_NAME"), "a");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.DECIMAL);
+        assertEquals(rs.getString("TYPE_NAME"), "DECIMAL(20,5)");
+        assertEquals(rs.getString(6), "DECIMAL(20,5)");
+        assertEquals(rs.getInt("COLUMN_SIZE"), 20);
+        assertEquals(rs.getInt("DECIMAL_DIGITS"), 5);
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "b");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.VARCHAR);
+        assertEquals(rs.getString("TYPE_NAME"), "VARCHAR");
+        assertNull(rs.getObject("COLUMN_SIZE"));
+        assertNull(rs.getObject("DECIMAL_DIGITS"));
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "c");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.VARCHAR);
+        assertEquals(rs.getString("TYPE_NAME"), "VARCHAR");
+        assertNull(rs.getObject("COLUMN_SIZE"));
+        assertNull(rs.getObject("DECIMAL_DIGITS"));
+
+        assertTrue(rs.next());
+        assertEquals(rs.getString("COLUMN_NAME"), "d");
+        assertEquals(rs.getInt("DATA_TYPE"), Types.BIGINT);
+        assertEquals(rs.getString("TYPE_NAME"), "BIGINT");
+        assertEquals(rs.getInt("COLUMN_SIZE"), 64); // should be 19
+        assertEquals(rs.getInt("DECIMAL_DIGITS"), 0);
+
+        rs.close();
         conn.close();
     }
 
@@ -3083,7 +3156,7 @@ public class TestDuckDBJDBC {
             assertEquals(rs.getString("column_type"), "INTEGER");
             assertEquals(rs.getString("null"), "YES");
             assertNull(rs.getString("key"));
-            assertNull(rs.getString("default"));
+            assertEquals(rs.getString("default"), "42");
             assertNull(rs.getString("extra"));
         }
     }
@@ -4554,6 +4627,20 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getString("TABLE_NAME"), "test");
                 assertEquals(rs.getString("INDEX_NAME"), "idx_test_ok");
                 assertEquals(rs.getBoolean("NON_UNIQUE"), true);
+            }
+        }
+    }
+
+    public static void test_blob_after_rs_next() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("SELECT 'AAAA'::BLOB;")) {
+                    Blob blob = null;
+                    while (rs.next()) {
+                        blob = rs.getBlob(1);
+                    }
+                    assertEquals(blob_to_string(blob), "AAAA");
+                }
             }
         }
     }

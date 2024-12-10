@@ -612,7 +612,7 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 	} else if (env->IsInstanceOf(param, J_Long)) {
 		return (Value::BIGINT(env->CallLongMethod(param, J_Long_longValue)));
 	} else if (env->IsInstanceOf(param, J_TimestampTZ)) { // Check for subclass before superclass!
-		return (Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
+		return (Value::TIMESTAMPTZ((timestamp_tz_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 	} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
 		return (Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
 
@@ -1003,15 +1003,20 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	}
 	case LogicalTypeId::BLOB:
-		varlen_data = env->NewObjectArray(row_count, J_ByteBuffer, nullptr);
+		varlen_data = env->NewObjectArray(row_count, J_ByteArray, nullptr);
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 			if (FlatVector::IsNull(vec, row_idx)) {
 				continue;
 			}
 			auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-			auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetData(), d_str.GetSize());
-			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+
+			auto j_arr = env->NewByteArray(d_str.GetSize());
+			auto j_arr_el = env->GetByteArrayElements(j_arr, nullptr);
+			memcpy((void *)j_arr_el, (void *)d_str.GetData(), d_str.GetSize());
+			env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
+
+			env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
 		}
 		break;
 	case LogicalTypeId::UUID:

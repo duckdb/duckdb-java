@@ -40,11 +40,7 @@ public:
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
 				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
-				uint32_t actual_read = ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read,
-				                                                        literal_batch, bit_width_);
-				if (literal_batch != actual_read) {
-					throw std::runtime_error("Did not find enough values");
-				}
+				ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read, literal_batch, bit_width_);
 				literal_count_ -= literal_batch;
 				values_read += literal_batch;
 			} else {
@@ -66,7 +62,7 @@ public:
 			return 0;
 		}
 		uint8_t ret = 1;
-		while (((idx_t)(1u << ret) - 1) < val) {
+		while ((((idx_t)1u << (idx_t)ret) - 1) < val) {
 			ret++;
 		}
 		return ret;

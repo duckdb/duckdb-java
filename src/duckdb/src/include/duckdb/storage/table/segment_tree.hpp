@@ -145,6 +145,7 @@ public:
 		}
 		SegmentNode<T> node;
 		segment->index = nodes.size();
+		segment->next = nullptr;
 		node.row_start = segment->start;
 		node.node = std::move(segment);
 		nodes.push_back(std::move(node));
@@ -164,16 +165,6 @@ public:
 	}
 	bool HasSegment(SegmentLock &, T *segment) {
 		return segment->index < nodes.size() && nodes[segment->index].node.get() == segment;
-	}
-
-	//! Replace this tree with another tree, taking over its nodes in-place
-	void Replace(SegmentTree<T> &other) {
-		auto l = Lock();
-		Replace(l, other);
-	}
-	void Replace(SegmentLock &l, SegmentTree<T> &other) {
-		other.LoadAllSegments(l);
-		nodes = std::move(other.nodes);
 	}
 
 	//! Erase all segments after a specific segment

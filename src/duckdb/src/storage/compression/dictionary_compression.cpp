@@ -127,7 +127,7 @@ struct DictionaryCompressionStorage {
 // contains the offsets into the dictionary which are also used to determine the string lengths. Each value in the
 // dictionary gets a single unique index in the index buffer. Secondly, the selection buffer maps the tuples to an index
 // in the index buffer. The selection buffer is compressed with bitpacking. Finally, the dictionary contains simply all
-// the unique strings without lenghts or null termination as we can deduce the lengths from the index buffer. The
+// the unique strings without lengths or null termination as we can deduce the lengths from the index buffer. The
 // addition of the selection buffer is done for two reasons: firstly, to allow the scan to emit dictionary vectors by
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
@@ -165,8 +165,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
@@ -259,7 +259,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);
@@ -441,6 +441,7 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 struct CompressedStringScanState : public StringScanState {
 	BufferHandle handle;
 	buffer_ptr<Vector> dictionary;
+	idx_t dictionary_size;
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
@@ -459,10 +460,16 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	auto index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
 	state->current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
+	    segment.GetBlockManager().GetBlockSize()) {
+		throw IOException(
+		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
+	}
 
 	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	state->dictionary_size = index_buffer_count;
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
@@ -539,13 +546,14 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 			scan_state.sel_vec = make_buffer<SelectionVector>(decompress_count);
 		}
 
-		// Scanning 1024 values, emitting a dict vector
+		// Scanning 2048 values, emitting a dict vector
 		data_ptr_t dst = data_ptr_cast(scan_state.sel_vec->data());
 		data_ptr_t src = data_ptr_cast(&base_data[(start * scan_state.current_width) / 8]);
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
-		result.Slice(*(scan_state.dictionary), *scan_state.sel_vec, scan_count);
+		result.Dictionary(*(scan_state.dictionary), scan_state.dictionary_size, *scan_state.sel_vec, scan_count);
+		DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
 	}
 }
 
@@ -657,7 +665,8 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
 	    DictionaryCompressionStorage::FinalizeCompress, DictionaryCompressionStorage::StringInitScan,
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
-	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
+	    UncompressedStringStorage::StringInitSegment);
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
