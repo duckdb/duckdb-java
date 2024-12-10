@@ -2781,8 +2781,9 @@ public class TestDuckDBJDBC {
         ResultSet results = stmt.executeQuery("SELECT * FROM data");
         assertTrue(results.next());
 
-        byte[] resultBlob = results.getBlob(1).getBinaryStream().readAllBytes();
-        assertTrue(Arrays.equals(resultBlob, data), "byte[] data is round tripped untouched");
+        Blob resultBlob = results.getBlob(1);
+        byte[] resultBytes = resultBlob.getBytes(1, (int) resultBlob.length());
+        assertTrue(Arrays.equals(resultBytes, data), "byte[] data is round tripped untouched");
 
         results.close();
         stmt.close();
