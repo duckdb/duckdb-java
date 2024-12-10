@@ -8,13 +8,12 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-
 #include "yyjson.hpp"
 
 #include <algorithm>
@@ -46,8 +45,31 @@ ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
 		return ProfilerPrintFormat::QUERY_TREE;
 	case ExplainFormat::JSON:
 		return ProfilerPrintFormat::JSON;
+	case ExplainFormat::HTML:
+		return ProfilerPrintFormat::HTML;
+	case ExplainFormat::GRAPHVIZ:
+		return ProfilerPrintFormat::GRAPHVIZ;
 	default:
 		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
+		                              EnumUtil::ToString(format));
+	}
+}
+
+ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const {
+	switch (format) {
+	case ProfilerPrintFormat::QUERY_TREE:
+	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
+		return ExplainFormat::TEXT;
+	case ProfilerPrintFormat::JSON:
+		return ExplainFormat::JSON;
+	case ProfilerPrintFormat::HTML:
+		return ExplainFormat::HTML;
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return ExplainFormat::GRAPHVIZ;
+	case ProfilerPrintFormat::NO_OUTPUT:
+		throw InternalException("Should not attempt to get ExplainFormat for ProfilerPrintFormat::NO_OUTPUT");
+	default:
+		throw NotImplementedException("No mapping from ProfilePrintFormat::%s to ExplainFormat",
 		                              EnumUtil::ToString(format));
 	}
 }
@@ -65,6 +87,7 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
+	lock_guard<std::mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -174,7 +197,7 @@ Value GetCumulativeOptimizers(ProfilingNode &node) {
 }
 
 void QueryProfiler::EndQuery() {
-	lock_guard<mutex> guard(flush_lock);
+	unique_lock<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -187,6 +210,8 @@ void QueryProfiler::EndQuery() {
 		}
 	}
 	running = false;
+
+	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler.
@@ -228,24 +253,36 @@ void QueryProfiler::EndQuery() {
 			}
 		}
 
+		if (ClientConfig::GetConfig(context).emit_profiler_output) {
+			emit_output = true;
+		}
+	}
+
+	is_explain_analyze = false;
+
+	guard.unlock();
+
+	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
 
-		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
-			// disable output
-		} else if (save_location.empty()) {
+		if (save_location.empty()) {
 			Printer::Print(tree);
 			Printer::Print("\n");
 		} else {
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
-
-	is_explain_analyze = false;
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
-	const auto format = GetPrintFormat(explain_format);
+	return ToString(GetPrintFormat(explain_format));
+}
+
+string QueryProfiler::ToString(ProfilerPrintFormat format) const {
+	if (!IsEnabled()) {
+		return RenderDisabledMessage(format);
+	}
 	switch (format) {
 	case ProfilerPrintFormat::QUERY_TREE:
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
@@ -254,12 +291,30 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 		return ToJSON();
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "";
+	case ProfilerPrintFormat::HTML:
+	case ProfilerPrintFormat::GRAPHVIZ: {
+		lock_guard<std::mutex> guard(lock);
+		// checking the tree to ensure the query is really empty
+		// the query string is empty when a logical plan is deserialized
+		if (query_info.query_name.empty() && !root) {
+			return "";
+		}
+		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
+		std::stringstream str;
+		auto &info = root->GetProfilingInfo();
+		if (info.Enabled(info.expanded_settings, MetricsType::OPERATOR_TIMING)) {
+			info.metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
+		}
+		renderer->Render(*root, str);
+		return str.str();
+	}
 	default:
 		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
 	}
 }
 
 void QueryProfiler::StartPhase(MetricsType phase_metric) {
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -271,6 +326,7 @@ void QueryProfiler::StartPhase(MetricsType phase_metric) {
 }
 
 void QueryProfiler::EndPhase() {
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -367,7 +423,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	lock_guard<mutex> guard(flush_lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -406,7 +462,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetInfo(const double &blocked_thread_time) {
-	lock_guard<mutex> guard(flush_lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -522,10 +578,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
-	if (!IsEnabled()) {
-		ss << "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
-		return;
-	}
+	lock_guard<std::mutex> guard(lock);
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
@@ -550,12 +603,12 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
-	// print phase timings
-	if (PrintOptimizerOutput()) {
-		PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
-	}
 	// render the main operator tree
 	if (root) {
+		// print phase timings
+		if (PrintOptimizerOutput()) {
+			PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
+		}
 		Render(*root, ss);
 	}
 }
@@ -637,14 +690,11 @@ static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
 }
 
 string QueryProfiler::ToJSON() const {
+	lock_guard<std::mutex> guard(lock);
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);
 
-	if (!IsEnabled()) {
-		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
-		return StringifyAndFree(doc, result_obj);
-	}
 	if (query_info.query_name.empty() && !root) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "empty");
 		return StringifyAndFree(doc, result_obj);
@@ -709,6 +759,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	node->depth = depth;
 
 	if (depth != 0) {
+		info.metrics[MetricsType::OPERATOR_NAME] = root_p.GetName();
 		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
 	}
 	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
@@ -724,7 +775,42 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	return node;
 }
 
+string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
+	switch (format) {
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return "";
+	case ProfilerPrintFormat::QUERY_TREE:
+	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
+		return "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
+	case ProfilerPrintFormat::HTML:
+		return R"(
+				<!DOCTYPE html>
+                <html lang="en"><head/><body>
+                  Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!
+                </body></html>
+			)";
+	case ProfilerPrintFormat::GRAPHVIZ:
+		return R"(
+				digraph G {
+				    node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
+				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
+				}
+			)";
+	case ProfilerPrintFormat::JSON: {
+		auto doc = yyjson_mut_doc_new(nullptr);
+		auto result_obj = yyjson_mut_obj(doc);
+		yyjson_mut_doc_set_root(doc, result_obj);
+
+		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
+		return StringifyAndFree(doc, result_obj);
+	}
+	default:
+		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
+	}
+}
+
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}

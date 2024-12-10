@@ -113,6 +113,7 @@ private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
 	                                     const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
+	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -145,6 +146,7 @@ public:
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
 	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
 	static string JSONSanitize(const string &text);
@@ -168,8 +170,8 @@ private:
 
 	//! Whether or not the query profiler is running
 	bool running;
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
+	//! The lock used for accessing the global query profiler or flushing information to it from a thread
+	mutable std::mutex lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;
@@ -207,6 +209,7 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 
 } // namespace duckdb

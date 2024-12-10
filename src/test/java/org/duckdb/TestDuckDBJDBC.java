@@ -3186,7 +3186,7 @@ public class TestDuckDBJDBC {
             assertEquals(rs.getString("column_type"), "INTEGER");
             assertEquals(rs.getString("null"), "YES");
             assertNull(rs.getString("key"));
-            assertNull(rs.getString("default"));
+            assertEquals(rs.getString("default"), "42");
             assertNull(rs.getString("extra"));
         }
     }
@@ -4657,6 +4657,20 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getString("TABLE_NAME"), "test");
                 assertEquals(rs.getString("INDEX_NAME"), "idx_test_ok");
                 assertEquals(rs.getBoolean("NON_UNIQUE"), true);
+            }
+        }
+    }
+
+    public static void test_blob_after_rs_next() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("SELECT 'AAAA'::BLOB;")) {
+                    Blob blob = null;
+                    while (rs.next()) {
+                        blob = rs.getBlob(1);
+                    }
+                    assertEquals(blob_to_string(blob), "AAAA");
+                }
             }
         }
     }
