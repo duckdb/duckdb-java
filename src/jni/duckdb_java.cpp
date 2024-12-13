@@ -1174,6 +1174,16 @@ void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_r
 	get_appender(env, appender_ref_buf)->Append(string_value.c_str());
 }
 
+void _duckdb_jdbc_appender_append_bytes(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
+	if (env->IsSameObject(value, NULL)) {
+		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+		return;
+	}
+
+	auto string_value = byte_array_to_string(env, value);
+	get_appender(env, appender_ref_buf)->Append(Value::BLOB_RAW(string_value));
+}
+
 void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref_buf) {
 	get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
 }
