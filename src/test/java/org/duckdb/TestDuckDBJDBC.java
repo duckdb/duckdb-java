@@ -149,6 +149,31 @@ public class TestDuckDBJDBC {
         assertThrows(conn::createStatement, SQLException.class);
     }
 
+    public static void test_duckdb_path_to_lib() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        assertTrue(conn.isValid(0));
+        assertFalse(conn.isClosed());
+
+        Path libPath = Paths.get(((DuckDBConnection) conn).getDuckDBResourceFile());
+        assertTrue(Files.exists(libPath));
+        conn.close();
+    }
+
+    public static void test_duckdb_memory_address() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        assertTrue(conn.isValid(0));
+        assertFalse(conn.isClosed());
+
+        // Unfortunately it seems to be impossible to test the memory
+        // address without writing test code inside jni. So the only test here
+        // is that the result is a long and it is not 0.
+
+        long memoryAddress = ((DuckDBConnection) conn).getDuckDBMemoryAddress();
+        assertTrue(Long.class.isInstance(memoryAddress));
+        assertFalse(memoryAddress == 0);
+        conn.close();
+    }
+
     public static void test_prepare_exception() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
