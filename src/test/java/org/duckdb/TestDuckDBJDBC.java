@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.sql.*;
 import java.time.Instant;
@@ -166,11 +167,11 @@ public class TestDuckDBJDBC {
 
         // Unfortunately it seems to be impossible to test the memory
         // address without writing test code inside jni. So the only test here
-        // is that the result is a long and it is not 0.
+        // is that the result is a long and it is not 0 or negative.
 
         long memoryAddress = ((DuckDBConnection) conn).getDuckDBMemoryAddress();
         assertTrue(Long.class.isInstance(memoryAddress));
-        assertFalse(memoryAddress == 0);
+        assertTrue(memoryAddress > 0);
         conn.close();
     }
 
