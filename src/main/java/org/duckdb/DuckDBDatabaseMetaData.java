@@ -689,8 +689,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     public ResultSet getSchemas() throws SQLException {
         Statement statement = conn.createStatement();
         statement.closeOnCompletion();
-        return statement.executeQuery(
-            "SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+        return statement.executeQuery("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM "
+                                      + "information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
     }
 
     @Override
