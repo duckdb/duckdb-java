@@ -196,6 +196,57 @@ jobs:
           path: |
             build/release/duckdb_jdbc.jar
 
+  java-linux-amd64-musl:
+    name: Java Musllinux (amd64)
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest 
+    env:
+      GEN: ninja
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Prepare Alpine Container
+        shell: sh
+
+        run: |
+          # Update package lists and install essential build tools
+          apk update
+          apk add --no-cache build-base gcc g++ libstdc++ cmake make ninja git pkgconfig boost-dev openjdk17 openjdk17-jdk
+          
+          rm -rf /var/cache/apk/*
+
+          # Set Java environment variables
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-17-openjdk/bin:${PATH}" >> $GITHUB_PATH
+
+      - name: Build
+        shell: bash
+        run: make release
+
+      - name: Java Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: make test
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64-musl.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64-musl.jar
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-linux-amd64-musl
+          path: |
+            build/release/duckdb_jdbc.jar
 
   java-combine:
     if: ${{ inputs.override_git_describe == '' }}
@@ -206,6 +257,7 @@ jobs:
       - java-linux-amd64
       - java-windows-amd64
       - java-osx-universal
+      - java-linux-amd64-musl
 
     steps:
       - uses: actions/checkout@v3
