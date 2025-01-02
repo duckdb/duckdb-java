@@ -9,43 +9,46 @@ on:
 jobs:
   java-alpine-amd64:
     name: Java Linux (Alpine arm64)
-    runs-on: 	macos-latest
-    container:
-      image: arm64v8/alpine:latest
+    runs-on: ubuntu-latest
       
     env:
       GEN: ninja
       DUCKDB_PLATFORM: linux_arm64_musl
     
     steps:
-      - name: Prepare Alpine Container
-        shell: sh
-
-        run: |
-          # Update package lists and install essential build tools
-          apk update
-          apk add --no-cache build-base gcc g++ libstdc++ cmake make ninja git pkgconfig boost-dev openjdk17 openjdk17-jdk
-          
-          rm -rf /var/cache/apk/*
-
-          # Set Java environment variables
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/java-17-openjdk/bin:${PATH}" >> $GITHUB_PATH
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Build DuckDB JDBC
+      - name: Create temporary Dockerfile
         run: |
-          # Add any specific build commands for DuckDB-JDBC
-          # This might need adjustment based on your specific build process
-          make release
+          cat > Dockerfile << 'EOF'
+          FROM arm64v8/alpine:latest
+
+          RUN apk update
+          RUN apk add --no-cache build-base gcc g++ libstdc++ cmake make ninja git pkgconfig boost-dev openjdk17 openjdk17-jdk
+          
+          RUN rm -rf /var/cache/apk/*
+          ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+          ENV PATH=$JAVA_HOME/bin:${PATH}
+
+          WORKDIR /duckdb-java
+          CMD ["make", "release"]
+
+          EOF
+        
+      - name: Build and run Alpine Container for building
+        shell: sh
+
+        run: |
+          docker build --platform linux/arm64  -t alpine-arm64 .
+          docker run --platform linux/arm64 -v `pwd`:/duckdb-java --name alpine-arm64 alpine-arm64
+
 
       - name: Package JDBC Artifact
         run: |
           # Copy or rename the JDBC jar as needed
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-alpine-x86_64.jar
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-arm64-musl.jar
 
       - uses: actions/upload-artifact@v4
         with:
