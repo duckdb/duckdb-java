@@ -216,7 +216,7 @@ jobs:
         run: |
           # Update package lists and install essential build tools
           apk update
-          apk add --no-cache build-base gcc g++ libstdc++ cmake make ninja git pkgconfig boost-dev openjdk17 openjdk17-jdk
+          apk add --no-cache bash boost-dev build-base cmake gcc g++ git libstdc++ make ninja openjdk17 openjdk17-jdk pkgconfig 
           
           rm -rf /var/cache/apk/*
 
