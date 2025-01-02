@@ -9,9 +9,10 @@ on:
 jobs:
   java-alpine-amd64:
     name: Java Linux (Alpine arm64)
-    runs-on: ubuntu-latest
+    runs-on: 	macos-latest
     container:
       image: arm64v8/alpine:latest
+      
     env:
       GEN: ninja
       DUCKDB_PLATFORM: linux_arm64_musl
