@@ -64,14 +64,11 @@ if(OVERRIDE_JDBC_OS_ARCH)
   set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
 endif()
 
-# Function to check if the current system is Alpine Linux
+# Check if the current system is Alpine Linux
 function(is_alpine_linux RESULT)
   if(UNIX AND NOT APPLE)
-    # Read the contents of /etc/os-release if it exists
     if(EXISTS "/etc/os-release")
       file(READ "/etc/os-release" OS_RELEASE_CONTENTS)
-      
-      # Check if the contents contain "Alpine Linux"
       string(FIND "${OS_RELEASE_CONTENTS}" "Alpine Linux" ALPINE_FOUND)
       
       if(ALPINE_FOUND GREATER -1)
