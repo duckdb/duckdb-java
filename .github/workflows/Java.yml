@@ -107,7 +107,7 @@ jobs:
          # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
 
       - uses: actions/upload-artifact@v3
-        with:
+        with: duckdb_jdbc-linux-aarch64
           name: java-linux-aarch64
           path: |
             build/release/duckdb_jdbc.jar
@@ -288,6 +288,11 @@ jobs:
         with:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: java-linux-amd64-musl
+          path: jdbc-artifacts/java-linux-amd64-musl
 
       - name: Combine JARs
         shell: bash
