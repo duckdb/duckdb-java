@@ -107,7 +107,7 @@ jobs:
          # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
 
       - uses: actions/upload-artifact@v3
-        with: duckdb_jdbc-linux-aarch64
+        with:
           name: java-linux-aarch64
           path: |
             build/release/duckdb_jdbc.jar
@@ -203,7 +203,6 @@ jobs:
       image: alpine:latest 
     env:
       GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       DUCKDB_PLATFORM: linux_amd64_musl
     steps:
       - uses: actions/checkout@v3
