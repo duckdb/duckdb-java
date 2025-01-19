@@ -22,10 +22,7 @@ enum class WindowBoundary : uint8_t {
 	EXPR_PRECEDING_ROWS = 5,
 	EXPR_FOLLOWING_ROWS = 6,
 	EXPR_PRECEDING_RANGE = 7,
-	EXPR_FOLLOWING_RANGE = 8,
-	CURRENT_ROW_GROUPS = 9,
-	EXPR_PRECEDING_GROUPS = 10,
-	EXPR_FOLLOWING_GROUPS = 11
+	EXPR_FOLLOWING_RANGE = 8
 };
 
 //! Represents the window exclusion mode
@@ -95,17 +92,6 @@ public:
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
 public:
-	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
-	                             const WindowBoundary groups) {
-		if (boundary == rows) {
-			return "ROWS";
-		} else if (boundary == range) {
-			return "RANGE";
-		} else {
-			return "GROUPS";
-		}
-	}
-
 	template <class T, class BASE, class ORDER_NODE>
 	static string ToString(const T &entry, const string &schema, const string &function_name) {
 		// Start with function call
@@ -170,10 +156,8 @@ public:
 		switch (entry.start) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
 		case WindowBoundary::CURRENT_ROW_ROWS:
-		case WindowBoundary::CURRENT_ROW_GROUPS:
 			from = "CURRENT ROW";
-			units = ToUnits(entry.start, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
-			                WindowBoundary::CURRENT_ROW_GROUPS);
+			units = (entry.start == WindowBoundary::CURRENT_ROW_RANGE) ? "RANGE" : "ROWS";
 			break;
 		case WindowBoundary::UNBOUNDED_PRECEDING:
 			if (entry.end != WindowBoundary::CURRENT_ROW_RANGE) {
@@ -182,20 +166,15 @@ public:
 			break;
 		case WindowBoundary::EXPR_PRECEDING_ROWS:
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
-		case WindowBoundary::EXPR_PRECEDING_GROUPS:
 			from = entry.start_expr->ToString() + " PRECEDING";
-			units = ToUnits(entry.start, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
-			                WindowBoundary::EXPR_PRECEDING_GROUPS);
+			units = (entry.start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
 			break;
 		case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
 			from = entry.start_expr->ToString() + " FOLLOWING";
-			units = ToUnits(entry.start, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
-			                WindowBoundary::EXPR_FOLLOWING_GROUPS);
+			units = (entry.start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 			break;
-		case WindowBoundary::UNBOUNDED_FOLLOWING:
-		case WindowBoundary::INVALID:
+		default:
 			throw InternalException("Unrecognized FROM in WindowExpression");
 		}
 
@@ -208,10 +187,8 @@ public:
 			}
 			break;
 		case WindowBoundary::CURRENT_ROW_ROWS:
-		case WindowBoundary::CURRENT_ROW_GROUPS:
 			to = "CURRENT ROW";
-			units = ToUnits(entry.end, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
-			                WindowBoundary::CURRENT_ROW_GROUPS);
+			units = "ROWS";
 			break;
 		case WindowBoundary::UNBOUNDED_PRECEDING:
 			to = "UNBOUNDED PRECEDING";
@@ -221,19 +198,15 @@ public:
 			break;
 		case WindowBoundary::EXPR_PRECEDING_ROWS:
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
-		case WindowBoundary::EXPR_PRECEDING_GROUPS:
 			to = entry.end_expr->ToString() + " PRECEDING";
-			units = ToUnits(entry.end, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
-			                WindowBoundary::EXPR_PRECEDING_GROUPS);
+			units = (entry.end == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
 			break;
 		case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
 			to = entry.end_expr->ToString() + " FOLLOWING";
-			units = ToUnits(entry.end, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
-			                WindowBoundary::EXPR_FOLLOWING_GROUPS);
+			units = (entry.end == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 			break;
-		case WindowBoundary::INVALID:
+		default:
 			throw InternalException("Unrecognized TO in WindowExpression");
 		}
 		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {

@@ -231,7 +231,7 @@ SimpleTimeZone::operator=(const SimpleTimeZone &right)
 
 // -------------------------------------
 
-bool
+UBool
 SimpleTimeZone::operator==(const TimeZone& that) const
 {
     return ((this == &that) ||

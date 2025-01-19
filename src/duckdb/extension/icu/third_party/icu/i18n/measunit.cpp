@@ -2042,7 +2042,7 @@ const char *MeasureUnit::getSubtype() const {
     return fCurrency[0] == 0 ? gSubTypes[getOffset()] : fCurrency;
 }
 
-bool MeasureUnit::operator==(const UObject& other) const {
+UBool MeasureUnit::operator==(const UObject& other) const {
     if (this == &other) {  // Same object, equal
         return TRUE;
     }

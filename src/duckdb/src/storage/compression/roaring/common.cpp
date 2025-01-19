@@ -188,9 +188,9 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	return LossyNumericCast<idx_t>((double)roaring_state.total_size * ROARING_COMPRESS_PENALTY);
 }
 
-unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &checkpoint_data,
+unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
+	return make_uniq<RoaringCompressState>(checkpointer, std::move(state));
 }
 
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
@@ -220,10 +220,6 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 }
 
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// dictionary encoding handles the validity itself
-		return;
-	}
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
@@ -246,13 +242,13 @@ void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_coun
 	return;
 }
 
+} // namespace roaring
+
 unique_ptr<CompressedSegmentState> RoaringInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                       optional_ptr<ColumnSegmentState> segment_state) {
 	// 'ValidityInitSegment' is used normally, which memsets the page to all bits set.
 	return nullptr;
 }
-
-} // namespace roaring
 
 //===--------------------------------------------------------------------===//
 // Get Function
@@ -262,7 +258,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	                           roaring::RoaringAnalyze, roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression,
 	                           roaring::RoaringCompress, roaring::RoaringFinalizeCompress, roaring::RoaringInitScan,
 	                           roaring::RoaringScan, roaring::RoaringScanPartial, roaring::RoaringFetchRow,
-	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
+	                           roaring::RoaringSkip, RoaringInitSegment);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {

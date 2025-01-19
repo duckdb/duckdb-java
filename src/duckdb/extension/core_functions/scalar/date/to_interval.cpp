@@ -165,94 +165,68 @@ struct ToMicroSecondsOperator {
 };
 
 ScalarFunction ToMillenniaFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToMillenniaOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToMillenniaOperator>);
 }
 
 ScalarFunction ToCenturiesFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToCenturiesOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToCenturiesOperator>);
 }
 
 ScalarFunction ToDecadesFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToDecadesOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToDecadesOperator>);
 }
 
 ScalarFunction ToYearsFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
 }
 
 ScalarFunction ToQuartersFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToQuartersOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToQuartersOperator>);
 }
 
 ScalarFunction ToMonthsFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
 }
 
 ScalarFunction ToWeeksFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToWeeksOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToWeeksOperator>);
 }
 
 ScalarFunction ToDaysFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>);
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<double, interval_t, ToSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToSecondsOperator>);
 }
 
 ScalarFunction ToMillisecondsFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
 }
 
 ScalarFunction ToMicrosecondsFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>);
 }
 
 } // namespace duckdb

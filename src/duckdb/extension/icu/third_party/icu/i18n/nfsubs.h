@@ -74,7 +74,7 @@ public:
      * @param rhs    the object to be compared with.
      * @return       true if the given Format objects are semantically equal.
      */
-    virtual bool operator==(const NFSubstitution& rhs) const;
+    virtual UBool operator==(const NFSubstitution& rhs) const;
 
     /**
      * Return true if the given Format objects are semantically unequal.
@@ -82,7 +82,7 @@ public:
      * @param rhs    the object to be compared with.
      * @return       true if the given Format objects are semantically unequal.
      */
-    bool operator!=(const NFSubstitution& rhs) const { return !operator==(rhs); }
+    UBool operator!=(const NFSubstitution& rhs) const { return !operator==(rhs); }
     
     /**
      * Sets the substitution's divisor.  Used by NFRule.setBaseValue().

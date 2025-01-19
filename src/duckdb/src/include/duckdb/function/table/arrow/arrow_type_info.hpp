@@ -23,9 +23,6 @@ class ArrowType;
 
 struct ArrowTypeInfo {
 public:
-	explicit ArrowTypeInfo() : type() {
-	}
-
 	explicit ArrowTypeInfo(ArrowTypeInfoType type);
 	virtual ~ArrowTypeInfo();
 
@@ -57,16 +54,16 @@ public:
 	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::STRUCT;
 
 public:
-	explicit ArrowStructInfo(vector<shared_ptr<ArrowType>> children);
+	explicit ArrowStructInfo(vector<unique_ptr<ArrowType>> children);
 	~ArrowStructInfo() override;
 
 public:
 	idx_t ChildCount() const;
 	const ArrowType &GetChild(idx_t index) const;
-	const vector<shared_ptr<ArrowType>> &GetChildren() const;
+	const vector<unique_ptr<ArrowType>> &GetChildren() const;
 
 private:
-	vector<shared_ptr<ArrowType>> children;
+	vector<unique_ptr<ArrowType>> children;
 };
 
 struct ArrowDateTimeInfo : public ArrowTypeInfo {
@@ -107,8 +104,8 @@ public:
 	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::LIST;
 
 public:
-	static unique_ptr<ArrowListInfo> ListView(shared_ptr<ArrowType> child, ArrowVariableSizeType size);
-	static unique_ptr<ArrowListInfo> List(shared_ptr<ArrowType> child, ArrowVariableSizeType size);
+	static unique_ptr<ArrowListInfo> ListView(unique_ptr<ArrowType> child, ArrowVariableSizeType size);
+	static unique_ptr<ArrowListInfo> List(unique_ptr<ArrowType> child, ArrowVariableSizeType size);
 	~ArrowListInfo() override;
 
 public:
@@ -117,12 +114,12 @@ public:
 	ArrowType &GetChild() const;
 
 private:
-	explicit ArrowListInfo(shared_ptr<ArrowType> child, ArrowVariableSizeType size);
+	explicit ArrowListInfo(unique_ptr<ArrowType> child, ArrowVariableSizeType size);
 
 private:
 	ArrowVariableSizeType size_type;
 	bool is_view = false;
-	shared_ptr<ArrowType> child;
+	unique_ptr<ArrowType> child;
 };
 
 struct ArrowArrayInfo : public ArrowTypeInfo {
@@ -130,7 +127,7 @@ public:
 	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::ARRAY;
 
 public:
-	explicit ArrowArrayInfo(shared_ptr<ArrowType> child, idx_t fixed_size);
+	explicit ArrowArrayInfo(unique_ptr<ArrowType> child, idx_t fixed_size);
 	~ArrowArrayInfo() override;
 
 public:
@@ -138,7 +135,7 @@ public:
 	ArrowType &GetChild() const;
 
 private:
-	shared_ptr<ArrowType> child;
+	unique_ptr<ArrowType> child;
 	idx_t fixed_size;
 };
 

@@ -56,7 +56,7 @@ class U_COMMON_API CacheKeyBase : public UObject {
    /**
     * Equality operator.
     */
-   virtual bool operator == (const CacheKeyBase &other) const = 0;
+   virtual UBool operator == (const CacheKeyBase &other) const = 0;
 
    /**
     * Create a new object for this key. Called by cache on cache miss.
@@ -83,7 +83,7 @@ class U_COMMON_API CacheKeyBase : public UObject {
    /**
     * Inequality operator.
     */
-   bool operator != (const CacheKeyBase &other) const {
+   UBool operator != (const CacheKeyBase &other) const {
        return !(*this == other);
    }
  private:
@@ -123,7 +123,7 @@ class CacheKey : public CacheKeyBase {
    /**
     * Two objects are equal if they are of the same type.
     */
-   virtual bool operator == (const CacheKeyBase &other) const {
+   virtual UBool operator == (const CacheKeyBase &other) const {
        return typeid(*this) == typeid(other);
    }
 };
@@ -144,7 +144,7 @@ class LocaleCacheKey : public CacheKey<T> {
    virtual int32_t hashCode() const {
        return (int32_t)(37u * (uint32_t)CacheKey<T>::hashCode() + (uint32_t)fLoc.hashCode());
    }
-   virtual bool operator == (const CacheKeyBase &other) const {
+   virtual UBool operator == (const CacheKeyBase &other) const {
        // reflexive
        if (this == &other) {
            return TRUE;

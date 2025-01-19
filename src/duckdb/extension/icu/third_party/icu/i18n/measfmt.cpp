@@ -424,7 +424,7 @@ MeasureFormat::~MeasureFormat() {
     delete listFormatter;
 }
 
-bool MeasureFormat::operator==(const Format &other) const {
+UBool MeasureFormat::operator==(const Format &other) const {
     if (this == &other) { // Same object, equal
         return TRUE;
     }

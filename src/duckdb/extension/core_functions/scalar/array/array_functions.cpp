@@ -210,13 +210,9 @@ template <class OP>
 static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
 	const auto array = LogicalType::ARRAY(type, optional_idx());
 	if (type.id() == LogicalTypeId::FLOAT) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind);
-		BaseScalarFunction::SetReturnsError(function);
-		set.AddFunction(function);
+		set.AddFunction(ScalarFunction({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind));
 	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind);
-		BaseScalarFunction::SetReturnsError(function);
-		set.AddFunction(function);
+		set.AddFunction(ScalarFunction({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind));
 	} else {
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
 	}
@@ -271,9 +267,6 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 	    ScalarFunction({float_array, float_array}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>));
 	set.AddFunction(
 	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
-	for (auto &func : set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
 	return set;
 }
 

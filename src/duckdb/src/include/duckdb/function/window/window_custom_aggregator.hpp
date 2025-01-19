@@ -14,9 +14,8 @@ namespace duckdb {
 
 class WindowCustomAggregator : public WindowAggregator {
 public:
-	static bool CanAggregate(const BoundWindowExpression &wexpr, WindowAggregationMode mode);
-
-	WindowCustomAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowCustomAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
+	                       WindowSharedExpressions &shared);
 	~WindowCustomAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,

@@ -42,19 +42,6 @@ public:
 
 struct DateFormatMap {
 public:
-	DateFormatMap() {
-	}
-
-	DateFormatMap(DateFormatMap &&other) noexcept {
-		candidate_formats = other.candidate_formats;
-	}
-
-	DateFormatMap &operator=(DateFormatMap &&other) noexcept {
-		candidate_formats = other.candidate_formats;
-		return *this;
-	}
-
-public:
 	void Initialize(const type_id_map_t<vector<const char *>> &format_templates) {
 		for (const auto &entry : format_templates) {
 			const auto &type = entry.first;
@@ -62,12 +49,6 @@ public:
 				AddFormat(type, format_string);
 			}
 		}
-	}
-
-	DateFormatMap Copy() const {
-		DateFormatMap result;
-		result.candidate_formats = candidate_formats;
-		return result;
 	}
 
 	void AddFormat(LogicalTypeId type, const string &format_string) {
@@ -78,47 +59,25 @@ public:
 	}
 
 	bool HasFormats(LogicalTypeId type) const {
-		lock_guard<mutex> guard(lock);
 		return candidate_formats.find(type) != candidate_formats.end();
 	}
 
-	idx_t NumberOfFormats(LogicalTypeId type) {
-		lock_guard<mutex> guard(lock);
-		return candidate_formats[type].size();
-	}
-
-	bool GetFormatAtIndex(LogicalTypeId type, idx_t index, StrpTimeFormat &format) {
-		lock_guard<mutex> guard(lock);
-		auto &formats = candidate_formats[type];
-		if (index >= formats.size()) {
-			return false;
-		}
-		format = formats[index];
-		return true;
-	}
-
-	void ShrinkFormatsToSize(LogicalTypeId type, idx_t size) {
-		lock_guard<mutex> guard(lock);
-		auto &formats = candidate_formats[type];
-		while (formats.size() > size) {
-			formats.pop_back();
-		}
+	vector<StrpTimeFormat> &GetCandidateFormats(LogicalTypeId type) {
+		D_ASSERT(HasFormats(type));
+		return candidate_formats[type];
 	}
 
 	StrpTimeFormat &GetFormat(LogicalTypeId type) {
-		lock_guard<mutex> guard(lock);
 		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
 		return candidate_formats.find(type)->second.back();
 	}
 
 	const StrpTimeFormat &GetFormat(LogicalTypeId type) const {
-		lock_guard<mutex> guard(lock);
 		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
 		return candidate_formats.find(type)->second.back();
 	}
 
 private:
-	mutable mutex lock;
 	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
 };
 

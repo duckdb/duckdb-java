@@ -92,7 +92,7 @@ public:
      *
      * @stable ICU 4.2
      */
-    bool operator==(const CurrencyPluralInfo& info) const;
+    UBool operator==(const CurrencyPluralInfo& info) const;
 
 
     /**
@@ -100,7 +100,7 @@ public:
      *
      * @stable ICU 4.2
      */
-    bool operator!=(const CurrencyPluralInfo& info) const;
+    UBool operator!=(const CurrencyPluralInfo& info) const;
 
 
     /**
@@ -259,7 +259,7 @@ private:
 };
 
 
-inline bool
+inline UBool
 CurrencyPluralInfo::operator!=(const CurrencyPluralInfo& info) const {
     return !operator==(info);
 }  

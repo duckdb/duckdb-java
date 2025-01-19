@@ -1,5 +1,4 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {

@@ -23,18 +23,33 @@ struct ReferencedColumn {
 	vector<ColumnIndex> child_columns;
 };
 
-class BaseColumnPruner : public LogicalOperatorVisitor {
-protected:
-	//! The map of column references
-	column_binding_map_t<ReferencedColumn> column_references;
+//! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
+class RemoveUnusedColumns : public LogicalOperatorVisitor {
+public:
+	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
+	    : binder(binder), context(context), everything_referenced(is_root) {
+	}
 
-protected:
+	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
+protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
-protected:
+private:
+	Binder &binder;
+	ClientContext &context;
+	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
+	//! output implicitly refers all the columns below it)
+	bool everything_referenced;
+	//! The map of column references
+	column_binding_map_t<ReferencedColumn> column_references;
+
+private:
+	template <class T>
+	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
+
 	//! Add a reference to the column in its entirey
 	void AddBinding(BoundColumnRefExpression &col);
 	//! Add a reference to a sub-section of the column
@@ -47,26 +62,5 @@ protected:
 
 	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
-};
-
-//! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
-class RemoveUnusedColumns : public BaseColumnPruner {
-public:
-	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
-	    : binder(binder), context(context), everything_referenced(is_root) {
-	}
-
-	void VisitOperator(LogicalOperator &op) override;
-
-private:
-	Binder &binder;
-	ClientContext &context;
-	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
-	//! output implicitly refers all the columns below it)
-	bool everything_referenced;
-
-private:
-	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 };
 } // namespace duckdb

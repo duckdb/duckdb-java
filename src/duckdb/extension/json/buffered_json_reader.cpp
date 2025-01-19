@@ -35,7 +35,7 @@ void JSONFileHandle::Reset() {
 	requested_reads = 0;
 	actual_reads = 0;
 	last_read_requested = false;
-	if (IsOpen() && !file_handle->IsPipe()) {
+	if (IsOpen() && CanSeek()) {
 		file_handle->Reset();
 	}
 }

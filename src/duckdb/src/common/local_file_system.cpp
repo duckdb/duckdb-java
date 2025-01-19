@@ -59,13 +59,13 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #endif
 
 namespace duckdb {
+
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
-		auto normalized_file = NormalizeLocalPath(filename);
-		if (access(normalized_file, 0) == 0) {
+		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
-			stat(normalized_file, &status);
+			stat(filename.c_str(), &status);
 			if (S_ISREG(status.st_mode)) {
 				return true;
 			}
@@ -77,10 +77,9 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
-		auto normalized_file = NormalizeLocalPath(filename);
-		if (access(normalized_file, 0) == 0) {
+		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
-			stat(normalized_file, &status);
+			stat(filename.c_str(), &status);
 			if (S_ISFIFO(status.st_mode)) {
 				return true;
 			}
@@ -91,21 +90,8 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 }
 
 #else
-static std::wstring NormalizePathAndConvertToUnicode(const string &path) {
-	string normalized_path_copy;
-	const char *normalized_path;
-	if (StringUtil::StartsWith(path, "file:/")) {
-		normalized_path_copy = LocalFileSystem::NormalizeLocalPath(path);
-		normalized_path_copy = LocalFileSystem().ConvertSeparators(normalized_path_copy);
-		normalized_path = normalized_path_copy.c_str();
-	} else {
-		normalized_path = path.c_str();
-	}
-	return WindowsUtil::UTF8ToUnicode(normalized_path);
-}
-
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(filename);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stati64 status;
@@ -117,7 +103,7 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(filename);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stati64 status;
@@ -194,7 +180,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	}
 
 	string process_name, process_owner;
-	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
+// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
 #ifdef PROC_PIDT_SHORTBSDINFO
 	// try to find out more about the process holding the lock
 	struct proc_bsdshortinfo proc;
@@ -275,11 +261,10 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
-	auto normalized_path = NormalizeLocalPath(path);
 
 	struct stat st;
 
-	if (lstat(normalized_path, &st) != 0) {
+	if (lstat(path.c_str(), &st) != 0) {
 		throw IOException(
 		    "Failed to stat '%s' when checking file permissions, file may be missing or have incorrect permissions",
 		    path.c_str());
@@ -296,13 +281,8 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
                                                  optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
-	auto normalized_path = NormalizeLocalPath(path);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
-	}
-
-	if (opener) {
-		Logger::Info("duckdb.FileSystem.LocalFileSystem.OpenFile", *opener, path_p);
 	}
 
 	flags.Verify();
@@ -358,7 +338,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
-	int fd = open(normalized_path, open_flags, filesec);
+	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
 		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
@@ -580,10 +560,9 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	if (!directory.empty()) {
-		auto normalized_dir = NormalizeLocalPath(directory);
-		if (access(normalized_dir, 0) == 0) {
+		if (access(directory.c_str(), 0) == 0) {
 			struct stat status;
-			stat(normalized_dir, &status);
+			stat(directory.c_str(), &status);
 			if (status.st_mode & S_IFDIR) {
 				return true;
 			}
@@ -596,10 +575,9 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	struct stat st;
 
-	auto normalized_dir = NormalizeLocalPath(directory);
-	if (stat(normalized_dir, &st) != 0) {
+	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
-		if (mkdir(normalized_dir, 0755) != 0 && errno != EEXIST) {
+		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
 			throw IOException("Failed to create directory \"%s\": %s", {{"errno", std::to_string(errno)}}, directory,
 			                  strerror(errno));
 		}
@@ -650,13 +628,11 @@ int RemoveDirectoryRecursive(const char *path) {
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	auto normalized_dir = NormalizeLocalPath(directory);
-	RemoveDirectoryRecursive(normalized_dir);
+	RemoveDirectoryRecursive(directory.c_str());
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto normalized_file = NormalizeLocalPath(filename);
-	if (std::remove(normalized_file) != 0) {
+	if (std::remove(filename.c_str()) != 0) {
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
 		                  strerror(errno));
 	}
@@ -664,8 +640,7 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
-	auto normalized_dir = NormalizeLocalPath(directory);
-	auto dir = opendir(normalized_dir);
+	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
 	}
@@ -682,7 +657,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 			continue;
 		}
 		// now stat the file to figure out if it is a regular file or directory
-		string full_path = JoinPath(normalized_dir, name);
+		string full_path = JoinPath(directory, name);
 		struct stat status;
 		auto res = stat(full_path.c_str(), &status);
 		if (res != 0) {
@@ -707,10 +682,8 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	auto normalized_source = NormalizeLocalPath(source);
-	auto normalized_target = NormalizeLocalPath(target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
-	if (rename(normalized_source, normalized_target) != 0) {
+	if (rename(source.c_str(), target.c_str()) != 0) {
 		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
 	}
 }
@@ -835,15 +808,10 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
                                                  optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
-	auto unicode_path = NormalizePathAndConvertToUnicode(path);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 	flags.Verify();
-
-	if (opener) {
-		Logger::Info("duckdb.FileSystem.LocalFileSystem.OpenFile", *opener, path_p);
-	}
 
 	DWORD desired_access;
 	DWORD share_mode;
@@ -853,27 +821,16 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
 		desired_access = GENERIC_READ | GENERIC_WRITE;
+		share_mode = 0;
 	} else if (open_read) {
 		desired_access = GENERIC_READ;
+		share_mode = FILE_SHARE_READ;
 	} else if (open_write) {
 		desired_access = GENERIC_WRITE;
+		share_mode = 0;
 	} else {
 		throw InternalException("READ, WRITE or both should be specified when opening a file");
 	}
-	switch (flags.Lock()) {
-	case FileLockType::NO_LOCK:
-		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
-		break;
-	case FileLockType::READ_LOCK:
-		share_mode = FILE_SHARE_READ;
-		break;
-	case FileLockType::WRITE_LOCK:
-		share_mode = 0;
-		break;
-	default:
-		throw InternalException("Unknown FileLockType");
-	}
-
 	if (open_write) {
 		if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;
@@ -884,6 +841,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	if (flags.DirectIO()) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
@@ -1058,12 +1016,8 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 static DWORD WindowsGetFileAttributes(const string &filename) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(filename);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	return GetFileAttributesW(unicode_path.c_str());
-}
-
-static DWORD WindowsGetFileAttributes(const std::wstring &filename) {
-	return GetFileAttributesW(filename.c_str());
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
@@ -1075,7 +1029,7 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	if (DirectoryExists(directory)) {
 		return;
 	}
-	auto unicode_path = NormalizePathAndConvertToUnicode(directory);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to create directory \"%s\": %s", directory.c_str(), error);
@@ -1090,7 +1044,7 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 			fs.RemoveFile(fs.JoinPath(directory, fname));
 		}
 	});
-	auto unicode_path = NormalizePathAndConvertToUnicode(directory);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to delete directory \"%s\": %s", directory, error);
@@ -1104,11 +1058,11 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 	if (!DirectoryExists(directory)) {
 		return;
 	}
-	DeleteDirectoryRecursive(*this, directory);
+	DeleteDirectoryRecursive(*this, directory.c_str());
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(filename);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to delete file \"%s\": %s", filename, error);
@@ -1118,7 +1072,8 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
-	auto unicode_path = NormalizePathAndConvertToUnicode(search_dir);
+
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
 
 	WIN32_FIND_DATAW ffd;
 	HANDLE hFind = FindFirstFileW(unicode_path.c_str(), &ffd);
@@ -1151,9 +1106,8 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
-	auto source_unicode = NormalizePathAndConvertToUnicode(source);
-	auto target_unicode = NormalizePathAndConvertToUnicode(target);
-
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
@@ -1165,8 +1119,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
 	}
-	auto normalized_path = NormalizePathAndConvertToUnicode(path);
-	DWORD attrs = WindowsGetFileAttributes(normalized_path);
+	DWORD attrs = WindowsGetFileAttributes(path.c_str());
 	if (attrs != INVALID_FILE_ATTRIBUTES) {
 		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
 			return FileType::FILE_TYPE_DIR;
@@ -1208,10 +1161,9 @@ static bool HasMultipleCrawl(const vector<string> &splits) {
 	return std::count(splits.begin(), splits.end(), "**") > 1;
 }
 static bool IsSymbolicLink(const string &path) {
-	auto normalized_path = LocalFileSystem::NormalizeLocalPath(path);
 #ifndef _WIN32
 	struct stat status;
-	return (lstat(normalized_path, &status) != -1 && S_ISLNK(status.st_mode));
+	return (lstat(path.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
 #else
 	auto attributes = WindowsGetFileAttributes(path);
 	if (attributes == INVALID_FILE_ATTRIBUTES)
@@ -1278,59 +1230,14 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 	return result;
 }
 
-// Helper function to handle file:/ URLs
-static idx_t GetFileUrlOffset(const string &path) {
-	if (!StringUtil::StartsWith(path, "file:/")) {
-		return 0;
-	}
-
-	// Url without host: file:/some/path
-	if (path[6] != '/') {
-#ifdef _WIN32
-		return 6;
-#else
-		return 5;
-#endif
-	}
-
-	// Url with empty host: file:///some/path
-	if (path[7] == '/') {
-#ifdef _WIN32
-		return 8;
-#else
-		return 7;
-#endif
-	}
-
-	// Url with localhost: file://localhost/some/path
-	if (path.compare(7, 10, "localhost/") == 0) {
-#ifdef _WIN32
-		return 17;
-#else
-		return 16;
-#endif
-	}
-
-	// unkown file:/ url format
-	return 0;
-}
-
-const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
-	return path.c_str() + GetFileUrlOffset(path);
-}
-
 vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}
 	// split up the path into separate chunks
 	vector<string> splits;
-
-	bool is_file_url = StringUtil::StartsWith(path, "file:/");
-	idx_t file_url_path_offset = GetFileUrlOffset(path);
-
 	idx_t last_pos = 0;
-	for (idx_t i = file_url_path_offset; i < path.size(); i++) {
+	for (idx_t i = 0; i < path.size(); i++) {
 		if (path[i] == '\\' || path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
@@ -1338,7 +1245,6 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				continue;
 			}
 			if (splits.empty()) {
-				//				splits.push_back(path.substr(file_url_path_offset, i-file_url_path_offset));
 				splits.push_back(path.substr(0, i));
 			} else {
 				splits.push_back(path.substr(last_pos, i - last_pos));
@@ -1349,10 +1255,10 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	splits.push_back(path.substr(last_pos, path.size() - last_pos));
 	// handle absolute paths
 	bool absolute_path = false;
-	if (IsPathAbsolute(path)) {
+	if (path[0] == '/') {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
-	} else if (StringUtil::Contains(splits[0], ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
+	} else if (StringUtil::Contains(splits[0], ":")) {
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
 	} else if (splits[0] == "~") {
@@ -1392,16 +1298,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
-	idx_t start_index;
-	if (is_file_url) {
-		start_index = 1;
-	} else if (absolute_path) {
-		start_index = 1;
-	} else {
-		start_index = 0;
-	}
-
-	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
+	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories

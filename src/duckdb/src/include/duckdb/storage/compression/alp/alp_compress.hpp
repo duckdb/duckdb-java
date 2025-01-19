@@ -32,16 +32,16 @@ struct AlpCompressionState : public CompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
+	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
+	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
@@ -90,8 +90,8 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
+		auto &db = checkpointer.GetDatabase();
+		auto &type = checkpointer.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
@@ -176,7 +176,7 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
+		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
@@ -262,9 +262,8 @@ public:
 };
 
 template <class T>
-unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
+unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
+	return make_uniq<AlpCompressionState<T>>(checkpointer, (AlpAnalyzeState<T> *)state.get());
 }
 
 template <class T>

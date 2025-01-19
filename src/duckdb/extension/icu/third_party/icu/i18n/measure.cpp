@@ -56,7 +56,7 @@ Measure::~Measure() {
     delete unit;
 }
 
-bool Measure::operator==(const UObject& other) const {
+UBool Measure::operator==(const UObject& other) const {
     if (this == &other) {  // Same object, equal
         return TRUE;
     }

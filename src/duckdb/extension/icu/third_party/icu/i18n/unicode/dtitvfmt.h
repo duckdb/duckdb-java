@@ -443,7 +443,7 @@ public:
      * @return         true if the given Format objects are semantically equal.
      * @stable ICU 4.0
      */
-    virtual bool operator==(const Format& other) const;
+    virtual UBool operator==(const Format& other) const;
 
     /**
      * Return true if the given Format objects are not semantically equal.
@@ -452,7 +452,7 @@ public:
      * @return      true if the given Format objects are not semantically equal.
      * @stable ICU 4.0
      */
-    bool operator!=(const Format& other) const;
+    UBool operator!=(const Format& other) const;
 
 
     using Format::format;
@@ -1144,7 +1144,7 @@ private:
     UnicodeString* fDateTimeFormat;
 };
 
-inline bool
+inline UBool
 DateIntervalFormat::operator!=(const Format& other) const  {
     return !operator==(other);
 }

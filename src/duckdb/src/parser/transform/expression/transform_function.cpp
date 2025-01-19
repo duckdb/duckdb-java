@@ -35,18 +35,6 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 	}
 }
 
-static inline WindowBoundary TransformFrameOption(const int frameOptions, const WindowBoundary rows,
-                                                  const WindowBoundary range, const WindowBoundary groups) {
-
-	if (frameOptions & FRAMEOPTION_RANGE) {
-		return range;
-	} else if (frameOptions & FRAMEOPTION_GROUPS) {
-		return groups;
-	} else {
-		return rows;
-	}
-}
-
 void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_spec, WindowExpression &expr) {
 	// finally: specifics of bounds
 	expr.start_expr = TransformExpression(window_spec.startOffset);
@@ -58,30 +46,28 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
 	}
 
+	if (window_spec.frameOptions & FRAMEOPTION_GROUPS) {
+		throw ParserException("GROUPS mode for window functions is not implemented yet");
+	}
+	const bool rangeMode = (window_spec.frameOptions & FRAMEOPTION_RANGE) != 0;
 	if (window_spec.frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
 		expr.start = WindowBoundary::UNBOUNDED_PRECEDING;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING) {
-		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_PRECEDING_ROWS,
-		                                  WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
+		expr.start = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) {
-		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_FOLLOWING_ROWS,
-		                                  WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
+		expr.start = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_CURRENT_ROW) {
-		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::CURRENT_ROW_ROWS,
-		                                  WindowBoundary::CURRENT_ROW_RANGE, WindowBoundary::CURRENT_ROW_GROUPS);
+		expr.start = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
 	if (window_spec.frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
 		expr.end = WindowBoundary::UNBOUNDED_FOLLOWING;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING) {
-		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_PRECEDING_ROWS,
-		                                WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
+		expr.end = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING) {
-		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_FOLLOWING_ROWS,
-		                                WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
+		expr.end = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_CURRENT_ROW) {
-		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::CURRENT_ROW_ROWS,
-		                                WindowBoundary::CURRENT_ROW_RANGE, WindowBoundary::CURRENT_ROW_GROUPS);
+		expr.end = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
 	D_ASSERT(expr.start != WindowBoundary::INVALID && expr.end != WindowBoundary::INVALID);
@@ -134,10 +120,10 @@ static bool IsOrderableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_CUME_DIST:
+		return true;
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
 	case ExpressionType::WINDOW_RANK_DENSE:
 		return false;
 	default:

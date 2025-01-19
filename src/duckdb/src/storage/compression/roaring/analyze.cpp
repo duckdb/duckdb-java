@@ -108,7 +108,6 @@ void RoaringAnalyzeState::Flush(RoaringAnalyzeState &state) {
 }
 
 bool RoaringAnalyzeState::HasEnoughSpaceInSegment(idx_t required_space) {
-	auto space_used = data_size + metadata_size;
 	D_ASSERT(space_used <= info.GetBlockSize());
 	idx_t remaining_space = info.GetBlockSize() - space_used;
 	if (required_space > remaining_space) {
@@ -118,15 +117,13 @@ bool RoaringAnalyzeState::HasEnoughSpaceInSegment(idx_t required_space) {
 }
 
 void RoaringAnalyzeState::FlushSegment() {
-	auto space_used = data_size + metadata_size;
 	if (!current_count) {
 		D_ASSERT(!space_used);
 		return;
 	}
 	metadata_collection.FlushSegment();
 	total_size += space_used;
-	data_size = 0;
-	metadata_size = 0;
+	space_used = 0;
 	current_count = 0;
 	segment_count++;
 }
@@ -149,14 +146,15 @@ void RoaringAnalyzeState::FlushContainer() {
 		arrays_count++;
 	}
 
-	metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+	idx_t required_space = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
 
-	data_size += metadata.GetDataSizeInBytes(count);
-	if (!HasEnoughSpaceInSegment(metadata_size + data_size)) {
+	required_space += metadata.GetDataSizeInBytes(count);
+	if (!HasEnoughSpaceInSegment(required_space)) {
 		FlushSegment();
 	}
 	container_metadata.push_back(metadata);
 	metadata_collection.AddMetadata(metadata);
+	space_used += required_space;
 	current_count += count;
 
 	// Reset the container analyze state

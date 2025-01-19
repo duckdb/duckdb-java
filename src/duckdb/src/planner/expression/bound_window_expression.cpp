@@ -101,21 +101,17 @@ bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression 
 	return true;
 }
 
-idx_t BoundWindowExpression::GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs) {
-	const auto overlap = MinValue<idx_t>(lhs.size(), rhs.size());
+idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
+	const auto overlap = MinValue<idx_t>(orders.size(), other.orders.size());
 
 	idx_t result = 0;
 	for (; result < overlap; ++result) {
-		if (!lhs.at(result).Equals(rhs.at(result))) {
-			return 0;
+		if (!orders[result].Equals(other.orders[result])) {
+			return false;
 		}
 	}
 
 	return result;
-}
-
-idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
-	return GetSharedOrders(orders, other.orders);
 }
 
 bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {
@@ -237,7 +233,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithExplicitDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
 	deserializer.ReadProperty(213, "distinct", result->distinct);
-	deserializer.ReadPropertyWithExplicitDefault(214, "arg_orders", result->arg_orders, vector<BoundOrderByNode>());
+	deserializer.ReadProperty(214, "arg_orders", result->arg_orders);
 	return std::move(result);
 }
 

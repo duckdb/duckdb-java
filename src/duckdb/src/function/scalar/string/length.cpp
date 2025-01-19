@@ -110,14 +110,12 @@ static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
                                                       vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-
-	const auto &arg_type = arguments[0]->return_type.id();
-	if (arg_type == LogicalTypeId::ARRAY) {
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
 		bound_function.function = ArrayLengthFunction;
-	} else if (arg_type == LogicalTypeId::LIST) {
+	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST) {
 		bound_function.function = ListLengthFunction;
 	} else {
 		// Unreachable
@@ -185,7 +183,7 @@ static void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, V
 
 static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
                                                             vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	auto type = arguments[0]->return_type;
@@ -243,9 +241,6 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
-	for (auto &func : array_length.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
 	return (array_length);
 }
 

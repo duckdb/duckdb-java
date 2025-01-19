@@ -344,7 +344,7 @@ util_equalRules(const NFRule* rule1, const NFRule* rule2)
     return FALSE;
 }
 
-bool
+UBool
 NFRuleSet::operator==(const NFRuleSet& rhs) const
 {
     if (rules.size() == rhs.rules.size() &&

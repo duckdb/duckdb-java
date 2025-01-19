@@ -37,7 +37,6 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
 	schema_metadata_map[key] = value;
 }
-
 string ArrowSchemaMetadata::GetOption(const string &key) const {
 	auto it = schema_metadata_map.find(key);
 	if (it != schema_metadata_map.end()) {
@@ -47,6 +46,10 @@ string ArrowSchemaMetadata::GetOption(const string &key) const {
 	}
 }
 
+string ArrowSchemaMetadata::GetExtensionName() const {
+	return GetOption(ARROW_EXTENSION_NAME);
+}
+
 ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extension_name) {
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, extension_name);
@@ -54,24 +57,36 @@ ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extens
 	return metadata;
 }
 
-ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_name, const string &vendor_name) {
+ArrowSchemaMetadata ArrowSchemaMetadata::DuckDBInternalType(const string &type_name) {
 	ArrowSchemaMetadata metadata;
-	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
+	metadata.AddOption(ARROW_EXTENSION_NAME, ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	metadata.extension_metadata_map["vendor_name"] = vendor_name;
+	metadata.extension_metadata_map["vendor_name"] = "DuckDB";
 	metadata.extension_metadata_map["type_name"] = type_name;
 	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToJSONMap(metadata.extension_metadata_map));
 	return metadata;
 }
 
-bool ArrowSchemaMetadata::HasExtension() const {
-	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
-	return !arrow_extension.empty();
+bool ArrowSchemaMetadata::IsNonCanonicalType(const string &type, const string &vendor) const {
+	if (schema_metadata_map.find(ARROW_EXTENSION_NAME) == schema_metadata_map.end()) {
+		return false;
+	}
+	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != ARROW_EXTENSION_NON_CANONICAL) {
+		return false;
+	}
+	if (extension_metadata_map.find("type_name") == extension_metadata_map.end() ||
+	    extension_metadata_map.find("vendor_name") == extension_metadata_map.end()) {
+		return false;
+	}
+	auto vendor_name = extension_metadata_map.find("vendor_name")->second;
+	auto type_name = extension_metadata_map.find("type_name")->second;
+	return vendor_name == vendor && type_name == type;
 }
 
-ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
-	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
-	        extension_metadata_map["type_name"], std::move(format)};
+bool ArrowSchemaMetadata::HasExtension() const {
+	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+	// FIXME: We are currently ignoring the ogc extensions
+	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

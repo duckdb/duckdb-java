@@ -99,8 +99,8 @@ public:
         return NULL;
     }
 
-    virtual bool operator==(const LocalizationInfo* rhs) const;
-    inline  bool operator!=(const LocalizationInfo* rhs) const { return !operator==(rhs); }
+    virtual UBool operator==(const LocalizationInfo* rhs) const;
+    inline  UBool operator!=(const LocalizationInfo* rhs) const { return !operator==(rhs); }
 
     virtual int32_t getNumberOfRuleSets(void) const = 0;
     virtual const UChar* getRuleSetName(int32_t index) const = 0;
@@ -131,7 +131,7 @@ streq(const UChar* lhs, const UChar* rhs) {
     return FALSE;
 }
 
-bool
+UBool
 LocalizationInfo::operator==(const LocalizationInfo* rhs) const {
     if (rhs) {
         if (this == rhs) {
@@ -936,7 +936,7 @@ RuleBasedNumberFormat::clone() const
     return new RuleBasedNumberFormat(*this);
 }
 
-bool
+UBool
 RuleBasedNumberFormat::operator==(const Format& other) const
 {
     if (this == &other) {

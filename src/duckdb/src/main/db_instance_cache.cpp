@@ -3,9 +3,6 @@
 
 namespace duckdb {
 
-DatabaseCacheEntry::DatabaseCacheEntry() {
-}
-
 DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DuckDB> &database_p) : database(database_p) {
 }
 
@@ -94,21 +91,17 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {
 		instance_path = IN_MEMORY_PATH;
 	}
-	shared_ptr<DatabaseCacheEntry> cache_entry;
-	if (cache_instance) {
-		cache_entry = make_shared_ptr<DatabaseCacheEntry>();
-		config.db_cache_entry = cache_entry;
-	}
 	auto db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
-	if (cache_entry) {
-		// attach cache entry to the database
-		cache_entry->database = db_instance;
+	if (on_create) {
+		on_create(*db_instance);
+	}
+	if (cache_instance) {
+		// create the cache entry and attach it to the database
+		auto cache_entry = make_shared_ptr<DatabaseCacheEntry>(db_instance);
+		db_instance->instance->SetDatabaseCacheEntry(cache_entry);
 
 		// cache the entry in the db_instances map
 		db_instances[abs_database_path] = cache_entry;
-	}
-	if (on_create) {
-		on_create(*db_instance);
 	}
 	return db_instance;
 }

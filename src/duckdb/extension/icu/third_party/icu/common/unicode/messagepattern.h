@@ -526,14 +526,14 @@ public:
      * @return TRUE if this object is equivalent to the other one.
      * @stable ICU 4.8
      */
-    bool operator==(const MessagePattern &other) const;
+    UBool operator==(const MessagePattern &other) const;
 
     /**
      * @param other another object to compare with.
      * @return FALSE if this object is equivalent to the other one.
      * @stable ICU 4.8
      */
-    inline bool operator!=(const MessagePattern &other) const {
+    inline UBool operator!=(const MessagePattern &other) const {
         return !operator==(other);
     }
 
@@ -797,14 +797,14 @@ public:
          * @return TRUE if this object is equivalent to the other one.
          * @stable ICU 4.8
          */
-        bool operator==(const Part &other) const;
+        UBool operator==(const Part &other) const;
 
         /**
          * @param other another object to compare with.
          * @return FALSE if this object is equivalent to the other one.
          * @stable ICU 4.8
          */
-        inline bool operator!=(const Part &other) const {
+        inline UBool operator!=(const Part &other) const {
             return !operator==(other);
         }
 
