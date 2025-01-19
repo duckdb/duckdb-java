@@ -140,17 +140,12 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
 	make_date.AddFunction(
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
-	for (auto &func : make_date.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
 	return make_date;
 }
 
 ScalarFunction MakeTimeFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
-	                        ExecuteMakeTime<int64_t>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
+	                      ExecuteMakeTime<int64_t>);
 }
 
 ScalarFunctionSet MakeTimestampFun::GetFunctions() {
@@ -160,10 +155,6 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 	                                        LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
-
-	for (auto &func : operator_set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
 	return operator_set;
 }
 

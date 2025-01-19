@@ -18,7 +18,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
-#include "duckdb/common/atomic_ptr.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -82,8 +81,12 @@ public:
 	idx_t GetAllocationSize() const {
 		return allocation_size;
 	}
-	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
-		return compression.get();
+	bool HasCompressionFunction() const {
+		return compression != nullptr;
+	}
+	const CompressionFunction &GetCompressionFunction() const {
+		D_ASSERT(HasCompressionFunction());
+		return *compression;
 	}
 
 	bool HasParent() const {
@@ -235,7 +238,7 @@ private:
 	optional_ptr<ColumnData> parent;
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	atomic_ptr<const CompressionFunction> compression;
+	optional_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

@@ -23,7 +23,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 public:
-	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
+	DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p, const CompressionInfo &info);
 
 public:
 	void CreateEmptySegment(idx_t row_start);
@@ -37,7 +37,7 @@ public:
 	idx_t Finalize();
 
 public:
-	ColumnDataCheckpointData &checkpoint_data;
+	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;
 
 	// State regarding current segment

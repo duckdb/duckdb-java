@@ -34,9 +34,7 @@ ScalarFunction EncodeFun::GetFunction() {
 }
 
 ScalarFunction DecodeFun::GetFunction() {
-	ScalarFunction function({LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction);
 }
 
 } // namespace duckdb

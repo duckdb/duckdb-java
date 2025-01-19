@@ -109,10 +109,9 @@ public:
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
-	    If initialize_to_zero is true, the allocated data will be zero-initialized.
+	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
-	                  idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -152,7 +151,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	DUCKDB_API void Initialize(bool initialize_to_zero = false, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(bool zero_data = false, idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;

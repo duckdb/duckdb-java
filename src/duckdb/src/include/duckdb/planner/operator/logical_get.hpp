@@ -23,8 +23,7 @@ public:
 
 public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names,
-	           LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE));
+	           vector<LogicalType> returned_types, vector<string> returned_names);
 
 	//! The table index in the current bind context
 	idx_t table_index;
@@ -80,10 +79,6 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	LogicalType GetRowIdType() const {
-		return rowid_type;
-	}
-
 protected:
 	void ResolveTypes() override;
 
@@ -93,8 +88,5 @@ private:
 private:
 	//! Bound column IDs
 	vector<ColumnIndex> column_ids;
-
-	//! The type of the rowid column
-	LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE);
 };
 } // namespace duckdb
