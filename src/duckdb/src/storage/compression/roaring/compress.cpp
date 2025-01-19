@@ -100,7 +100,7 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 	appended_count += amount;
 }
 
-void ContainerCompressionState::OverrideArray(data_ptr_t &destination, bool nulls, idx_t count) {
+void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
 	if (nulls) {
 		append_function = AppendToArray<true>;
 	} else {
@@ -110,31 +110,28 @@ void ContainerCompressionState::OverrideArray(data_ptr_t &destination, bool null
 	if (count >= COMPRESSED_ARRAY_THRESHOLD) {
 		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
-		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
-		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(data_start);
+		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
 	} else {
-		destination = AlignValue<sizeof(uint16_t)>(destination);
 		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
 	}
 }
 
-void ContainerCompressionState::OverrideRun(data_ptr_t &destination, idx_t count) {
+void ContainerCompressionState::OverrideRun(data_ptr_t destination, idx_t count) {
 	append_function = AppendRun;
 
 	if (count >= COMPRESSED_RUN_THRESHOLD) {
 		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		run_counts = reinterpret_cast<uint8_t *>(destination);
-		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
-		compressed_runs = reinterpret_cast<uint8_t *>(data_start);
+		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_runs = reinterpret_cast<uint8_t *>(destination);
 	} else {
-		destination = AlignValue<sizeof(RunContainerRLEPair)>(destination);
 		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 }
 
-void ContainerCompressionState::OverrideUncompressed(data_ptr_t &destination) {
+void ContainerCompressionState::OverrideUncompressed(data_ptr_t destination) {
 	append_function = AppendBitset;
-	destination = AlignValue<sizeof(idx_t)>(destination);
 	uncompressed = reinterpret_cast<validity_t *>(destination);
 }
 
@@ -196,13 +193,13 @@ void ContainerCompressionState::Reset() {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_data,
+RoaringCompressState::RoaringCompressState(ColumnDataCheckpointer &checkpointer,
                                            unique_ptr<AnalyzeState> analyze_state_p)
     : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
       analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
-      container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+      container_metadata(analyze_state.container_metadata), checkpointer(checkpointer),
+      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
+	CreateEmptySegment(checkpointer.GetRowGroup().start);
 	total_count = 0;
 	InitializeContainer();
 }
@@ -279,8 +276,8 @@ void RoaringCompressState::InitializeContainer() {
 }
 
 void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
-	auto &db = checkpoint_data.GetDatabase();
-	auto &type = checkpoint_data.GetType();
+	auto &db = checkpointer.GetDatabase();
+	auto &type = checkpointer.GetType();
 
 	auto compressed_segment =
 	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
@@ -294,7 +291,7 @@ void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
 }
 
 void RoaringCompressState::FlushSegment() {
-	auto &state = checkpoint_data.GetCheckpointState();
+	auto &state = checkpointer.GetCheckpointState();
 	auto base_ptr = handle.Ptr();
 	// +======================================+
 	// |x|ddddddddddddddd||mmm|               |

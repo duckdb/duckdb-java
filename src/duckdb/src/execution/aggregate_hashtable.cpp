@@ -131,9 +131,6 @@ void GroupedAggregateHashTable::Abandon() {
 	// Start over
 	ClearPointerTable();
 	count = 0;
-
-	// Resetting the id ensures the dict state is reset properly when needed
-	state.dict_state.dictionary_id = string();
 }
 
 void GroupedAggregateHashTable::Repartition() {

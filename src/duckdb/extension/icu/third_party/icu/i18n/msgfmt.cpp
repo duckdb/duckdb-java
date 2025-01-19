@@ -389,7 +389,7 @@ MessageFormat::operator=(const MessageFormat& that)
     return *this;
 }
 
-bool
+UBool
 MessageFormat::operator==(const Format& rhs) const
 {
     if (this == &rhs) return TRUE;
@@ -1869,7 +1869,7 @@ UBool MessageFormat::equalFormats(const void* left, const void* right) {
 }
 
 
-bool MessageFormat::DummyFormat::operator==(const Format&) const {
+UBool MessageFormat::DummyFormat::operator==(const Format&) const {
     return TRUE;
 }
 

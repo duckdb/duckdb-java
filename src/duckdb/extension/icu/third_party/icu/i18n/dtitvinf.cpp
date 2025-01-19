@@ -165,7 +165,7 @@ DateIntervalInfo::~DateIntervalInfo() {
 }
 
 
-bool
+UBool
 DateIntervalInfo::operator==(const DateIntervalInfo& other) const {
     UBool equal = (
       fFallbackIntervalPattern == other.fFallbackIntervalPattern &&

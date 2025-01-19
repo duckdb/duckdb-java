@@ -11,7 +11,6 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -132,8 +131,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	idx_t result_count;
 	ErrorData error;
-	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count, error,
-	                              my_stream->extension_types)) {
+	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
+	                              error)) {
 		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;
@@ -176,9 +175,6 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
-
-	extension_types =
-	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
 }
 
 } // namespace duckdb

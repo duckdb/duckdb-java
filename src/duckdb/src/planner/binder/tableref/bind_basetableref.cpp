@@ -247,9 +247,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
-		auto logical_get =
-		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), table.GetRowIdType());
+		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
+		                                         std::move(return_types), std::move(return_names));
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

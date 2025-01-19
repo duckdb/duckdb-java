@@ -1031,7 +1031,7 @@ Calendar::getCalendarTypeFromLocale(
     }
 }
 
-bool
+UBool
 Calendar::operator==(const Calendar& that) const
 {
     UErrorCode status = U_ZERO_ERROR;

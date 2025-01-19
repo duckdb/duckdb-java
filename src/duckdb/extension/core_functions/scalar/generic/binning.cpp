@@ -500,7 +500,6 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	for (auto &function : functions.functions) {
 		function.serialize = EquiWidthBinSerialize;
 		function.deserialize = EquiWidthBinDeserialize;
-		BaseScalarFunction::SetReturnsError(function);
 	}
 	return functions;
 }

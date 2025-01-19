@@ -100,14 +100,14 @@ public:
      * @return TRUE if the two parse positions are equal, FALSE otherwise.
      * @stable ICU 2.0
      */
-    inline bool              operator==(const ParsePosition& that) const;
+    inline UBool              operator==(const ParsePosition& that) const;
 
     /**
      * Equality operator.
      * @return TRUE if the two parse positions are not equal, FALSE otherwise.
      * @stable ICU 2.0
      */
-    inline bool              operator!=(const ParsePosition& that) const;
+    inline UBool              operator!=(const ParsePosition& that) const;
 
     /**
      * Clone this object.
@@ -192,7 +192,7 @@ ParsePosition::operator=(const ParsePosition& copy)
   return *this;
 }
 
-inline bool
+inline UBool
 ParsePosition::operator==(const ParsePosition& copy) const
 {
   if(index != copy.index || errorIndex != copy.errorIndex)
@@ -201,7 +201,7 @@ ParsePosition::operator==(const ParsePosition& copy) const
   return TRUE;
 }
 
-inline bool
+inline UBool
 ParsePosition::operator!=(const ParsePosition& copy) const
 {
   return !operator==(copy);

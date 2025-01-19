@@ -418,10 +418,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(result));
+			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(result));
 		}
-		result->SetParentSchema(s_ele);
 		return result;
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
@@ -473,6 +472,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
 	}
 	if (parquet_options.file_row_number) {
+		file_row_number_idx = root_struct_reader.child_readers.size();
+
 		generated_column_schema.push_back(SchemaElement());
 		root_struct_reader.child_readers.push_back(make_uniq<RowNumberColumnReader>(
 		    *this, LogicalType::BIGINT, generated_column_schema.back(), next_file_idx, 0, 0));
@@ -497,39 +498,20 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	root_reader = CreateReader(context);
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
-
-	auto &struct_reader = root_reader->Cast<StructColumnReader>();
-	auto &child_readers = struct_reader.child_readers;
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
-
-	D_ASSERT(child_readers.size() >= child_types.size());
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto &type_pair = child_types[i];
-		auto column = MultiFileReaderColumnDefinition(type_pair.first, type_pair.second);
-		auto &column_reader = *child_readers[i];
-		auto &column_schema = column_reader.Schema();
-
-		if (column_schema.__isset.field_id) {
-			column.identifier = Value::INTEGER(column_schema.field_id);
-		} else if (column_reader.GetParentSchema()) {
-			auto &parent_column_schema = *column_reader.GetParentSchema();
-			if (parent_column_schema.__isset.field_id) {
-				column.identifier = Value::INTEGER(parent_column_schema.field_id);
-			}
-		}
-		columns.emplace_back(std::move(column));
+	for (auto &type_pair : child_types) {
+		names.push_back(type_pair.first);
+		return_types.push_back(type_pair.second);
 	}
 
 	// Add generated constant column for row number
 	if (parquet_options.file_row_number) {
-		for (auto &column : columns) {
-			auto &name = column.name;
-			if (StringUtil::CIEquals(name, "file_row_number")) {
-				throw BinderException(
-				    "Using file_row_number option on file with column named file_row_number is not supported");
-			}
+		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
+			throw BinderException(
+			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}
-		columns.emplace_back("file_row_number", LogicalType::BIGINT);
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("file_row_number");
 	}
 }
 
@@ -542,8 +524,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
 	ParquetColumnDefinition result;
-	auto &identifier = StructValue::GetChildren(column_value)[0];
-	result.identifier = identifier;
+	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
 
 	const auto &column_def = StructValue::GetChildren(column_value)[1];
 	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);
@@ -625,12 +606,12 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	idx_t file_col_idx;
-	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
-		if (columns[file_col_idx].name == name) {
+	for (file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
+		if (names[file_col_idx] == name) {
 			break;
 		}
 	}
-	if (file_col_idx == columns.size()) {
+	if (file_col_idx == names.size()) {
 		return nullptr;
 	}
 
@@ -778,13 +759,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			FilterPropagateResult prune_result;
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
-			bool is_generated_column = column_reader.FileIdx() >= group.columns.size();
-			if (!column_reader.Type().IsNested() && !is_generated_column &&
+			if (!column_reader.Type().IsNested() &&
 			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader.FileIdx()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR &&
 			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.max_value) {
 

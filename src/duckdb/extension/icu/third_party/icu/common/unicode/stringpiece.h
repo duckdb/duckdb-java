@@ -248,7 +248,7 @@ operator==(const StringPiece& x, const StringPiece& y);
  * @return TRUE if the string data is not equal
  * @stable ICU 4.8
  */
-inline bool operator!=(const StringPiece& x, const StringPiece& y) {
+inline UBool operator!=(const StringPiece& x, const StringPiece& y) {
   return !(x == y);
 }
 

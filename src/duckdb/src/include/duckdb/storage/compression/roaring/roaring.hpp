@@ -244,9 +244,7 @@ public:
 	//! Flushed analyze data
 
 	//! The space used by the current segment
-	idx_t data_size = 0;
-	idx_t metadata_size = 0;
-
+	idx_t space_used = 0;
 	//! The total amount of segments to write
 	idx_t segment_count = 0;
 	//! The amount of values in the current segment;
@@ -273,9 +271,9 @@ public:
 
 public:
 	void Append(bool null, uint16_t amount = 1);
-	void OverrideArray(data_ptr_t &destination, bool nulls, idx_t count);
-	void OverrideRun(data_ptr_t &destination, idx_t count);
-	void OverrideUncompressed(data_ptr_t &destination);
+	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count);
+	void OverrideRun(data_ptr_t destination, idx_t count);
+	void OverrideUncompressed(data_ptr_t destination);
 	void Finalize();
 	ContainerMetadata GetResult();
 	void Reset();
@@ -321,7 +319,7 @@ public:
 
 struct RoaringCompressState : public CompressionState {
 public:
-	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
+	explicit RoaringCompressState(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> analyze_state_p);
 
 public:
 	//! RoaringStateAppender interface
@@ -352,7 +350,7 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
 
-	ColumnDataCheckpointData &checkpoint_data;
+	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;

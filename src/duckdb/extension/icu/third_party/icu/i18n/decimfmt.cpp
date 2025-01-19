@@ -500,7 +500,7 @@ DecimalFormat* DecimalFormat::clone() const {
     return nullptr;
 }
 
-bool DecimalFormat::operator==(const Format& other) const {
+UBool DecimalFormat::operator==(const Format& other) const {
     auto* otherDF = dynamic_cast<const DecimalFormat*>(&other);
     if (otherDF == nullptr) {
         return false;

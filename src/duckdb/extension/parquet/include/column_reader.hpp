@@ -57,9 +57,6 @@ public:
 	ParquetReader &Reader();
 	const LogicalType &Type() const;
 	const SchemaElement &Schema() const;
-	optional_ptr<const SchemaElement> GetParentSchema() const;
-	void SetParentSchema(const SchemaElement &parent_schema);
-
 	idx_t FileIdx() const;
 	idx_t MaxDefine() const;
 	idx_t MaxRepeat() const;
@@ -143,7 +140,6 @@ protected:
 
 protected:
 	const SchemaElement &schema;
-	optional_ptr<const SchemaElement> parent_schema;
 
 	idx_t file_idx;
 	idx_t max_define;

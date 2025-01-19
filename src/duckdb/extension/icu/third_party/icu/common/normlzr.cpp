@@ -108,7 +108,7 @@ int32_t Normalizer::hashCode() const
     return text->hashCode() + fUMode + fOptions + buffer.hashCode() + bufferPos + currentIndex + nextIndex;
 }
     
-bool Normalizer::operator==(const Normalizer& that) const
+UBool Normalizer::operator==(const Normalizer& that) const
 {
     return
         this==&that ||

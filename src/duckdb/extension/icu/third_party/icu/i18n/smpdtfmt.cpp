@@ -628,7 +628,7 @@ SimpleDateFormat::clone() const
 
 //----------------------------------------------------------------------
 
-bool
+UBool
 SimpleDateFormat::operator==(const Format& other) const
 {
     if (DateFormat::operator==(other)) {

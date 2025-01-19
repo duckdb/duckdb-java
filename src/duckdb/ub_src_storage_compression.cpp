@@ -24,5 +24,3 @@
 
 #include "src/storage/compression/fsst.cpp"
 
-#include "src/storage/compression/empty_validity.cpp"
-

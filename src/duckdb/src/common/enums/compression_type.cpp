@@ -24,8 +24,6 @@ bool CompressionTypeIsDeprecated(CompressionType compression_type) {
 
 CompressionType CompressionTypeFromString(const string &str) {
 	auto compression = StringUtil::Lower(str);
-	//! NOTE: this explicitly does not include 'constant' and 'empty validity', these are internal compression functions
-	//! not general purpose
 	if (compression == "uncompressed") {
 		return CompressionType::COMPRESSION_UNCOMPRESSED;
 	} else if (compression == "rle") {
@@ -85,8 +83,6 @@ string CompressionTypeToString(CompressionType type) {
 		return "ALPRD";
 	case CompressionType::COMPRESSION_ROARING:
 		return "Roaring";
-	case CompressionType::COMPRESSION_EMPTY:
-		return "Empty Validity";
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}

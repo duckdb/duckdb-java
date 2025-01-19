@@ -275,7 +275,7 @@ Formattable::operator=(const Formattable& source)
 
 // -------------------------------------
 
-bool
+UBool
 Formattable::operator==(const Formattable& that) const
 {
     int32_t i;

@@ -6,11 +6,6 @@
 namespace duckdb {
 
 const uint64_t VERSION_NUMBER = 64;
-const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 65;
-
-static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
-static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
 
 struct StorageVersionInfo {
 	const char *version_name;
@@ -76,7 +71,6 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.1.1", 64},
 	{"v1.1.2", 64},
 	{"v1.1.3", 64},
-	{"v1.2.0", 65},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO

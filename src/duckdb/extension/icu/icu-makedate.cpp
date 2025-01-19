@@ -94,13 +94,8 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename T>
 	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
-		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), [&](T micros) {
-			const auto result = timestamp_t(micros);
-			if (!Timestamp::IsFinite(result)) {
-				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
-			}
-			return result;
-		});
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
+		                                       [&](T micros) { return timestamp_t(micros); });
 	}
 
 	template <typename T>
@@ -142,27 +137,21 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
-		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                        Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
-		return function;
+		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
+		                      Execute<TA>, Bind);
 	}
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
-		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
-		return function;
+		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
+		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
 	}
 
 	static void AddFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
-		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
-		BaseScalarFunction::SetReturnsError(function);
-		set.AddFunction(function);
+		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
 		ExtensionUtil::RegisterFunction(db, set);
 	}
 };

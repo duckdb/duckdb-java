@@ -482,7 +482,7 @@ TimeZoneFormat::operator=(const TimeZoneFormat& other) {
 }
 
 
-bool
+UBool
 TimeZoneFormat::operator==(const Format& other) const {
     TimeZoneFormat* tzfmt = (TimeZoneFormat*)&other;
 

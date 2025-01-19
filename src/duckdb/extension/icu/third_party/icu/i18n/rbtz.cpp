@@ -88,7 +88,7 @@ RuleBasedTimeZone::operator=(const RuleBasedTimeZone& right) {
     return *this;
 }
 
-bool
+UBool
 RuleBasedTimeZone::operator==(const TimeZone& that) const {
     if (this == &that) {
         return TRUE;
@@ -108,7 +108,7 @@ RuleBasedTimeZone::operator==(const TimeZone& that) const {
     return FALSE;
 }
 
-bool
+UBool
 RuleBasedTimeZone::operator!=(const TimeZone& that) const {
     return !operator==(that);
 }

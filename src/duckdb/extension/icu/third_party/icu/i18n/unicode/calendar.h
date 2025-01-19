@@ -451,7 +451,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual bool operator==(const Calendar& that) const;
+    virtual UBool operator==(const Calendar& that) const;
 
     /**
      * Compares the inequality of two Calendar objects.
@@ -461,7 +461,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    bool operator!=(const Calendar& that) const {return !operator==(that);}
+    UBool operator!=(const Calendar& that) const {return !operator==(that);}
 
     /**
      * Returns TRUE if the given Calendar object is equivalent to this

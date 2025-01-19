@@ -119,6 +119,10 @@ TupleDataSegment::~TupleDataSegment() {
 	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();
+	if (Allocator::SupportsFlush() && allocator &&
+	    data_size > allocator->GetBufferManager().GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
 	allocator.reset();
 }
 

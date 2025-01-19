@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import pickle
+import platform
 import argparse
 
 parser = argparse.ArgumentParser(description='Inlines DuckDB Sources')
@@ -13,9 +14,17 @@ parser.add_argument('--duckdb', action='store',
 
 args = parser.parse_args()
 
-
 # list of extensions to bundle
 extensions = ['core_functions', 'parquet', 'icu', 'json']
+
+# Conditionally include jemalloc
+is_android = hasattr(sys, 'getandroidapilevel')
+is_pyodide = 'PYODIDE' in os.environ
+use_jemalloc = (
+    not is_android and not is_pyodide and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+)
+if use_jemalloc:
+  extensions.append('jemalloc')
 
 # path to target
 basedir = os.getcwd()
@@ -53,7 +62,7 @@ include_list = [os.path.join('src', 'duckdb', x) for x in include_list]
 libraries = []
 
 def sanitize_path(x):
-    return x.replace('\\', '/')
+  return x.replace('\\', '/')
 
 
 source_list = [sanitize_path(x) for x in source_list]
@@ -63,11 +72,11 @@ libraries = [sanitize_path(x) for x in libraries]
 os.chdir(basedir)
 
 with open('CMakeLists.txt.in', 'r') as f:
-    cmake = f.read()
+  cmake = f.read()
 
 
 def replace_entries(cmake, replacement_map):
-    cmake.replace()
+  cmake.replace()
 
 
 cmake = cmake.replace('${SOURCE_FILES}', ' '.join(source_list))
@@ -79,4 +88,4 @@ cmake = cmake.replace('${LIBRARY_FILES}', ' '.join(libraries))
 
 
 with open('CMakeLists.txt', 'w+') as f:
-    f.write(cmake)
+  f.write(cmake)

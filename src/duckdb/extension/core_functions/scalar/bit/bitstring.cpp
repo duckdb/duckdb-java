@@ -46,9 +46,6 @@ ScalarFunctionSet BitStringFun::GetFunctions() {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
 	bitstring.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
-	for (auto &func : bitstring.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
 	return bitstring;
 }
 
@@ -67,10 +64,8 @@ struct GetBitOperator {
 };
 
 ScalarFunction GetBitFun::GetFunction() {
-	ScalarFunction func({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                    ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
-	BaseScalarFunction::SetReturnsError(func);
-	return func;
+	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
+	                      ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -95,10 +90,8 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction SetBitFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::BIT,
-	                        SetBitOperation);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::BIT,
+	                      SetBitOperation);
 }
 
 //===--------------------------------------------------------------------===//

@@ -178,9 +178,9 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT: {
-			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
-			function.statistics = PropagateAbsStats;
-			abs.AddFunction(function);
+			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
+			func.statistics = PropagateAbsStats;
+			abs.AddFunction(func);
 			break;
 		}
 		case LogicalTypeId::UTINYINT:
@@ -193,9 +193,6 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 			abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 			break;
 		}
-	}
-	for (auto &func : abs.functions) {
-		BaseScalarFunction::SetReturnsError(func);
 	}
 	return abs;
 }
@@ -768,10 +765,8 @@ struct SqrtOperator {
 };
 
 ScalarFunction SqrtFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -807,10 +802,8 @@ struct LnOperator {
 };
 
 ScalarFunction LnFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LnOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, LnOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -830,10 +823,8 @@ struct Log10Operator {
 };
 
 ScalarFunction Log10Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log10Operator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, Log10Operator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -856,9 +847,6 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
-	for (auto &function : funcs.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return funcs;
 }
 
@@ -879,10 +867,8 @@ struct Log2Operator {
 };
 
 ScalarFunction Log2Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log2Operator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, Log2Operator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1051,10 +1037,8 @@ struct SinOperator {
 };
 
 ScalarFunction SinFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1068,10 +1052,8 @@ struct CosOperator {
 };
 
 ScalarFunction CosFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1085,10 +1067,8 @@ struct TanOperator {
 };
 
 ScalarFunction TanFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1105,10 +1085,8 @@ struct ASinOperator {
 };
 
 ScalarFunction AsinFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1155,10 +1133,8 @@ struct ACos {
 };
 
 ScalarFunction AcosFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1253,10 +1229,8 @@ struct AtanhOperator {
 };
 
 ScalarFunction AtanhFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1287,10 +1261,8 @@ struct CotOperator {
 };
 
 ScalarFunction CotFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1307,10 +1279,8 @@ struct GammaOperator {
 };
 
 ScalarFunction GammaFun::GetFunction() {
-	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                           ScalarFunction::UnaryFunction<double, double, GammaOperator>);
-	BaseScalarFunction::SetReturnsError(func);
-	return func;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, GammaOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1327,10 +1297,8 @@ struct LogGammaOperator {
 };
 
 ScalarFunction LogGammaFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1350,10 +1318,8 @@ struct FactorialOperator {
 };
 
 ScalarFunction FactorialOperatorFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTEGER}, LogicalType::HUGEINT,
-	                        ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
-	BaseScalarFunction::SetReturnsError(function);
-	return function;
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::HUGEINT,
+	                      ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1460,9 +1426,6 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	funcs.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
-	for (auto &function : funcs.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return funcs;
 }
 

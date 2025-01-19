@@ -112,9 +112,6 @@ ScalarFunctionSet BitwiseAndFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseANDOperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 
@@ -145,9 +142,6 @@ ScalarFunctionSet BitwiseOrFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseOROperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 
@@ -178,9 +172,6 @@ ScalarFunctionSet BitwiseXorFun::GetFunctions() {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseXOROperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 
@@ -209,9 +200,6 @@ ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIT, BitwiseNOTOperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 
@@ -275,9 +263,6 @@ ScalarFunctionSet LeftShiftFun::GetFunctions() {
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftLeftOperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 
@@ -321,9 +306,6 @@ ScalarFunctionSet RightShiftFun::GetFunctions() {
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftRightOperation));
-	for (auto &function : functions.functions) {
-		BaseScalarFunction::SetReturnsError(function);
-	}
 	return functions;
 }
 

@@ -114,7 +114,7 @@ public:
      * character in the same character-storage object
      * @stable ICU 2.0
      */
-    virtual bool operator==(const ForwardCharacterIterator& that) const = 0;
+    virtual UBool operator==(const ForwardCharacterIterator& that) const = 0;
     
     /**
      * Returns true when the iterators refer to different
@@ -126,7 +126,7 @@ public:
      * same text-storage object
      * @stable ICU 2.0
      */
-    inline bool operator!=(const ForwardCharacterIterator& that) const;
+    inline UBool operator!=(const ForwardCharacterIterator& that) const;
     
     /**
      * Generates a hash code for this iterator.  
@@ -692,7 +692,7 @@ protected:
     int32_t  end;
 };
 
-inline bool
+inline UBool
 ForwardCharacterIterator::operator!=(const ForwardCharacterIterator& that) const {
     return !operator==(that);
 }
