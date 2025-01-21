@@ -1,10 +1,10 @@
 package org.duckdb;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.math.BigDecimal;
 import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {
@@ -91,6 +91,14 @@ public class DuckDBAppender implements AutoCloseable {
             DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
         } else {
             DuckDBNative.duckdb_jdbc_appender_append_string(appender_ref, value.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    public void append(byte[] value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            DuckDBNative.duckdb_jdbc_appender_append_bytes(appender_ref, value);
         }
     }
 

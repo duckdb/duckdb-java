@@ -1,14 +1,14 @@
 package org.duckdb;
 
+import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
+import static org.duckdb.test.Assertions.assertEquals;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.sql.Types;
-
-import static org.duckdb.test.Assertions.assertEquals;
-import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 
 public class TestExtensionTypes {
 

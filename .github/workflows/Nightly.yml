@@ -1,0 +1,65 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/Nightly.yml"
+      - "vendor.py"
+  workflow_dispatch:
+  schedule:
+    - cron: "17 0 * * *"
+
+name: Vendor upstream DuckDB sources
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    outputs:
+      did_vendor: ${{ steps.vendor.outputs.vendor }}
+
+    name: "Update vendored sources"
+    if: github.repository == 'duckdb/duckdb-java'
+
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb
+          path: .git/duckdb
+          fetch-depth: 0
+
+      - name: Vendor sources
+        id: vendor
+        run: |
+          git config --global user.email "github_bot@duckdblabs.com"
+          git config --global user.name "DuckDB Labs GitHub Bot"
+          git rm -rf src/duckdb
+          python vendor.py --duckdb .git/duckdb
+          git add src/duckdb CMakeLists.txt
+          rm -rf .git/duckdb
+          export REV=`git rev-parse --short HEAD`
+          git commit -m "Update vendored DuckDB sources to $REV"
+          git push --dry-run
+          # Check if ahead of upstream branch
+          # If yes, set a step output
+          if [ $(git rev-list HEAD...origin/main --count) -gt 0 ]; then
+            # Avoid set-output, it's deprecated
+            echo "vendor=ok" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
+        run: |
+          git push -u origin HEAD
+
+  rebuild:
+    needs: vendor
+    if: ${{ needs.vendor.outputs.did_vendor != '' }}
+    uses: ./.github/workflows/Java.yml
+    secrets: inherit

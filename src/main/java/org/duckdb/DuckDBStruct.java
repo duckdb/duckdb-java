@@ -2,8 +2,8 @@ package org.duckdb;
 
 import java.sql.SQLException;
 import java.sql.Struct;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.HashMap;
 
 public class DuckDBStruct implements Struct {
     private final Object[] attributes;
@@ -41,7 +41,7 @@ public class DuckDBStruct implements Struct {
 
     public Map<String, Object> getMap() throws SQLException {
         Object[] values = getAttributes();
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         for (int i = 0; i < values.length; i++) {
             result.put(keys[i], values[i]);
         }
