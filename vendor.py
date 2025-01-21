@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import pickle
+import platform
 import argparse
 
 parser = argparse.ArgumentParser(description='Inlines DuckDB Sources')
@@ -16,6 +17,15 @@ args = parser.parse_args()
 
 # list of extensions to bundle
 extensions = ['core_functions', 'parquet', 'icu', 'json']
+
+# Conditionally include jemalloc
+is_android = hasattr(sys, 'getandroidapilevel')
+is_pyodide = 'PYODIDE' in os.environ
+use_jemalloc = (
+    not is_android and not is_pyodide and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+)
+if use_jemalloc:
+  extensions.append('jemalloc')
 
 # path to target
 basedir = os.getcwd()
