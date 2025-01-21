@@ -12,19 +12,22 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import org.duckdb.DuckDBTimestamp;
 
 class DuckDBVector {
     // Constant to construct BigDecimals from hugeint_t
@@ -198,6 +201,30 @@ class DuckDBVector {
         }
         Object o = getObject(idx);
         return Timestamp.valueOf(o.toString());
+    }
+
+    DuckDBTimestamp getDuckDBTimestamp(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        switch (this.duckdb_type) {
+        case TIMESTAMP:
+        case TIMESTAMP_WITH_TIME_ZONE:
+            long epochMicros = getbuf(idx, 8).getLong();
+            return new DuckDBTimestamp(epochMicros);
+        case TIMESTAMP_MS:
+            long epochMillis = getbuf(idx, 8).getLong();
+            return new DuckDBTimestamp(Math.multiplyExact(epochMillis, 1_000));
+        case TIMESTAMP_NS:
+            long epochNanos = getbuf(idx, 8).getLong();
+            return new DuckDBTimestamp(epochNanos / 1000);
+        case TIMESTAMP_S:
+            long epochSeconds = getbuf(idx, 8).getLong();
+            return new DuckDBTimestamp(Math.multiplyExact(epochSeconds, 1_000_000));
+        }
+
+        throw new SQLFeatureNotSupportedException("getDuckDBTimestamp");
     }
 
     UUID getUuid(int idx) throws SQLException {
@@ -541,6 +568,18 @@ class DuckDBVector {
         }
         if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
             return DuckDBTimestamp.toLocalDateTime(getbuf(idx, 8).getLong());
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
+            long epochMillis = getbuf(idx, 8).getLong();
+            return Instant.EPOCH.plusMillis(epochMillis).atZone(ZoneOffset.UTC).toLocalDateTime();
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
+            long epochNanos = getbuf(idx, 8).getLong();
+            return Instant.EPOCH.plusNanos(epochNanos).atZone(ZoneOffset.UTC).toLocalDateTime();
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_S)) {
+            long epochSeconds = getbuf(idx, 8).getLong();
+            return Instant.ofEpochSecond(epochSeconds).atZone(ZoneOffset.UTC).toLocalDateTime();
         }
         Object o = getObject(idx);
         return LocalDateTime.parse(o.toString());

@@ -377,6 +377,13 @@ public class DuckDBResultSet implements ResultSet {
         return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1);
     }
 
+    private DuckDBTimestamp getDuckDBTimestamp(int columnIndex) throws SQLException {
+        if (check_and_null(columnIndex)) {
+            return null;
+        }
+        return current_chunk[columnIndex - 1].getDuckDBTimestamp(chunk_idx - 1);
+    }
+
     private LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
         if (check_and_null(columnIndex)) {
             return null;
@@ -1241,10 +1248,26 @@ public class DuckDBResultSet implements ResultSet {
             } else {
                 throw new SQLException("Can't convert value to Timestamp " + type.toString());
             }
+        } else if (type == DuckDBTimestamp.class) {
+            switch (sqlType) {
+            case TIMESTAMP:
+            case TIMESTAMP_MS:
+            case TIMESTAMP_NS:
+            case TIMESTAMP_S:
+            case TIMESTAMP_WITH_TIME_ZONE:
+                return type.cast(getDuckDBTimestamp(columnIndex));
+            default:
+                throw new SQLException("Can't convert value to DuckDBTimestamp " + type.toString());
+            }
         } else if (type == LocalDateTime.class) {
-            if (isTimestamp(sqlType)) {
+            switch (sqlType) {
+            case TIMESTAMP:
+            case TIMESTAMP_MS:
+            case TIMESTAMP_NS:
+            case TIMESTAMP_S:
+            case TIMESTAMP_WITH_TIME_ZONE:
                 return type.cast(getLocalDateTime(columnIndex));
-            } else {
+            default:
                 throw new SQLException("Can't convert value to LocalDateTime " + type.toString());
             }
         } else if (type == BigInteger.class) {
