@@ -27,8 +27,7 @@ public class DuckDBTimestamp {
     }
 
     public DuckDBTimestamp(OffsetDateTime offsetDateTime) {
-        this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC),
-                                                                 ChronoUnit.MICROS);
+        this.timeMicros = offsetDateTime2Micros(offsetDateTime);
     }
 
     public DuckDBTimestamp(Timestamp sqlTimestamp) {
@@ -100,6 +99,11 @@ public class DuckDBTimestamp {
 
     public static long localDateTime2Micros(LocalDateTime localDateTime) {
         return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
+    }
+
+    public static long offsetDateTime2Micros(OffsetDateTime offsetDateTime) {
+        return DuckDBTimestamp.RefLocalDateTime.until(offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC),
+                ChronoUnit.MICROS);
     }
 
     // TODO: move this to C++ side

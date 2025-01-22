@@ -223,30 +223,6 @@ class DuckDBVector {
         return Timestamp.valueOf(o.toString());
     }
 
-    DuckDBTimestamp getDuckDBTimestamp(int idx) throws SQLException {
-        if (check_and_null(idx)) {
-            return null;
-        }
-
-        switch (this.duckdb_type) {
-        case TIMESTAMP:
-        case TIMESTAMP_WITH_TIME_ZONE:
-            long epochMicros = getbuf(idx, 8).getLong();
-            return new DuckDBTimestamp(epochMicros);
-        case TIMESTAMP_MS:
-            long epochMillis = getbuf(idx, 8).getLong();
-            return new DuckDBTimestamp(Math.multiplyExact(epochMillis, 1_000));
-        case TIMESTAMP_NS:
-            long epochNanos = getbuf(idx, 8).getLong();
-            return new DuckDBTimestamp(epochNanos / 1000);
-        case TIMESTAMP_S:
-            long epochSeconds = getbuf(idx, 8).getLong();
-            return new DuckDBTimestamp(Math.multiplyExact(epochSeconds, 1_000_000));
-        }
-
-        throw new SQLFeatureNotSupportedException("getDuckDBTimestamp");
-    }
-
     UUID getUuid(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;

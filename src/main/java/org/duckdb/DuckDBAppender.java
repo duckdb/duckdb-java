@@ -4,7 +4,10 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+
 import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {
@@ -51,16 +54,25 @@ public class DuckDBAppender implements AutoCloseable {
         DuckDBNative.duckdb_jdbc_appender_append_long(appender_ref, value);
     }
 
-    // New naming schema for object params to keep compatibility with calling "append(null)"
-
-    public void appendDuckDBTimestamp(DuckDBTimestamp value) throws SQLException {
+    public void appendTimestamp(Timestamp value) throws SQLException {
         if (value == null) {
             DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
         } else {
-            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, value.getMicrosEpoch());
+            long timeInMicros = DuckDBTimestamp.getMicroseconds(value);
+            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
         }
     }
 
+    public void appendOffsetDateTime(OffsetDateTime value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            long timeInMicros = DuckDBTimestamp.offsetDateTime2Micros(value);
+            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
+        }
+    }
+
+    // New naming schema for object params to keep compatibility with calling "append(null)"
     public void appendLocalDateTime(LocalDateTime value) throws SQLException {
         if (value == null) {
             DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
