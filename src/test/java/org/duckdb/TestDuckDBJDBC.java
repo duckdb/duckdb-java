@@ -1032,6 +1032,38 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_parameter_metadata() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), "
+                     + "dec128 DECIMAL(38,10), int INTEGER, uint UINTEGER)");
+        PreparedStatement ps1 = conn.prepareStatement(
+            "INSERT INTO q (id, dec16, dec32, dec64, dec128, int, uint) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        ParameterMetaData meta = ps1.getParameterMetaData();
+        assertEquals(3, meta.getPrecision(1));
+        assertEquals(0, meta.getScale(1));
+        assertEquals(4, meta.getPrecision(2));
+        assertEquals(1, meta.getScale(2));
+        assertEquals(9, meta.getPrecision(3));
+        assertEquals(4, meta.getScale(3));
+        assertEquals(18, meta.getPrecision(4));
+        assertEquals(7, meta.getScale(4));
+        assertEquals(38, meta.getPrecision(5));
+        assertEquals(10, meta.getScale(5));
+        assertEquals(0, meta.getPrecision(6));
+        assertEquals(0, meta.getScale(6));
+        assertEquals(0, meta.getPrecision(7));
+        assertEquals(0, meta.getScale(7));
+
+        assertTrue(meta.isSigned(5));
+        assertTrue(meta.isSigned(6));
+        assertFalse(meta.isSigned(7));
+
+        assertTrue(BigDecimal.class.getName().equals(meta.getParameterClassName(1)));
+        assertTrue(Integer.class.getName().equals(meta.getParameterClassName(6)));
+        assertTrue(Long.class.getName().equals(meta.getParameterClassName(7)));
+    }
+
     public static void test_bigdecimal() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
