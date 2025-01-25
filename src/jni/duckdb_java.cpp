@@ -105,6 +105,13 @@ static jmethodID J_Object_toString;
 
 static jclass J_DuckDBTime;
 
+static jobject J_ProfilerPrintFormat_QUERY_TREE;
+static jobject J_ProfilerPrintFormat_JSON;
+static jobject J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER;
+static jobject J_ProfilerPrintFormat_NO_OUTPUT;
+static jobject J_ProfilerPrintFormat_HTML;
+static jobject J_ProfilerPrintFormat_GRAPHVIZ;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
@@ -121,6 +128,12 @@ static jclass GetClassRef(JNIEnv *env, const string &name) {
 	toFree.emplace_back(globalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 	return globalRef;
+}
+
+static jobject GetObjectStaticField(JNIEnv *env, jclass clazz, const char *name, const char *sig) {
+	auto field = env->GetStaticFieldID(clazz, name, sig);
+	auto obj = env->GetStaticObjectField(clazz, field);
+	return env->NewGlobalRef(obj);
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -291,6 +304,17 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_Object_toString = env->GetMethodID(tmpLocalRef, "toString", "()Ljava/lang/String;");
 	env->DeleteLocalRef(tmpLocalRef);
 
+	tmpLocalRef = env->FindClass("org/duckdb/ProfilerPrintFormat");
+
+	J_ProfilerPrintFormat_QUERY_TREE = GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_JSON = GetObjectStaticField(env, tmpLocalRef, "JSON", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER = GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE_OPTIMIZER", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_NO_OUTPUT = GetObjectStaticField(env, tmpLocalRef, "NO_OUTPUT", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_HTML = GetObjectStaticField(env, tmpLocalRef, "HTML", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_GRAPHVIZ = GetObjectStaticField(env, tmpLocalRef, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
+
+	env->DeleteLocalRef(tmpLocalRef);
+
 	return JNI_VERSION;
 }
 
@@ -317,6 +341,12 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	env->DeleteGlobalRef(J_DuckResultSetMeta);
 	env->DeleteGlobalRef(J_DuckVector);
 	env->DeleteGlobalRef(J_ByteBuffer);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_QUERY_TREE);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_JSON);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_NO_OUTPUT);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_HTML);
+	env->DeleteGlobalRef(J_ProfilerPrintFormat_GRAPHVIZ);
 
 	for (auto &clazz : toFree) {
 		env->DeleteGlobalRef(clazz);
@@ -1268,4 +1298,35 @@ void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
 	byte_test_type_type.SetAlias("byte_test_type");
 	ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
+}
+
+static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE)) {
+		return ProfilerPrintFormat::QUERY_TREE;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_JSON)) {
+		return ProfilerPrintFormat::JSON;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER)) {
+		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_NO_OUTPUT)) {
+		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_HTML)) {
+		return ProfilerPrintFormat::HTML;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_GRAPHVIZ)) {
+		return ProfilerPrintFormat::GRAPHVIZ;
+	}
+}
+
+jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
+	auto connection = get_connection(env, conn_ref_buf);
+	if (!connection) {
+		throw InvalidInputException("Invalid connection");
+	}
+	auto format = GetProfilerPrintFormat(env, j_format);
+	auto profiling_info = connection->GetProfilingInformation(format);
+	return env->NewStringUTF(profiling_info.c_str());
 }
