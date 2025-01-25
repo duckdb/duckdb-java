@@ -910,3 +910,34 @@ void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 	byte_test_type_type.SetAlias("byte_test_type");
 	ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
 }
+
+static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE)) {
+		return ProfilerPrintFormat::QUERY_TREE;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_JSON)) {
+		return ProfilerPrintFormat::JSON;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER)) {
+		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_NO_OUTPUT)) {
+		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_HTML)) {
+		return ProfilerPrintFormat::HTML;
+	}
+	if (env->IsSameObject(format, J_ProfilerPrintFormat_GRAPHVIZ)) {
+		return ProfilerPrintFormat::GRAPHVIZ;
+	}
+}
+
+jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
+	auto connection = get_connection(env, conn_ref_buf);
+	if (!connection) {
+		throw InvalidInputException("Invalid connection");
+	}
+	auto format = GetProfilerPrintFormat(env, j_format);
+	auto profiling_info = connection->GetProfilingInformation(format);
+	return env->NewStringUTF(profiling_info.c_str());
+}
