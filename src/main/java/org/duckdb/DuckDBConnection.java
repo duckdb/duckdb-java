@@ -384,4 +384,8 @@ public final class DuckDBConnection implements java.sql.Connection {
         long array_stream_address = getArrowStreamAddress(arrow_array_stream);
         DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
     }
+
+    public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
+        return DuckDBNative.duckdb_jdbc_get_profiling_information(conn_ref, format);
+    }
 }

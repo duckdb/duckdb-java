@@ -160,3 +160,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 void _duckdb_jdbc_create_extension_type(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv * env, jclass param0, jobject param1);
+
+jstring _duckdb_jdbc_get_profiling_information(JNIEnv * env, jclass param0, jobject param1, jobject param2);
+
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information(JNIEnv * env, jclass param0, jobject param1, jobject param2);

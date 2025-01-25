@@ -100,6 +100,14 @@ jmethodID J_Object_toString;
 
 jclass J_DuckDBTime;
 
+jclass J_ProfilerPrintFormat;	
+jobject J_ProfilerPrintFormat_QUERY_TREE;
+jobject J_ProfilerPrintFormat_JSON;
+jobject J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER;
+jobject J_ProfilerPrintFormat_NO_OUTPUT;
+jobject J_ProfilerPrintFormat_HTML;
+jobject J_ProfilerPrintFormat_GRAPHVIZ;
+
 static std::vector<jobject> global_refs;
 
 template <typename T>
@@ -252,6 +260,18 @@ void create_refs(JNIEnv *env) {
 	J_DuckVector_varlen = get_field_id(env, J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
 
 	J_ByteBuffer = make_class_ref(env, "java/nio/ByteBuffer");
+
+	J_ProfilerPrintFormat = make_class_ref(env, "org/duckdb/ProfilerPrintFormat");
+	J_ProfilerPrintFormat_QUERY_TREE =
+	make_static_object_field_ref(env, J_ProfilerPrintFormat, "QUERY_TREE", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_JSON = make_static_object_field_ref(env, J_ProfilerPrintFormat, "JSON", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER =
+	make_static_object_field_ref(env, J_ProfilerPrintFormat, "QUERY_TREE_OPTIMIZER", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_NO_OUTPUT =
+	make_static_object_field_ref(env, J_ProfilerPrintFormat, "NO_OUTPUT", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_HTML = make_static_object_field_ref(env, J_ProfilerPrintFormat, "HTML", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_GRAPHVIZ =
+	make_static_object_field_ref(env, J_ProfilerPrintFormat, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {
