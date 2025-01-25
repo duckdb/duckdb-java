@@ -306,12 +306,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 
 	tmpLocalRef = env->FindClass("org/duckdb/ProfilerPrintFormat");
 
-	J_ProfilerPrintFormat_QUERY_TREE = GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_QUERY_TREE =
+	    GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE", "Lorg/duckdb/ProfilerPrintFormat;");
 	J_ProfilerPrintFormat_JSON = GetObjectStaticField(env, tmpLocalRef, "JSON", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER = GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE_OPTIMIZER", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_NO_OUTPUT = GetObjectStaticField(env, tmpLocalRef, "NO_OUTPUT", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER =
+	    GetObjectStaticField(env, tmpLocalRef, "QUERY_TREE_OPTIMIZER", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_NO_OUTPUT =
+	    GetObjectStaticField(env, tmpLocalRef, "NO_OUTPUT", "Lorg/duckdb/ProfilerPrintFormat;");
 	J_ProfilerPrintFormat_HTML = GetObjectStaticField(env, tmpLocalRef, "HTML", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_GRAPHVIZ = GetObjectStaticField(env, tmpLocalRef, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_GRAPHVIZ =
+	    GetObjectStaticField(env, tmpLocalRef, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
 
 	env->DeleteLocalRef(tmpLocalRef);
 
