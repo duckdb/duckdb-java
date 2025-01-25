@@ -4676,6 +4676,16 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_profiling_information() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SET enable_profiling = 'no_output';");
+            try (ResultSet rs = stmt.executeQuery("SELECT 1+1")) {
+                String profile = ((DuckDBConnection) conn).getProfilingInformation(ProfilerPrintFormat.JSON);
+                assertTrue(profile.contains("\"query_name\": \"SELECT 1+1\","));
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
