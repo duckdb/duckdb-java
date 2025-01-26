@@ -4,6 +4,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -43,8 +44,8 @@ public class Runner {
                 LocalDateTime start = LocalDateTime.now();
                 try {
                     m.invoke(null);
-                    System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() +
-                                       " seconds");
+                    Duration duration = Duration.between(start, LocalDateTime.now());
+                    System.out.println("success in " + (duration.toNanos() / 1000000L) + "ms");
                 } catch (Throwable t) {
                     if (t instanceof InvocationTargetException) {
                         t = t.getCause();

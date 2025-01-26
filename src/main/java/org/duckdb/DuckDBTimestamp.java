@@ -102,7 +102,7 @@ public class DuckDBTimestamp {
     }
 
     public static long offsetDateTime2Micros(OffsetDateTime offsetDateTime) {
-        return DuckDBTimestamp.RefLocalDateTime.until(offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC),
+        return DuckDBTimestamp.RefLocalDateTime.until(offsetDateTime.withOffsetSameInstant(offsetDateTime.getOffset()),
                 ChronoUnit.MICROS);
     }
 
