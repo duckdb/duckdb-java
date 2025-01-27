@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - run: 
+      - run: |
           python3 -m pip install --user clang_format==11.0.1
           make format-check
 
