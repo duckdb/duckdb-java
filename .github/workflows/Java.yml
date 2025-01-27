@@ -21,7 +21,7 @@ jobs:
           ref: ${{ inputs.git_ref }}
 
       - run: 
-          python3 -m pip install --user clang_format=11.0.1
+          python3 -m pip install --user clang_format==11.0.1
           make format-check
 
   java-linux-amd64:
