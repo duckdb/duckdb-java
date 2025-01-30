@@ -20,7 +20,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - run: make format-check
+      - run: |
+          python3 -m pip install --user clang_format==11.0.1
+          make format-check
 
   java-linux-amd64:
     name: Java Linux (amd64)
