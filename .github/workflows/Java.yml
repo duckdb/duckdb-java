@@ -218,22 +218,22 @@ jobs:
       - shell: bash
         run: mkdir jdbc-artifacts
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-linux-aarch64
           path: jdbc-artifacts/java-linux-aarch64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-linux-amd64
           path: jdbc-artifacts/java-linux-amd64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-windows-amd64
           path: jdbc-artifacts/java-windows-amd64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
