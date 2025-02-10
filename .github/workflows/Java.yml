@@ -242,8 +242,9 @@ jobs:
         run:  |
           sudo apt-get update -y
           sudo apt-get install openjdk-8-jre
-          sudo update-alternatives java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
-          sudo update-alternatives javac /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/javac
+          ls -lah /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/
+          sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+          sudo update-alternatives --set javac /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/javac
           java -version
           javac -version
 
