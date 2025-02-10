@@ -27,7 +27,7 @@ jobs:
   java-linux:
     strategy:
       matrix:
-        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64 }, { runner: ubuntu-24.04-arm, arch: arm64, image: aarch64 } ]
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64 }, { runner: ubuntu-24.04-arm, arch: aarch64, image: aarch64 } ]
 
     name: Java Linux (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
@@ -228,44 +228,20 @@ jobs:
 
   jdbc-compliance:
     name: JDBC Compliance
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     if: ${{ inputs.skip_tests != 'true' }}
     needs: java-linux
-    container: quay.io/pypa/manylinux_2_28_x86_64
-    env:
-      BUILD_JDBC: 1
-      GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          jdk: 1
-          python_alias: 1
-          aws-cli: 1
+          name: java-linux-amd64
+          path: jdbc-driver
 
       - name: Install
         shell: bash
-        run: |
-          git clone https://github.com/cwida/jdbccts.git
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
-
-      - name: Build
-        shell: bash
-        run: make release
+        run: git clone https://github.com/cwida/jdbccts.git
 
       - name: Test
         shell: bash
-        run: (cd jdbccts && make DUCKDB_JAR=../build/release/duckdb_jdbc.jar test)
+        run: (cd jdbccts && make DUCKDB_JAR=../jdbc-driver/duckdb_jdbc-linux-amd64.jar test)
