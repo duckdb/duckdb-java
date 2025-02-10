@@ -24,36 +24,42 @@ jobs:
           python3 -m pip install --user clang_format==11.0.1
           make format-check
 
-  java-linux-amd64:
-    name: Java Linux (amd64)
-    runs-on: ubuntu-latest
-    container:
-      image: quay.io/pypa/manylinux_2_28_x86_64
-    env:
-      GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  java-linux:
+    strategy:
+      matrix:
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64 }, { runner: ubuntu-24.04-arm, arch: arm64, image: aarch64 } ]
+
+    name: Java Linux (${{ matrix.config.arch }})
+    runs-on: ${{ matrix.config.runner }}
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          jdk: 1
-          python_alias: 1
-          aws-cli: 1
+#      - uses: ./.github/actions/manylinux_2014_setup
+#        with:
+#          ninja-build: 1
+#          ccache: 1
+#          jdk: 1
+#          python_alias: 1
+#          aws-cli: 1
 
       - name: Build
         shell: bash
-        run: make release
-
-      - name: Java Tests
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: make test
+        run: |
+          export PWD=`pwd`
+          docker run                                                             \
+          -v$PWD:$PWD                                                            \
+          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+          quay.io/pypa/manylinux2014_${{ matrix.config.image }}                  \
+          bash -c "yum install -y java-1.8.0-openjdk-devel && git config --global --add safe.directory $PWD && make release -C $PWD"
+#
+#      - name: Java Tests
+#        shell: bash
+#        if: ${{ inputs.skip_tests != 'true' }}
+#        run: make test
 
       - name: Deploy
         shell: bash
@@ -61,64 +67,19 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
-      - uses: actions/upload-artifact@v3
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-${{ matrix.config.arch }}.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-${{ matrix.config.arch }}.jar
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: java-linux-amd64
+          name: java-linux-${{ matrix.config.arch }}
           path: |
             build/release/duckdb_jdbc.jar
-
-  java-linux-aarch64:
-    name: Java Linux (aarch64)
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
-    needs: java-linux-amd64
-    env:
-      GEN: ninja
-      DUCKDB_PLATFORM: linux_arm64
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./.github/actions/ubuntu_18_setup
-        with:
-          ccache: 1
-          aarch64_cross_compile: 1
-
-      - name: Install Stuff
-        shell: bash
-        run: >
-          curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
-
-      - name: Build
-        shell: bash
-        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ OVERRIDE_JDBC_OS_ARCH=arm64 make release
-
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
-         # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: java-linux-aarch64
-          path: |
-            build/release/duckdb_jdbc.jar
-
 
   java-windows-amd64:
     name: Java Windows (amd64)
     runs-on: windows-2019
-    needs: java-linux-amd64
+    needs: java-linux
     steps:
       - uses: actions/checkout@v3
         with:
@@ -160,7 +121,7 @@ jobs:
   java-osx-universal:
     name: Java OSX (Universal)
     runs-on: macos-14
-    needs: java-linux-amd64
+    needs: java-linux
     steps:
       - uses: actions/checkout@v3
         with:
@@ -204,8 +165,7 @@ jobs:
     name: Java Combine
     runs-on: ubuntu-latest
     needs:
-      - java-linux-aarch64
-      - java-linux-amd64
+      - java-linux
       - java-windows-amd64
       - java-osx-universal
 
@@ -277,7 +237,7 @@ jobs:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
     if: ${{ inputs.skip_tests != 'true' }}
-    needs: java-linux-amd64
+    needs: java-linux
     container: quay.io/pypa/manylinux_2_28_x86_64
     env:
       BUILD_JDBC: 1
