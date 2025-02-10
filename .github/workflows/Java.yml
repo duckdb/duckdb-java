@@ -230,7 +230,7 @@ jobs:
     name: JDBC Compliance
     runs-on: ubuntu-latest
     if: ${{ inputs.skip_tests != 'true' }}
-    #needs: java-linux
+    needs: java-linux
 
     steps:
       - name: Install jdbccts
