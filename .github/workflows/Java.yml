@@ -38,13 +38,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-#      - uses: ./.github/actions/manylinux_2014_setup
-#        with:
-#          ninja-build: 1
-#          ccache: 1
-#          jdk: 1
-#          python_alias: 1
-#          aws-cli: 1
 
       - name: Build
         shell: bash
@@ -55,11 +48,11 @@ jobs:
           -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
           quay.io/pypa/manylinux2014_${{ matrix.config.image }}                  \
           bash -c "yum install -y java-1.8.0-openjdk-devel && git config --global --add safe.directory $PWD && make release -C $PWD"
-#
-#      - name: Java Tests
-#        shell: bash
-#        if: ${{ inputs.skip_tests != 'true' }}
-#        run: make test
+
+      - name: Java Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: make test
 
       - name: Deploy
         shell: bash

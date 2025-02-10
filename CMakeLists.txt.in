@@ -1,11 +1,15 @@
+cmake_minimum_required(VERSION 3.11.0)
+
+project(DuckDBJava)
+
 find_package(Java 1.8)
 
 set(JAVA_AWT_LIBRARY NotNeeded)
 set(JAVA_JVM_LIBRARY NotNeeded)
 
 find_package(JNI)
+find_package(Threads)
 
-cmake_minimum_required(VERSION 3.11.0)
 set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -15,7 +19,6 @@ if(NOT JNI_FOUND OR NOT Java_FOUND)
 endif()
 
 include(UseJava)
-project(DuckDBJava)
 
 include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 
