@@ -230,18 +230,26 @@ jobs:
     name: JDBC Compliance
     runs-on: ubuntu-latest
     if: ${{ inputs.skip_tests != 'true' }}
-    needs: java-linux
+    #needs: java-linux
 
     steps:
+      - name: Install jdbccts
+        shell: bash
+        run: git clone https://github.com/cwida/jdbccts.git
+
+      - name: Downgrade Java(TM)
+        shell: bash
+        run:  |
+          apt-get update -y
+          apt-get install openjdk-8-jre
+          java -version
+
       - uses: actions/download-artifact@v4
         with:
           name: java-linux-amd64
           path: jdbc-driver
 
-      - name: Install
-        shell: bash
-        run: git clone https://github.com/cwida/jdbccts.git
-
       - name: Test
         shell: bash
-        run: (cd jdbccts && make DUCKDB_JAR=../jdbc-driver/duckdb_jdbc-linux-amd64.jar test)
+        run:  apt-get install openjdk-8-jre(cd jdbccts && make DUCKDB_JAR=../jdbc-driver/duckdb_jdbc-linux-amd64.jar test)
+
