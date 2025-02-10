@@ -25,19 +25,18 @@ jobs:
           make format-check
 
   java-linux:
+    needs: format_check
     strategy:
       matrix:
         config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64 }, { runner: ubuntu-24.04-arm, arch: aarch64, image: aarch64 } ]
 
     name: Java Linux (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
-
 
       - name: Build
         shell: bash
@@ -225,6 +224,7 @@ jobs:
           name: java-jars
           path: |
             jdbc-artifacts
+
 
   jdbc-compliance:
     name: JDBC Compliance
