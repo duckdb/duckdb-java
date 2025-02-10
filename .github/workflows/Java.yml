@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -74,7 +74,7 @@ jobs:
     runs-on: windows-2019
     needs: java-linux
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -104,7 +104,7 @@ jobs:
         run: |
           cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
           ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-windows-amd64
           path: |
@@ -116,7 +116,7 @@ jobs:
     runs-on: macos-14
     needs: java-linux
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -146,7 +146,7 @@ jobs:
         run: |
           cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
           ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-osx-universal
           path: |
@@ -163,7 +163,7 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -171,22 +171,22 @@ jobs:
       - shell: bash
         run: mkdir jdbc-artifacts
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-linux-aarch64
           path: jdbc-artifacts/java-linux-aarch64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-linux-amd64
           path: jdbc-artifacts/java-linux-amd64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-windows-amd64
           path: jdbc-artifacts/java-windows-amd64
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
@@ -220,7 +220,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: java-jars
           path: |
@@ -238,7 +238,7 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
