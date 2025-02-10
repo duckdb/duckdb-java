@@ -254,5 +254,7 @@ jobs:
 
       - name: Test
         shell: bash
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-8-openjdk-amd64
         run: (cd jdbccts && make DUCKDB_JAR=../jdbc-driver/duckdb_jdbc-linux-amd64.jar test)
 
