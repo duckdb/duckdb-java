@@ -18,12 +18,12 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::LIST;
 
 public:
-	ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                 idx_t max_define_p, idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p);
+	ListColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                 unique_ptr<ColumnReader> child_column_reader_p);
 
 	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) override;
 
-	void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) override;
+	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
