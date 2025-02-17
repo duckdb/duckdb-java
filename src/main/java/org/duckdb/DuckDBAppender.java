@@ -93,6 +93,42 @@ public class DuckDBAppender implements AutoCloseable {
         }
     }
 
+    private void appendNull() throws SQLException {
+        DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+    }
+
+    public void append(Boolean value) throws SQLException {
+      if (value == null) {
+          this.appendNull();
+      } else {
+          append(value.booleanValue());
+      }
+    }
+    
+    public void append(Long value) throws SQLException {
+      if (value == null) {
+          this.appendNull();
+      } else {
+          append(value.longValue());
+      }
+    }
+
+    public void append(Short value) throws SQLException {
+      if (value == null) {
+          this.appendNull();
+      } else {
+          append(value.shortValue());
+      }
+    }
+
+    public void append(Integer value) throws SQLException {
+      if (value == null) {
+          this.appendNull();
+      } else {
+          append(value.intValue());
+      }
+    }
+
     protected void finalize() throws Throwable {
         close();
     }

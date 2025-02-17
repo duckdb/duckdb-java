@@ -2713,6 +2713,109 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_Boolean() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+
+            stmt.execute("CREATE TABLE data (a BOOLEAN)");
+            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+            Boolean[] values = new Boolean[] { Boolean.TRUE, Boolean.FALSE, null};
+            for (Boolean value : values) {
+                appender.beginRow();
+                appender.append(value);
+                appender.endRow();
+            }
+            appender.flush();
+            appender.close();
+
+            try (ResultSet results = stmt.executeQuery("SELECT count(1) FROM data WHERE a = true");) {
+                assertTrue(results.next());
+                assertEquals(1, results.getInt(1));
+            }
+            try (ResultSet results = stmt.executeQuery("SELECT count(1) FROM data WHERE a = false");) {
+                assertTrue(results.next());
+                assertEquals(1, results.getInt(1));
+            }
+            try (ResultSet results = stmt.executeQuery("SELECT count(1) FROM data WHERE a is null");) {
+                assertTrue(results.next());
+                assertEquals(1, results.getInt(1));
+            }
+        }
+    }
+
+
+    public static void test_appender_Integer() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+
+            stmt.execute("CREATE TABLE data (a INTEGER)");
+            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+            appender.beginRow();
+
+            Integer value = Integer.MAX_VALUE - 10;
+
+            appender.append(value);
+            appender.endRow();
+            appender.flush();
+            appender.close();
+
+            try (ResultSet results = stmt.executeQuery("SELECT * FROM data");) {
+                assertTrue(results.next());
+                assertEquals(value, results.getInt(1));
+                assertFalse(results.wasNull());
+            }
+        }
+    }
+
+    public static void test_appender_Long() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+
+            stmt.execute("CREATE TABLE data (a LONG)");
+            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+            appender.beginRow();
+
+            Long value = Long.MAX_VALUE - 10;
+
+            appender.append(value);
+            appender.endRow();
+            appender.flush();
+            appender.close();
+
+            try (ResultSet results = stmt.executeQuery("SELECT * FROM data");) {
+                assertTrue(results.next());
+                assertEquals(value, results.getLong(1));
+                assertFalse(results.wasNull());
+            }
+        }
+    }
+
+    public static void test_appender_Short() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+
+            stmt.execute("CREATE TABLE data (a SHORT)");
+            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+            Short shortValue = Short.MIN_VALUE;
+            while (true) {
+                appender.beginRow();
+                appender.append(shortValue);
+                appender.endRow();
+                if (shortValue == Short.MAX_VALUE) {
+                    break;
+                }
+                shortValue++;
+            }
+            appender.flush();
+            appender.close();
+
+            try (ResultSet results = stmt.executeQuery("SELECT min(a), max(a), avg(a) FROM data");) {
+                assertTrue(results.next());
+                assertEquals(Short.MIN_VALUE, results.getShort(1));
+                assertEquals(Short.MAX_VALUE, results.getShort(2));
+                assertEquals(-0.5f, results.getFloat(3));
+                assertFalse(results.wasNull());
+            }
+        }
+    }
+
     public static void test_appender_null_varchar() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
