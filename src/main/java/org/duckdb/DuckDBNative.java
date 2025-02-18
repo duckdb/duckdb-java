@@ -50,17 +50,27 @@ class DuckDBNative {
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
             if (lib_res == null) {
                 System.load(Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString());
+                duckDBResourceFile = Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString();
             } else {
                 try (final InputStream lib_res_input_stream = lib_res.openStream()) {
                     Files.copy(lib_res_input_stream, lib_file, StandardCopyOption.REPLACE_EXISTING);
                 }
                 new File(lib_file.toString()).deleteOnExit();
                 System.load(lib_file.toAbsolutePath().toString());
+                duckDBResourceFile = lib_file.toAbsolutePath().toString();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
+
+    // Full path and name of the libduckdb_java.so
+    private static final String duckDBResourceFile;
+
+    protected static String getDuckDBResourceFile() {
+        return duckDBResourceFile;
+    }
+
     // We use zero-length ByteBuffer-s as a hacky but cheap way to pass C++ pointers
     // back and forth
 
@@ -75,6 +85,8 @@ class DuckDBNative {
 
     // returns conn_ref connection reference object
     protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref) throws SQLException;
+
+    protected static native long duckdb_jdbc_db_memory_address(ByteBuffer conn_ref);
 
     protected static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit)
         throws SQLException;

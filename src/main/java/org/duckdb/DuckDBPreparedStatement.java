@@ -189,8 +189,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         requireNonBatch();
         execute();
         if (!(returnsChangedRows || returnsNothing)) {
-            throw new SQLException(
-                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
+            throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL "
+                                   + "statement), or update rows");
         }
         return getUpdateCountInternal();
     }
