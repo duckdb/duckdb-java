@@ -2714,11 +2714,12 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_appender_Boolean() throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement();) {
 
             stmt.execute("CREATE TABLE data (a BOOLEAN)");
             DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-            Boolean[] values = new Boolean[] { Boolean.TRUE, Boolean.FALSE, null};
+            Boolean[] values = new Boolean[] {Boolean.TRUE, Boolean.FALSE, null};
             for (Boolean value : values) {
                 appender.beginRow();
                 appender.append(value);
@@ -2742,9 +2743,9 @@ public class TestDuckDBJDBC {
         }
     }
 
-
     public static void test_appender_Integer() throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement();) {
 
             stmt.execute("CREATE TABLE data (a INTEGER)");
             DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
@@ -2766,7 +2767,8 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_appender_Long() throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement();) {
 
             stmt.execute("CREATE TABLE data (a LONG)");
             DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
@@ -2788,7 +2790,8 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_appender_Short() throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class); Statement stmt = conn.createStatement();) {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement();) {
 
             stmt.execute("CREATE TABLE data (a SHORT)");
             DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
