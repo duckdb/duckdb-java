@@ -55,19 +55,19 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         run: make test
 
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
-      - uses: actions/upload-artifact@v3
-        with:
-          name: java-linux-amd64
-          path: |
-            build/release/duckdb_jdbc.jar
+      # - name: Deploy
+      #   shell: bash
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      #   run: |
+      #     cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
+      #     ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: java-linux-amd64
+      #     path: |
+      #       build/release/duckdb_jdbc.jar
 
   java-linux-aarch64:
     name: Java Linux (aarch64)
@@ -99,20 +99,20 @@ jobs:
         shell: bash
         run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ OVERRIDE_JDBC_OS_ARCH=arm64 make release
 
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
-         # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
+      # - name: Deploy
+      #   shell: bash
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      #   run: |
+      #     cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
+      #    # ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
 
-      - uses: actions/upload-artifact@v3
-        with:
-          name: java-linux-aarch64
-          path: |
-            build/release/duckdb_jdbc.jar
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: java-linux-aarch64
+      #     path: |
+      #       build/release/duckdb_jdbc.jar
 
 
   java-windows-amd64:
@@ -142,19 +142,19 @@ jobs:
         run: |
           ls -R .
           make test
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
-      - uses: actions/upload-artifact@v3
-        with:
-          name: java-windows-amd64
-          path: |
-            build/release/duckdb_jdbc.jar
+      # - name: Deploy
+      #   shell: bash
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      #   run: |
+      #     cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
+      #     ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: java-windows-amd64
+      #     path: |
+      #       build/release/duckdb_jdbc.jar
 
 
   java-osx-universal:
@@ -184,19 +184,19 @@ jobs:
       - name: See if this actually universal
         shell: bash
         run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
-      - uses: actions/upload-artifact@v3
-        with:
-          name: java-osx-universal
-          path: |
-            build/release/duckdb_jdbc.jar
+      # - name: Deploy
+      #   shell: bash
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      #   run: |
+      #     cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
+      #     ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: java-osx-universal
+      #     path: |
+      #       build/release/duckdb_jdbc.jar
 
 
   java-combine:
@@ -265,13 +265,13 @@ jobs:
           fi
           ls -lahR jdbc-artifacts
 
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: java-jars
-          path: |
-            jdbc-artifacts
+      # - name: Upload artifacts
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: java-jars
+      #     path: |
+      #       jdbc-artifacts
 
   jdbc-compliance:
     name: JDBC Compliance
