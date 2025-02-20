@@ -2,6 +2,7 @@ package org.duckdb;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.ParameterMetaData;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -17,7 +18,9 @@ import java.util.UUID;
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     public DuckDBResultSetMetaData(int param_count, int column_count, String[] column_names,
-                                   String[] column_types_string, String[] column_types_details, String return_type) {
+                                   String[] column_types_string, String[] column_types_details, String return_type,
+                                   String[] param_types_string, String[] param_types_details) {
+
         this.param_count = param_count;
         this.column_count = column_count;
         this.column_names = column_names;
@@ -41,6 +44,26 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             }
         }
         this.column_types_meta = column_types_meta.toArray(new DuckDBColumnTypeMetaData[column_count]);
+
+        ArrayList<DuckDBColumnType> param_types_al = new ArrayList<DuckDBColumnType>(param_count);
+        ArrayList<DuckDBColumnTypeMetaData> param_types_meta_al = new ArrayList<DuckDBColumnTypeMetaData>(param_count);
+
+        for (String param_type_string : param_types_string) {
+            param_types_al.add(TypeNameToType(param_type_string));
+        }
+        DuckDBColumnType[] param_types = param_types_al.toArray(new DuckDBColumnType[param_count]);
+
+        for (String param_type_detail : param_types_details) {
+            if (TypeNameToType(param_type_detail) == DuckDBColumnType.DECIMAL) {
+                param_types_meta_al.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(param_type_detail));
+            } else {
+                param_types_meta_al.add(null);
+            }
+        }
+        DuckDBColumnTypeMetaData[] param_types_meta =
+            param_types_meta_al.toArray(new DuckDBColumnTypeMetaData[param_count]);
+
+        this.param_meta = new DuckDBParameterMetaData(param_count, param_types_string, param_types, param_types_meta);
     }
 
     public static DuckDBColumnType TypeNameToType(String type_name) {
@@ -75,6 +98,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
     protected DuckDBColumnType[] column_types;
     protected DuckDBColumnTypeMetaData[] column_types_meta;
     protected final StatementReturnType return_type;
+    protected ParameterMetaData param_meta;
 
     public StatementReturnType getReturnType() {
         return return_type;
@@ -150,7 +174,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
     }
 
     public String getColumnClassName(int column) throws SQLException {
-        switch (column_types[column - 1]) {
+        if (column > column_count) {
+            throw new SQLException("Column index out of bounds");
+        }
+        return type_to_javaString(column_types[column - 1]);
+    }
+
+    protected static String type_to_javaString(DuckDBColumnType type) {
+        switch (type) {
         case BOOLEAN:
             return Boolean.class.getName();
         case TINYINT:
@@ -249,7 +280,23 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
     }
 
     public boolean isSigned(int column) throws SQLException {
-        return false;
+        if (column > column_count) {
+            throw new SQLException("Column index out of bounds");
+        }
+        return is_signed(column_types[column - 1]);
+    }
+
+    protected static boolean is_signed(DuckDBColumnType type) {
+        switch (type) {
+        case UTINYINT:
+        case USMALLINT:
+        case UINTEGER:
+        case UBIGINT:
+        case UHUGEINT:
+            return false;
+        default:
+            return true;
+        }
     }
 
     public int getColumnDisplaySize(int column) throws SQLException {
