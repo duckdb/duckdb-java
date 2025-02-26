@@ -2713,6 +2713,31 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_append_null_integer() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a INTEGER)");
+
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+        appender.beginRow();
+        appender.appendNull();
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+        // java.sql.ResultSet.getInt(int) returns 0 if the value is NULL
+        assertEquals(0, results.getInt(1));
+        assertTrue(results.wasNull());
+
+        results.close();
+        stmt.close();
+        conn.close();
+    }
+
     public static void test_appender_null_varchar() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
@@ -2737,6 +2762,30 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_append_null_varchar() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a VARCHAR)");
+
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+        appender.beginRow();
+        appender.appendNull();
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+        assertNull(results.getString(1));
+        assertTrue(results.wasNull());
+
+        results.close();
+        stmt.close();
+        conn.close();
+    }
+
     public static void test_appender_null_blob() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
@@ -2747,6 +2796,30 @@ public class TestDuckDBJDBC {
 
         appender.beginRow();
         appender.append((byte[]) null);
+        appender.endRow();
+        appender.flush();
+        appender.close();
+
+        ResultSet results = stmt.executeQuery("SELECT * FROM data");
+        assertTrue(results.next());
+        assertNull(results.getString(1));
+        assertTrue(results.wasNull());
+
+        results.close();
+        stmt.close();
+        conn.close();
+    }
+
+    public static void test_appender_append_null_blob() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE data (a BLOB)");
+
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
+
+        appender.beginRow();
+        appender.appendNull();
         appender.endRow();
         appender.flush();
         appender.close();
