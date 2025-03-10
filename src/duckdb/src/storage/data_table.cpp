@@ -228,11 +228,11 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
-                               const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
+void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state,
+                               const vector<StorageIndex> &column_ids, TableFilterSet *table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
-	state.Initialize(column_ids, context, table_filters);
+	state.Initialize(column_ids, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
@@ -854,24 +854,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
+OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
+	return local_storage.CreateOptimisticWriter(*this);
 }
 
-RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+void DataTable::FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.GetOptimisticCollection(*this, collection_index);
-}
-
-void DataTable::ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
-	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.ResetOptimisticCollection(*this, collection_index);
-}
-
-OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
-	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.GetOptimisticWriter(*this);
+	local_storage.FinalizeOptimisticWriter(*this, writer);
 }
 
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
@@ -1551,8 +1541,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
-void DataTable::CommitDropColumn(const idx_t column_index) {
-	row_groups->CommitDropColumn(column_index);
+void DataTable::CommitDropColumn(idx_t index) {
+	row_groups->CommitDropColumn(index);
 }
 
 idx_t DataTable::ColumnCount() const {

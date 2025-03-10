@@ -83,8 +83,7 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
                                    const vector<unique_ptr<Expression>> &bound_defaults,
                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints)
-    : default_executor(context, bound_defaults), collection_index(DConstants::INVALID_INDEX),
-      bound_constraints(bound_constraints) {
+    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 
 	auto &allocator = Allocator::Get(context);
 	insert_chunk.Initialize(allocator, types);
@@ -665,7 +664,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
-		if (return_chunk) {
+		if (!parallel && return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
@@ -675,35 +674,29 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			// All of the tuples should have been turned into an update, leaving the chunk empty afterwards
 			D_ASSERT(lstate.update_chunk.size() == 0);
 		}
-		return SinkResultType::NEED_MORE_INPUT;
+	} else {
+		//! FIXME: can't we enable this by using a BatchedDataCollection ?
+		D_ASSERT(!return_chunk);
+		// parallel append
+		if (!lstate.local_collection) {
+			lock_guard<mutex> l(gstate.lock);
+			auto table_info = storage.GetDataTableInfo();
+			auto &io_manager = TableIOManager::Get(table.GetStorage());
+			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
+			                                                        NumericCast<idx_t>(MAX_ROW_ID));
+			lstate.local_collection->InitializeEmpty();
+			lstate.local_collection->InitializeAppend(lstate.local_append_state);
+			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
+		}
+		OnConflictHandling(table, context, gstate, lstate);
+		D_ASSERT(action_type != OnConflictAction::UPDATE);
+
+		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
+		if (new_row_group) {
+			lstate.writer->WriteNewRowGroup(*lstate.local_collection);
+		}
 	}
 
-	// Parallel append.
-	D_ASSERT(!return_chunk);
-	auto &data_table = gstate.table.GetStorage();
-	if (!lstate.collection_index.IsValid()) {
-		auto table_info = storage.GetDataTableInfo();
-		auto &io_manager = TableIOManager::Get(table.GetStorage());
-
-		// Create the local row group collection.
-		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
-		collection->InitializeEmpty();
-		collection->InitializeAppend(lstate.local_append_state);
-
-		lock_guard<mutex> l(gstate.lock);
-		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(data_table);
-		lstate.collection_index = data_table.CreateOptimisticCollection(context.client, std::move(collection));
-	}
-
-	OnConflictHandling(table, context, gstate, lstate);
-	D_ASSERT(action_type != OnConflictAction::UPDATE);
-
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
-	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.local_append_state);
-	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(collection);
-	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -714,7 +707,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
-	if (!parallel || !lstate.collection_index.IsValid()) {
+	if (!parallel || !lstate.local_collection) {
 		return SinkCombineResultType::FINISHED;
 	}
 
@@ -724,11 +717,9 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
-	auto &data_table = gstate.table.GetStorage();
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
-	collection.FinalizeAppend(tdata, lstate.local_append_state);
+	lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
 
-	auto append_count = collection.GetTotalRows();
+	auto append_count = lstate.local_collection->GetTotalRows();
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
@@ -736,18 +727,17 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		// we have few rows - append to the local storage directly
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			storage.LocalAppend(gstate.append_state, context.client, insert_chunk, false);
 			return true;
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteLastRowGroup(collection);
-		lstate.optimistic_writer->FinalFlush();
-		gstate.table.GetStorage().LocalMerge(context.client, collection);
-		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
-		optimistic_writer.Merge(*lstate.optimistic_writer);
+		lstate.writer->WriteLastRowGroup(*lstate.local_collection);
+		lstate.writer->FinalFlush();
+		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
+		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
 
 	return SinkCombineResultType::FINISHED;

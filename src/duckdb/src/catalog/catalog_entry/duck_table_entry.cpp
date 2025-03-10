@@ -885,10 +885,7 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 			break;
 		}
 	}
-
-	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
-	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
-	storage->CommitDropColumn(column_index);
+	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index.GetIndex())).index);
 }
 
 void DuckTableEntry::CommitDrop() {

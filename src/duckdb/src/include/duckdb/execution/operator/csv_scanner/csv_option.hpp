@@ -128,10 +128,6 @@ private:
 
 	std::string FormatValueInternal(const char &val) const {
 		string char_val;
-		if (val == '\0') {
-			char_val = "(empty)";
-			return char_val;
-		}
 		char_val += val;
 		return char_val;
 	}

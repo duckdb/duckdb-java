@@ -42,17 +42,17 @@ private:
 struct CSVValidator {
 	CSVValidator() {
 	}
-	//! Validate that all lines are good
+	//! Validate that all files are good
 	void Verify() const;
 
-	//! Inserts line_info to a given thread index
-	void Insert(idx_t thread, ValidatorLine line_info);
+	//! Inserts line_info to a given thread index of a given file.
+	void Insert(idx_t file_idx, idx_t thread, ValidatorLine line_info);
 
-	string Print() const;
+	string Print(idx_t file_idx) const;
 
 private:
-	//! Thread lines for this file
-	ThreadLines thread_lines;
+	//! Per file thread lines.
+	vector<ThreadLines> per_file_thread_lines;
 };
 
 } // namespace duckdb

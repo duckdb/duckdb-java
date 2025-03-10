@@ -22,7 +22,7 @@ FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) {
 	return filter_data->filter->CheckStatistics(stats);
 }
 
-string DynamicFilter::ToString(const string &column_name) const {
+string DynamicFilter::ToString(const string &column_name) {
 	if (filter_data) {
 		return "Dynamic Filter (" + column_name + ")";
 	} else {

@@ -98,9 +98,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// check if the table name refers to a CTE
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
-	// unless we want to refer to the recurring table of "using key".
 	vector<reference<CommonTableExpressionInfo>> found_ctes;
-	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
+	if (ref.schema_name.empty()) {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
 	}
 
@@ -124,22 +123,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 #endif
 				}
-
-				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
-					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
-				}
-
-				auto result =
-				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
+				auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
 				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
 				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
-
-				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
-
 				// Update references to CTE
-				auto cteref = bind_context.cte_references[cte_reference];
+				auto cteref = bind_context.cte_references[ref.table_name];
 				(*cteref)++;
 
 				result->types = ctebinding->types;
@@ -159,12 +149,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					throw BinderException(
 					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
 					    ref.table_name);
-				}
-
-				if (ref.schema_name == "recurring") {
-					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-					                      "referenced from this part of the query.",
-					                      ref.table_name);
 				}
 
 				// Move CTE to subquery and bind recursively
@@ -278,7 +262,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get =
 		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), table.GetVirtualColumns());
+		                          std::move(return_names), table.GetRowIdType());
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

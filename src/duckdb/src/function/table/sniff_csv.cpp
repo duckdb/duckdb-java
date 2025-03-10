@@ -60,9 +60,8 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase("force_match");
 	}
-	MultiFileReaderOptions file_options;
-	result->options.FromNamedParameters(input.named_parameters, context, file_options);
-	result->options.Verify(file_options);
+	result->options.FromNamedParameters(input.named_parameters, context);
+	result->options.Verify();
 
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
@@ -151,8 +150,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
-	MultiFileReaderOptions file_options;
-	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
+	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
 		for (auto &type : sniffer_result.return_types) {
@@ -167,19 +165,19 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(1);
 
 	// 1. Delimiter
-	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.GetValue();
 	output.SetValue(0, 0, str_opt);
 	// 2. Quote
-	str_opt = sniffer_options.dialect_options.state_machine_options.quote.FormatValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.quote.GetValue();
 	output.SetValue(1, 0, str_opt);
 	// 3. Escape
-	str_opt = sniffer_options.dialect_options.state_machine_options.escape.FormatValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
 	auto new_line_identifier = sniffer_options.NewLineIdentifierToString();
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Comment
-	str_opt = sniffer_options.dialect_options.state_machine_options.comment.FormatValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.comment.GetValue();
 	output.SetValue(4, 0, str_opt);
 	// 6. Skip Rows
 	output.SetValue(5, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
@@ -231,7 +229,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (data.options.user_defined_parameters.empty()) {
 		output.SetValue(10, 0, Value());
 	} else {
-		output.SetValue(10, 0, Value(data.options.GetUserDefinedParameters()));
+		output.SetValue(10, 0, Value(data.options.user_defined_parameters));
 	}
 
 	// 12. csv_read string
@@ -311,7 +309,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	// 11.11 User Arguments
 	if (!data.options.user_defined_parameters.empty()) {
-		csv_read << separator << data.options.GetUserDefinedParameters();
+		csv_read << separator << data.options.user_defined_parameters;
 	}
 	csv_read << ");";
 	output.SetValue(11, 0, csv_read.str());
