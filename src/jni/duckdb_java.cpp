@@ -269,9 +269,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckResultSetMeta = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
-	J_DuckResultSetMeta_init =
-	    env->GetMethodID(J_DuckResultSetMeta, "<init>",
-	                     "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)V");
+	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
+	                                            "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/"
+	                                            "lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
 
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBVector");
 	J_DuckVector = (jclass)env->NewGlobalRef(tmpLocalRef);
@@ -782,7 +782,8 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 }
 
 static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
-                          const duckdb::vector<LogicalType> &types, StatementProperties properties) {
+                          const duckdb::vector<LogicalType> &types, StatementProperties properties,
+                          const duckdb::vector<LogicalType> &param_types) {
 	auto name_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_detail_array = env->NewObjectArray(column_count, J_String, nullptr);
@@ -802,10 +803,26 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
 
+	auto param_type_array = env->NewObjectArray(n_param, J_String, nullptr);
+	auto param_type_detail_array = env->NewObjectArray(n_param, J_String, nullptr);
+
+	for (idx_t param_idx = 0; param_idx < n_param; param_idx++) {
+		std::string param_name;
+		if (param_types[param_idx].id() == LogicalTypeId::ENUM) {
+			param_name = "ENUM";
+		} else {
+			param_name = param_types[param_idx].ToString();
+		}
+
+		env->SetObjectArrayElement(param_type_array, param_idx, env->NewStringUTF(param_name.c_str()));
+		env->SetObjectArrayElement(param_type_detail_array, param_idx,
+		                           env->NewStringUTF(type_to_jduckdb_type(param_types[param_idx]).c_str()));
+	}
+
 	auto return_type = env->NewStringUTF(StatementReturnTypeToString(properties.return_type).c_str());
 
 	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, n_param, column_count, name_array, type_array,
-	                      type_detail_array, return_type);
+	                      type_detail_array, return_type, param_type_array, param_type_detail_array);
 }
 
 jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
@@ -815,9 +832,11 @@ jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf)
 	}
 	auto &result = res_ref->res;
 
-	auto n_param = -1; // no params now
+	auto n_param = 0; // no params now
+	duckdb::vector<LogicalType> param_types(n_param);
 
-	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties);
+	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties,
+	                  param_types);
 }
 
 jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
@@ -829,9 +848,14 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 
 	auto &stmt = stmt_ref->stmt;
 	auto n_param = stmt->named_param_map.size();
+	auto expected_parameter_types = stmt->GetExpectedParameterTypes();
+	duckdb::vector<LogicalType> param_types(n_param);
+	for (auto &it : stmt->named_param_map) {
+		param_types[it.second - 1] = expected_parameter_types[it.first];
+	}
 
 	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties());
+	                  stmt->GetStatementProperties(), param_types);
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
