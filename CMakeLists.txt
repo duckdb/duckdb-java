@@ -145,7 +145,13 @@ if(MSVC)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr bcrypt)
 endif()
 
-add_library(duckdb_java SHARED src/jni/duckdb_java.cpp src/jni/functions.cpp ${DUCKDB_SRC_FILES})
+add_library(duckdb_java SHARED
+  src/jni/config.cpp
+  src/jni/duckdb_java.cpp
+  src/jni/functions.cpp
+  src/jni/refs.cpp
+  src/jni/util.cpp
+  ${DUCKDB_SRC_FILES})
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native )
 target_link_libraries(duckdb_java ${DUCKDB_SYSTEM_LIBS})

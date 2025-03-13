@@ -20,6 +20,10 @@ public class Assertions {
         assertTrue(!val);
     }
 
+    public static void assertFalse(boolean val, String message) throws Exception {
+        assertTrue(!val, message);
+    }
+
     public static void assertEquals(Object actual, Object expected) throws Exception {
         assertEquals(actual, expected, "");
     }
