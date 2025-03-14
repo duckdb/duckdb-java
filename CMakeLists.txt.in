@@ -32,6 +32,74 @@ set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 add_definitions(-DDUCKDB_BUILD_LIBRARY)
 
 if(MSVC)
+  remove_definitions(-DDUCKDB_EXTENSION_JEMALLOC_LINKED)
+  list(REMOVE_ITEM DUCKDB_SRC_FILES
+    src/duckdb/extension/jemalloc/jemalloc_extension.cpp
+    src/duckdb/extension/jemalloc/jemalloc/src/jemalloc.c
+    src/duckdb/extension/jemalloc/jemalloc/src/arena.c
+    src/duckdb/extension/jemalloc/jemalloc/src/background_thread.c
+    src/duckdb/extension/jemalloc/jemalloc/src/base.c
+    src/duckdb/extension/jemalloc/jemalloc/src/batcher.c
+    src/duckdb/extension/jemalloc/jemalloc/src/bin.c
+    src/duckdb/extension/jemalloc/jemalloc/src/bin_info.c
+    src/duckdb/extension/jemalloc/jemalloc/src/bitmap.c
+    src/duckdb/extension/jemalloc/jemalloc/src/buf_writer.c
+    src/duckdb/extension/jemalloc/jemalloc/src/cache_bin.c
+    src/duckdb/extension/jemalloc/jemalloc/src/ckh.c
+    src/duckdb/extension/jemalloc/jemalloc/src/counter.c
+    src/duckdb/extension/jemalloc/jemalloc/src/ctl.c
+    src/duckdb/extension/jemalloc/jemalloc/src/decay.c
+    src/duckdb/extension/jemalloc/jemalloc/src/div.c
+    src/duckdb/extension/jemalloc/jemalloc/src/ecache.c
+    src/duckdb/extension/jemalloc/jemalloc/src/edata.c
+    src/duckdb/extension/jemalloc/jemalloc/src/edata_cache.c
+    src/duckdb/extension/jemalloc/jemalloc/src/ehooks.c
+    src/duckdb/extension/jemalloc/jemalloc/src/emap.c
+    src/duckdb/extension/jemalloc/jemalloc/src/eset.c
+    src/duckdb/extension/jemalloc/jemalloc/src/exp_grow.c
+    src/duckdb/extension/jemalloc/jemalloc/src/extent.c
+    src/duckdb/extension/jemalloc/jemalloc/src/extent_dss.c
+    src/duckdb/extension/jemalloc/jemalloc/src/extent_mmap.c
+    src/duckdb/extension/jemalloc/jemalloc/src/fxp.c
+    src/duckdb/extension/jemalloc/jemalloc/src/san.c
+    src/duckdb/extension/jemalloc/jemalloc/src/san_bump.c
+    src/duckdb/extension/jemalloc/jemalloc/src/hook.c
+    src/duckdb/extension/jemalloc/jemalloc/src/hpa.c
+    src/duckdb/extension/jemalloc/jemalloc/src/hpa_hooks.c
+    src/duckdb/extension/jemalloc/jemalloc/src/hpdata.c
+    src/duckdb/extension/jemalloc/jemalloc/src/inspect.c
+    src/duckdb/extension/jemalloc/jemalloc/src/large.c
+    src/duckdb/extension/jemalloc/jemalloc/src/log.c
+    src/duckdb/extension/jemalloc/jemalloc/src/malloc_io.c
+    src/duckdb/extension/jemalloc/jemalloc/src/mutex.c
+    src/duckdb/extension/jemalloc/jemalloc/src/nstime.c
+    src/duckdb/extension/jemalloc/jemalloc/src/pa.c
+    src/duckdb/extension/jemalloc/jemalloc/src/pa_extra.c
+    src/duckdb/extension/jemalloc/jemalloc/src/pai.c
+    src/duckdb/extension/jemalloc/jemalloc/src/pac.c
+    src/duckdb/extension/jemalloc/jemalloc/src/pages.c
+    src/duckdb/extension/jemalloc/jemalloc/src/peak_event.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof_data.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof_log.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof_recent.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof_stats.c
+    src/duckdb/extension/jemalloc/jemalloc/src/prof_sys.c
+    src/duckdb/extension/jemalloc/jemalloc/src/psset.c
+    src/duckdb/extension/jemalloc/jemalloc/src/rtree.c
+    src/duckdb/extension/jemalloc/jemalloc/src/safety_check.c
+    src/duckdb/extension/jemalloc/jemalloc/src/sc.c
+    src/duckdb/extension/jemalloc/jemalloc/src/sec.c
+    src/duckdb/extension/jemalloc/jemalloc/src/stats.c
+    src/duckdb/extension/jemalloc/jemalloc/src/sz.c
+    src/duckdb/extension/jemalloc/jemalloc/src/tcache.c
+    src/duckdb/extension/jemalloc/jemalloc/src/test_hooks.c
+    src/duckdb/extension/jemalloc/jemalloc/src/thread_event.c
+    src/duckdb/extension/jemalloc/jemalloc/src/ticker.c
+    src/duckdb/extension/jemalloc/jemalloc/src/tsd.c
+    src/duckdb/extension/jemalloc/jemalloc/src/util.c
+    src/duckdb/extension/jemalloc/jemalloc/src/witness.c
+    src/duckdb/extension/jemalloc/jemalloc/src/zone.c )
   add_definitions(/bigobj /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 else()
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
