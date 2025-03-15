@@ -4317,11 +4317,25 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_UUID_binding() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
-             ResultSet resultSet = statement.executeQuery()) {
-            resultSet.next();
-            assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
+        UUID uuid = UUID.fromString("7f649593-934e-4945-9bd6-9a554f25b573");
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                // UUID is parsed from string by UUID::FromString
+                try (ResultSet rs = stmt.executeQuery("SELECT '" + uuid + "'::UUID")) {
+                    rs.next();
+                    Object obj = rs.getObject(1);
+                    assertEquals(uuid, obj);
+                }
+            }
+            try (PreparedStatement stmt = conn.prepareStatement("SELECT ?")) {
+                // UUID is passed as 2 longs in JDBC ToValue
+                stmt.setObject(1, uuid);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    Object obj = rs.getObject(1);
+                    assertEquals(uuid, obj);
+                }
+            }
         }
     }
 

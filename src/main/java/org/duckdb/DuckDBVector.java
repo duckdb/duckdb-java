@@ -228,9 +228,10 @@ class DuckDBVector {
         if (isType(DuckDBColumnType.UUID)) {
             ByteBuffer buffer = getbuf(idx, 16);
             long leastSignificantBits = buffer.getLong();
-
-            // Account for unsigned
-            long mostSignificantBits = buffer.getLong() - Long.MAX_VALUE - 1;
+            long mostSignificantBits = buffer.getLong();
+            // Account for the following logic in UUID::FromString:
+            // Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
+            mostSignificantBits ^= Long.MIN_VALUE;
             return new UUID(mostSignificantBits, leastSignificantBits);
         }
         Object o = getObject(idx);
