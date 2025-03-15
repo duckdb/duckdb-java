@@ -4676,6 +4676,56 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_typed_connection_properties() throws Exception {
+        Properties config = new Properties();
+        config.put("autoinstall_known_extensions", false); // BOOLEAN
+        List<String> allowedDirsList = new ArrayList<>();
+        allowedDirsList.add("path/to/dir1");
+        allowedDirsList.add("path/to/dir2");
+        config.put("allowed_directories", allowedDirsList); // VARCHAR[]
+        config.put("catalog_error_max_schemas", 42);        // UBIGINT
+        config.put("index_scan_percentage", 0.042);         // DOUBLE
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            try (Statement stmt = conn.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("SELECT current_setting('autoinstall_known_extensions')")) {
+                    rs.next();
+                    boolean val = rs.getBoolean(1);
+                    assertFalse(val, "autoinstall_known_extensions");
+                }
+                try (ResultSet rs = stmt.executeQuery("SELECT UNNEST(current_setting('allowed_directories'))")) {
+                    List<String> values = new ArrayList<>();
+                    while (rs.next()) {
+                        String val = rs.getString(1);
+                        values.add(val);
+                    }
+                    assertTrue(values.size() >= 2);
+                    boolean dir1Found = false;
+                    boolean dir2Found = false;
+                    for (String val : values) {
+                        if (val.contains("dir1")) {
+                            dir1Found = true;
+                        }
+                        if (val.contains("dir2")) {
+                            dir2Found = true;
+                        }
+                    }
+                    assertTrue(dir1Found && dir2Found, "allowed_directories 1");
+                }
+                try (ResultSet rs = stmt.executeQuery("SELECT current_setting('catalog_error_max_schemas')")) {
+                    rs.next();
+                    long val = rs.getLong(1);
+                    assertEquals(val, 42l, "catalog_error_max_schemas");
+                }
+                try (ResultSet rs = stmt.executeQuery("SELECT current_setting('index_scan_percentage')")) {
+                    rs.next();
+                    double val = rs.getDouble(1);
+                    assertEquals(val, 0.042d, "index_scan_percentage");
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }

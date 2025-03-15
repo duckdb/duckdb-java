@@ -11,7 +11,13 @@ template = ['clang-format', '-i']
 if args.check:
     template += ['--dry-run', '--Werror']
 
-for name in ['src/jni/duckdb_java.cpp'] + glob('src/**/*.java', recursive=True):
+hpp_files = set(glob('src/jni/*.hpp'))
+hpp_files.remove('src/jni/functions.hpp')
+cpp_files = set(glob('src/jni/*.cpp'))
+cpp_files.remove('src/jni/functions.cpp')
+java_files = set(glob('src/**/*.java', recursive=True))
+
+for name in [*hpp_files] + [*cpp_files] + [*java_files]:
     print('Formatting', name)
     check_call(template + [name])
 
