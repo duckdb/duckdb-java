@@ -100,6 +100,7 @@ if(MSVC)
     src/duckdb/extension/jemalloc/jemalloc/src/util.c
     src/duckdb/extension/jemalloc/jemalloc/src/witness.c
     src/duckdb/extension/jemalloc/jemalloc/src/zone.c )
+  list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
   add_definitions(/bigobj /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 else()
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
@@ -152,9 +153,23 @@ add_library(duckdb_java SHARED
   src/jni/refs.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})
-target_compile_options(duckdb_java PRIVATE -fexceptions)
+target_compile_definitions(duckdb_java PRIVATE -DDUCKDB_STATIC_BUILD)
 target_link_libraries(duckdb_java duckdb-native ${LIBRARY_FILES})
 target_link_libraries(duckdb_java ${DUCKDB_SYSTEM_LIBS})
+if(NOT WIN32)
+  target_compile_options(duckdb_java PRIVATE -fexceptions)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(duckdb_java PRIVATE
+      -Bsymbolic
+      -Bsymbolic-functions
+      -fvisibility=hidden 
+      -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/duckdb_java.map)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_link_options(duckdb_java PRIVATE
+      -fvisibility=hidden
+      -Wl,-exported_symbols_list,${CMAKE_CURRENT_LIST_DIR}/duckdb_java.exp)
+  endif()
+endif()
 
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
