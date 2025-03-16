@@ -371,4 +371,26 @@ public final class DuckDBConnection implements java.sql.Connection {
         long array_stream_address = getArrowStreamAddress(arrow_array_stream);
         DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
     }
+
+    /**
+     * <p>Gets the memory address of the DuckDB C++ object from within JNI. With this it is possible to create
+     * database connections outside the JDBC driver.</p>
+     * <p><b>Big warning:</b> The JDBC driver does not know anything about these outside connection! Closing the
+     * database must happen with JDBC! Using outside connections implies keeping at least one JDBC connection open to
+     * avoid accessing freed memory!</p>
+     * @return The memory address as a Java long. 0 indicates no open connection.
+     */
+    public long getDuckDBMemoryAddress() {
+        if (this.conn_ref != null) {
+            return DuckDBNative.duckdb_jdbc_db_memory_address(this.conn_ref);
+        }
+        return 0;
+    }
+
+    /**
+     * <p>Gets the path and temporal file name of the duckdb_java lib as it was loaded via System.load().</p>
+     */
+    public String getDuckDBResourceFile() {
+        return DuckDBNative.getDuckDBResourceFile();
+    }
 }
