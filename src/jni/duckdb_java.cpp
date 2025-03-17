@@ -16,6 +16,9 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstdint>
+#include <limits>
+
 using namespace duckdb;
 using namespace std;
 
@@ -270,6 +273,9 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 		return (Value::BLOB_RAW(byte_array_to_string(env, (jbyteArray)param)));
 	} else if (env->IsInstanceOf(param, J_UUID)) {
 		auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
+		// Account for the following logic in UUID::FromString:
+		// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
+		most_significant ^= (std::numeric_limits<int64_t>::min)();
 		auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
 		return (Value::UUID(hugeint_t(most_significant, least_significant)));
 	} else if (env->IsInstanceOf(param, J_DuckMap)) {
