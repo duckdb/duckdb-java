@@ -14,6 +14,10 @@ if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR "No compatible Java/JNI found")
 endif()
 
+if(NOT(Java_VERSION_MAJOR STREQUAL "1" AND Java_VERSION_MINOR STREQUAL "8"))
+  message(WARNING "JDK ${Java_VERSION} is used to compile the Java part of the driver, resulting binaries will NOT be compatible with JDK 8.")
+endif()
+
 include(UseJava)
 project(DuckDBJava)
 
@@ -27,7 +31,7 @@ file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 set(DUCKDB_SRC_FILES ${SOURCE_FILES})
 
-set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
+set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g)
 
 add_definitions(-DDUCKDB_BUILD_LIBRARY)
 
