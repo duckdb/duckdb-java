@@ -1,15 +1,10 @@
 package org.duckdb;
 
 import java.sql.Date;
+import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {
@@ -38,18 +33,47 @@ public class DuckDBTimestamp {
     final static LocalDateTime RefLocalDateTime;
     protected long timeMicros;
 
-    public static Timestamp toSqlTimestamp(long timeMicros) {
-        return Timestamp.valueOf(
-            LocalDateTime.ofEpochSecond(micros2seconds(timeMicros), nanosPartMicros(timeMicros), ZoneOffset.UTC));
+    private static Instant createInstant(long value, ChronoUnit unit) throws SQLException {
+        switch (unit) {
+        case SECONDS:
+            return Instant.ofEpochSecond(value);
+        case MILLIS:
+            return Instant.ofEpochMilli(value);
+        case MICROS: {
+            long epochSecond = value / 1_000_000;
+            int nanoAdjustment = nanosPartMicros(value);
+            return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
+        }
+        case NANOS: {
+            long epochSecond = value / 1_000_000_000;
+            long nanoAdjustment = nanosPartNanos(value);
+            return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
+        }
+        default:
+            throw new SQLException("Unsupported unit type: [" + unit + "]");
+        }
     }
 
-    public static Timestamp toSqlTimestampNanos(long timeNanos) {
-        return Timestamp.valueOf(
-            LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos), nanosPartNanos(timeNanos), ZoneOffset.UTC));
+    public static LocalDateTime localDateTimeFromTimestampWithTimezone(long value, ChronoUnit unit,
+                                                                       ZoneId zoneIdNullable) throws SQLException {
+        Instant instant = createInstant(value, unit);
+        ZoneId zoneId = zoneIdNullable != null ? zoneIdNullable : ZoneId.systemDefault();
+        return LocalDateTime.ofInstant(instant, zoneId);
     }
 
-    public static LocalDateTime toLocalDateTime(long timeMicros) {
-        return LocalDateTime.ofEpochSecond(micros2seconds(timeMicros), nanosPartMicros(timeMicros), ZoneOffset.UTC);
+    public static LocalDateTime localDateTimeFromTimestamp(long value, ChronoUnit unit, ZoneId zoneIdNullable)
+        throws SQLException {
+        Instant instant = createInstant(value, unit);
+        LocalDateTime ldt = LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+        if (null == zoneIdNullable) {
+            return ldt;
+        }
+        ZoneId zoneIdDefault = ZoneId.systemDefault();
+        LocalDateTime ldtDefault = LocalDateTime.ofInstant(instant, zoneIdDefault);
+        LocalDateTime ldtZoned = LocalDateTime.ofInstant(instant, zoneIdNullable);
+        Duration duration = Duration.between(ldtZoned, ldtDefault);
+        LocalDateTime ldtAdjusted = ldt.plus(duration);
+        return ldtAdjusted;
     }
 
     public static OffsetTime toOffsetTime(long timeBits) {
@@ -76,26 +100,6 @@ public class DuckDBTimestamp {
 
     private static LocalTime toLocalTime(long timeMicros) {
         return LocalTime.ofNanoOfDay(timeMicros * 1000);
-    }
-
-    public static OffsetDateTime toOffsetDateTime(long timeMicros) {
-        return OffsetDateTime.of(toLocalDateTime(timeMicros), ZoneOffset.UTC);
-    }
-
-    public static Timestamp fromSecondInstant(long seconds) {
-        return fromMilliInstant(seconds * 1_000);
-    }
-
-    public static Timestamp fromMilliInstant(long millis) {
-        return new Timestamp(millis);
-    }
-
-    public static Timestamp fromMicroInstant(long micros) {
-        return Timestamp.from(Instant.ofEpochSecond(micros / 1_000_000, nanosPartMicros(micros)));
-    }
-
-    public static Timestamp fromNanoInstant(long nanos) {
-        return Timestamp.from(Instant.ofEpochSecond(nanos / 1_000_000_000, nanosPartNanos(nanos)));
     }
 
     public static long localDateTime2Micros(LocalDateTime localDateTime) {
@@ -130,7 +134,7 @@ public class DuckDBTimestamp {
     }
 
     public OffsetDateTime toOffsetDateTime() {
-        return OffsetDateTime.of(toLocalDateTime(this.timeMicros), ZoneOffset.UTC);
+        return OffsetDateTime.of(toLocalDateTime(), ZoneOffset.UTC);
     }
 
     public static long getMicroseconds(Timestamp sqlTimestamp) {

@@ -1,5 +1,8 @@
 package org.duckdb;
 
+import static java.time.temporal.ChronoUnit.*;
+import static org.duckdb.DuckDBTimestamp.*;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -12,19 +15,13 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 class DuckDBVector {
@@ -126,39 +123,65 @@ class DuckDBVector {
         }
     }
 
-    LocalTime getLocalTime(int idx) {
+    LocalTime getLocalTime(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
 
-        if (isType(DuckDBColumnType.TIME)) {
-            long microseconds = getbuf(idx, 8).getLong();
+        switch (duckdb_type) {
+        case TIME: {
+            long microseconds = getLongFromConstlen(idx);
             long nanoseconds = TimeUnit.MICROSECONDS.toNanos(microseconds);
             return LocalTime.ofNanoOfDay(nanoseconds);
         }
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+            return ldt.toLocalTime();
+        }
+        }
 
         String lazyString = getLazyString(idx);
-
-        return lazyString == null ? null : LocalTime.parse(lazyString);
+        if (lazyString == null) {
+            return null;
+        }
+        return LocalTime.parse(lazyString);
     }
 
-    LocalDate getLocalDate(int idx) {
+    LocalDate getLocalDate(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
 
-        if (isType(DuckDBColumnType.DATE)) {
-            return LocalDate.ofEpochDay(getbuf(idx, 4).getInt());
+        switch (duckdb_type) {
+        case DATE: {
+            int day = getbuf(idx, 4).getInt();
+            return LocalDate.ofEpochDay(day);
+        }
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+            return ldt.toLocalDate();
+        }
         }
 
         String lazyString = getLazyString(idx);
-
-        if ("infinity".equals(lazyString))
+        if (lazyString == null) {
+            return null;
+        }
+        if ("infinity".equals(lazyString)) {
             return LocalDate.MAX;
-        else if ("-infinity".equals(lazyString))
+        } else if ("-infinity".equals(lazyString)) {
             return LocalDate.MIN;
+        }
 
-        return lazyString == null ? null : LocalDate.from(ERA_FORMAT.parse(lazyString));
+        return LocalDate.from(ERA_FORMAT.parse(lazyString));
     }
 
     BigDecimal getBigDecimal(int idx) throws SQLException {
@@ -192,32 +215,29 @@ class DuckDBVector {
             return null;
         }
 
-        if (isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-            return DuckDBTimestamp.toOffsetDateTime(getbuf(idx, 8).getLong());
+        switch (duckdb_type) {
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+            Instant instant = ldt.toInstant(ZoneOffset.UTC);
+            ZoneId systemZone = ZoneId.systemDefault();
+            ZoneOffset zoneOffset = systemZone.getRules().getOffset(instant);
+            return ldt.atOffset(zoneOffset);
         }
-        Object o = getObject(idx);
-        return OffsetDateTime.parse(o.toString());
+        }
+
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
+            return null;
+        }
+        return OffsetDateTime.parse(lazyString);
     }
 
     Timestamp getTimestamp(int idx) throws SQLException {
-        if (check_and_null(idx)) {
-            return null;
-        }
-
-        if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-            return DuckDBTimestamp.toSqlTimestamp(getbuf(idx, 8).getLong());
-        }
-        if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
-            return DuckDBTimestamp.toSqlTimestamp(getbuf(idx, 8).getLong() * 1000);
-        }
-        if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
-            return DuckDBTimestamp.toSqlTimestampNanos(getbuf(idx, 8).getLong());
-        }
-        if (isType(DuckDBColumnType.TIMESTAMP_S)) {
-            return DuckDBTimestamp.toSqlTimestamp(getbuf(idx, 8).getLong() * 1_000_000);
-        }
-        Object o = getObject(idx);
-        return Timestamp.valueOf(o.toString());
+        return getTimestamp(idx, null);
     }
 
     UUID getUuid(int idx) throws SQLException {
@@ -305,48 +325,99 @@ class DuckDBVector {
         return result == null ? null : new JsonNode(result);
     }
 
-    Date getDate(int idx) {
+    Date getDate(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
 
-        if (isType(DuckDBColumnType.DATE)) {
+        switch (duckdb_type) {
+        case DATE:
             return Date.valueOf(this.getLocalDate(idx));
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+            LocalDateTime ldtTruncated = ldt.truncatedTo(ChronoUnit.DAYS);
+            Timestamp tsTruncated = Timestamp.valueOf(ldtTruncated);
+            return new Date(tsTruncated.getTime());
+        }
         }
 
-        String string_value = getLazyString(idx);
-        if (string_value == null) {
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
             return null;
         }
-        try {
-            return Date.valueOf(string_value);
-        } catch (Exception e) {
-            return null;
-        }
+        return Date.valueOf(lazyString);
     }
 
-    OffsetTime getOffsetTime(int idx) {
+    OffsetTime getOffsetTime(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
-        return DuckDBTimestamp.toOffsetTime(getbuf(idx, 8).getLong());
+
+        switch (duckdb_type) {
+        case TIME: {
+            LocalTime lt = getLocalTime(idx);
+            return lt.atOffset(ZoneOffset.UTC);
+        }
+        case TIME_WITH_TIME_ZONE: {
+            long micros = getLongFromConstlen(idx);
+            return DuckDBTimestamp.toOffsetTime(micros);
+        }
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            OffsetDateTime odt = getOffsetDateTime(idx);
+            return odt.toOffsetTime();
+        }
+        }
+
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
+            return null;
+        }
+        return OffsetTime.parse(lazyString);
     }
 
-    Time getTime(int idx) {
+    Time getTime(int idx) throws SQLException {
+        return getTime(idx, null);
+    }
+
+    Time getTime(int idx, Calendar cal) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
 
-        if (isType(DuckDBColumnType.TIME)) {
-            return Time.valueOf(getLocalTime(idx));
+        switch (duckdb_type) {
+        case TIME: {
+            LocalTime lt = getLocalTime(idx);
+            return Time.valueOf(lt);
+        }
+        case TIME_WITH_TIME_ZONE: {
+            long micros = getLongFromConstlen(idx);
+            OffsetTime ot = DuckDBTimestamp.toOffsetTime(micros);
+            LocalTime lt = ot.toLocalTime();
+            return Time.valueOf(lt);
+        }
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            Timestamp ts = getTimestamp(idx, cal);
+            return new Time(ts.getTime());
+        }
         }
 
-        String string_value = getLazyString(idx);
-        try {
-            return Time.valueOf(string_value);
-        } catch (Exception e) {
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
             return null;
         }
+        return Time.valueOf(lazyString);
     }
 
     Boolean getBoolean(int idx) throws SQLException {
@@ -369,6 +440,11 @@ class DuckDBVector {
         buf.order(ByteOrder.LITTLE_ENDIAN);
         buf.position(idx * typeWidth);
         return buf;
+    }
+
+    private long getLongFromConstlen(int idx) {
+        ByteBuffer buf = getbuf(idx, 8);
+        return buf.getLong();
     }
 
     protected boolean check_and_null(int idx) {
@@ -554,37 +630,52 @@ class DuckDBVector {
         return duckdb_type == columnType;
     }
 
-    Timestamp getTimestamp(int idx, Calendar cal) throws SQLException {
+    Timestamp getTimestamp(int idx, Calendar calNullable) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
-        // Our raw data is already a proper count of units since the epoch
-        // So just construct the SQL Timestamp.
-        if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-            return DuckDBTimestamp.fromMicroInstant(getbuf(idx, 8).getLong());
+        LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, calNullable);
+        if (ldt != null) {
+            return Timestamp.valueOf(ldt);
         }
-        if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
-            return DuckDBTimestamp.fromMilliInstant(getbuf(idx, 8).getLong());
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
+            return null;
         }
-        if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
-            return DuckDBTimestamp.fromNanoInstant(getbuf(idx, 8).getLong());
-        }
-        if (isType(DuckDBColumnType.TIMESTAMP_S)) {
-            return DuckDBTimestamp.fromSecondInstant(getbuf(idx, 8).getLong());
-        }
-        Object o = getObject(idx);
-        return Timestamp.valueOf(o.toString());
+        return Timestamp.valueOf(lazyString);
     }
 
     LocalDateTime getLocalDateTime(int idx) throws SQLException {
+        LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+        if (ldt != null) {
+            return ldt;
+        }
+        String lazyString = getLazyString(idx);
+        if (lazyString == null) {
+            return null;
+        }
+        return LocalDateTime.parse(lazyString);
+    }
+
+    private LocalDateTime getLocalDateTimeFromTimestamp(int idx, Calendar calNullable) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
-        if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-            return DuckDBTimestamp.toLocalDateTime(getbuf(idx, 8).getLong());
+        ZoneId zoneIdNullable = calNullable != null ? calNullable.getTimeZone().toZoneId() : null;
+        switch (duckdb_type) {
+        case TIMESTAMP:
+            return localDateTimeFromTimestamp(getLongFromConstlen(idx), MICROS, zoneIdNullable);
+        case TIMESTAMP_MS:
+            return localDateTimeFromTimestamp(getLongFromConstlen(idx), MILLIS, zoneIdNullable);
+        case TIMESTAMP_NS:
+            return localDateTimeFromTimestamp(getLongFromConstlen(idx), NANOS, zoneIdNullable);
+        case TIMESTAMP_S:
+            return localDateTimeFromTimestamp(getLongFromConstlen(idx), SECONDS, zoneIdNullable);
+        case TIMESTAMP_WITH_TIME_ZONE: {
+            return localDateTimeFromTimestampWithTimezone(getLongFromConstlen(idx), MICROS, zoneIdNullable);
         }
-        Object o = getObject(idx);
-        return LocalDateTime.parse(o.toString());
+        }
+        return null;
     }
 
     Struct getStruct(int idx) {
