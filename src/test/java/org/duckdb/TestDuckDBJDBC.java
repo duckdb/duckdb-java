@@ -1790,177 +1790,188 @@ public class TestDuckDBJDBC {
         stmt.execute("COMMENT ON COLUMN b.j IS 'a column'");
 
         DatabaseMetaData md = conn.getMetaData();
-        ResultSet rs;
 
-        rs = md.getCatalogs();
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        rs.close();
+        try (ResultSet rs = md.getCatalogs()) {
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+        }
 
-        rs = md.getSchemas(null, "ma%");
-        assertTrue(rs.next());
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertTrue(rs.getObject("TABLE_CATALOG") != null);
-        assertEquals(rs.getString(1), DuckDBConnection.DEFAULT_SCHEMA);
-        rs.close();
+        try (ResultSet rs = md.getSchemas(null, "ma%")) {
+            assertTrue(rs.next());
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertTrue(rs.getObject("TABLE_CATALOG") != null);
+            assertEquals(rs.getString(1), DuckDBConnection.DEFAULT_SCHEMA);
+        }
 
-        rs = md.getSchemas(null, "xxx");
-        assertFalse(rs.next());
-        rs.close();
+        try (ResultSet rs = md.getSchemas(null, null)) {
+            assertTrue(rs.next());
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertTrue(rs.getObject("TABLE_CATALOG") != null);
+            assertEquals(rs.getString(1), DuckDBConnection.DEFAULT_SCHEMA);
+        }
 
-        rs = md.getTables(null, null, "%", null);
+        try (ResultSet rs = md.getSchemas("", "")) {
+            assertFalse(rs.next());
+        }
 
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "a");
-        assertEquals(rs.getString(3), "a");
-        assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
-        assertEquals(rs.getString(4), "BASE TABLE");
-        assertEquals(rs.getObject("REMARKS"), "a table");
-        assertEquals(rs.getObject(5), "a table");
-        assertNull(rs.getObject("TYPE_CAT"));
-        assertNull(rs.getObject(6));
-        assertNull(rs.getObject("TYPE_SCHEM"));
-        assertNull(rs.getObject(7));
-        assertNull(rs.getObject("TYPE_NAME"));
-        assertNull(rs.getObject(8));
-        assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
-        assertNull(rs.getObject(9));
-        assertNull(rs.getObject("REF_GENERATION"));
-        assertNull(rs.getObject(10));
+        try (ResultSet rs = md.getSchemas(null, "xxx")) {
+            assertFalse(rs.next());
+        }
 
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "b");
-        assertEquals(rs.getString(3), "b");
-        assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
-        assertEquals(rs.getString(4), "VIEW");
-        assertEquals(rs.getObject("REMARKS"), "a view");
-        assertEquals(rs.getObject(5), "a view");
-        assertNull(rs.getObject("TYPE_CAT"));
-        assertNull(rs.getObject(6));
-        assertNull(rs.getObject("TYPE_SCHEM"));
-        assertNull(rs.getObject(7));
-        assertNull(rs.getObject("TYPE_NAME"));
-        assertNull(rs.getObject(8));
-        assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
-        assertNull(rs.getObject(9));
-        assertNull(rs.getObject("REF_GENERATION"));
-        assertNull(rs.getObject(10));
+        try (ResultSet rs = md.getTables(null, null, "%", null)) {
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "a");
+            assertEquals(rs.getString(3), "a");
+            assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
+            assertEquals(rs.getString(4), "BASE TABLE");
+            assertEquals(rs.getObject("REMARKS"), "a table");
+            assertEquals(rs.getObject(5), "a table");
+            assertNull(rs.getObject("TYPE_CAT"));
+            assertNull(rs.getObject(6));
+            assertNull(rs.getObject("TYPE_SCHEM"));
+            assertNull(rs.getObject(7));
+            assertNull(rs.getObject("TYPE_NAME"));
+            assertNull(rs.getObject(8));
+            assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+            assertNull(rs.getObject(9));
+            assertNull(rs.getObject("REF_GENERATION"));
+            assertNull(rs.getObject(10));
 
-        assertFalse(rs.next());
-        rs.close();
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "b");
+            assertEquals(rs.getString(3), "b");
+            assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
+            assertEquals(rs.getString(4), "VIEW");
+            assertEquals(rs.getObject("REMARKS"), "a view");
+            assertEquals(rs.getObject(5), "a view");
+            assertNull(rs.getObject("TYPE_CAT"));
+            assertNull(rs.getObject(6));
+            assertNull(rs.getObject("TYPE_SCHEM"));
+            assertNull(rs.getObject(7));
+            assertNull(rs.getObject("TYPE_NAME"));
+            assertNull(rs.getObject(8));
+            assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+            assertNull(rs.getObject(9));
+            assertNull(rs.getObject("REF_GENERATION"));
+            assertNull(rs.getObject(10));
 
-        rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", null);
+            assertFalse(rs.next());
+        }
 
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "a");
-        assertEquals(rs.getString(3), "a");
-        assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
-        assertEquals(rs.getString(4), "BASE TABLE");
-        assertEquals(rs.getObject("REMARKS"), "a table");
-        assertEquals(rs.getObject(5), "a table");
-        assertNull(rs.getObject("TYPE_CAT"));
-        assertNull(rs.getObject(6));
-        assertNull(rs.getObject("TYPE_SCHEM"));
-        assertNull(rs.getObject(7));
-        assertNull(rs.getObject("TYPE_NAME"));
-        assertNull(rs.getObject(8));
-        assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
-        assertNull(rs.getObject(9));
-        assertNull(rs.getObject("REF_GENERATION"));
-        assertNull(rs.getObject(10));
+        try (ResultSet rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", null)) {
 
-        rs.close();
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "a");
+            assertEquals(rs.getString(3), "a");
+            assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
+            assertEquals(rs.getString(4), "BASE TABLE");
+            assertEquals(rs.getObject("REMARKS"), "a table");
+            assertEquals(rs.getObject(5), "a table");
+            assertNull(rs.getObject("TYPE_CAT"));
+            assertNull(rs.getObject(6));
+            assertNull(rs.getObject("TYPE_SCHEM"));
+            assertNull(rs.getObject(7));
+            assertNull(rs.getObject("TYPE_NAME"));
+            assertNull(rs.getObject(8));
+            assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+            assertNull(rs.getObject(9));
+            assertNull(rs.getObject("REF_GENERATION"));
+            assertNull(rs.getObject(10));
+        }
 
-        rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", null);
-        assertFalse(rs.next());
-        rs.close();
+        try (ResultSet rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", null)) {
+            assertFalse(rs.next());
+        }
 
-        rs = md.getColumns(null, null, "a", null);
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "a");
-        assertEquals(rs.getString(3), "a");
-        assertEquals(rs.getString("COLUMN_NAME"), "i");
-        assertEquals(rs.getString("REMARKS"), "a column");
-        assertEquals(rs.getString(4), "i");
-        assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
-        assertEquals(rs.getInt(5), Types.INTEGER);
-        assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
-        assertEquals(rs.getString(6), "INTEGER");
-        assertEquals(rs.getInt("COLUMN_SIZE"), 32); // this should 10 for INTEGER
-        assertEquals(rs.getInt(7), 32);
-        assertNull(rs.getObject("BUFFER_LENGTH"));
-        assertNull(rs.getObject(8));
+        try (ResultSet rs = md.getTables("", "", "%", null)) {
+            assertFalse(rs.next());
+        }
 
-        // and so on but whatever
+        try (ResultSet rs = md.getColumns(null, null, "a", null)) {
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "a");
+            assertEquals(rs.getString(3), "a");
+            assertEquals(rs.getString("COLUMN_NAME"), "i");
+            assertEquals(rs.getString("REMARKS"), "a column");
+            assertEquals(rs.getString(4), "i");
+            assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+            assertEquals(rs.getInt(5), Types.INTEGER);
+            assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+            assertEquals(rs.getString(6), "INTEGER");
+            assertEquals(rs.getInt("COLUMN_SIZE"), 32); // this should 10 for INTEGER
+            assertEquals(rs.getInt(7), 32);
+            assertNull(rs.getObject("BUFFER_LENGTH"));
+            assertNull(rs.getObject(8));
+            // and so on but whatever
+        }
 
-        rs.close();
-
-        rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "i");
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        ;
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "a");
-        assertEquals(rs.getString(3), "a");
-        assertEquals(rs.getString("COLUMN_NAME"), "i");
-        assertEquals(rs.getString(4), "i");
-        assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
-        assertEquals(rs.getInt(5), Types.INTEGER);
-        assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
-        assertEquals(rs.getString(6), "INTEGER");
-        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
-        assertEquals(rs.getInt(7), 32);
-        assertNull(rs.getObject("BUFFER_LENGTH"));
-        assertNull(rs.getObject(8));
-        assertEquals(rs.getString("REMARKS"), "a column");
-
-        rs.close();
+        try (ResultSet rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "i")) {
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "a");
+            assertEquals(rs.getString(3), "a");
+            assertEquals(rs.getString("COLUMN_NAME"), "i");
+            assertEquals(rs.getString(4), "i");
+            assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+            assertEquals(rs.getInt(5), Types.INTEGER);
+            assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+            assertEquals(rs.getString(6), "INTEGER");
+            assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+            assertEquals(rs.getInt(7), 32);
+            assertNull(rs.getObject("BUFFER_LENGTH"));
+            assertNull(rs.getObject(8));
+            assertEquals(rs.getString("REMARKS"), "a column");
+        }
 
         // try with catalog as well
-        rs = md.getColumns(conn.getCatalog(), DuckDBConnection.DEFAULT_SCHEMA, "a", "i");
-        assertTrue(rs.next());
-        assertTrue(rs.getObject("TABLE_CAT") != null);
-        assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
-        assertEquals(rs.getString("TABLE_NAME"), "a");
-        assertEquals(rs.getString(3), "a");
-        assertEquals(rs.getString("COLUMN_NAME"), "i");
-        assertEquals(rs.getString(4), "i");
-        assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
-        assertEquals(rs.getInt(5), Types.INTEGER);
-        assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
-        assertEquals(rs.getString(6), "INTEGER");
-        assertEquals(rs.getInt("COLUMN_SIZE"), 32);
-        assertEquals(rs.getInt(7), 32);
-        assertNull(rs.getObject("BUFFER_LENGTH"));
-        assertNull(rs.getObject(8));
+        try (ResultSet rs = md.getColumns(conn.getCatalog(), DuckDBConnection.DEFAULT_SCHEMA, "a", "i")) {
+            assertTrue(rs.next());
+            assertTrue(rs.getObject("TABLE_CAT") != null);
+            assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
+            assertEquals(rs.getString("TABLE_NAME"), "a");
+            assertEquals(rs.getString(3), "a");
+            assertEquals(rs.getString("COLUMN_NAME"), "i");
+            assertEquals(rs.getString(4), "i");
+            assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+            assertEquals(rs.getInt(5), Types.INTEGER);
+            assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+            assertEquals(rs.getString(6), "INTEGER");
+            assertEquals(rs.getInt("COLUMN_SIZE"), 32);
+            assertEquals(rs.getInt(7), 32);
+            assertNull(rs.getObject("BUFFER_LENGTH"));
+            assertNull(rs.getObject(8));
+        }
 
-        rs.close();
+        try (ResultSet rs = md.getColumns(null, "xxx", "a", "i")) {
+            assertFalse(rs.next());
+        }
 
-        rs = md.getColumns(null, "xxx", "a", "i");
-        assertFalse(rs.next());
-        rs.close();
+        try (ResultSet rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", "i")) {
+            assertFalse(rs.next());
+        }
 
-        rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", "i");
-        assertFalse(rs.next());
-        rs.close();
+        try (ResultSet rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "xxx")) {
+            assertFalse(rs.next());
+        }
 
-        rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "xxx");
-        assertFalse(rs.next());
-        rs.close();
+        try (ResultSet rs = md.getColumns("", "", "%", "%")) {
+            assertFalse(rs.next());
+        }
 
         conn.close();
     }
@@ -3232,6 +3243,23 @@ public class TestDuckDBJDBC {
             assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
             assertFalse(functions.next());
+            functions.close();
+
+            try (ResultSet rs = conn.getMetaData().getFunctions(null, null, "read_csv_auto")) {
+                assertTrue(rs.next());
+            }
+
+            try (ResultSet rs = conn.getMetaData().getFunctions(null, null, "read\\_%")) {
+                assertTrue(rs.next());
+            }
+
+            try (ResultSet rs = conn.getMetaData().getFunctions("", "", "read_csv_auto")) {
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = conn.getMetaData().getFunctions(null, null, null)) {
+                assertTrue(rs.next());
+            }
         }
     }
 
@@ -3295,58 +3323,13 @@ public class TestDuckDBJDBC {
                 resultSet.close();
             }
 
-            /*
-            StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            pw.println("WITH constraint_columns as (");
-            pw.println("select");
-            pw.println("  database_name as \"TABLE_CAT\"");
-            pw.println(", schema_name as \"TABLE_SCHEM\"");
-            pw.println(", table_name as \"TABLE_NAME\"");
-            pw.println(", unnest(constraint_column_names) as \"COLUMN_NAME\"");
-            pw.println(", cast(null as varchar) as \"PK_NAME\"");
-            pw.println("from duckdb_constraints");
-            pw.println("where constraint_type = 'PRIMARY KEY'");
-            pw.println(")");
-            pw.println("SELECT \"TABLE_CAT\"");
-            pw.println(", \"TABLE_SCHEM\"");
-            pw.println(", \"TABLE_NAME\"");
-            pw.println(", \"COLUMN_NAME\"");
-            pw.println(", cast(row_number() over ");
-            pw.println("(partition by \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\") as int) as \"KEY_SEQ\"");
-            pw.println(", \"PK_NAME\"");
-            pw.println("FROM constraint_columns");
-            pw.println("ORDER BY TABLE_CAT, TABLE_SCHEM, TABLE_NAME, KEY_SEQ");
-
-            ResultSet resultSet = stmt.executeQuery(sw.toString());
-            ResultSet resultSet = databaseMetaData.getPrimaryKeys(null, null, catalog);
-            for (testDataIndex = 0; testDataIndex < testData.length; testDataIndex++) {
-                assertTrue(resultSet.next(), "Expected a row at position " + testDataIndex);
-                Object[] testDataRow = testData[testDataIndex];
-                for (int columnIndex = 0; columnIndex < testDataRow.length; columnIndex++) {
-                    Object value = testDataRow[columnIndex];
-                    if (value == null || value instanceof String) {
-                        String columnValue = resultSet.getString(columnIndex + 1);
-                        assertTrue(
-                            value == null ? columnValue == null : value.equals(columnValue),
-                            "row value " + testDataIndex + ", " + columnIndex + " " + value +
-                            " should equal column value "+ columnValue
-                        );
-                    } else {
-                        int testValue = ((Integer) value).intValue();
-                        int columnValue = resultSet.getInt(columnIndex + 1);
-                        assertTrue(
-                            testValue == columnValue,
-                            "row value " + testDataIndex + ", " + columnIndex + " " + testValue +
-                            " should equal column value " + columnValue
-                        );
-                    }
-                }
+            try (ResultSet rs = conn.getMetaData().getPrimaryKeys(null, null, "table1")) {
+                assertTrue(rs.next());
             }
-            */
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw e;
+
+            try (ResultSet rs = conn.getMetaData().getPrimaryKeys("", "", "table1")) {
+                assertFalse(rs.next());
+            }
         }
     }
 
@@ -4672,6 +4655,15 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getString("TABLE_NAME"), "test");
                 assertEquals(rs.getString("INDEX_NAME"), "idx_test_ok");
                 assertEquals(rs.getBoolean("NON_UNIQUE"), true);
+            }
+            try (ResultSet rs = conn.getMetaData().getIndexInfo(null, null, "test", true, false)) {
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = conn.getMetaData().getIndexInfo("", "", "test", false, false)) {
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = conn.getMetaData().getIndexInfo(null, null, null, false, false)) {
+                assertFalse(rs.next());
             }
         }
     }
