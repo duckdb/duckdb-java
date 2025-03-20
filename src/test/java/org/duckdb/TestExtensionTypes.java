@@ -3,12 +3,7 @@ package org.duckdb;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.assertEquals;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.Statement;
-import java.sql.Types;
+import java.sql.*;
 
 public class TestExtensionTypes {
 
@@ -21,8 +16,14 @@ public class TestExtensionTypes {
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
                 rs.next();
-                assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
-                assertEquals(rs.getObject(2), "\\xAA");
+                Struct struct = (Struct) rs.getObject(1);
+                Object[] attrs = struct.getAttributes();
+                assertEquals(attrs[0], "foo");
+                assertEquals(attrs[1], "bar");
+                Blob blob = rs.getBlob(2);
+                byte[] bytes = blob.getBytes(1, (int) blob.length());
+                assertEquals(bytes.length, 1);
+                assertEquals(bytes[0] & 0xff, 0xaa);
             }
         }
     }

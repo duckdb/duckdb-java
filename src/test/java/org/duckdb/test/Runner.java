@@ -27,14 +27,22 @@ public class Runner {
                                    .collect(Collectors.toList());
 
         String specific_test = null;
+        boolean quick_run = false;
         if (args.length >= 1) {
-            specific_test = args[0];
+            if ("quick".equals(args[0])) {
+                quick_run = true;
+            } else {
+                specific_test = args[0];
+            }
         }
 
         boolean anySucceeded = false;
         boolean anyFailed = false;
         for (Method m : methods) {
             if (m.getName().startsWith("test_")) {
+                if (quick_run && m.getName().startsWith("test_lots_")) {
+                    continue;
+                }
                 if (specific_test != null && !m.getName().contains(specific_test)) {
                     continue;
                 }
