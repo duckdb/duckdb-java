@@ -20,6 +20,7 @@ import static org.duckdb.test.Assertions.assertTrue;
 import static org.duckdb.test.Assertions.fail;
 import static org.duckdb.test.Runner.runTests;
 
+import java.io.File;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -4737,6 +4738,58 @@ public class TestDuckDBJDBC {
                     assertEquals(val, 0.042d, "index_scan_percentage");
                 }
             }
+        }
+    }
+
+    // https://github.com/duckdb/duckdb-java/issues/101
+    public static void test_unclosed_statement_does_not_hang() throws Exception {
+        String dbName = "test_issue_101.db";
+        String url = JDBC_URL + dbName;
+        Connection conn = DriverManager.getConnection(url);
+        Statement stmt = conn.createStatement();
+        stmt.execute("select 42");
+        // statement not closed explicitly
+        conn.close();
+        assertTrue(stmt.isClosed());
+        Connection connOther = DriverManager.getConnection(url);
+        connOther.close();
+        assertTrue(new File(dbName).delete());
+    }
+
+    public static void test_result_set_auto_closed() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            Statement stmt = conn.createStatement();
+            ResultSet rs1 = stmt.executeQuery("select 42");
+            ResultSet rs2 = stmt.executeQuery("select 43");
+            assertTrue(rs1.isClosed());
+            stmt.close();
+            assertTrue(rs2.isClosed());
+        }
+    }
+
+    public static void test_statements_auto_closed_on_conn_close() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt1 = conn.createStatement();
+        stmt1.execute("select 42");
+        PreparedStatement stmt2 = conn.prepareStatement("select 43");
+        stmt2.execute();
+        Statement stmt3 = conn.createStatement();
+        stmt3.execute("select 44");
+        stmt3.close();
+        conn.close();
+        assertTrue(stmt1.isClosed());
+        assertTrue(stmt2.isClosed());
+    }
+
+    public static void test_statement_auto_closed_on_completion() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            Statement stmt = conn.createStatement();
+            stmt.closeOnCompletion();
+            assertTrue(stmt.isCloseOnCompletion());
+            try (ResultSet rs = stmt.executeQuery("select 42")) {
+                rs.next();
+            }
+            assertTrue(stmt.isClosed());
         }
     }
 

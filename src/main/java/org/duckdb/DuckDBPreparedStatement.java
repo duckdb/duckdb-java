@@ -1,6 +1,5 @@
 package org.duckdb;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -31,7 +30,6 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.logging.Level;
@@ -49,6 +47,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private boolean returnsNothing = false;
     private boolean returnsResultSet = false;
     boolean closeOnCompletion = false;
+    boolean closing = false;
     private Object[] params = new Object[0];
     private DuckDBResultSetMetaData meta = null;
     private final List<Object[]> batchedParams = new ArrayList<>();
@@ -61,16 +60,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("connection parameter cannot be null");
         }
         this.conn = conn;
+        this.conn.trackStatement(this);
     }
 
     public DuckDBPreparedStatement(DuckDBConnection conn, String sql) throws SQLException {
-        if (conn == null) {
-            throw new SQLException("connection parameter cannot be null");
-        }
+        this(conn);
         if (sql == null) {
             throw new SQLException("sql query parameter cannot be null");
         }
-        this.conn = conn;
         this.isPreparedStatement = true;
         prepare(sql);
     }
@@ -299,15 +296,25 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void close() throws SQLException {
-        if (select_result != null) {
-            select_result.close();
-            select_result = null;
+        if (conn == null) {
+            return;
         }
-        if (stmt_ref != null) {
-            DuckDBNative.duckdb_jdbc_release(stmt_ref);
-            stmt_ref = null;
+        synchronized (this) {
+            if (conn == null) {
+                return;
+            }
+            closing = true;
+            if (select_result != null) {
+                select_result.close();
+                select_result = null;
+            }
+            if (stmt_ref != null) {
+                DuckDBNative.duckdb_jdbc_release(stmt_ref);
+                stmt_ref = null;
+            }
+            conn.untrackStatement(this);
+            conn = null; // we use this as a check for closed-ness
         }
-        conn = null; // we use this as a check for closed-ness
     }
 
     protected void finalize() throws Throwable {
@@ -352,9 +359,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
      * It is not safe to call this function when the connection is already closed.
      */
     @Override
-    public synchronized void cancel() throws SQLException {
-        if (conn.conn_ref != null) {
-            DuckDBNative.duckdb_jdbc_interrupt(conn.conn_ref);
+    public void cancel() throws SQLException {
+        synchronized (this) {
+            if (isClosed()) {
+                throw new SQLException("Statement was closed");
+            }
+            if (conn.conn_ref != null) {
+                DuckDBNative.duckdb_jdbc_interrupt(conn.conn_ref);
+            }
         }
     }
 
@@ -559,7 +571,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean isClosed() throws SQLException {
-        return conn == null;
+        if (conn == null) {
+            return true;
+        }
+        synchronized (this) {
+            return conn == null;
+        }
     }
 
     @Override
@@ -576,7 +593,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public void closeOnCompletion() throws SQLException {
         if (isClosed())
             throw new SQLException("Statement is closed");
-        closeOnCompletion = true;
+        synchronized (this) {
+            closeOnCompletion = true;
+        }
     }
 
     @Override

@@ -20,8 +20,7 @@ import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Struct;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.Executor;
 import org.duckdb.user.DuckDBMap;
 import org.duckdb.user.DuckDBUserArray;
@@ -37,6 +36,9 @@ public final class DuckDBConnection implements java.sql.Connection {
     boolean transactionRunning;
     final String url;
     private final boolean readOnly;
+    // Tracking set for statements created from this connection,
+    // must only be used from outside with track/untrack accessors.
+    private final Set<DuckDBPreparedStatement> statements = new LinkedHashSet<>();
 
     public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties)
         throws SQLException {
@@ -110,15 +112,32 @@ public final class DuckDBConnection implements java.sql.Connection {
         close();
     }
 
-    public synchronized void close() throws SQLException {
-        if (conn_ref != null) {
+    public void close() throws SQLException {
+        if (conn_ref == null) {
+            return;
+        }
+        synchronized (this) {
+            if (conn_ref == null) {
+                return;
+            }
+            // Closing remaining statements is not required by JDBC spec,
+            // but it is a reasonable expectation from clients point of view.
+            List<DuckDBPreparedStatement> stmtList = new ArrayList<>(statements);
+            for (DuckDBPreparedStatement stmt : stmtList) {
+                stmt.close();
+            }
             DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
             conn_ref = null;
         }
     }
 
     public boolean isClosed() throws SQLException {
-        return conn_ref == null;
+        if (conn_ref == null) {
+            return true;
+        }
+        synchronized (this) {
+            return conn_ref == null;
+        }
     }
 
     public boolean isValid(int timeout) throws SQLException {
@@ -370,5 +389,20 @@ public final class DuckDBConnection implements java.sql.Connection {
     public void registerArrowStream(String name, Object arrow_array_stream) {
         long array_stream_address = getArrowStreamAddress(arrow_array_stream);
         DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
+    }
+
+    void trackStatement(DuckDBPreparedStatement stmt) throws SQLException {
+        synchronized (this) {
+            if (isClosed()) {
+                throw new SQLException("Connection was closed");
+            }
+            this.statements.add(stmt);
+        }
+    }
+
+    void untrackStatement(DuckDBPreparedStatement stmt) throws SQLException {
+        synchronized (this) {
+            this.statements.remove(stmt);
+        }
     }
 }
