@@ -109,6 +109,8 @@ class DuckDBVector {
         case JSON:
             return getJsonObject(idx);
         case BLOB:
+        case GEOMETRY:
+        case WKB_BLOB:
             return getBlob(idx);
         case UUID:
             return getUuid(idx);
@@ -116,8 +118,15 @@ class DuckDBVector {
             return getMap(idx);
         case LIST:
         case ARRAY:
+        case LINESTRING_2D:
+        case POLYGON_2D:
             return getArray(idx);
         case STRUCT:
+        case POINT_2D:
+        case POINT_3D:
+        case POINT_4D:
+        case BOX_2D:
+        case BOX_2DF:
             return getStruct(idx);
         case UNION:
             return getUnion(idx);
@@ -249,7 +258,11 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        if (isType(DuckDBColumnType.LIST) || isType(DuckDBColumnType.ARRAY)) {
+        switch (duckdb_type) {
+        case LIST:
+        case ARRAY:
+        case LINESTRING_2D:
+        case POLYGON_2D:
             return (Array) varlen_data[idx];
         }
         throw new SQLFeatureNotSupportedException("getArray");
@@ -278,10 +291,12 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        if (isType(DuckDBColumnType.BLOB)) {
+        switch (duckdb_type) {
+        case BLOB:
+        case GEOMETRY:
+        case WKB_BLOB:
             return new DuckDBResultSet.DuckDBBlobResult(ByteBuffer.wrap((byte[]) varlen_data[idx]));
         }
-
         throw new SQLFeatureNotSupportedException("getBlob");
     }
 
