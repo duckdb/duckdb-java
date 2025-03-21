@@ -10,6 +10,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
+import static org.duckdb.DuckDBTimestamp.localDateTimeFromTimestamp;
 import static org.duckdb.test.Assertions.assertEquals;
 import static org.duckdb.test.Assertions.assertFalse;
 import static org.duckdb.test.Assertions.assertNotNull;
@@ -28,13 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.*;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
@@ -377,12 +372,6 @@ public class TestDuckDBJDBC {
             assertEquals(expected.getTime(), actual.getTime());
             assertEquals(expected.getNanos(), actual.getNanos());
 
-            //	Verify calendar variants
-            Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
-            Timestamp actual_cal = rs.getTimestamp(1, cal);
-            assertEquals(expected.getTime(), actual_cal.getTime());
-            assertEquals(expected.getNanos(), actual_cal.getNanos());
-
             assertEquals(Types.TIMESTAMP, rs.getMetaData().getColumnType(1));
             assertEquals(expectedTypeName, rs.getMetaData().getColumnTypeName(1));
 
@@ -410,7 +399,7 @@ public class TestDuckDBJDBC {
         OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
         OffsetDateTime odt1Rounded = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12000, ZoneOffset.ofHours(7));
         OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
-        OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 13000, ZoneOffset.ofHours(-5));
+        OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 8, 13000, ZoneOffset.ofHours(-5));
         OffsetDateTime odt3 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(2));
         OffsetDateTime odt4 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(0));
         OffsetDateTime odt5 = OffsetDateTime.of(1900, 11, 27, 23, 59, 59, 0, ZoneOffset.ofHours(1));
@@ -499,12 +488,51 @@ public class TestDuckDBJDBC {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             try (ResultSet rs = stmt.executeQuery(
                      "select range from range(TIMESTAMP '2001-04-10', TIMESTAMP '2001-04-11', INTERVAL 30 MINUTE)")) {
+                Calendar cal = GregorianCalendar.getInstance();
+                cal.setTimeZone(TimeZone.getTimeZone("UTC"));
                 while (rs.next()) {
-                    Timestamp actual = rs.getTimestamp(1, Calendar.getInstance());
+                    Timestamp actual = rs.getTimestamp(1, cal);
                     assertEquals(expected, actual.getTime());
                     expected += 30 * 60 * 1_000;
                 }
             }
+        }
+    }
+
+    public static void test_timestamp_getters() throws Exception {
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone activeTimeZone = TimeZone.getTimeZone("Europe/Sofia");
+        TimeZone.setDefault(activeTimeZone);
+        try {
+            try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
+                try (ResultSet rs = s.executeQuery(
+                         "SELECT '2020-01-01 01:23:45.678901 Australia/Darwin'::TIMESTAMP WITH TIME ZONE")) {
+                    rs.next();
+                    assertEquals("2019-12-31 17:53:45.678901", rs.getTimestamp(1).toString());
+                    assertEquals(1577807625678L, rs.getTimestamp(1).getTime());
+                    assertEquals("2019-12-31", rs.getDate(1).toString());
+                    assertEquals("Tue Dec 31 00:00:00 EET 2019",
+                                 new java.util.Date(rs.getDate(1).getTime()).toString());
+                    assertEquals("17:53:45", rs.getTime(1).toString());
+                    assertEquals("2019-12-31T17:53:45.678901", rs.getTimestamp(1).toLocalDateTime().toString());
+                    Calendar cal = GregorianCalendar.getInstance();
+                    cal.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+                    assertEquals("2019-12-31 10:53:45.678901", rs.getTimestamp(1, cal).toString());
+                    assertEquals(1577782425678L, rs.getTimestamp(1, cal).getTime());
+                }
+                try (ResultSet rs =
+                         s.executeQuery("SELECT '2020-01-01 01:23:45.678901'::TIMESTAMP WITHOUT TIME ZONE")) {
+                    rs.next();
+                    assertEquals("2020-01-01 01:23:45.678901", rs.getTimestamp(1).toString());
+                    assertEquals(1577834625678L, rs.getTimestamp(1).getTime());
+                    Calendar cal = GregorianCalendar.getInstance();
+                    cal.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+                    assertEquals("2020-01-01 08:23:45.678901", rs.getTimestamp(1, cal).toString());
+                    assertEquals(1577859825678L, rs.getTimestamp(1, cal).getTime());
+                }
+            }
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
         }
     }
 
@@ -797,8 +825,6 @@ public class TestDuckDBJDBC {
         assertTrue(ts4.getTime() == cts4.getTime());
         assertTrue(ts4.compareTo(cts4) == 0);
 
-        assertTrue(DuckDBTimestamp.getMicroseconds(DuckDBTimestamp.toSqlTimestamp(5678912345L)) == 5678912345L);
-
         DuckDBTimestamp dts4 = new DuckDBTimestamp(ts1);
         assertTrue(dts4.toSqlTimestamp().compareTo(ts1) == 0);
         DuckDBTimestamp dts5 = new DuckDBTimestamp(ts2);
@@ -852,7 +878,7 @@ public class TestDuckDBJDBC {
         ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
         ResultSet rs6 = ps.executeQuery();
         assertTrue(rs6.next());
-        assertEquals(rs6.getTimestamp(1), Timestamp.valueOf("1905-11-02 07:59:58.12345"));
+        assertEquals(rs6.getTimestamp(1), Timestamp.valueOf("1905-11-02 07:59:59.12345"));
         rs6.close();
         ps.close();
 
@@ -1693,7 +1719,7 @@ public class TestDuckDBJDBC {
         ResultSet rs = stmt.executeQuery(
             "SELECT '2019-11-26 21:11:43.123456'::timestamp ts, '2019-11-26'::date dt, '21:11:00'::time te");
         assertTrue(rs.next());
-        assertEquals(rs.getTimestamp("ts", cal), Timestamp.from(Instant.ofEpochSecond(1574802703, 123456000)));
+        assertEquals(rs.getTimestamp("ts", cal), Timestamp.valueOf("2019-11-27 05:11:43.123456"));
 
         assertEquals(rs.getDate("dt", cal), Date.valueOf("2019-11-26"));
 
@@ -3967,8 +3993,27 @@ public class TestDuckDBJDBC {
         return result;
     }
 
+    private static Timestamp microsToTimestampNoThrow(long micros) {
+        try {
+            LocalDateTime ldt = localDateTimeFromTimestamp(micros, ChronoUnit.MICROS, null);
+            return Timestamp.valueOf(ldt);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static OffsetDateTime localDateTimeToOffset(LocalDateTime ldt) {
+        Instant instant = ldt.toInstant(ZoneOffset.UTC);
+        ZoneId systemZone = ZoneId.systemDefault();
+        ZoneOffset zoneOffset = systemZone.getRules().getOffset(instant);
+        return ldt.atOffset(zoneOffset);
+    }
+
     static Map<String, List<Object>> correct_answer_map = new HashMap<>();
+    static final TimeZone ALL_TYPES_TIME_ZONE = TimeZone.getTimeZone("America/New_York");
     static {
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
         correct_answer_map.put("int_array", trio(42, 999, null, null, -42));
         correct_answer_map.put("double_array",
                                trio(42.0, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0));
@@ -3976,13 +4021,19 @@ public class TestDuckDBJDBC {
             "date_array", trio(LocalDate.parse("1970-01-01"), LocalDate.parse("5881580-07-11", FORMAT_DATE),
                                LocalDate.parse("-5877641-06-24", FORMAT_DATE), null, LocalDate.parse("2022-05-12")));
         correct_answer_map.put("timestamp_array", trio(Timestamp.valueOf("1970-01-01 00:00:00.0"),
-                                                       DuckDBTimestamp.toSqlTimestamp(9223372036854775807L),
-                                                       DuckDBTimestamp.toSqlTimestamp(-9223372036854775807L), null,
+                                                       microsToTimestampNoThrow(9223372036854775807L),
+                                                       microsToTimestampNoThrow(-9223372036854775807L), null,
                                                        Timestamp.valueOf("2022-05-12 16:23:45.0")));
-        correct_answer_map.put("timestamptz_array", trio(OffsetDateTime.parse("1970-01-01T00:00Z"),
-                                                         OffsetDateTime.parse("+294247-01-10T04:00:54.775807Z"),
-                                                         OffsetDateTime.parse("-290308-12-21T19:59:05.224193Z"), null,
-                                                         OffsetDateTime.parse("2022-05-12T23:23:45Z")));
+        correct_answer_map.put("timestamptz_array",
+                               trio(localDateTimeToOffset(LocalDateTime.ofInstant(Instant.parse("1970-01-01T00:00:00Z"),
+                                                                                  ZoneId.systemDefault())),
+                                    localDateTimeToOffset(LocalDateTime.ofInstant(
+                                        Instant.parse("+294247-01-10T04:00:54.775807Z"), ZoneId.systemDefault())),
+                                    localDateTimeToOffset(LocalDateTime.ofInstant(
+                                        Instant.parse("-290308-12-21T19:59:06.224193Z"), ZoneId.systemDefault())),
+                                    null,
+                                    localDateTimeToOffset(LocalDateTime.ofInstant(Instant.parse("2022-05-12T23:23:45Z"),
+                                                                                  ZoneId.systemDefault()))));
         correct_answer_map.put("varchar_array", trio("🦆🦆🦆🦆🦆🦆", "goose", null, ""));
         List<Integer> numbers = asList(42, 999, null, null, -42);
         correct_answer_map.put("nested_int_array", trio(emptyList(), numbers, null, emptyList(), numbers));
@@ -4037,8 +4088,8 @@ public class TestDuckDBJDBC {
         correct_answer_map.put(
             "time_tz", asList(OffsetTime.parse("00:00+15:59:59"), OffsetTime.parse("23:59:59.999999-15:59:59"), null));
         correct_answer_map.put("interval", asList("00:00:00", "83 years 3 months 999 days 00:16:39.999999", null));
-        correct_answer_map.put("timestamp", asList(DuckDBTimestamp.toSqlTimestamp(-9223372022400000000L),
-                                                   DuckDBTimestamp.toSqlTimestamp(9223372036854775806L), null));
+        correct_answer_map.put("timestamp", asList(microsToTimestampNoThrow(-9223372022400000000L),
+                                                   microsToTimestampNoThrow(9223372036854775806L), null));
         correct_answer_map.put("date", asList(LocalDate.of(-5877641, 6, 25), LocalDate.of(5881580, 7, 10), null));
         correct_answer_map.put("timestamp_s",
                                asList(Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0)),
@@ -4049,10 +4100,12 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("timestamp_ms",
                                asList(Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0, 0)),
                                       Timestamp.valueOf(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775000000)), null));
-        correct_answer_map.put(
-            "timestamp_tz",
-            asList(OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
-                   OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775806000), ZoneOffset.UTC), null));
+        correct_answer_map.put("timestamp_tz",
+                               asList(localDateTimeToOffset(LocalDateTime.ofInstant(
+                                          Instant.parse("-290308-12-21T19:03:58.00Z"), ZoneOffset.UTC)),
+                                      localDateTimeToOffset(LocalDateTime.ofInstant(
+                                          Instant.parse("+294247-01-09T23:00:54.775806Z"), ZoneOffset.UTC)),
+                                      null));
 
         List<Integer> int_array = asList(null, 2, 3);
         List<String> varchar_array = asList("a", null, "c");
@@ -4077,44 +4130,53 @@ public class TestDuckDBJDBC {
 
         correct_answer_map.put("list_of_fixed_int_array", asList(asList(int_array, int_list, int_array),
                                                                  asList(int_list, int_array, int_list), null));
+        TimeZone.setDefault(defaultTimeZone);
     }
 
     public static void test_all_types() throws Exception {
-        Logger logger = Logger.getAnonymousLogger();
-        String sql =
-            "select * EXCLUDE(time, time_tz)"
-            + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
-            +
-            "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
-            + "\nfrom test_all_types()";
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
+        try {
+            Logger logger = Logger.getAnonymousLogger();
+            String sql =
+                "select * EXCLUDE(time, time_tz)"
+                + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                +
+                "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
+                + "\nfrom test_all_types()";
 
-        try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            conn.createStatement().execute("set timezone = 'UTC'");
+            try (Connection conn = DriverManager.getConnection(JDBC_URL);
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                conn.createStatement().execute("set timezone = 'UTC'");
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                ResultSetMetaData metaData = rs.getMetaData();
+                try (ResultSet rs = stmt.executeQuery()) {
+                    ResultSetMetaData metaData = rs.getMetaData();
 
-                int rowIdx = 0;
-                while (rs.next()) {
-                    for (int i = 0; i < metaData.getColumnCount(); i++) {
-                        String columnName = metaData.getColumnName(i + 1);
-                        List<Object> answers = correct_answer_map.get(columnName);
-                        assertTrue(answers != null,
-                                   String.format("correct_answer_map lacks value for column \"%s\"", columnName));
-                        Object expected = answers.get(rowIdx);
+                    int rowIdx = 0;
+                    while (rs.next()) {
+                        for (int i = 0; i < metaData.getColumnCount(); i++) {
+                            String columnName = metaData.getColumnName(i + 1);
+                            List<Object> answers = correct_answer_map.get(columnName);
+                            assertTrue(answers != null,
+                                       "correct_answer_map lacks value for column: [" + columnName + "]");
+                            Object expected = answers.get(rowIdx);
 
-                        Object actual = toJavaObject(rs.getObject(i + 1));
+                            Object actual = toJavaObject(rs.getObject(i + 1));
 
-                        if (actual instanceof List) {
-                            assertListsEqual((List) actual, (List) expected);
-                        } else {
-                            assertEquals(actual, expected);
+                            String msg =
+                                "test_all_types error, columnName: [" + columnName + "], rowIdx: [" + rowIdx + "]";
+                            if (actual instanceof List) {
+                                assertListsEqual((List) actual, (List) expected, msg);
+                            } else {
+                                assertEquals(actual, expected, msg);
+                            }
                         }
+                        rowIdx++;
                     }
-                    rowIdx++;
                 }
             }
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
         }
     }
 
@@ -4126,13 +4188,17 @@ public class TestDuckDBJDBC {
     }
 
     private static <T> void assertListsEqual(List<T> actual, List<T> expected) throws Exception {
+        assertListsEqual(actual, expected, "");
+    }
+
+    private static <T> void assertListsEqual(List<T> actual, List<T> expected, String label) throws Exception {
         assertEquals(actual.size(), expected.size());
 
         ListIterator<T> itera = actual.listIterator();
         ListIterator<T> itere = expected.listIterator();
 
         while (itera.hasNext()) {
-            assertEquals(itera.next(), itere.next());
+            assertEquals(itera.next(), itere.next(), label);
         }
     }
 

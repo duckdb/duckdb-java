@@ -31,11 +31,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 public class DuckDBResultSet implements ResultSet {
     private final DuckDBPreparedStatement stmt;
@@ -372,7 +368,7 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Time getTime(int columnIndex) throws SQLException {
-        return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getTime(chunk_idx - 1);
+        return getTime(columnIndex, null);
     }
 
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
@@ -911,7 +907,10 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-        return getTime(columnIndex);
+        if (check_and_null(columnIndex)) {
+            return null;
+        }
+        return current_chunk[columnIndex - 1].getTime(chunk_idx - 1, cal);
     }
 
     public Time getTime(String columnLabel, Calendar cal) throws SQLException {
