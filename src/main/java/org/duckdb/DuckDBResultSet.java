@@ -31,7 +31,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.Objects;
@@ -92,15 +91,22 @@ public class DuckDBResultSet implements ResultSet {
         return true;
     }
 
-    public synchronized void close() throws SQLException {
-        if (result_ref != null) {
+    public void close() throws SQLException {
+        if (result_ref == null) {
+            return;
+        }
+        synchronized (this) {
+            if (result_ref == null) {
+                return;
+            }
             DuckDBNative.duckdb_jdbc_free_result(result_ref);
             // Nullness is used to determine whether we're closed
             result_ref = null;
-
+        }
+        synchronized (stmt) {
             // isCloseOnCompletion() throws if already closed, and we can't check for isClosed() because it could change
             // between when we check and call isCloseOnCompletion, so access the field directly.
-            if (stmt.closeOnCompletion) {
+            if (stmt.closeOnCompletion && !stmt.closing) {
                 stmt.close();
             }
         }
@@ -110,8 +116,13 @@ public class DuckDBResultSet implements ResultSet {
         close();
     }
 
-    public synchronized boolean isClosed() throws SQLException {
-        return result_ref == null;
+    public boolean isClosed() throws SQLException {
+        if (result_ref == null) {
+            return true;
+        }
+        synchronized (this) {
+            return result_ref == null;
+        }
     }
 
     private void check(int columnIndex) throws SQLException {

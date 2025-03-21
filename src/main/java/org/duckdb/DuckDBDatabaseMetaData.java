@@ -173,74 +173,74 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public String getSQLKeywords() throws SQLException {
-        Statement statement = conn.createStatement();
-        statement.closeOnCompletion();
-        ResultSet rs = statement.executeQuery("SELECT keyword_name FROM duckdb_keywords()");
-        StringBuilder sb = new StringBuilder();
-        while (rs.next()) {
-            sb.append(rs.getString(1));
-            sb.append(',');
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT keyword_name FROM duckdb_keywords()")) {
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getString(1));
+                sb.append(',');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     @Override
     public String getNumericFunctions() throws SQLException {
-        Statement statement = conn.createStatement();
-        statement.closeOnCompletion();
-        ResultSet rs = statement.executeQuery("SELECT DISTINCT function_name FROM duckdb_functions() "
-                                              + "WHERE parameter_types[1] ='DECIMAL'"
-                                              + "OR parameter_types[1] ='DOUBLE'"
-                                              + "OR parameter_types[1] ='SMALLINT'"
-                                              + "OR parameter_types[1] = 'BIGINT'");
-        StringBuilder sb = new StringBuilder();
-        while (rs.next()) {
-            sb.append(rs.getString(1));
-            sb.append(',');
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT DISTINCT function_name FROM duckdb_functions() "
+                                                   + "WHERE parameter_types[1] ='DECIMAL'"
+                                                   + "OR parameter_types[1] ='DOUBLE'"
+                                                   + "OR parameter_types[1] ='SMALLINT'"
+                                                   + "OR parameter_types[1] = 'BIGINT'")) {
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getString(1));
+                sb.append(',');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     @Override
     public String getStringFunctions() throws SQLException {
-        Statement statement = conn.createStatement();
-        statement.closeOnCompletion();
-        ResultSet rs = statement.executeQuery(
-            "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] = 'VARCHAR'");
-        StringBuilder sb = new StringBuilder();
-        while (rs.next()) {
-            sb.append(rs.getString(1));
-            sb.append(',');
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(
+                 "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] = 'VARCHAR'")) {
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getString(1));
+                sb.append(',');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     @Override
     public String getSystemFunctions() throws SQLException {
-        Statement statement = conn.createStatement();
-        statement.closeOnCompletion();
-        ResultSet rs = statement.executeQuery(
-            "SELECT DISTINCT function_name FROM duckdb_functions() WHERE length(parameter_types) = 0");
-        StringBuilder sb = new StringBuilder();
-        while (rs.next()) {
-            sb.append(rs.getString(1));
-            sb.append(',');
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(
+                 "SELECT DISTINCT function_name FROM duckdb_functions() WHERE length(parameter_types) = 0")) {
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getString(1));
+                sb.append(',');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     @Override
     public String getTimeDateFunctions() throws SQLException {
-        Statement statement = conn.createStatement();
-        statement.closeOnCompletion();
-        ResultSet rs = statement.executeQuery(
-            "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] LIKE 'TIME%'");
-        StringBuilder sb = new StringBuilder();
-        while (rs.next()) {
-            sb.append(rs.getString(1));
-            sb.append(',');
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery(
+                 "SELECT DISTINCT function_name FROM duckdb_functions() WHERE parameter_types[1] LIKE 'TIME%'")) {
+            StringBuilder sb = new StringBuilder();
+            while (rs.next()) {
+                sb.append(rs.getString(1));
+                sb.append(',');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     @Override
