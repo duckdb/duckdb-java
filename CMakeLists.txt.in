@@ -1,3 +1,5 @@
+# Java and JNI
+
 find_package(Java 1.8)
 
 set(JAVA_AWT_LIBRARY NotNeeded)
@@ -19,98 +21,36 @@ if(NOT(Java_VERSION_MAJOR STREQUAL "1" AND Java_VERSION_MINOR STREQUAL "8"))
 endif()
 
 include(UseJava)
-project(DuckDBJava)
 
-include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 
-include_directories(${INCLUDE_FILES})
-add_definitions(${DEFINES})
-add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1 -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
+# project definition
 
-file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
-file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
-set(DUCKDB_SRC_FILES ${SOURCE_FILES})
+project(DuckDBJava C CXX Java)
 
-set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g)
-
-add_definitions(-DDUCKDB_BUILD_LIBRARY)
-
-if(MSVC)
-  remove_definitions(-DDUCKDB_EXTENSION_JEMALLOC_LINKED)
-  list(REMOVE_ITEM DUCKDB_SRC_FILES
-    src/duckdb/extension/jemalloc/jemalloc_extension.cpp
-    src/duckdb/extension/jemalloc/jemalloc/src/jemalloc.c
-    src/duckdb/extension/jemalloc/jemalloc/src/arena.c
-    src/duckdb/extension/jemalloc/jemalloc/src/background_thread.c
-    src/duckdb/extension/jemalloc/jemalloc/src/base.c
-    src/duckdb/extension/jemalloc/jemalloc/src/batcher.c
-    src/duckdb/extension/jemalloc/jemalloc/src/bin.c
-    src/duckdb/extension/jemalloc/jemalloc/src/bin_info.c
-    src/duckdb/extension/jemalloc/jemalloc/src/bitmap.c
-    src/duckdb/extension/jemalloc/jemalloc/src/buf_writer.c
-    src/duckdb/extension/jemalloc/jemalloc/src/cache_bin.c
-    src/duckdb/extension/jemalloc/jemalloc/src/ckh.c
-    src/duckdb/extension/jemalloc/jemalloc/src/counter.c
-    src/duckdb/extension/jemalloc/jemalloc/src/ctl.c
-    src/duckdb/extension/jemalloc/jemalloc/src/decay.c
-    src/duckdb/extension/jemalloc/jemalloc/src/div.c
-    src/duckdb/extension/jemalloc/jemalloc/src/ecache.c
-    src/duckdb/extension/jemalloc/jemalloc/src/edata.c
-    src/duckdb/extension/jemalloc/jemalloc/src/edata_cache.c
-    src/duckdb/extension/jemalloc/jemalloc/src/ehooks.c
-    src/duckdb/extension/jemalloc/jemalloc/src/emap.c
-    src/duckdb/extension/jemalloc/jemalloc/src/eset.c
-    src/duckdb/extension/jemalloc/jemalloc/src/exp_grow.c
-    src/duckdb/extension/jemalloc/jemalloc/src/extent.c
-    src/duckdb/extension/jemalloc/jemalloc/src/extent_dss.c
-    src/duckdb/extension/jemalloc/jemalloc/src/extent_mmap.c
-    src/duckdb/extension/jemalloc/jemalloc/src/fxp.c
-    src/duckdb/extension/jemalloc/jemalloc/src/san.c
-    src/duckdb/extension/jemalloc/jemalloc/src/san_bump.c
-    src/duckdb/extension/jemalloc/jemalloc/src/hook.c
-    src/duckdb/extension/jemalloc/jemalloc/src/hpa.c
-    src/duckdb/extension/jemalloc/jemalloc/src/hpa_hooks.c
-    src/duckdb/extension/jemalloc/jemalloc/src/hpdata.c
-    src/duckdb/extension/jemalloc/jemalloc/src/inspect.c
-    src/duckdb/extension/jemalloc/jemalloc/src/large.c
-    src/duckdb/extension/jemalloc/jemalloc/src/log.c
-    src/duckdb/extension/jemalloc/jemalloc/src/malloc_io.c
-    src/duckdb/extension/jemalloc/jemalloc/src/mutex.c
-    src/duckdb/extension/jemalloc/jemalloc/src/nstime.c
-    src/duckdb/extension/jemalloc/jemalloc/src/pa.c
-    src/duckdb/extension/jemalloc/jemalloc/src/pa_extra.c
-    src/duckdb/extension/jemalloc/jemalloc/src/pai.c
-    src/duckdb/extension/jemalloc/jemalloc/src/pac.c
-    src/duckdb/extension/jemalloc/jemalloc/src/pages.c
-    src/duckdb/extension/jemalloc/jemalloc/src/peak_event.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof_data.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof_log.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof_recent.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof_stats.c
-    src/duckdb/extension/jemalloc/jemalloc/src/prof_sys.c
-    src/duckdb/extension/jemalloc/jemalloc/src/psset.c
-    src/duckdb/extension/jemalloc/jemalloc/src/rtree.c
-    src/duckdb/extension/jemalloc/jemalloc/src/safety_check.c
-    src/duckdb/extension/jemalloc/jemalloc/src/sc.c
-    src/duckdb/extension/jemalloc/jemalloc/src/sec.c
-    src/duckdb/extension/jemalloc/jemalloc/src/stats.c
-    src/duckdb/extension/jemalloc/jemalloc/src/sz.c
-    src/duckdb/extension/jemalloc/jemalloc/src/tcache.c
-    src/duckdb/extension/jemalloc/jemalloc/src/test_hooks.c
-    src/duckdb/extension/jemalloc/jemalloc/src/thread_event.c
-    src/duckdb/extension/jemalloc/jemalloc/src/ticker.c
-    src/duckdb/extension/jemalloc/jemalloc/src/tsd.c
-    src/duckdb/extension/jemalloc/jemalloc/src/util.c
-    src/duckdb/extension/jemalloc/jemalloc/src/witness.c
-    src/duckdb/extension/jemalloc/jemalloc/src/zone.c )
-  list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
-  add_definitions(/bigobj /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-else()
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
+
+# variables set by vendor.py
+
+set(DUCKDB_INCLUDE_DIRS
+  ${INCLUDES})
+
+set(JEMALLOC_INCLUDE_DIRS
+  ${JEMALLOC_INCLUDES})
+
+set(DUCKDB_DEFINITIONS
+  ${DEFINES})
+
+set(DUCKDB_SRC_FILES 
+  ${SOURCES})
+
+set(JEMACLLOC_SRC_FILES 
+  ${JEMALLOC_SOURCES})
+
+
+# a few OS-specific variables
 
 set(OS_NAME "unknown")
 set(OS_ARCH "amd64")
@@ -138,16 +78,24 @@ if(OVERRIDE_JDBC_OS_ARCH)
   set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
 endif()
 
+
+# Java compilation
+
+file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
+file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
+set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g)
+
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
         GENERATE_NATIVE_HEADERS duckdb-native)
 add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 
 
-
-set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
+# main shared lib compilation
 
 if(MSVC)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr bcrypt)
+  list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
+else()
+  list(APPEND DUCKDB_SRC_FILES ${JEMACLLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED
@@ -157,27 +105,69 @@ add_library(duckdb_java SHARED
   src/jni/refs.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})
-target_compile_definitions(duckdb_java PRIVATE -DDUCKDB_STATIC_BUILD)
-target_link_libraries(duckdb_java duckdb-native ${LIBRARY_FILES})
-target_link_libraries(duckdb_java ${DUCKDB_SYSTEM_LIBS})
-if(NOT WIN32)
-  target_compile_options(duckdb_java PRIVATE -fexceptions)
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_link_options(duckdb_java PRIVATE
-      -Bsymbolic
-      -Bsymbolic-functions
-      -fvisibility=hidden 
-      -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/duckdb_java.map)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_link_options(duckdb_java PRIVATE
-      -fvisibility=hidden
-      -Wl,-exported_symbols_list,${CMAKE_CURRENT_LIST_DIR}/duckdb_java.exp)
-  endif()
+
+target_include_directories(duckdb_java PRIVATE
+  ${JAVA_INCLUDE_PATH}
+  ${JAVA_INCLUDE_PATH2}
+  ${DUCKDB_INCLUDE_DIRS})
+
+if (NOT MSVC)
+  target_include_directories(duckdb_java PRIVATE
+    ${JEMALLOC_INCLUDE_DIRS})
+endif()
+
+target_link_libraries(duckdb_java PRIVATE
+  duckdb-native
+  ${CMAKE_DL_LIBS})
+
+if(MSVC)
+  target_link_libraries(duckdb_java PRIVATE
+    ws2_32
+    rstrtmgr
+    bcrypt)
+endif()
+
+if(MSVC)
+  target_compile_options(duckdb_java PRIVATE
+    /bigobj)
+else()
+  target_compile_options(duckdb_java PRIVATE
+    -fexceptions)
+endif()
+
+target_compile_definitions(duckdb_java PRIVATE
+  ${DUCKDB_DEFINITIONS}
+  -DDUCKDB_BUILD_LIBRARY
+  -DDUCKDB_STATIC_BUILD
+  -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+  -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT)
+
+if(MSVC)
+  target_compile_definitions(duckdb_java PRIVATE
+    -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+else()
+  target_compile_definitions(duckdb_java PRIVATE
+    -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_link_options(duckdb_java PRIVATE
+    -Bsymbolic
+    -Bsymbolic-functions
+    -fvisibility=hidden 
+    -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/duckdb_java.map)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  target_link_options(duckdb_java PRIVATE
+    -fvisibility=hidden
+    -Wl,-exported_symbols_list,${CMAKE_CURRENT_LIST_DIR}/duckdb_java.exp)
 endif()
 
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
+
+
+# JAR packing
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
