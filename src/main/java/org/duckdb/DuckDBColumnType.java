@@ -35,5 +35,16 @@ public enum DuckDBColumnType {
     MAP,
     ARRAY,
     UNKNOWN,
-    UNION;
+    UNION,
+
+    // spatial extension types
+    POINT_2D,
+    POINT_3D,
+    POINT_4D,
+    LINESTRING_2D,
+    POLYGON_2D,
+    BOX_2D,
+    BOX_2DF,
+    GEOMETRY,
+    WKB_BLOB;
 }

@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "functions.hpp"
 #include "refs.hpp"
+#include "types.hpp"
 #include "util.hpp"
 
 #include <cstdint>
@@ -515,6 +516,7 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 
 	return vec_array;
 }
+
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
@@ -532,7 +534,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 
 	// this allows us to treat aliased (usually extension) types as strings
 	auto type = vec.GetType();
-	auto type_id = type.HasAlias() ? LogicalTypeId::UNKNOWN : type.id();
+	auto type_id = type_id_from_type(type);
 
 	switch (type_id) {
 	case LogicalTypeId::BOOLEAN:
