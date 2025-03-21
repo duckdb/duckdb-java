@@ -5,7 +5,20 @@ on:
     paths:
       - ".github/workflows/Nightly.yml"
       - "vendor.py"
+  workflow_call:
+    inputs:
+      duckdb-sha:
+        description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
   workflow_dispatch:
+    inputs:
+      duckdb-sha:
+        description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
   schedule:
     - cron: "17 0 * * *"
 
@@ -34,6 +47,15 @@ jobs:
           repository: duckdb/duckdb
           path: .git/duckdb
           fetch-depth: 0
+
+      - name: Get commit SHA
+        if: ${{ inputs.duckdb-sha != '' }}
+        run: |
+          cd .git/duckdb && git checkout ${{ inputs.duckdb-sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Vendor sources
         id: vendor
