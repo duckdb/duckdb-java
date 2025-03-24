@@ -4798,6 +4798,23 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_client_config_retained_on_dup() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt1 = conn.createStatement()) {
+                stmt1.execute("set home_directory='test1'");
+                try (ResultSet rs = stmt1.executeQuery("select current_setting('home_directory')")) {
+                    rs.next();
+                    assertEquals(rs.getString(1), "test1");
+                }
+            }
+            try (Connection dup = ((DuckDBConnection) conn).duplicate(); Statement stmt2 = dup.createStatement();
+                 ResultSet rs = stmt2.executeQuery("select current_setting('home_directory')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "test1");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }

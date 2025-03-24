@@ -107,7 +107,9 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 
 jobject _duckdb_jdbc_connect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto config = ClientConfig::GetConfig(*conn_ref->connection->context);
 	auto conn = new ConnectionHolder(conn_ref->db);
+	conn->connection->context->config = config;
 	return env->NewDirectByteBuffer(conn, 0);
 }
 
