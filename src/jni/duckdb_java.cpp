@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "functions.hpp"
 #include "refs.hpp"
+#include "types.hpp"
 #include "util.hpp"
 
 #include <cstdint>
@@ -396,42 +397,6 @@ void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
 	}
 }
 
-static std::string type_to_jduckdb_type(LogicalType logical_type) {
-	switch (logical_type.id()) {
-	case LogicalTypeId::DECIMAL: {
-
-		uint8_t width = 0;
-		uint8_t scale = 0;
-		logical_type.GetDecimalProperties(width, scale);
-		std::string width_scale = std::to_string(width) + std::string(";") + std::to_string(scale);
-
-		auto physical_type = logical_type.InternalType();
-		switch (physical_type) {
-		case PhysicalType::INT16: {
-			string res = std::string("DECIMAL16;") + width_scale;
-			return res;
-		}
-		case PhysicalType::INT32: {
-			string res = std::string("DECIMAL32;") + width_scale;
-			return res;
-		}
-		case PhysicalType::INT64: {
-			string res = std::string("DECIMAL64;") + width_scale;
-			return res;
-		}
-		case PhysicalType::INT128: {
-			string res = std::string("DECIMAL128;") + width_scale;
-			return res;
-		}
-		default:
-			return std::string("no physical type found");
-		}
-	} break;
-	default:
-		return logical_type.ToString();
-	}
-}
-
 static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
                           const duckdb::vector<LogicalType> &types, StatementProperties properties) {
 	auto name_array = env->NewObjectArray(column_count, J_String, nullptr);
@@ -515,6 +480,7 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 
 	return vec_array;
 }
+
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
@@ -530,11 +496,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
 
-	// this allows us to treat aliased (usually extension) types as strings
-	auto type = vec.GetType();
-	auto type_id = type.HasAlias() ? LogicalTypeId::UNKNOWN : type.id();
-
-	switch (type_id) {
+	switch (vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 		break;

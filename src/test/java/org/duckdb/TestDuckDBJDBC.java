@@ -11,14 +11,7 @@ import static java.util.Collections.singletonList;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 import static org.duckdb.DuckDBTimestamp.localDateTimeFromTimestamp;
-import static org.duckdb.test.Assertions.assertEquals;
-import static org.duckdb.test.Assertions.assertFalse;
-import static org.duckdb.test.Assertions.assertNotNull;
-import static org.duckdb.test.Assertions.assertNull;
-import static org.duckdb.test.Assertions.assertThrows;
-import static org.duckdb.test.Assertions.assertThrowsMaybe;
-import static org.duckdb.test.Assertions.assertTrue;
-import static org.duckdb.test.Assertions.fail;
+import static org.duckdb.test.Assertions.*;
 import static org.duckdb.test.Runner.runTests;
 
 import java.math.BigDecimal;
@@ -1302,7 +1295,7 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
-    public static void test_big_data() throws Exception {
+    public static void test_lots_of_big_data() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
         int rows = 10000;
@@ -4187,21 +4180,6 @@ public class TestDuckDBJDBC {
         return result;
     }
 
-    private static <T> void assertListsEqual(List<T> actual, List<T> expected) throws Exception {
-        assertListsEqual(actual, expected, "");
-    }
-
-    private static <T> void assertListsEqual(List<T> actual, List<T> expected, String label) throws Exception {
-        assertEquals(actual.size(), expected.size());
-
-        ListIterator<T> itera = actual.listIterator();
-        ListIterator<T> itere = expected.listIterator();
-
-        while (itera.hasNext()) {
-            assertEquals(itera.next(), itere.next(), label);
-        }
-    }
-
     public static void test_cancel() throws Exception {
         ExecutorService service = Executors.newFixedThreadPool(1);
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
@@ -4300,7 +4278,7 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_race() throws Exception {
+    public static void test_lots_of_races() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
             ExecutorService executorService = Executors.newFixedThreadPool(10);
 
@@ -4799,6 +4777,15 @@ public class TestDuckDBJDBC {
     }
 
     public static void main(String[] args) throws Exception {
-        System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
+        String arg1 = args.length > 0 ? args[0] : "";
+        final int statusCode;
+        if (arg1.startsWith("Test")) {
+            Class<?> clazz = Class.forName("org.duckdb." + arg1);
+            statusCode = runTests(new String[0], clazz);
+        } else {
+            // extension installation fails on CI, Spatial test is temporary disabled
+            statusCode = runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class /*, TestSpatial.class */);
+        }
+        System.exit(statusCode);
     }
 }

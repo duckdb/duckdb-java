@@ -1,6 +1,8 @@
 package org.duckdb.test;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.Objects;
 import java.util.function.Function;
 import org.duckdb.test.Thrower;
@@ -40,6 +42,21 @@ public class Assertions {
 
     public static void assertEquals(byte[] actual, byte[] expected, String message) throws Exception {
         assertTrue(Arrays.equals(actual, expected), message);
+    }
+
+    public static <T> void assertListsEqual(List<T> actual, List<T> expected) throws Exception {
+        assertListsEqual(actual, expected, "");
+    }
+
+    public static <T> void assertListsEqual(List<T> actual, List<T> expected, String label) throws Exception {
+        assertEquals(actual.size(), expected.size());
+
+        ListIterator<T> itera = actual.listIterator();
+        ListIterator<T> itere = expected.listIterator();
+
+        while (itera.hasNext()) {
+            assertEquals(itera.next(), itere.next(), label);
+        }
     }
 
     public static void assertNotNull(Object a) throws Exception {
