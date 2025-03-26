@@ -560,7 +560,6 @@ add_library(duckdb_java SHARED
   src/jni/duckdb_java.cpp
   src/jni/functions.cpp
   src/jni/refs.cpp
-  src/jni/types.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})
 
