@@ -110,6 +110,8 @@ class DuckDBNative {
     protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref, ByteBuffer conn_ref)
         throws SQLException;
 
+    protected static native boolean duckdb_jdbc_is_result_open(ByteBuffer res_ref) throws SQLException;
+
     protected static native int duckdb_jdbc_fetch_size();
 
     protected static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, long batch_size);

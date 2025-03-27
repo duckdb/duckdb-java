@@ -13,12 +13,14 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "functions.hpp"
+#include "holders.hpp"
 #include "refs.hpp"
 #include "types.hpp"
 #include "util.hpp"
 
 #include <cstdint>
 #include <limits>
+#include <mutex>
 
 using namespace duckdb;
 using namespace std;
@@ -37,6 +39,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	}
 
 	try {
+		ConnectionHolder::init_statics();
+		StatementHolder::init_statics();
+		ResultHolder::init_statics();
 		create_refs(env);
 	} catch (const std::exception &e) {
 		if (!env->ExceptionCheck()) {
@@ -59,40 +64,6 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	delete_global_refs(env);
 }
 
-/**
- * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
- * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
- * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing a DuckDB is freed, the
- * DuckDB is released as well.
- */
-struct ConnectionHolder {
-	const duckdb::shared_ptr<duckdb::DuckDB> db;
-	const duckdb::unique_ptr<duckdb::Connection> connection;
-
-	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db)
-	    : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
-	}
-};
-
-/**
- * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
- */
-static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	if (!conn_ref_buf) {
-		throw ConnectionException("Invalid connection");
-	}
-	auto conn_holder = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_holder) {
-		throw ConnectionException("Invalid connection");
-	}
-	auto conn_ref = conn_holder->connection.get();
-	if (!conn_ref || !conn_ref->context) {
-		throw ConnectionException("Invalid connection");
-	}
-
-	return conn_ref;
-}
-
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
@@ -100,40 +71,45 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 	auto database = byte_array_to_string(env, database_j);
 	std::unique_ptr<DBConfig> config = create_db_config(env, read_only, props);
 	bool cache_instance = database != ":memory:" && !database.empty();
-	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, cache_instance);
-	auto conn_holder = new ConnectionHolder(shared_db);
 
-	return env->NewDirectByteBuffer(conn_holder, 0);
+	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, cache_instance);
+	auto conn_ref_ptr = make_uniq<ConnectionHolder>(shared_db);
+	ConnectionHolder::track(conn_ref_ptr.get());
+
+	return env->NewDirectByteBuffer(conn_ref_ptr.release(), 0);
 }
 
 jobject _duckdb_jdbc_connect(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
+
 	auto config = ClientConfig::GetConfig(*conn_ref->connection->context);
-	auto conn = new ConnectionHolder(conn_ref->db);
-	conn->connection->context->config = config;
-	return env->NewDirectByteBuffer(conn, 0);
+	auto conn_ref_dup = make_uniq<ConnectionHolder>(conn_ref->db, std::move(config));
+	ConnectionHolder::track(conn_ref_dup.get());
+
+	return env->NewDirectByteBuffer(conn_ref_dup.release(), 0);
 }
 
 jstring _duckdb_jdbc_get_schema(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
-
+	auto entry = conn_ref->client_data().catalog_search_path->GetDefault();
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
 static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
-	}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	conn_ref->context->RunFunctionInTransaction([&]() {
-		ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, CatalogSetPathType::SET_SCHEMA);
-	});
+	conn_ref->conn().context->RunFunctionInTransaction(
+	    [&]() { conn_ref->client_data().catalog_search_path->Set(search_entry, CatalogSetPathType::SET_SCHEMA); });
 }
 
 void _duckdb_jdbc_set_schema(JNIEnv *env, jclass, jobject conn_ref_buf, jstring schema) {
@@ -145,65 +121,122 @@ void _duckdb_jdbc_set_catalog(JNIEnv *env, jclass, jobject conn_ref_buf, jstring
 }
 
 jstring _duckdb_jdbc_get_catalog(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
+	auto entry = conn_ref->client_data().catalog_search_path->GetDefault();
 	if (entry.catalog == INVALID_CATALOG) {
-		entry.catalog = DatabaseManager::GetDefaultDatabase(*conn_ref->context);
+		entry.catalog = DatabaseManager::GetDefaultDatabase(*conn_ref->conn().context);
 	}
-
 	return env->NewStringUTF(entry.catalog.c_str());
 }
 
 void _duckdb_jdbc_set_auto_commit(JNIEnv *env, jclass, jobject conn_ref_buf, jboolean auto_commit) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
-	}
-	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->SetAutoCommit(auto_commit); });
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
+
+	conn_ref->conn().context->RunFunctionInTransaction([&]() { conn_ref->conn().SetAutoCommit(auto_commit); });
 }
 
 jboolean _duckdb_jdbc_get_auto_commit(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return false;
-	}
-	return conn_ref->IsAutoCommit();
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
+
+	return conn_ref->conn().IsAutoCommit();
 }
 
 void _duckdb_jdbc_interrupt(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
+
+	conn_ref->conn().Interrupt();
+}
+
+// Statement lock must be held when calling this function,
+// see details in holders.hpp.
+static void close_stmt_tracked_results(StatementHolder *stmt_ref) {
+	// last created - first deleted
+	for (auto it = stmt_ref->res_list.rbegin(); it != stmt_ref->res_list.rend(); it++) {
+		ResultHolder *res_ref = *it;
+
+		auto res_mtx = ResultHolder::mutex_no_throw(res_ref);
+		if (res_mtx.get() == nullptr) {
+			continue;
+		}
+		std::lock_guard<std::mutex> res_guard(*res_mtx);
+		bool res_was_tracked = ResultHolder::untrack(res_ref);
+		if (!res_was_tracked) {
+			continue;
+		}
+		delete res_ref;
 	}
-	conn_ref->Interrupt();
+
+	stmt_ref->res_list.clear();
+	stmt_ref->res_set.clear();
 }
 
 void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (conn_ref) {
-		delete conn_ref;
+	if (conn_ref_buf == nullptr) {
+		return;
 	}
-}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf_no_throw(env, conn_ref_buf);
+	if (conn_ref == nullptr) {
+		return;
+	}
+	auto mtx = ConnectionHolder::mutex_no_throw(conn_ref);
+	if (mtx.get() == nullptr) {
+		return;
+	}
+	std::lock_guard<std::mutex> guard(*mtx);
+	bool was_tracked = ConnectionHolder::untrack(conn_ref);
+	if (!was_tracked) {
+		return;
+	}
 
-struct StatementHolder {
-	duckdb::unique_ptr<PreparedStatement> stmt;
-};
+	// cancel active query if any
+	conn_ref->conn().Interrupt();
+
+	// clean up statements, last created - first deleted
+	for (auto it = conn_ref->stmt_list.rbegin(); it != conn_ref->stmt_list.rend(); it++) {
+		StatementHolder *stmt_ref = *it;
+
+		auto stmt_mtx = StatementHolder::mutex_no_throw(stmt_ref);
+		if (stmt_mtx.get() == nullptr) {
+			continue;
+		}
+		std::lock_guard<std::mutex> stmt_guard(*stmt_mtx);
+		bool stmt_was_tracked = StatementHolder::untrack(stmt_ref);
+		if (!stmt_was_tracked) {
+			continue;
+		}
+		close_stmt_tracked_results(stmt_ref);
+		delete stmt_ref;
+	}
+
+	conn_ref->stmt_list.clear();
+	conn_ref->stmt_set.clear();
+	delete conn_ref;
+}
 
 #include "utf8proc_wrapper.hpp"
 
 jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
 	auto query = byte_array_to_string(env, query_j);
 
-	auto statements = conn_ref->ExtractStatements(query.c_str());
+	auto statements = conn_ref->conn().ExtractStatements(query.c_str());
 	if (statements.empty()) {
 		throw InvalidInputException("No statements to execute.");
 	}
@@ -211,32 +244,25 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 	// if there are multiple statements, we directly execute the statements besides the last one
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = conn_ref->Query(std::move(statements[i]));
+		auto res = conn_ref->conn().Query(std::move(statements[i]));
 		if (res->HasError()) {
 			res->ThrowError();
 		}
 	}
 
-	auto stmt_ref = new StatementHolder();
-	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
-	if (stmt_ref->stmt->HasError()) {
-		string error_msg = string(stmt_ref->stmt->GetError());
-		stmt_ref->stmt = nullptr;
-
-		// No success, so it must be deleted
-		delete stmt_ref;
+	auto stmt = conn_ref->conn().Prepare(std::move(statements.back()));
+	if (stmt->HasError()) {
+		string error_msg = string(stmt->GetError());
 		ThrowJNI(env, error_msg.c_str());
-
 		// Just return control flow back to JVM, as an Exception is pending anyway
 		return nullptr;
 	}
-	return env->NewDirectByteBuffer(stmt_ref, 0);
-}
+	auto stmt_ref_ptr = make_uniq<StatementHolder>(conn_ref, std::move(stmt));
+	StatementHolder::track(stmt_ref_ptr.get());
+	conn_ref->track_stmt(stmt_ref_ptr.get());
 
-struct ResultHolder {
-	duckdb::unique_ptr<QueryResult> res;
-	duckdb::unique_ptr<DataChunk> chunk;
-};
+	return env->NewDirectByteBuffer(stmt_ref_ptr.release(), 0);
+}
 
 Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> context) {
 	param = env->CallStaticObjectMethod(J_Timestamp, J_Timestamp_valueOf, param);
@@ -348,12 +374,11 @@ Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> cont
 }
 
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref) {
-		throw InvalidInputException("Invalid statement");
-	}
+	auto stmt_ref = StatementHolder::unwrap_ref_buf(env, stmt_ref_buf);
+	auto mtx = StatementHolder::mutex(stmt_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	StatementHolder::check_tracked(stmt_ref);
 
-	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
@@ -375,28 +400,63 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 	bool stream_results =
 	    stmt_ref->stmt->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
 
-	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
-	if (res_ref->res->HasError()) {
-		string error_msg = string(res_ref->res->GetError());
-		res_ref->res = nullptr;
+	auto res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
+	if (res->HasError()) {
+		string error_msg = string(res->GetError());
 		ThrowJNI(env, error_msg.c_str());
 		return nullptr;
 	}
+	auto res_ref = make_uniq<ResultHolder>(stmt_ref, std::move(res));
+	stmt_ref->track_result(res_ref.get());
+	ResultHolder::track(res_ref.get());
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }
 
-void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (stmt_ref) {
-		delete stmt_ref;
-	}
+static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
+                          const duckdb::vector<LogicalType> &types, StatementProperties properties);
+
+jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
+	auto stmt_ref = StatementHolder::unwrap_ref_buf(env, stmt_ref_buf);
+	auto mtx = StatementHolder::mutex(stmt_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	StatementHolder::check_tracked(stmt_ref);
+
+	auto &stmt = stmt_ref->stmt;
+	auto n_param = stmt->named_param_map.size();
+
+	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
+	                  stmt->GetStatementProperties());
 }
 
-void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (res_ref) {
-		delete res_ref;
+void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
+	if (stmt_ref_buf == nullptr) {
+		return;
 	}
+	auto stmt_ref = StatementHolder::unwrap_ref_buf_no_throw(env, stmt_ref_buf);
+	if (stmt_ref == nullptr) {
+		return;
+	}
+	auto mtx = StatementHolder::mutex_no_throw(stmt_ref);
+	if (mtx.get() == nullptr) {
+		return;
+	}
+	std::lock_guard<std::mutex> guard(*mtx);
+	bool was_tracked = StatementHolder::untrack(stmt_ref);
+	if (!was_tracked) {
+		return;
+	}
+	{
+		auto conn_mtx = ConnectionHolder::mutex_no_throw(stmt_ref->conn_ref);
+		if (conn_mtx.get() != nullptr) {
+			std::lock_guard<std::mutex> conn_guard(*conn_mtx);
+			bool conn_tracked = ConnectionHolder::is_tracked(stmt_ref->conn_ref);
+			if (conn_tracked) {
+				stmt_ref->conn_ref->untrack_stmt(stmt_ref);
+			}
+		}
+	}
+	close_stmt_tracked_results(stmt_ref);
+	delete stmt_ref;
 }
 
 static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
@@ -427,43 +487,34 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 }
 
 jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+	auto res_ref = ResultHolder::unwrap_ref_buf(env, res_ref_buf);
+	auto mtx = ResultHolder::mutex(res_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ResultHolder::check_tracked(res_ref);
+	if (!res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");
 	}
+
 	auto &result = res_ref->res;
-
 	auto n_param = -1; // no params now
-
 	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties);
-}
-
-jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
-
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		throw InvalidInputException("Invalid statement");
-	}
-
-	auto &stmt = stmt_ref->stmt;
-	auto n_param = stmt->named_param_map.size();
-
-	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties());
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
 
 jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf) {
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+	auto res_ref = ResultHolder::unwrap_ref_buf(env, res_ref_buf);
+	auto mtx = ResultHolder::mutex(res_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ResultHolder::check_tracked(res_ref);
+	if (!res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");
 	}
 
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (conn_ref == nullptr) {
-		return nullptr;
-	}
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto conn_mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> conn_guard(*conn_mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
 	res_ref->chunk = res_ref->res->Fetch();
 	if (!res_ref->chunk) {
@@ -475,12 +526,53 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
 
-		auto jvec = ProcessVector(env, conn_ref, vec, row_count);
+		auto jvec = ProcessVector(env, &conn_ref->conn(), vec, row_count);
 
 		env->SetObjectArrayElement(vec_array, col_idx, jvec);
 	}
 
 	return vec_array;
+}
+
+jboolean _duckdb_jdbc_is_result_open(JNIEnv *env, jclass, jobject res_ref_buf) {
+	if (res_ref_buf == nullptr) {
+		return false;
+	}
+	auto res_ref = ResultHolder::unwrap_ref_buf_no_throw(env, res_ref_buf);
+	if (res_ref == nullptr) {
+		return false;
+	}
+	return ResultHolder::is_tracked(res_ref);
+}
+
+void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
+	if (res_ref_buf == nullptr) {
+		return;
+	}
+	auto res_ref = ResultHolder::unwrap_ref_buf_no_throw(env, res_ref_buf);
+	if (res_ref == nullptr) {
+		return;
+	}
+	auto mtx = ResultHolder::mutex_no_throw(res_ref);
+	if (mtx.get() == nullptr) {
+		return;
+	}
+	std::lock_guard<std::mutex> guard(*mtx);
+	bool was_tracked = ResultHolder::untrack(res_ref);
+	if (!was_tracked) {
+		return;
+	}
+	{
+		auto stmt_mtx = StatementHolder::mutex_no_throw(res_ref->stmt_ref);
+		if (stmt_mtx.get() != nullptr) {
+			std::lock_guard<std::mutex> stmt_guard(*stmt_mtx);
+			bool stmt_tracked = StatementHolder::is_tracked(res_ref->stmt_ref);
+			if (stmt_tracked) {
+				res_ref->stmt_ref->untrack_result(res_ref);
+			}
+		}
+	}
+	delete res_ref;
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
@@ -704,14 +796,14 @@ jint _duckdb_jdbc_fetch_size(JNIEnv *, jclass) {
 
 jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray schema_name_j,
                                      jbyteArray table_name_j) {
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
 	auto schema_name = byte_array_to_string(env, schema_name_j);
 	auto table_name = byte_array_to_string(env, table_name_j);
-	auto appender = new Appender(*conn_ref, schema_name, table_name);
+	auto appender = new Appender(conn_ref->conn(), schema_name, table_name);
 	return env->NewDirectByteBuffer(appender, 0);
 }
 
@@ -850,11 +942,11 @@ public:
 
 void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlong arrow_array_stream_pointer,
                                  jbyteArray name_j) {
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	auto conn = get_connection(env, conn_ref_buf);
-	if (conn == nullptr) {
-		return;
-	}
 	auto name = byte_array_to_string(env, name_j);
 
 	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
@@ -864,17 +956,16 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	parameters.push_back(Value::POINTER((uintptr_t)factory));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	conn_ref->conn().TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
 }
 
-void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
+void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	auto conn_ref = ConnectionHolder::unwrap_ref_buf(env, conn_ref_buf);
+	auto mtx = ConnectionHolder::mutex(conn_ref);
+	std::lock_guard<std::mutex> guard(*mtx);
+	ConnectionHolder::check_tracked(conn_ref);
 
-	auto connection = get_connection(env, conn_buf);
-	if (!connection) {
-		return;
-	}
-
-	auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
+	auto &db_instance = DatabaseInstance::GetDatabase(*conn_ref->conn().context);
 	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
 	auto hello_world_type = LogicalType::STRUCT(children);
 	hello_world_type.SetAlias("test_type");

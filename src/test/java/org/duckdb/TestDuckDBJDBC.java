@@ -3085,7 +3085,7 @@ public class TestDuckDBJDBC {
             conn.getSchema();
             fail();
         } catch (SQLException e) {
-            assertEquals(e.getMessage(), "Connection Error: Invalid connection");
+            assertEquals(e.getMessage(), "Invalid Error: Invalid connection ref buffer");
         }
     }
 
@@ -4801,7 +4801,8 @@ public class TestDuckDBJDBC {
             statusCode = runTests(new String[0], clazz);
         } else {
             // extension installation fails on CI, Spatial test is temporary disabled
-            statusCode = runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class /*, TestSpatial.class */);
+            statusCode = runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class /*, TestSpatial.class */,
+                                  TestClosure.class);
         }
         System.exit(statusCode);
     }
