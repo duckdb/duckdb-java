@@ -33,6 +33,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1is_1result_1open;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1statement_1meta;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1result_1meta;
