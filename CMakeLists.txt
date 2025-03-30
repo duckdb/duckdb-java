@@ -104,6 +104,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_common_crypto.cpp
   src/duckdb/ub_src_common_enums.cpp
   src/duckdb/ub_src_common_exception.cpp
+  src/duckdb/ub_src_common_multi_file.cpp
   src/duckdb/ub_src_common_operator.cpp
   src/duckdb/ub_src_common_progress_bar.cpp
   src/duckdb/ub_src_common_row_operations.cpp
