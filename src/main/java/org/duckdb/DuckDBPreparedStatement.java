@@ -233,7 +233,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (stmt_ref == null) {
             throw new SQLException("Prepare something first");
         }
-        return new DuckDBParameterMetaData(meta);
+        return meta.param_meta;
     }
 
     @Override
