@@ -239,9 +239,9 @@ void create_refs(JNIEnv *env) {
 	J_Decimal_longValue = get_method_id(env, J_Decimal, "longValue", "()J");
 
 	J_DuckResultSetMeta = make_class_ref(env, "org/duckdb/DuckDBResultSetMetaData");
-	J_DuckResultSetMeta_init =
-	    get_method_id(env, J_DuckResultSetMeta, "<init>",
-	                  "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)V");
+	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
+	                                            "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/"
+	                                            "lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
 
 	J_DuckVector = make_class_ref(env, "org/duckdb/DuckDBVector");
 
