@@ -60,13 +60,14 @@ jobs:
       - name: Vendor sources
         id: vendor
         run: |
+          export REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)
+          echo "Updating vendored DuckDB sources to $REV"
           git config --global user.email "github_bot@duckdblabs.com"
           git config --global user.name "DuckDB Labs GitHub Bot"
           git rm -rf src/duckdb
           python vendor.py --duckdb .git/duckdb
           git add src/duckdb CMakeLists.txt
           rm -rf .git/duckdb
-          export REV=`git rev-parse --short HEAD`
           git commit -m "Update vendored DuckDB sources to $REV"
           git push --dry-run
           # Check if ahead of upstream branch
@@ -79,6 +80,10 @@ jobs:
       - if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
         run: |
           git push -u origin HEAD
+
+      - name: Wait for push to complete
+        if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
+        run: sleep 10  # Give GitHub a moment to process the push
 
   rebuild:
     needs: vendor
