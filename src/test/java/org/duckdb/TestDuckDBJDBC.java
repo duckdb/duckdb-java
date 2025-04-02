@@ -4793,6 +4793,19 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_empty_typemap_allowed() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            Map<String, Class<?>> defaultMap = conn.getTypeMap();
+            assertEquals(defaultMap.size(), 0);
+            // check empty not throws
+            conn.setTypeMap(new HashMap<>());
+            // check custom map throws
+            Map<String, Class<?>> customMap = new HashMap<>();
+            customMap.put("foo", TestDuckDBJDBC.class);
+            assertThrows(() -> { conn.setTypeMap(customMap); }, SQLException.class);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;

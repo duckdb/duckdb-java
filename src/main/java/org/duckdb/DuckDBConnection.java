@@ -20,6 +20,7 @@ import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Struct;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
@@ -257,10 +258,22 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Map<String, Class<?>> getTypeMap() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getTypeMap");
+        if (isClosed()) {
+            throw new SQLException("Connection was closed");
+        }
+        return new HashMap<>();
     }
 
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("Connection was closed");
+        }
+        if (map != null && (map instanceof java.util.HashMap)) {
+            // we return an empty Hash map if the user gives this back make sure we accept it.
+            if (map.isEmpty()) {
+                return;
+            }
+        }
         throw new SQLFeatureNotSupportedException("setTypeMap");
     }
 
