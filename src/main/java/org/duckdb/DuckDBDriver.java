@@ -38,6 +38,13 @@ public class DuckDBDriver implements java.sql.Driver {
             read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
         }
         info.put("duckdb_api", "jdbc");
+
+        // Apache Spark passes this option when SELECT on a JDBC DataSource
+        // table is performed. It is the internal Spark option and is likely
+        // passed by mistake, so we need to ignore it to allow the connection
+        // to be established.
+        info.remove("path");
+
         return DuckDBConnection.newConnection(url, read_only, info);
     }
 
