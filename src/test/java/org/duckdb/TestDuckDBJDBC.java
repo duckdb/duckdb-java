@@ -4869,6 +4869,13 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_spark_path_option_ignored() throws Exception {
+        Properties config = new Properties();
+        config.put("path", "path/to/spark/catalog/dir");
+        Connection conn = DriverManager.getConnection(JDBC_URL, config);
+        conn.close();
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;
