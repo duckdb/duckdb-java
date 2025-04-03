@@ -3748,7 +3748,17 @@ public class TestDuckDBJDBC {
                 ResultSet arrayResultSet = rs.getArray(1).getResultSet();
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 1);
+                assertEquals(arrayResultSet.getInt("index"), 1);
+                assertEquals(arrayResultSet.getInt("Index"), 1);
+                assertEquals(arrayResultSet.getInt("INDEX"), 1);
+                assertEquals(arrayResultSet.getByte(2), (byte) 42);
+                assertEquals(arrayResultSet.getShort(2), (short) 42);
                 assertEquals(arrayResultSet.getInt(2), 42);
+                assertEquals(arrayResultSet.getLong(2), (long) 42);
+                assertEquals(arrayResultSet.getFloat(2), (float) 42);
+                assertEquals(arrayResultSet.getDouble(2), (double) 42);
+                assertEquals(arrayResultSet.getBigDecimal(2), BigDecimal.valueOf(42));
+                assertEquals(arrayResultSet.getInt("value"), 42);
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 2);
                 assertEquals(arrayResultSet.getInt(2), 69);
@@ -3760,10 +3770,18 @@ public class TestDuckDBJDBC {
                 ResultSet arrayResultSet = rs.getArray(1).getResultSet();
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 1);
-                Array subArray = arrayResultSet.getArray(2);
-                assertNotNull(subArray);
-                ResultSet subArrayResultSet = subArray.getResultSet();
-                assertFalse(subArrayResultSet.next()); // empty array
+                {
+                    Array subArray = arrayResultSet.getArray(2);
+                    assertNotNull(subArray);
+                    ResultSet subArrayResultSet = subArray.getResultSet();
+                    assertFalse(subArrayResultSet.next()); // empty array
+                }
+                {
+                    Array subArray = arrayResultSet.getArray("value");
+                    assertNotNull(subArray);
+                    ResultSet subArrayResultSet = subArray.getResultSet();
+                    assertFalse(subArrayResultSet.next()); // empty array
+                }
 
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 2);
@@ -3844,6 +3862,13 @@ public class TestDuckDBJDBC {
                 assertEquals(arrayResultSet2.getInt(1), 1);
                 assertEquals(arrayResultSet2.getInt(2), 69);
                 assertFalse(arrayResultSet2.next());
+            }
+
+            try (ResultSet rs = statement.executeQuery("select [" + Integer.MAX_VALUE + "::BIGINT + 1]")) {
+                assertTrue(rs.next());
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getLong(2), ((long) Integer.MAX_VALUE) + 1);
             }
         }
     }
@@ -4574,6 +4599,44 @@ public class TestDuckDBJDBC {
                 }
                 assertEquals(1, rowsReturned, "Got unexpected number of rows back.");
             }
+        }
+    }
+
+    public static void test_case_insensitivity() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (Statement s = connection.createStatement()) {
+                s.execute("CREATE TABLE someTable (lowercase INT, mixedCASE INT, UPPERCASE INT)");
+                s.execute("INSERT INTO someTable VALUES (0, 1, 2)");
+            }
+
+            String[] tableNameVariations = new String[] {"sometable", "someTable", "SOMETABLE"};
+            String[][] columnNameVariations = new String[][] {{"lowercase", "mixedcase", "uppercase"},
+                                                              {"lowerCASE", "mixedCASE", "upperCASE"},
+                                                              {"LOWERCASE", "MIXEDCASE", "UPPERCASE"}};
+
+            int totalTestsRun = 0;
+
+            // Test every combination of upper, lower and mixedcase column and table names.
+            for (String tableName : tableNameVariations) {
+                for (int columnVariation = 0; columnVariation < columnNameVariations.length; columnVariation++) {
+                    try (Statement s = connection.createStatement()) {
+                        String query = String.format("SELECT %s, %s, %s from %s;", columnNameVariations[0][0],
+                                                     columnNameVariations[0][1], columnNameVariations[0][2], tableName);
+
+                        ResultSet resultSet = s.executeQuery(query);
+                        assertTrue(resultSet.next());
+                        for (int i = 0; i < columnNameVariations[0].length; i++) {
+                            assertEquals(resultSet.getInt(columnNameVariations[columnVariation][i]), i,
+                                         "Query " + query + " did not get correct result back for column number " + i);
+                            totalTestsRun++;
+                        }
+                    }
+                }
+            }
+
+            assertEquals(totalTestsRun,
+                         tableNameVariations.length * columnNameVariations.length * columnNameVariations[0].length,
+                         "Number of test cases actually run did not match number expected to be run.");
         }
     }
 
