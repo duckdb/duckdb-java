@@ -40,7 +40,8 @@ public class DuckDBResultSet implements ResultSet {
     /**
      * {@code null} if this result set is closed.
      */
-    private ByteBuffer result_ref;
+    private volatile ByteBuffer result_ref;
+
     private DuckDBVector[] current_chunk = {};
     private int chunk_idx = 0;
     private boolean finished = false;
@@ -49,10 +50,14 @@ public class DuckDBResultSet implements ResultSet {
 
     public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref,
                            ByteBuffer conn_ref) throws SQLException {
-        this.stmt = Objects.requireNonNull(stmt);
-        this.result_ref = Objects.requireNonNull(result_ref);
-        this.meta = Objects.requireNonNull(meta);
-        this.conn_ref = Objects.requireNonNull(conn_ref);
+        try {
+            this.stmt = Objects.requireNonNull(stmt);
+            this.result_ref = Objects.requireNonNull(result_ref);
+            this.meta = Objects.requireNonNull(meta);
+            this.conn_ref = Objects.requireNonNull(conn_ref);
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Statement getStatement() throws SQLException {
@@ -69,7 +74,7 @@ public class DuckDBResultSet implements ResultSet {
         return meta;
     }
 
-    public synchronized boolean next() throws SQLException {
+    public boolean next() throws SQLException {
         if (isClosed()) {
             throw new SQLException("ResultSet was closed");
         }
@@ -88,7 +93,7 @@ public class DuckDBResultSet implements ResultSet {
         return true;
     }
 
-    public synchronized void close() throws SQLException {
+    public void close() throws SQLException {
         if (result_ref != null) {
             DuckDBNative.duckdb_jdbc_free_result(result_ref);
             // Nullness is used to determine whether we're closed
@@ -106,8 +111,15 @@ public class DuckDBResultSet implements ResultSet {
         close();
     }
 
-    public synchronized boolean isClosed() throws SQLException {
-        return result_ref == null;
+    public boolean isClosed() throws SQLException {
+        if (this.result_ref == null) {
+            return true;
+        }
+        boolean open = DuckDBNative.duckdb_jdbc_is_result_open(this.result_ref);
+        if (!open) {
+            this.result_ref = null;
+        }
+        return !open;
     }
 
     private void check(int columnIndex) throws SQLException {

@@ -71,12 +71,12 @@ public class Assertions {
         assertTrue(Math.abs(a - b) < epsilon);
     }
 
-    public static void fail() throws Exception {
+    public static void fail() {
         fail(null);
     }
 
-    public static void fail(String s) throws Exception {
-        throw new Exception(s);
+    public static void fail(String s) {
+        throw new RuntimeException(s);
     }
 
     public static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
