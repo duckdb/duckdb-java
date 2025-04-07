@@ -276,10 +276,7 @@ jobs:
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
-    # temporary disabled until jdbccts is fixed
-    # https://github.com/cwida/jdbccts/pull/1
-    if: ${{ false }}
-    #if: ${{ inputs.skip_tests != 'true' }}
+    if: ${{ inputs.skip_tests != 'true' }}
     needs: java-linux-amd64
     container: quay.io/pypa/manylinux_2_28_x86_64
     env:
