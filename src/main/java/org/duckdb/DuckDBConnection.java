@@ -32,9 +32,10 @@ public final class DuckDBConnection implements java.sql.Connection {
     /** Name of the DuckDB default schema. */
     public static final String DEFAULT_SCHEMA = "main";
 
-    ByteBuffer conn_ref;
-    boolean autoCommit = true;
-    boolean transactionRunning;
+    volatile ByteBuffer conn_ref;
+    volatile boolean autoCommit = true;
+    volatile boolean transactionRunning;
+
     final String url;
     private final boolean readOnly;
 
@@ -110,7 +111,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         close();
     }
 
-    public synchronized void close() throws SQLException {
+    public void close() throws SQLException {
         if (conn_ref != null) {
             DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
             conn_ref = null;
