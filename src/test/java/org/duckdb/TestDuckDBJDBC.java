@@ -4801,7 +4801,8 @@ public class TestDuckDBJDBC {
             statusCode = runTests(new String[0], clazz);
         } else {
             // extension installation fails on CI, Spatial test is temporary disabled
-            statusCode = runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class /*, TestSpatial.class */);
+            statusCode = runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class /*, TestSpatial.class */,
+                                  TestParameterMetadata.class);
         }
         System.exit(statusCode);
     }
