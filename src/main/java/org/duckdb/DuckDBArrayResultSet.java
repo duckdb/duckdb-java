@@ -41,22 +41,23 @@ public class DuckDBArrayResultSet implements ResultSet {
         return wasNull;
     }
 
-    private <T> T getValue(String columnLabel, SqlValueGetter<T> getter) throws SQLException {
-        return getValue(findColumn(columnLabel), getter);
-    }
-
     private <T> T getValue(int columnIndex, SqlValueGetter<T> getter) throws SQLException {
         if (columnIndex == 1) {
-            throw new IllegalArgumentException(
-                "The first element of Array-backed ResultSet can only be retrieved with getInt()");
+            throw new SQLException(
+                "The first element of Array-backed ResultSet can only be retrieved with numeric getters");
         }
         if (columnIndex != 2) {
-            throw new IllegalArgumentException("Array-backed ResultSet can only have two columns");
+            throw new SQLException("Array-backed ResultSet can only have two columns");
         }
         T value = getter.getValue(offset + currentValueIndex);
 
         wasNull = value == null;
         return value;
+    }
+
+    private int getIndexColumnValue() {
+        wasNull = false;
+        return currentValueIndex + 1;
     }
 
     @Override
@@ -71,40 +72,57 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public byte getByte(int columnIndex) throws SQLException {
+        if (columnIndex == 1) {
+            return (byte) getIndexColumnValue();
+        }
         return getValue(columnIndex, vector::getByte);
     }
 
     @Override
     public short getShort(int columnIndex) throws SQLException {
+        if (columnIndex == 1) {
+            return (short) getIndexColumnValue();
+        }
         return getValue(columnIndex, vector::getShort);
     }
 
     @Override
     public int getInt(int columnIndex) throws SQLException {
         if (columnIndex == 1) {
-            wasNull = false;
-            return currentValueIndex + 1;
+            return getIndexColumnValue();
         }
         return getValue(columnIndex, vector::getInt);
     }
 
     @Override
     public long getLong(int columnIndex) throws SQLException {
-        return getInt(columnIndex);
+        if (columnIndex == 1) {
+            return getIndexColumnValue();
+        }
+        return getValue(columnIndex, vector::getLong);
     }
 
     @Override
     public float getFloat(int columnIndex) throws SQLException {
+        if (columnIndex == 1) {
+            return getIndexColumnValue();
+        }
         return getValue(columnIndex, vector::getFloat);
     }
 
     @Override
     public double getDouble(int columnIndex) throws SQLException {
+        if (columnIndex == 1) {
+            return getIndexColumnValue();
+        }
         return getValue(columnIndex, vector::getDouble);
     }
 
     @Override
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
+        if (columnIndex == 1) {
+            return BigDecimal.valueOf(getIndexColumnValue());
+        }
         return getValue(columnIndex, vector::getBigDecimal);
     }
 
@@ -145,51 +163,47 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public String getString(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getLazyString);
+        return getString(findColumn(columnLabel));
     }
 
     @Override
     public boolean getBoolean(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getBoolean);
+        return getBoolean(findColumn(columnLabel));
     }
 
     @Override
     public byte getByte(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getByte);
+        return getByte(findColumn(columnLabel));
     }
 
     @Override
     public short getShort(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getShort);
+        return getShort(findColumn(columnLabel));
     }
 
     @Override
     public int getInt(String columnLabel) throws SQLException {
-        int columnIndex = findColumn(columnLabel);
-        if (columnIndex == 1) {
-            return currentValueIndex;
-        }
-        return getValue(columnIndex, vector::getInt);
+        return getInt(findColumn(columnLabel));
     }
 
     @Override
     public long getLong(String columnLabel) throws SQLException {
-        return getInt(columnLabel);
+        return getLong(findColumn(columnLabel));
     }
 
     @Override
     public float getFloat(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getFloat);
+        return getFloat(findColumn(columnLabel));
     }
 
     @Override
     public double getDouble(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getDouble);
+        return getDouble(findColumn(columnLabel));
     }
 
     @Override
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
-        return getValue(columnLabel, vector::getBigDecimal);
+        return getBigDecimal(findColumn(columnLabel), scale);
     }
 
     @Override
@@ -199,17 +213,17 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Date getDate(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getDate);
+        return getDate(findColumn(columnLabel));
     }
 
     @Override
     public Time getTime(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getTime);
+        return getTime(findColumn(columnLabel));
     }
 
     @Override
     public Timestamp getTimestamp(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getTimestamp);
+        return getTimestamp(findColumn(columnLabel));
     }
 
     @Override
@@ -254,12 +268,18 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Object getObject(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getTimestamp);
+        return getObject(findColumn(columnLabel));
     }
 
     @Override
     public int findColumn(String columnLabel) throws SQLException {
-        return Integer.parseInt(columnLabel);
+        if ("INDEX".equalsIgnoreCase(columnLabel)) {
+            return 1;
+        }
+        if ("VALUE".equalsIgnoreCase(columnLabel)) {
+            return 2;
+        }
+        throw new SQLException("Could not find column with label " + columnLabel);
     }
 
     @Override
@@ -279,7 +299,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getBigDecimal);
+        return getBigDecimal(findColumn(columnLabel));
     }
 
     @Override
@@ -671,7 +691,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
-        return getValue(columnLabel, vector::getObject);
+        return getObject(findColumn(columnLabel));
     }
 
     @Override
@@ -691,7 +711,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Array getArray(String columnLabel) throws SQLException {
-        return getValue(columnLabel, vector::getArray);
+        return getArray(findColumn(columnLabel));
     }
 
     @Override
