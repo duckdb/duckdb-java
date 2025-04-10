@@ -103,10 +103,6 @@ public:
 			ptr = allocated_data.get();
 		}
 	}
-	void reset() {
-		ptr = allocated_data.get();
-		len = alloc_len;
-	}
 
 private:
 	AllocatedData allocated_data;

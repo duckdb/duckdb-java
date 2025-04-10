@@ -18,7 +18,5 @@
 
 #include "src/catalog/dependency_catalog_set.cpp"
 
-#include "src/catalog/entry_lookup_info.cpp"
-
 #include "src/catalog/similar_catalog_entry.cpp"
 

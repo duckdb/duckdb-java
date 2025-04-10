@@ -12,7 +12,7 @@ FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {
 	return child_filter->CheckStatistics(stats);
 }
 
-string OptionalFilter::ToString(const string &column_name) const {
+string OptionalFilter::ToString(const string &column_name) {
 	return string("optional: ") + child_filter->ToString(column_name);
 }
 

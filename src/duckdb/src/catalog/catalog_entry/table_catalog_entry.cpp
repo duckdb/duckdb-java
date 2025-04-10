@@ -203,11 +203,6 @@ string TableCatalogEntry::ToSQL() const {
 	return create_info->ToString();
 }
 
-TableFunction TableCatalogEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
-                                                 const EntryLookupInfo &lookup_info) {
-	return GetScanFunction(context, bind_data);
-}
-
 const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
@@ -335,18 +330,6 @@ optional_ptr<Constraint> TableCatalogEntry::GetPrimaryKey() const {
 
 bool TableCatalogEntry::HasPrimaryKey() const {
 	return GetPrimaryKey() != nullptr;
-}
-
-virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
-	virtual_column_map_t virtual_columns;
-	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
-	return virtual_columns;
-}
-
-vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
-	vector<column_t> result;
-	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	return result;
 }
 
 } // namespace duckdb

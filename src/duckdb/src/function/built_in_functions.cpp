@@ -142,9 +142,9 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 		vector<LogicalType> arguments;
 		auto splits = StringUtil::Split(entry.signature, ">");
 		auto return_type = DBConfig::ParseLogicalType(splits[1]);
-		auto parameters = Value(splits[0]).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
-		for (auto &param : ListValue::GetChildren(parameters)) {
-			arguments.push_back(DBConfig::ParseLogicalType(param.GetValue<string>()));
+		auto argument_splits = StringUtil::Split(splits[0], ",");
+		for (auto &param : argument_splits) {
+			arguments.push_back(DBConfig::ParseLogicalType(param));
 		}
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			throw InternalException(

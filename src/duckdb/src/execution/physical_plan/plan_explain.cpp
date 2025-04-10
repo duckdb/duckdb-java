@@ -8,18 +8,18 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
 	auto logical_plan_opt = op.children[0]->ToString(op.explain_format);
-	auto &plan = CreatePlan(*op.children[0]);
+	auto plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.explain_format);
-		explain.children.push_back(plan);
-		return explain;
+		auto result = make_uniq<PhysicalExplainAnalyze>(op.types, op.explain_format);
+		result->children.push_back(std::move(plan));
+		return std::move(result);
 	}
 
-	// Format the plan and set the output of the EXPLAIN.
-	op.physical_plan = plan.ToString(op.explain_format);
+	op.physical_plan = plan->ToString(op.explain_format);
+	// the output of the explain
 	vector<string> keys, values;
 	switch (ClientConfig::GetConfig(context).explain_output_type) {
 	case ExplainOutputType::OPTIMIZED_ONLY:
@@ -35,7 +35,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}
 
-	// Create a ColumnDataCollection from the output.
+	// create a ColumnDataCollection from the output
 	auto &allocator = Allocator::Get(context);
 	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	auto collection =
@@ -54,9 +54,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	}
 	collection->Append(chunk);
 
-	// Output the result via a chunk scan.
-	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
-	                                    std::move(collection));
+	// create a chunk scan to output the result
+	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                    op.estimated_cardinality, std::move(collection));
+	return std::move(chunk_scan);
 }
 
 } // namespace duckdb

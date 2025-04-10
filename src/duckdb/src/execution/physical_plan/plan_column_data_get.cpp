@@ -4,11 +4,12 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalColumnDataGet &op) {
-	D_ASSERT(op.children.empty());
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalColumnDataGet &op) {
+	D_ASSERT(op.children.size() == 0);
 	D_ASSERT(op.collection);
-	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
-	                                    std::move(op.collection));
+
+	return make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
+	                                         std::move(op.collection));
 }
 
 } // namespace duckdb

@@ -94,10 +94,7 @@ idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, 
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	if (result_offset > 0) {
-		throw InternalException("ListColumnData::ScanCount not supported with result_offset > 0");
-	}
+idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	if (count == 0) {
 		return 0;
 	}

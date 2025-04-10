@@ -94,9 +94,6 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
 		tbl->GetStorage().SetDistinct(column_id_map.at(col_idx), std::move(sink.column_distinct_stats[col_idx]));
 	}
-	if (tbl) {
-		tbl->GetStorage().VacuumIndexes();
-	}
 
 	return SinkFinalizeType::READY;
 }

@@ -7,7 +7,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "unicode/calendar.h"
-#include "tz_calendar.hpp"
 
 namespace duckdb {
 
@@ -64,8 +63,6 @@ struct ICUTableRange {
 		bool inclusive_bound;
 		bool greater_than_check;
 
-		bool empty_range = false;
-
 		bool Finished(timestamp_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
@@ -116,12 +113,14 @@ struct ICUTableRange {
 			}
 			result.greater_than_check = true;
 			if (result.start > result.end) {
-				result.empty_range = true;
+				throw BinderException(
+				    "start is bigger than end, but increment is positive: cannot generate infinite series");
 			}
 		} else {
 			result.greater_than_check = false;
 			if (result.start < result.end) {
-				result.empty_range = true;
+				throw BinderException(
+				    "start is smaller than end, but increment is negative: cannot generate infinite series");
 			}
 		}
 		result.inclusive_bound = GENERATE_SERIES;
@@ -152,7 +151,8 @@ struct ICUTableRange {
 	                                                DataChunk &input, DataChunk &output) {
 		auto &bind_data = data_p.bind_data->Cast<ICURangeBindData>();
 		auto &state = data_p.local_state->Cast<ICURangeLocalState>();
-		TZCalendar calendar(*bind_data.calendar, bind_data.cal_setting);
+		CalendarPtr calendar_ptr(bind_data.calendar->clone());
+		auto calendar = calendar_ptr.get();
 		while (true) {
 			if (!state.initialized_row) {
 				// initialize for the current input row
@@ -165,13 +165,6 @@ struct ICUTableRange {
 				GenerateRangeDateTimeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
 				state.initialized_row = true;
 				state.current_state = state.start;
-			}
-			if (state.empty_range) {
-				// empty range
-				output.SetCardinality(0);
-				state.current_input_row++;
-				state.initialized_row = false;
-				return OperatorResultType::HAVE_MORE_OUTPUT;
 			}
 			idx_t size = 0;
 			auto data = FlatVector::GetData<timestamp_t>(output.data[0]);

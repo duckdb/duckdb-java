@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
@@ -38,8 +37,9 @@ public:
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
 	virtual CheckpointType GetCheckpointType() const = 0;
 
+	TaskScheduler &GetScheduler();
 	DatabaseInstance &GetDatabase();
-	unique_ptr<TaskExecutor> CreateTaskExecutor();
+	optional_ptr<ClientContext> GetClientContext();
 
 protected:
 	DuckTableEntry &table;

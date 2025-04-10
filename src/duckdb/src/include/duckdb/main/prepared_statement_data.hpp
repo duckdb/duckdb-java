@@ -19,7 +19,7 @@
 namespace duckdb {
 class CatalogEntry;
 class ClientContext;
-class PhysicalPlan;
+class PhysicalOperator;
 class SQLStatement;
 
 class PreparedStatementData {
@@ -30,9 +30,8 @@ public:
 	StatementType statement_type;
 	//! The unbound SQL statement that was prepared
 	unique_ptr<SQLStatement> unbound_statement;
-
-	//! The physical plan.
-	unique_ptr<PhysicalPlan> physical_plan;
+	//! The fully prepared physical plan of the prepared statement
+	unique_ptr<PhysicalOperator> plan;
 
 	//! The result names of the transaction
 	vector<string> names;

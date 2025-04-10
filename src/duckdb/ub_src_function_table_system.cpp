@@ -26,8 +26,6 @@
 
 #include "src/function/table/system/duckdb_secrets.cpp"
 
-#include "src/function/table/system/duckdb_prepared_statements.cpp"
-
 #include "src/function/table/system/duckdb_which_secret.cpp"
 
 #include "src/function/table/system/duckdb_secret_types.cpp"

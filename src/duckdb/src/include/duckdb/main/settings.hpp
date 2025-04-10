@@ -218,17 +218,6 @@ struct ArrowOutputListViewSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct AsofLoopJoinThresholdSetting {
-	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "asof_loop_join_threshold";
-	static constexpr const char *Description =
-	    "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join";
-	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct AutoinstallExtensionRepositorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "autoinstall_extension_repository";
@@ -362,16 +351,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DebugVerifyVectorSetting {
-	using RETURN_TYPE = DebugVectorVerification;
-	static constexpr const char *Name = "debug_verify_vector";
-	static constexpr const char *Description = "DEBUG SETTING: enable vector verification";
-	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1119,17 +1098,6 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct SchedulerProcessPartialSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "scheduler_process_partial";
-	static constexpr const char *Description =
-	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 

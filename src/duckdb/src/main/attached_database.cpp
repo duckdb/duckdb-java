@@ -173,11 +173,11 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
+void AttachedDatabase::Initialize(StorageOptions options) {
 	if (IsSystem()) {
-		catalog->Initialize(context, true);
+		catalog->Initialize(true);
 	} else {
-		catalog->Initialize(context, false);
+		catalog->Initialize(false);
 	}
 	if (storage) {
 		storage->Initialize(options);

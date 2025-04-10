@@ -35,8 +35,7 @@ public:
 	template <class FUNC, class CATALOG_ENTRY>
 	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &name,
 	                                vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
-		EntryLookupInfo lookup_info(catalog_type, name);
-		auto &func_catalog = Catalog::GetEntry(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, lookup_info);
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}

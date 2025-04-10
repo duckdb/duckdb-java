@@ -201,14 +201,16 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.path = config.options.database_path;
 
 	optional_ptr<AttachedDatabase> initial_database;
-	Connection con(*this);
-	con.BeginTransaction();
-	AttachOptions options(config.options);
-	initial_database = db_manager->AttachDatabase(*con.context, info, options);
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		AttachOptions options(config.options);
+		initial_database = db_manager->AttachDatabase(*con.context, info, options);
+		con.Commit();
+	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize(*con.context);
-	con.Commit();
+	initial_database->Initialize();
 }
 
 static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {

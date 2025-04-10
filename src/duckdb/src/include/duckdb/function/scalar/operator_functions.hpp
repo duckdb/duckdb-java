@@ -20,7 +20,6 @@ struct OperatorAddFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -36,7 +35,6 @@ struct OperatorSubtractFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -52,7 +50,6 @@ struct OperatorMultiplyFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -68,7 +65,6 @@ struct OperatorFloatDivideFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -78,7 +74,6 @@ struct OperatorIntegerDivideFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -94,7 +89,6 @@ struct OperatorModuloFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };

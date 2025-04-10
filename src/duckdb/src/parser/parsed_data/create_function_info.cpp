@@ -11,7 +11,6 @@ CreateFunctionInfo::CreateFunctionInfo(CatalogType type, string schema) : Create
 void CreateFunctionInfo::CopyFunctionProperties(CreateFunctionInfo &other) const {
 	CopyProperties(other);
 	other.name = name;
-	other.alias_of = alias_of;
 	other.descriptions = descriptions;
 }
 

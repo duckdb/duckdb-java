@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalEmptyResult &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalEmptyResult &op) {
 	D_ASSERT(op.children.size() == 0);
-	return Make<PhysicalEmptyResult>(op.types, op.estimated_cardinality);
+	return make_uniq<PhysicalEmptyResult>(op.types, op.estimated_cardinality);
 }
 
 } // namespace duckdb

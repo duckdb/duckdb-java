@@ -67,10 +67,9 @@ private:
 
 public:
 	typedef void (*initialize_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                             UnifiedVectorFormat &update, const SelectionVector &sel);
+	                                             Vector &update, const SelectionVector &sel);
 	typedef void (*merge_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                        UnifiedVectorFormat &update, row_t *ids, idx_t count,
-	                                        const SelectionVector &sel);
+	                                        Vector &update, row_t *ids, idx_t count, const SelectionVector &sel);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
@@ -79,8 +78,8 @@ public:
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
-	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
-	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);
+	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
+	                                              idx_t count, SelectionVector &sel);
 
 private:
 	initialize_update_function_t initialize_update_function;

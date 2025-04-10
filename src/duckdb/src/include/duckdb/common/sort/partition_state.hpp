@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 
@@ -21,7 +22,7 @@ public:
 	using Types = vector<LogicalType>;
 	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
-	PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions, const Orders &orders,
+	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
 	inline int ComparePartitions(const SBIterator &left, const SBIterator &right) {
@@ -81,7 +82,7 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	shared_ptr<TupleDataLayout> grouping_types_ptr;
+	TupleDataLayout grouping_types;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -159,6 +160,7 @@ public:
 	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
 	bool IsFinished() const {
+		lock_guard<mutex> guard(lock);
 		return stage == PartitionSortStage::FINISHED;
 	}
 
@@ -178,7 +180,7 @@ public:
 
 private:
 	mutable mutex lock;
-	atomic<PartitionSortStage> stage;
+	PartitionSortStage stage;
 	idx_t total_tasks;
 	idx_t tasks_assigned;
 	idx_t tasks_completed;

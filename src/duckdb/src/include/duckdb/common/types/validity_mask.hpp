@@ -63,7 +63,7 @@ struct TemplatedValidityMask {
 public:
 	static constexpr const idx_t BITS_PER_VALUE = ValidityBuffer::BITS_PER_VALUE;
 	static constexpr const idx_t STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
-	static constexpr const idx_t STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(V);
+	static constexpr const idx_t STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
 	inline TemplatedValidityMask() : validity_mask(nullptr), capacity(STANDARD_VECTOR_SIZE) {
@@ -112,11 +112,16 @@ public:
 			auto entry = GetValidityEntry(entry_idx++);
 			// Handle ragged end (if not exactly multiple of BITS_PER_VALUE)
 			if (entry_idx == entry_count && count % BITS_PER_VALUE != 0) {
-				const auto shift = BITS_PER_VALUE - (count % BITS_PER_VALUE);
-				const auto mask = ValidityBuffer::MAX_ENTRY >> shift;
-				entry &= mask;
-			} else if (AllValid(entry)) {
-				// Handle all set
+				idx_t idx_in_entry;
+				GetEntryIndex(count, entry_idx, idx_in_entry);
+				for (idx_t i = 0; i < idx_in_entry; ++i) {
+					valid += idx_t(RowIsValid(entry, i));
+				}
+				break;
+			}
+
+			// Handle all set
+			if (AllValid(entry)) {
 				valid += BITS_PER_VALUE;
 				continue;
 			}
@@ -183,7 +188,7 @@ public:
 		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
-		auto entry = GetValidityEntryUnsafe(entry_idx);
+		auto entry = GetValidityEntry(entry_idx);
 		return RowIsValid(entry, idx_in_entry);
 	}
 

@@ -98,7 +98,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::EXTRA_INFO:
 			break;
 		default:
-			throw InternalException("MetricsType" + EnumUtil::ToString(metric) + "not implemented");
+			throw Exception(ExceptionType::INTERNAL, "MetricsType" + EnumUtil::ToString(metric) + "not implemented");
 		}
 	}
 }

@@ -43,10 +43,6 @@ public:
 	//! Total allocation size (cached)
 	DUCKDB_API idx_t AllocationSize() const;
 
-	DUCKDB_API ArenaAllocator &GetAllocator() {
-		return allocator;
-	}
-
 private:
 	ArenaAllocator allocator;
 };

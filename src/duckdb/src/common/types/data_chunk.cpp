@@ -76,7 +76,6 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
-	SetCardinality(0);
 	if (data.empty() || vector_caches.empty()) {
 		return;
 	}
@@ -87,6 +86,7 @@ void DataChunk::Reset() {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
 	capacity = STANDARD_VECTOR_SIZE;
+	SetCardinality(0);
 }
 
 void DataChunk::Destroy() {
@@ -246,7 +246,7 @@ string DataChunk::ToString() const {
 	return retval;
 }
 
-void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization) const {
+void DataChunk::Serialize(Serializer &serializer) const {
 
 	// write the count
 	auto row_count = size();
@@ -266,7 +266,7 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
-			serialized_vector.Serialize(object, row_count, compressed_serialization);
+			serialized_vector.Serialize(object, row_count);
 		});
 	});
 }

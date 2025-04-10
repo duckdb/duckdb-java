@@ -20,7 +20,6 @@ struct BitwiseAndFun {
 	static constexpr const char *Parameters = "left,right";
 	static constexpr const char *Description = "Bitwise AND";
 	static constexpr const char *Example = "91 & 15";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -30,7 +29,6 @@ struct BitwiseOrFun {
 	static constexpr const char *Parameters = "left,right";
 	static constexpr const char *Description = "Bitwise OR";
 	static constexpr const char *Example = "32 | 3";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -40,7 +38,6 @@ struct BitwiseNotFun {
 	static constexpr const char *Parameters = "input";
 	static constexpr const char *Description = "Bitwise NOT";
 	static constexpr const char *Example = "~15";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -50,7 +47,6 @@ struct LeftShiftFun {
 	static constexpr const char *Parameters = "input";
 	static constexpr const char *Description = "Bitwise shift left";
 	static constexpr const char *Example = "1 << 4";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -60,7 +56,6 @@ struct RightShiftFun {
 	static constexpr const char *Parameters = "input";
 	static constexpr const char *Description = "Bitwise shift right";
 	static constexpr const char *Example = "8 >> 2";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -70,7 +65,6 @@ struct BitwiseXorFun {
 	static constexpr const char *Parameters = "left,right";
 	static constexpr const char *Description = "Bitwise XOR";
 	static constexpr const char *Example = "xor(17, 5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };

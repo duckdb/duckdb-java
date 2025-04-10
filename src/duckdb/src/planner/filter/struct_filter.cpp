@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/struct_functions.hpp"
 
 namespace duckdb {
 
@@ -21,7 +20,7 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 	return child_filter->CheckStatistics(child_stats);
 }
 
-string StructFilter::ToString(const string &column_name) const {
+string StructFilter::ToString(const string &column_name) {
 	if (!child_name.empty()) {
 		return child_filter->ToString(column_name + "." + child_name);
 	}
@@ -49,7 +48,7 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
 	auto child = make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
-	                                                StructExtractAtFun::GetBindData(child_idx));
+	                                                GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }
 } // namespace duckdb

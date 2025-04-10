@@ -112,9 +112,6 @@ void CatalogEntry::Verify(Catalog &catalog_p) {
 void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
 }
 
-void CatalogEntry::OnDrop() {
-}
-
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
     : CatalogEntry(type, catalog, std::move(name)), catalog(catalog) {
 }

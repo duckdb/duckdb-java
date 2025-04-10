@@ -31,15 +31,12 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 	row_group_pointers.push_back(std::move(row_group_pointer));
 }
 
-DatabaseInstance &TableDataWriter::GetDatabase() {
-	return table.ParentCatalog().GetDatabase();
+TaskScheduler &TableDataWriter::GetScheduler() {
+	return TaskScheduler::GetScheduler(GetDatabase());
 }
 
-unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
-	if (client_context) {
-		return make_uniq<TaskExecutor>(*client_context);
-	}
-	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
+DatabaseInstance &TableDataWriter::GetDatabase() {
+	return table.ParentCatalog().GetDatabase();
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,

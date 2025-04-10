@@ -260,7 +260,9 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	auto &block_manager = segment.GetBlockManager();
-	state.Cleanup(block_manager);
+	for (auto &block_id : state.on_disk_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 //===--------------------------------------------------------------------===//

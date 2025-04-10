@@ -648,16 +648,6 @@ bool LogicalType::IsIntegral() const {
 	}
 }
 
-bool LogicalType::IsFloating() const {
-	switch (id_) {
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-		return true;
-	default:
-		return false;
-	}
-}
-
 bool LogicalType::IsNumeric() const {
 	switch (id_) {
 	case LogicalTypeId::TINYINT:

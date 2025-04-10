@@ -20,10 +20,6 @@ struct FirstFunctionGetter {
 	static AggregateFunction GetFunction(const LogicalType &type);
 };
 
-struct LastFunctionGetter {
-	static AggregateFunction GetFunction(const LogicalType &type);
-};
-
 struct MinFunction {
 	static AggregateFunction GetFunction();
 };
