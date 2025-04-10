@@ -149,60 +149,35 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
-
-	const auto restore_projection_maps = join.HasProjectionMap();
-	auto left_projection_map = join.left_projection_map;
-	auto right_projection_map = join.right_projection_map;
+	if (join.HasProjectionMap()) {
+		// cannot push down further otherwise the projection maps won't be preserved
+		return FinishPushdown(std::move(op));
+	}
 
 	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
-	unique_ptr<LogicalOperator> result;
 	switch (join.join_type) {
 	case JoinType::INNER:
 		//	AsOf joins can't push anything into the RHS, so treat it as a left join
 		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			result = PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
-			break;
+			return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
 		}
-		result = PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
-		break;
+		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
-		result = PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
-		break;
+		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::MARK:
-		result = PushdownMarkJoin(std::move(op), left_bindings, right_bindings);
-		break;
+		return PushdownMarkJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::SINGLE:
-		result = PushdownSingleJoin(std::move(op), left_bindings, right_bindings);
-		break;
+		return PushdownSingleJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::SEMI:
 	case JoinType::ANTI:
-		result = PushdownSemiAntiJoin(std::move(op));
-		break;
+		return PushdownSemiAntiJoin(std::move(op));
 	default:
 		// unsupported join type: stop pushing down
 		return FinishPushdown(std::move(op));
 	}
-
-	if (restore_projection_maps) {
-		switch (result->type) {
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-			// Pushing down filter through join didn't change operator type (e.g., LogicalEmptyResult), restore maps
-			auto &result_join = result->Cast<LogicalJoin>();
-			result_join.left_projection_map = std::move(left_projection_map);
-			result_join.right_projection_map = std::move(right_projection_map);
-			break;
-		}
-		default:
-			break;
-		}
-	}
-	return result;
 }
 void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {

@@ -15,8 +15,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NULL";
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		return "IS_NOT_NULL";
-	case ExpressionType::OPERATOR_UNPACK:
-		return "UNPACK";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -87,8 +85,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "NULLIF";
 	case ExpressionType::OPERATOR_COALESCE:
 		return "COALESCE";
-	case ExpressionType::OPERATOR_TRY:
-		return "TRY";
 	case ExpressionType::ARRAY_EXTRACT:
 		return "ARRAY_EXTRACT";
 	case ExpressionType::ARRAY_SLICE:

@@ -399,11 +399,6 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
-string FileSystem::GetVersionTag(FileHandle &handle) {
-	// Used to check cache invalidation for httpfs files with an ETag in CachingFileSystem
-	return "";
-}
-
 FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
@@ -477,10 +472,6 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 
 void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
-}
-
-unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
 }
 
 void FileSystem::SetDisabledFileSystems(const vector<string> &names) {

@@ -12,8 +12,6 @@
 #include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
-class TableFilterSet;
-class TableFilter;
 
 class ExpressionHeuristics : public LogicalOperatorVisitor {
 public:
@@ -29,23 +27,27 @@ public:
 	//! Reorder the expressions of a filter
 	void ReorderExpressions(vector<unique_ptr<Expression>> &expressions);
 	//! Return the cost of an expression
-	static idx_t Cost(Expression &expr);
-
-	static vector<idx_t> GetInitialOrder(const TableFilterSet &table_filters);
+	idx_t Cost(Expression &expr);
 
 	unique_ptr<Expression> VisitReplace(BoundConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	//! Override this function to search for filter operators
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	static idx_t ExpressionCost(BoundBetweenExpression &expr);
-	static idx_t ExpressionCost(BoundCaseExpression &expr);
-	static idx_t ExpressionCost(BoundCastExpression &expr);
-	static idx_t ExpressionCost(BoundComparisonExpression &expr);
-	static idx_t ExpressionCost(BoundConjunctionExpression &expr);
-	static idx_t ExpressionCost(BoundFunctionExpression &expr);
-	static idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type);
-	static idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
-	static idx_t Cost(TableFilter &filter);
+	unordered_map<std::string, idx_t> function_costs = {
+	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
+	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
+	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
+	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
+	    {"||", 200}};
+
+	idx_t ExpressionCost(BoundBetweenExpression &expr);
+	idx_t ExpressionCost(BoundCaseExpression &expr);
+	idx_t ExpressionCost(BoundCastExpression &expr);
+	idx_t ExpressionCost(BoundComparisonExpression &expr);
+	idx_t ExpressionCost(BoundConjunctionExpression &expr);
+	idx_t ExpressionCost(BoundFunctionExpression &expr);
+	idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type);
+	idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
 };
 } // namespace duckdb

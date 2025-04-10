@@ -102,10 +102,7 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
                                    DataChunk &result, idx_t aggr_idx) {
 	// Copy the addresses
-	if (!state.addresses) {
-		state.addresses = make_uniq<Vector>(LogicalType::POINTER);
-	}
-	auto &addresses_copy = *state.addresses;
+	Vector addresses_copy(LogicalType::POINTER);
 	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
 
 	//	Move to the first aggregate state

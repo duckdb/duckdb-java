@@ -118,7 +118,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
 
-	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
+	// transform ORDER BY + LIMIT to TopN
 	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
 		SumRewriterOptimizer optimizer(*this);
 		optimizer.Optimize(plan);

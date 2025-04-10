@@ -43,16 +43,21 @@ void ThreadLines::Verify() const {
 	}
 }
 
-void CSVValidator::Insert(idx_t thread_idx, ValidatorLine line_info) {
-	thread_lines.Insert(thread_idx, line_info);
+void CSVValidator::Insert(idx_t file_idx, idx_t thread_idx, ValidatorLine line_info) {
+	if (per_file_thread_lines.size() <= file_idx) {
+		per_file_thread_lines.resize(file_idx + 1);
+	}
+	per_file_thread_lines[file_idx].Insert(thread_idx, line_info);
 }
 
 void CSVValidator::Verify() const {
-	thread_lines.Verify();
+	for (auto &file : per_file_thread_lines) {
+		file.Verify();
+	}
 }
 
-string CSVValidator::Print() const {
-	return thread_lines.Print();
+string CSVValidator::Print(idx_t file_idx) const {
+	return per_file_thread_lines[file_idx].Print();
 }
 
 } // namespace duckdb

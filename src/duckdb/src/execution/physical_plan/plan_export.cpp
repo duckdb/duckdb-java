@@ -5,15 +5,15 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
-	auto &export_op = Make<PhysicalExport>(op.types, op.function, std::move(op.copy_info), op.estimated_cardinality,
-	                                       std::move(op.exported_tables));
-	// Plan the underlying copy statements, if any.
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
+	auto export_node = make_uniq<PhysicalExport>(op.types, op.function, std::move(op.copy_info),
+	                                             op.estimated_cardinality, std::move(op.exported_tables));
+	// plan the underlying copy statements, if any
 	if (!op.children.empty()) {
-		auto &plan = CreatePlan(*op.children[0]);
-		export_op.children.push_back(plan);
+		auto plan = CreatePlan(*op.children[0]);
+		export_node->children.push_back(std::move(plan));
 	}
-	return export_op;
+	return std::move(export_node);
 }
 
 } // namespace duckdb

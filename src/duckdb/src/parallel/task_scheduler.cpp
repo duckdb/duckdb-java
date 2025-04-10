@@ -55,7 +55,6 @@ struct QueueProducerToken {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
-	task->token = token;
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
 		semaphore.signal();
 	} else {
@@ -79,7 +78,6 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	task->token = token;
 	q[std::ref(*token.token)].push(std::move(task));
 }
 
@@ -163,7 +161,6 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
 
-	auto &config = DBConfig::GetConfig(db);
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
@@ -189,21 +186,15 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
-			auto process_mode = config.options.scheduler_process_partial ? TaskExecutionMode::PROCESS_PARTIAL
-			                                                             : TaskExecutionMode::PROCESS_ALL;
-			auto execute_result = task->Execute(process_mode);
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
 				task.reset();
 				break;
-			case TaskExecutionResult::TASK_NOT_FINISHED: {
-				// task is not finished - reschedule immediately
-				auto &token = *task->token;
-				queue->Enqueue(token, std::move(task));
-				break;
-			}
+			case TaskExecutionResult::TASK_NOT_FINISHED:
+				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
 			case TaskExecutionResult::TASK_BLOCKED:
 				task->Deschedule();
 				task.reset();

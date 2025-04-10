@@ -17,7 +17,6 @@ struct dtime_t;     // NOLINT: literal casing
 struct date_t;      // NOLINT: literal casing
 struct dtime_tz_t;  // NOLINT: literal casing
 struct timestamp_t; // NOLINT: literal casing
-struct TimestampComponents;
 
 class Serializer;
 class Deserializer;
@@ -145,10 +144,8 @@ public:
 	//! Get Interval in Nanoseconds
 	static int64_t GetNanoseconds(const interval_t &val);
 
-	//! Returns the age between two timestamps (including months)
+	//! Returns the age between two timestamps (including 30 day months)
 	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
-	//! Returns the age between two timestamp components
-	static interval_t GetAge(TimestampComponents ts1, TimestampComponents ts2, bool is_negative);
 
 	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);

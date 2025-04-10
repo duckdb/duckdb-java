@@ -14,7 +14,6 @@
 #include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
-struct EntryLookupInfo;
 
 class CatalogException : public Exception {
 public:
@@ -29,7 +28,6 @@ public:
 	    : CatalogException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
 	}
 
-	static CatalogException MissingEntry(const EntryLookupInfo &lookup_info, const string &suggestion);
 	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion,
 	                                     QueryErrorContext context = QueryErrorContext());
 	static CatalogException MissingEntry(const string &type, const string &name, const vector<string> &suggestions,

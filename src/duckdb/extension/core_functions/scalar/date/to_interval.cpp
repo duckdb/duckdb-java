@@ -14,12 +14,11 @@ bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result)
 struct ToMillenniaOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
 		result.days = 0;
 		result.micros = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::MONTHS_PER_MILLENIUM,
-		                                                               result.months)) {
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_MILLENIUM,
+		                                                          result.months)) {
 			throw OutOfRangeException("Interval value %s millennia out of range", NumericHelper::ToString(input));
 		}
 		return result;
@@ -29,12 +28,10 @@ struct ToMillenniaOperator {
 struct ToCenturiesOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
 		result.days = 0;
 		result.micros = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::MONTHS_PER_CENTURY,
-		                                                               result.months)) {
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_CENTURY, result.months)) {
 			throw OutOfRangeException("Interval value %s centuries out of range", NumericHelper::ToString(input));
 		}
 		return result;
@@ -44,12 +41,10 @@ struct ToCenturiesOperator {
 struct ToDecadesOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
 		result.days = 0;
 		result.micros = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::MONTHS_PER_DECADE,
-		                                                               result.months)) {
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_DECADE, result.months)) {
 			throw OutOfRangeException("Interval value %s decades out of range", NumericHelper::ToString(input));
 		}
 		return result;
@@ -59,11 +54,10 @@ struct ToDecadesOperator {
 struct ToYearsOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
 		result.days = 0;
 		result.micros = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::MONTHS_PER_YEAR,
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::MONTHS_PER_YEAR,
 		                                                               result.months)) {
 			throw OutOfRangeException("Interval value %d years out of range", input);
 		}
@@ -74,9 +68,8 @@ struct ToYearsOperator {
 struct ToQuartersOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::MONTHS_PER_QUARTER,
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::MONTHS_PER_QUARTER,
 		                                                               result.months)) {
 			throw OutOfRangeException("Interval value %d quarters out of range", input);
 		}
@@ -90,8 +83,7 @@ struct ToMonthsOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		interval_t result;
-		result.months = Cast::Operation<TA, int32_t>(input);
-		;
+		result.months = input;
 		result.days = 0;
 		result.micros = 0;
 		return result;
@@ -101,10 +93,9 @@ struct ToMonthsOperator {
 struct ToWeeksOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		const auto iinput = Cast::Operation<TA, int32_t>(input);
 		interval_t result;
 		result.months = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(iinput, Interval::DAYS_PER_WEEK, result.days)) {
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::DAYS_PER_WEEK, result.days)) {
 			throw OutOfRangeException("Interval value %d weeks out of range", input);
 		}
 		result.micros = 0;
@@ -117,7 +108,7 @@ struct ToDaysOperator {
 	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
-		result.days = Cast::Operation<TA, int32_t>(input);
+		result.days = input;
 		result.micros = 0;
 		return result;
 	}
@@ -173,49 +164,60 @@ struct ToMicroSecondsOperator {
 	}
 };
 
-template <typename OP>
-ScalarFunctionSet GetIntegerIntervalFunctions() {
-	ScalarFunctionSet function_set;
-	function_set.AddFunction(ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                                        ScalarFunction::UnaryFunction<int32_t, interval_t, OP>));
-	function_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                                        ScalarFunction::UnaryFunction<int64_t, interval_t, OP>));
-	for (auto &func : function_set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
-	}
-	return function_set;
+ScalarFunction ToMillenniaFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToMillenniaOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToMillenniaFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToMillenniaOperator>();
+ScalarFunction ToCenturiesFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToCenturiesOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToCenturiesFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToCenturiesOperator>();
+ScalarFunction ToDecadesFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToDecadesOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToDecadesFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToDecadesOperator>();
+ScalarFunction ToYearsFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToYearsFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToYearsOperator>();
+ScalarFunction ToQuartersFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToQuartersOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToQuartersFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToQuartersOperator>();
+ScalarFunction ToMonthsFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToMonthsFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToMonthsOperator>();
+ScalarFunction ToWeeksFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToWeeksOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
-ScalarFunctionSet ToWeeksFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToWeeksOperator>();
-}
-
-ScalarFunctionSet ToDaysFun::GetFunctions() {
-	return GetIntegerIntervalFunctions<ToDaysOperator>();
+ScalarFunction ToDaysFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                        ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>);
+	BaseScalarFunction::SetReturnsError(function);
+	return function;
 }
 
 ScalarFunction ToHoursFun::GetFunction() {

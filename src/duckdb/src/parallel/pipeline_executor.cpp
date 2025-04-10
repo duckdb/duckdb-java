@@ -527,12 +527,9 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
-	// Ensures sources only return empty results when Blocking or Finished
+	// Ensures Sinks only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
-	if (res == SourceResultType::FINISHED) {
-		// final call into the source - finish source execution
-		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
-	}
+
 	EndOperator(*pipeline.source, &result);
 
 	return res;

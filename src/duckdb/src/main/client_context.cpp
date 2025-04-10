@@ -138,12 +138,13 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), transaction(*this), connection_id(DConstants::INVALID_INDEX) {
+    : db(std::move(database)), interrupted(false), transaction(*this) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
 	LoggingContext context(LogContextScope::CONNECTION);
+	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 	client_data = make_uniq<ClientData>(*this);
 }
@@ -214,9 +215,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	// Refresh the logger to ensure we are in sync with global log settings
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = connection_id;
-	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
-	context.query_id = transaction.GetActiveQuery();
+	context.client_context = reinterpret_cast<idx_t>(this);
+	context.transaction_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
 	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
 }
@@ -260,7 +260,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = reinterpret_cast<idx_t>(this);
+	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
@@ -316,10 +316,6 @@ const string &ClientContext::GetCurrentQuery() {
 	return active_query->query;
 }
 
-connection_t ClientContext::GetConnectionId() const {
-	return connection_id;
-}
-
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(pending));
@@ -360,48 +356,52 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase(MetricsType::PLANNER);
-	Planner logical_planner(*this);
+	Planner planner(*this);
 	if (values) {
 		auto &parameter_values = *values;
 		for (auto &value : parameter_values) {
-			logical_planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
+			planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
 		}
 	}
 
-	logical_planner.CreatePlan(std::move(statement));
-	D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
+	planner.CreatePlan(std::move(statement));
+	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
 
-	auto logical_plan = std::move(logical_planner.plan);
+	auto plan = std::move(planner.plan);
 	// extract the result column names from the plan
-	result->properties = logical_planner.properties;
-	result->names = logical_planner.names;
-	result->types = logical_planner.types;
-	result->value_map = std::move(logical_planner.value_map);
-	if (!logical_planner.properties.bound_all_parameters) {
+	result->properties = planner.properties;
+	result->names = planner.names;
+	result->types = planner.types;
+	result->value_map = std::move(planner.value_map);
+	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
 #ifdef DEBUG
-	logical_plan->Verify(*this);
+	plan->Verify(*this);
 #endif
-	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
+	if (config.enable_optimizer && plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
-		Optimizer optimizer(*logical_planner.binder, *this);
-		logical_plan = optimizer.Optimize(std::move(logical_plan));
-		D_ASSERT(logical_plan);
+		Optimizer optimizer(*planner.binder, *this);
+		plan = optimizer.Optimize(std::move(plan));
+		D_ASSERT(plan);
 		profiler.EndPhase();
 
 #ifdef DEBUG
-		logical_plan->Verify(*this);
+		plan->Verify(*this);
 #endif
 	}
 
-	// Convert the logical query plan into a physical query plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
+	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
-	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
+	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
 	profiler.EndPhase();
-	D_ASSERT(result->physical_plan);
+
+#ifdef DEBUG
+	D_ASSERT(!physical_plan->ToString().empty());
+#endif
+	result->plan = std::move(physical_plan);
 	return result;
 }
 

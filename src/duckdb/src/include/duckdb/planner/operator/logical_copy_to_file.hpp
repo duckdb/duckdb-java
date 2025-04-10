@@ -42,7 +42,6 @@ public:
 
 	bool partition_output;
 	bool write_partition_columns;
-	bool write_empty_file = true;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;

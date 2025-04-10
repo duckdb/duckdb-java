@@ -23,13 +23,9 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGRen
 		// change column name
 
 		// get the old name and the new name
-		auto names = TransformNameList(*stmt.name_list);
+		string old_name = stmt.subname;
 		string new_name = stmt.newname;
-		if (names.size() == 1) {
-			info = make_uniq<RenameColumnInfo>(std::move(data), std::move(names[0]), std::move(new_name));
-		} else {
-			info = make_uniq<RenameFieldInfo>(std::move(data), std::move(names), std::move(new_name));
-		}
+		info = make_uniq<RenameColumnInfo>(std::move(data), old_name, new_name);
 		break;
 	}
 	case duckdb_libpgquery::PG_OBJECT_TABLE: {

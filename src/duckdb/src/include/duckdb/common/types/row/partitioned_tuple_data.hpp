@@ -31,11 +31,8 @@ public:
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
-	unsafe_vector<TupleDataPinState> partition_pin_states;
+	unsafe_vector<unsafe_unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
-
-	//! Utility Vector for when repartitioning and copying rows straight from one collection to another
-	unique_ptr<Vector> utility_vector;
 
 public:
 	template <bool fixed>
@@ -74,6 +71,12 @@ enum class PartitionedTupleDataType : uint8_t {
 	RADIX
 };
 
+//! Shared allocators for parallel partitioning
+struct PartitionTupleDataAllocators {
+	mutex lock;
+	vector<shared_ptr<TupleDataAllocator>> allocators;
+};
+
 //! PartitionedTupleData represents partitioned row data, which serves as an interface for different types of
 //! partitioning, e.g., radix, hive
 class PartitionedTupleData {
@@ -82,7 +85,6 @@ public:
 
 public:
 	//! Get the layout of this PartitionedTupleData
-	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Get the partitioning type of this PartitionedTupleData
 	PartitionedTupleDataType GetType() const;
@@ -107,7 +109,7 @@ public:
 	//! Resets this PartitionedTupleData
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
-	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data);
+	void Repartition(PartitionedTupleData &new_partitioned_data);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
@@ -143,8 +145,7 @@ protected:
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Compute partition indices from rows (similar to function above)
-	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices,
-	                                     unique_ptr<Vector> &utility_vector) const {
+	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Maximum partition index (optional)
@@ -160,10 +161,11 @@ protected:
 
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
-	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
-	                     shared_ptr<TupleDataLayout> &layout_ptr);
+	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, const TupleDataLayout &layout);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
+	//! Create a new shared allocator
+	void CreateAllocator();
 	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
@@ -178,8 +180,12 @@ protected:
 	template <bool fixed>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
-	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) {
-		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
+	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
+		if (allocators) {
+			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
+		} else {
+			return make_uniq<TupleDataCollection>(buffer_manager, layout);
+		}
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
@@ -187,12 +193,12 @@ protected:
 protected:
 	PartitionedTupleDataType type;
 	BufferManager &buffer_manager;
-	shared_ptr<TupleDataLayout> layout_ptr;
-	const TupleDataLayout &layout;
+	const TupleDataLayout layout;
 	idx_t count;
 	idx_t data_size;
 
 	mutex lock;
+	shared_ptr<PartitionTupleDataAllocators> allocators;
 	unsafe_vector<unique_ptr<TupleDataCollection>> partitions;
 
 public:

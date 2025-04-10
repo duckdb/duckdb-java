@@ -102,8 +102,4 @@ idx_t MemoryStream::GetCapacity() const {
 	return capacity;
 }
 
-void MemoryStream::SetPosition(idx_t position_p) {
-	position = position_p;
-}
-
 } // namespace duckdb

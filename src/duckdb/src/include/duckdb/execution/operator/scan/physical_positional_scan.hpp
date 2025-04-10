@@ -22,10 +22,11 @@ public:
 
 public:
 	//! Regular Table Scan
-	PhysicalPositionalScan(vector<LogicalType> types, PhysicalOperator &left, PhysicalOperator &right);
+	PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
+	                       unique_ptr<PhysicalOperator> right);
 
 	//! The child table functions
-	vector<reference<PhysicalOperator>> child_tables;
+	vector<unique_ptr<PhysicalOperator>> child_tables;
 
 public:
 	bool Equals(const PhysicalOperator &other) const override;

@@ -5,18 +5,18 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPositionalJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPositionalJoin &op) {
 	D_ASSERT(op.children.size() == 2);
 
-	auto &left = CreatePlan(*op.children[0]);
-	auto &right = CreatePlan(*op.children[1]);
-	switch (left.type) {
+	auto left = CreatePlan(*op.children[0]);
+	auto right = CreatePlan(*op.children[1]);
+	switch (left->type) {
 	case PhysicalOperatorType::TABLE_SCAN:
 	case PhysicalOperatorType::POSITIONAL_SCAN:
-		switch (right.type) {
+		switch (right->type) {
 		case PhysicalOperatorType::TABLE_SCAN:
 		case PhysicalOperatorType::POSITIONAL_SCAN:
-			return Make<PhysicalPositionalScan>(op.types, left, right);
+			return make_uniq<PhysicalPositionalScan>(op.types, std::move(left), std::move(right));
 		default:
 			break;
 		}
@@ -24,7 +24,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPositionalJoin &op) {
 	default:
 		break;
 	}
-	return Make<PhysicalPositionalJoin>(op.types, left, right, op.estimated_cardinality);
+
+	return make_uniq<PhysicalPositionalJoin>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 }
 
 } // namespace duckdb

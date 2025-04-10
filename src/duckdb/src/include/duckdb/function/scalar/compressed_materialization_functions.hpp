@@ -20,7 +20,6 @@ struct InternalCompressIntegralUtinyintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -30,7 +29,6 @@ struct InternalCompressIntegralUsmallintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -40,7 +38,6 @@ struct InternalCompressIntegralUintegerFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -50,7 +47,6 @@ struct InternalCompressIntegralUbigintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -60,7 +56,6 @@ struct InternalCompressStringUtinyintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -70,7 +65,6 @@ struct InternalCompressStringUsmallintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -80,7 +74,6 @@ struct InternalCompressStringUintegerFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -90,7 +83,6 @@ struct InternalCompressStringUbigintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -100,7 +92,6 @@ struct InternalCompressStringHugeintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -110,7 +101,6 @@ struct InternalDecompressIntegralSmallintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -120,7 +110,6 @@ struct InternalDecompressIntegralIntegerFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -130,7 +119,6 @@ struct InternalDecompressIntegralBigintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -140,7 +128,6 @@ struct InternalDecompressIntegralHugeintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -150,7 +137,6 @@ struct InternalDecompressIntegralUsmallintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -160,7 +146,6 @@ struct InternalDecompressIntegralUintegerFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -170,7 +155,6 @@ struct InternalDecompressIntegralUbigintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -180,7 +164,6 @@ struct InternalDecompressIntegralUhugeintFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -190,7 +173,6 @@ struct InternalDecompressStringFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };

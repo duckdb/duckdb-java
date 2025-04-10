@@ -52,6 +52,7 @@ set(DUCKDB_INCLUDE_DIRS
   src/duckdb/third_party/brotli/common
   src/duckdb/third_party/brotli/dec
   src/duckdb/third_party/brotli/enc
+  src/duckdb/third_party/mbedtls
   src/duckdb/third_party/mbedtls/include
   src/duckdb/third_party/mbedtls/library
   src/duckdb/third_party/miniz
@@ -104,7 +105,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_common_crypto.cpp
   src/duckdb/ub_src_common_enums.cpp
   src/duckdb/ub_src_common_exception.cpp
-  src/duckdb/ub_src_common_multi_file.cpp
   src/duckdb/ub_src_common_operator.cpp
   src/duckdb/ub_src_common_progress_bar.cpp
   src/duckdb/ub_src_common_row_operations.cpp
@@ -279,14 +279,16 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/libpg_query/src_backend_parser_scansup.cpp
   src/duckdb/third_party/libpg_query/src_common_keywords.cpp
   src/duckdb/third_party/mbedtls/library/aes.cpp
+  src/duckdb/third_party/mbedtls/library/aria.cpp
   src/duckdb/third_party/mbedtls/library/asn1parse.cpp
-  src/duckdb/third_party/mbedtls/library/asn1write.cpp
   src/duckdb/third_party/mbedtls/library/base64.cpp
   src/duckdb/third_party/mbedtls/library/bignum.cpp
-  src/duckdb/third_party/mbedtls/library/bignum_core.cpp
+  src/duckdb/third_party/mbedtls/library/camellia.cpp
   src/duckdb/third_party/mbedtls/library/cipher.cpp
   src/duckdb/third_party/mbedtls/library/cipher_wrap.cpp
   src/duckdb/third_party/mbedtls/library/constant_time.cpp
+  src/duckdb/third_party/mbedtls/library/entropy.cpp
+  src/duckdb/third_party/mbedtls/library/entropy_poll.cpp
   src/duckdb/third_party/mbedtls/library/gcm.cpp
   src/duckdb/third_party/mbedtls/library/md.cpp
   src/duckdb/third_party/mbedtls/library/oid.cpp
@@ -294,12 +296,12 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/mbedtls/library/pk.cpp
   src/duckdb/third_party/mbedtls/library/pk_wrap.cpp
   src/duckdb/third_party/mbedtls/library/pkparse.cpp
-  src/duckdb/third_party/mbedtls/library/platform.cpp
   src/duckdb/third_party/mbedtls/library/platform_util.cpp
   src/duckdb/third_party/mbedtls/library/rsa.cpp
   src/duckdb/third_party/mbedtls/library/rsa_alt_helpers.cpp
   src/duckdb/third_party/mbedtls/library/sha1.cpp
   src/duckdb/third_party/mbedtls/library/sha256.cpp
+  src/duckdb/third_party/mbedtls/library/sha512.cpp
   src/duckdb/third_party/mbedtls/mbedtls_wrapper.cpp
   src/duckdb/third_party/yyjson/yyjson.cpp
   src/duckdb/third_party/zstd/common/debug.cpp
@@ -334,45 +336,41 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/zstd/dict/divsufsort.cpp
   src/duckdb/third_party/zstd/dict/fastcover.cpp
   src/duckdb/third_party/zstd/dict/zdict.cpp
-  src/duckdb/extension/core_functions/lambda_functions.cpp
   src/duckdb/extension/core_functions/core_functions_extension.cpp
+  src/duckdb/extension/core_functions/lambda_functions.cpp
   src/duckdb/extension/core_functions/function_list.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_regression.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
-  src/duckdb/ub_extension_core_functions_scalar_union.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_regression.cpp
+  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
   src/duckdb/ub_extension_core_functions_scalar_generic.cpp
-  src/duckdb/ub_extension_core_functions_scalar_enum.cpp
-  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
-  src/duckdb/ub_extension_core_functions_scalar_array.cpp
-  src/duckdb/ub_extension_core_functions_scalar_map.cpp
-  src/duckdb/ub_extension_core_functions_scalar_math.cpp
-  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
-  src/duckdb/ub_extension_core_functions_scalar_list.cpp
   src/duckdb/ub_extension_core_functions_scalar_string.cpp
+  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
+  src/duckdb/ub_extension_core_functions_scalar_enum.cpp
+  src/duckdb/ub_extension_core_functions_scalar_bit.cpp
+  src/duckdb/ub_extension_core_functions_scalar_math.cpp
   src/duckdb/ub_extension_core_functions_scalar_random.cpp
   src/duckdb/ub_extension_core_functions_scalar_date.cpp
-  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
+  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
+  src/duckdb/ub_extension_core_functions_scalar_list.cpp
+  src/duckdb/ub_extension_core_functions_scalar_array.cpp
   src/duckdb/ub_extension_core_functions_scalar_operators.cpp
-  src/duckdb/ub_extension_core_functions_scalar_bit.cpp
+  src/duckdb/ub_extension_core_functions_scalar_union.cpp
+  src/duckdb/ub_extension_core_functions_scalar_map.cpp
+  src/duckdb/extension/parquet/column_reader.cpp
   src/duckdb/extension/parquet/column_writer.cpp
-  src/duckdb/extension/parquet/serialize_parquet.cpp
-  src/duckdb/extension/parquet/parquet_float16.cpp
-  src/duckdb/extension/parquet/parquet_reader.cpp
-  src/duckdb/extension/parquet/parquet_statistics.cpp
-  src/duckdb/extension/parquet/parquet_writer.cpp
-  src/duckdb/extension/parquet/zstd_file_system.cpp
   src/duckdb/extension/parquet/parquet_crypto.cpp
   src/duckdb/extension/parquet/parquet_extension.cpp
-  src/duckdb/extension/parquet/column_reader.cpp
-  src/duckdb/extension/parquet/geo_parquet.cpp
   src/duckdb/extension/parquet/parquet_metadata.cpp
+  src/duckdb/extension/parquet/parquet_reader.cpp
+  src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_timestamp.cpp
-  src/duckdb/ub_extension_parquet_writer.cpp
-  src/duckdb/ub_extension_parquet_reader.cpp
-  src/duckdb/ub_extension_parquet_decoder.cpp
+  src/duckdb/extension/parquet/parquet_writer.cpp
+  src/duckdb/extension/parquet/serialize_parquet.cpp
+  src/duckdb/extension/parquet/zstd_file_system.cpp
+  src/duckdb/extension/parquet/geo_parquet.cpp
   src/duckdb/third_party/parquet/parquet_types.cpp
   src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
   src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
@@ -411,32 +409,31 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/brotli/enc/metablock.cpp
   src/duckdb/third_party/brotli/enc/static_dict.cpp
   src/duckdb/third_party/brotli/enc/utf8_util.cpp
-  src/duckdb/extension/icu/./icu-timezone.cpp
+  src/duckdb/extension/icu/./icu-current.cpp
+  src/duckdb/extension/icu/./icu-datepart.cpp
   src/duckdb/extension/icu/./icu-timebucket.cpp
-  src/duckdb/extension/icu/./icu-strptime.cpp
   src/duckdb/extension/icu/./icu-datefunc.cpp
-  src/duckdb/extension/icu/./icu_extension.cpp
-  src/duckdb/extension/icu/./icu-table-range.cpp
-  src/duckdb/extension/icu/./icu-datesub.cpp
-  src/duckdb/extension/icu/./icu-list-range.cpp
   src/duckdb/extension/icu/./icu-makedate.cpp
   src/duckdb/extension/icu/./icu-datetrunc.cpp
-  src/duckdb/extension/icu/./icu-datepart.cpp
-  src/duckdb/extension/icu/./icu-current.cpp
+  src/duckdb/extension/icu/./icu-strptime.cpp
+  src/duckdb/extension/icu/./icu-datesub.cpp
+  src/duckdb/extension/icu/./icu-timezone.cpp
+  src/duckdb/extension/icu/./icu_extension.cpp
   src/duckdb/extension/icu/./icu-dateadd.cpp
+  src/duckdb/extension/icu/./icu-list-range.cpp
+  src/duckdb/extension/icu/./icu-table-range.cpp
   src/duckdb/ub_extension_icu_third_party_icu_common.cpp
   src/duckdb/ub_extension_icu_third_party_icu_i18n.cpp
   src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
-  src/duckdb/extension/json/json_multi_file_info.cpp
-  src/duckdb/extension/json/json_deserializer.cpp
+  src/duckdb/extension/json/buffered_json_reader.cpp
   src/duckdb/extension/json/json_enums.cpp
-  src/duckdb/extension/json/json_scan.cpp
-  src/duckdb/extension/json/json_functions.cpp
-  src/duckdb/extension/json/serialize_json.cpp
-  src/duckdb/extension/json/json_common.cpp
-  src/duckdb/extension/json/json_reader.cpp
   src/duckdb/extension/json/json_extension.cpp
+  src/duckdb/extension/json/json_common.cpp
+  src/duckdb/extension/json/json_functions.cpp
+  src/duckdb/extension/json/json_scan.cpp
   src/duckdb/extension/json/json_serializer.cpp
+  src/duckdb/extension/json/json_deserializer.cpp
+  src/duckdb/extension/json/serialize_json.cpp
   src/duckdb/ub_extension_json_json_functions.cpp)
 
 set(JEMACLLOC_SRC_FILES 

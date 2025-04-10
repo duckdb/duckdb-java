@@ -15,11 +15,32 @@ void TupleDataChunkPart::SetHeapEmpty() {
 	base_heap_ptr = nullptr;
 }
 
+void MoveTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
+	a.row_block_index = b.row_block_index;
+	a.row_block_offset = b.row_block_offset;
+	a.heap_block_index = b.heap_block_index;
+	a.heap_block_offset = b.heap_block_offset;
+	a.base_heap_ptr = b.base_heap_ptr;
+	a.total_heap_size = b.total_heap_size;
+	a.count = b.count;
+	std::swap(a.lock, b.lock);
+}
+
+TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept : lock((other.lock)) {
+	MoveTupleDataChunkPart(*this, other);
+}
+
+TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) noexcept {
+	MoveTupleDataChunkPart(*this, other);
+	return *this;
+}
+
 TupleDataChunk::TupleDataChunk() : count(0), lock(make_unsafe_uniq<mutex>()) {
+	parts.reserve(2);
 }
 
 static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noexcept {
-	std::swap(a.part_ids, b.part_ids);
+	std::swap(a.parts, b.parts);
 	std::swap(a.row_block_ids, b.row_block_ids);
 	std::swap(a.heap_block_ids, b.heap_block_ids);
 	std::swap(a.count, b.count);
@@ -35,53 +56,46 @@ TupleDataChunk &TupleDataChunk::operator=(TupleDataChunk &&other) noexcept {
 	return *this;
 }
 
-TupleDataChunkPart &TupleDataChunk::AddPart(TupleDataSegment &segment, TupleDataChunkPart &&part) {
+void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout) {
 	count += part.count;
-	row_block_ids.Insert(part.row_block_index);
-	if (!segment.layout.get().AllConstant() && part.total_heap_size > 0) {
-		heap_block_ids.Insert(part.heap_block_index);
+	row_block_ids.insert(part.row_block_index);
+	if (!layout.AllConstant() && part.total_heap_size > 0) {
+		heap_block_ids.insert(part.heap_block_index);
 	}
 	part.lock = *lock;
-	part_ids.Insert(UnsafeNumericCast<uint32_t>(segment.chunk_parts.size()));
-	segment.chunk_parts.emplace_back(std::move(part));
-	return segment.chunk_parts.back();
+	parts.emplace_back(std::move(part));
 }
 
-void TupleDataChunk::Verify(const TupleDataSegment &segment) const {
+void TupleDataChunk::Verify() const {
 #ifdef DEBUG
 	idx_t total_count = 0;
-	for (auto part_id = part_ids.Start(); part_id < part_ids.End(); part_id++) {
-		total_count += segment.chunk_parts[part_id].count;
+	for (const auto &part : parts) {
+		total_count += part.count;
 	}
 	D_ASSERT(this->count == total_count);
 	D_ASSERT(this->count <= STANDARD_VECTOR_SIZE);
 #endif
 }
 
-void TupleDataChunk::MergeLastChunkPart(TupleDataSegment &segment) {
-	if (part_ids.Size() < 2) {
+void TupleDataChunk::MergeLastChunkPart(const TupleDataLayout &layout) {
+	if (parts.size() < 2) {
 		return;
 	}
 
-	auto &second_to_last = segment.chunk_parts[part_ids.End() - 2];
-	auto &last = segment.chunk_parts[part_ids.End() - 1];
+	auto &second_to_last = parts[parts.size() - 2];
+	auto &last = parts[parts.size() - 1];
 
-	auto rows_align = last.row_block_index == second_to_last.row_block_index &&
-	                  last.row_block_offset ==
-	                      second_to_last.row_block_offset + second_to_last.count * segment.layout.get().GetRowWidth();
+	auto rows_align =
+	    last.row_block_index == second_to_last.row_block_index &&
+	    last.row_block_offset == second_to_last.row_block_offset + second_to_last.count * layout.GetRowWidth();
 
 	if (!rows_align) { // If rows don't align we can never merge
 		return;
 	}
 
-	if (segment.layout.get().AllConstant()) { // No heap and rows align - merge
+	if (layout.AllConstant()) { // No heap and rows align - merge
 		second_to_last.count += last.count;
-		if (segment.chunk_parts.size() == part_ids.End()) {
-			// Can only remove if the part we're merging was the last added chunk part
-			// If not, we just leave it there (no chunk will reference it anyway)
-			segment.chunk_parts.pop_back();
-		}
-		part_ids.DecrementMax();
+		parts.pop_back();
 		return;
 	}
 
@@ -90,19 +104,12 @@ void TupleDataChunk::MergeLastChunkPart(TupleDataSegment &segment) {
 	    last.base_heap_ptr == second_to_last.base_heap_ptr) { // There is a heap and it aligns - merge
 		second_to_last.total_heap_size += last.total_heap_size;
 		second_to_last.count += last.count;
-		if (segment.chunk_parts.size() == part_ids.End()) {
-			segment.chunk_parts.pop_back(); // Same as above
-		}
-		part_ids.DecrementMax();
+		parts.pop_back();
 	}
 }
 
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
-    : allocator(std::move(allocator_p)), layout(allocator->GetLayout()), count(0), data_size(0) {
-	// We initialize these with plenty of room so that we can avoid allocations
-	static constexpr idx_t CHUNK_RESERVATION = 64;
-	chunks.reserve(CHUNK_RESERVATION);
-	chunk_parts.reserve(CHUNK_RESERVATION);
+    : allocator(std::move(allocator_p)), count(0), data_size(0) {
 }
 
 TupleDataSegment::~TupleDataSegment() {
@@ -117,16 +124,14 @@ TupleDataSegment::~TupleDataSegment() {
 
 void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
 	std::swap(a.allocator, b.allocator);
-	std::swap(a.layout, b.layout);
 	std::swap(a.chunks, b.chunks);
-	std::swap(a.chunk_parts, b.chunk_parts);
 	std::swap(a.count, b.count);
 	std::swap(a.data_size, b.data_size);
 	std::swap(a.pinned_row_handles, b.pinned_row_handles);
 	std::swap(a.pinned_heap_handles, b.pinned_heap_handles);
 }
 
-TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept : layout(other.layout) {
+TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
 	SwapTupleDataSegment(*this, other);
 }
 
@@ -156,13 +161,13 @@ void TupleDataSegment::Verify() const {
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (const auto &chunk : chunks) {
-		chunk.Verify(*this);
+		chunk.Verify();
 		total_count += chunk.count;
 
 		total_size += chunk.count * layout.GetRowWidth();
 		if (!layout.AllConstant()) {
-			for (auto part_id = chunk.part_ids.Start(); part_id < chunk.part_ids.End(); part_id++) {
-				total_size += chunk_parts[part_id].total_heap_size;
+			for (const auto &part : chunk.parts) {
+				total_size += part.total_heap_size;
 			}
 		}
 	}

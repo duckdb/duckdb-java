@@ -4,10 +4,11 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPivot &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPivot &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
-	return Make<PhysicalPivot>(std::move(op.types), plan, std::move(op.bound_pivot));
+	auto child_plan = CreatePlan(*op.children[0]);
+	auto pivot = make_uniq<PhysicalPivot>(std::move(op.types), std::move(child_plan), std::move(op.bound_pivot));
+	return std::move(pivot);
 }
 
 } // namespace duckdb

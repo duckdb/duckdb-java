@@ -20,7 +20,6 @@ struct AbsOperatorFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Absolute value";
 	static constexpr const char *Example = "abs(-17.4)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -36,7 +35,6 @@ struct PowOperatorFun {
 	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Computes x to the power of y";
 	static constexpr const char *Example = "pow(2, 3)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -64,7 +62,6 @@ struct FactorialOperatorFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Factorial of x. Computes the product of the current integer and all integers below it";
 	static constexpr const char *Example = "4!";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -80,7 +77,6 @@ struct AcosFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the arccosine of x";
 	static constexpr const char *Example = "acos(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -90,7 +86,6 @@ struct AsinFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the arcsine of x";
 	static constexpr const char *Example = "asin(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -100,7 +95,6 @@ struct AtanFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the arctangent of x";
 	static constexpr const char *Example = "atan(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -110,7 +104,6 @@ struct Atan2Fun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Computes the arctangent (y, x)";
 	static constexpr const char *Example = "atan2(1.0, 0.0)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -120,7 +113,6 @@ struct BitCountFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the number of bits that are set";
 	static constexpr const char *Example = "bit_count(31)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -130,7 +122,6 @@ struct CbrtFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the cube root of x";
 	static constexpr const char *Example = "cbrt(8)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -140,7 +131,6 @@ struct CeilFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Rounds the number up";
 	static constexpr const char *Example = "ceil(17.4)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -156,7 +146,6 @@ struct CosFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the cos of x";
 	static constexpr const char *Example = "cos(90)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -166,7 +155,6 @@ struct CotFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the cotangent of x";
 	static constexpr const char *Example = "cot(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -176,7 +164,6 @@ struct DegreesFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Converts radians to degrees";
 	static constexpr const char *Example = "degrees(pi())";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -186,7 +173,6 @@ struct EvenFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Rounds x to next even number by rounding away from zero";
 	static constexpr const char *Example = "even(2.9)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -196,7 +182,6 @@ struct ExpFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes e to the power of x";
 	static constexpr const char *Example = "exp(1)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -206,7 +191,6 @@ struct FloorFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Rounds the number down";
 	static constexpr const char *Example = "floor(17.4)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -216,7 +200,6 @@ struct IsFiniteFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns true if the floating point value is finite, false otherwise";
 	static constexpr const char *Example = "isfinite(5.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -226,7 +209,6 @@ struct IsInfiniteFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns true if the floating point value is infinite, false otherwise";
 	static constexpr const char *Example = "isinf('Infinity'::float)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -236,7 +218,6 @@ struct IsNanFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns true if the floating point value is not a number, false otherwise";
 	static constexpr const char *Example = "isnan('NaN'::FLOAT)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -246,7 +227,6 @@ struct GammaFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Interpolation of (x-1) factorial (so decimal inputs are allowed)";
 	static constexpr const char *Example = "gamma(5.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -256,7 +236,6 @@ struct GreatestCommonDivisorFun {
 	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Computes the greatest common divisor of x and y";
 	static constexpr const char *Example = "greatest_common_divisor(42, 57)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -272,7 +251,6 @@ struct LeastCommonMultipleFun {
 	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Computes the least common multiple of x and y";
 	static constexpr const char *Example = "least_common_multiple(42, 57)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -288,7 +266,6 @@ struct LogGammaFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the log of the gamma function";
 	static constexpr const char *Example = "lgamma(2)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -298,7 +275,6 @@ struct LnFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the natural logarithm of x";
 	static constexpr const char *Example = "ln(2)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -308,7 +284,6 @@ struct Log2Fun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the 2-log of x";
 	static constexpr const char *Example = "log2(8)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -318,7 +293,6 @@ struct Log10Fun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the 10-log of x";
 	static constexpr const char *Example = "log10(1000)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -328,7 +302,6 @@ struct LogFun {
 	static constexpr const char *Parameters = "b, x";
 	static constexpr const char *Description = "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
 	static constexpr const char *Example = "log(2, 64)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -338,7 +311,6 @@ struct NextAfterFun {
 	static constexpr const char *Parameters = "x, y";
 	static constexpr const char *Description = "Returns the next floating point value after x in the direction of y";
 	static constexpr const char *Example = "nextafter(1::float, 2::float)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -348,7 +320,6 @@ struct PiFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns the value of pi";
 	static constexpr const char *Example = "pi()";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -358,7 +329,6 @@ struct RadiansFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Converts degrees to radians";
 	static constexpr const char *Example = "radians(90)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -368,7 +338,6 @@ struct RoundFun {
 	static constexpr const char *Parameters = "x,precision";
 	static constexpr const char *Description = "Rounds x to s decimal places";
 	static constexpr const char *Example = "round(42.4332, 2)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -378,7 +347,6 @@ struct SignFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the sign of x as -1, 0 or 1";
 	static constexpr const char *Example = "sign(-349)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -388,7 +356,6 @@ struct SignBitFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns whether the signbit is set or not";
 	static constexpr const char *Example = "signbit(-0.0)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -398,7 +365,6 @@ struct SinFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the sin of x";
 	static constexpr const char *Example = "sin(90)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -408,7 +374,6 @@ struct SqrtFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the square root of x";
 	static constexpr const char *Example = "sqrt(4)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -418,7 +383,6 @@ struct TanFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the tan of x";
 	static constexpr const char *Example = "tan(90)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -428,7 +392,6 @@ struct TruncFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Truncates the number";
 	static constexpr const char *Example = "trunc(17.4)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -438,7 +401,6 @@ struct CoshFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the hyperbolic cos of x";
 	static constexpr const char *Example = "cosh(1)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -448,7 +410,6 @@ struct SinhFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the hyperbolic sin of x";
 	static constexpr const char *Example = "sinh(1)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -458,7 +419,6 @@ struct TanhFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the hyperbolic tan of x";
 	static constexpr const char *Example = "tanh(1)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -468,7 +428,6 @@ struct AcoshFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the inverse hyperbolic cos of x";
 	static constexpr const char *Example = "acosh(2.3)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -478,7 +437,6 @@ struct AsinhFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the inverse hyperbolic sin of x";
 	static constexpr const char *Example = "asinh(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -488,7 +446,6 @@ struct AtanhFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Computes the inverse hyperbolic tan of x";
 	static constexpr const char *Example = "atanh(0.5)";
-	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };

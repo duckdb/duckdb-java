@@ -78,7 +78,6 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
-	ModifyTable(table);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -144,14 +143,14 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
-void DuckTransaction::ModifyTable(DataTable &tbl) {
-	auto table_ref = reference<DataTable>(tbl);
-	auto entry = modified_tables.find(table_ref);
-	if (entry != modified_tables.end()) {
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
 		// already exists
 		return;
 	}
-	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
+	updated_collections.insert(make_pair(collection_ref, collection));
 }
 
 bool DuckTransaction::ChangesMade() {
@@ -234,14 +233,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
-	}
-	for (auto &entry : modified_tables) {
-		auto &tbl = entry.first.get();
-		if (!tbl.IsMainTable()) {
-			return ErrorData(
-			    TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                         tbl.GetTableName(), tbl.TableModification()));
-		}
 	}
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 

@@ -225,13 +225,13 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 	return nullptr;
 }
 
-unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInput &input) {
+unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
 	// Note that a context is required for CreateSecret, as the CreateSecretFunction expects one
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 	InitializeSecrets(transaction);
 
 	// Make a copy to set the provider to default if necessary
-	auto function_input = input;
+	CreateSecretInput function_input {info.type, info.provider, info.storage_type, info.name, info.scope, info.options};
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(function_input.type);
 		function_input.provider = secret_type.default_provider;
@@ -240,7 +240,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Lookup function
 	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
 	if (!function_lookup) {
-		ThrowProviderNotFoundError(input.type, input.provider);
+		ThrowProviderNotFoundError(info.type, info.provider);
 	}
 
 	// Call the function
@@ -248,15 +248,15 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 
 	if (!secret) {
 		throw InternalException("CreateSecretFunction for type: '%s' and provider: '%s' did not return a secret!",
-		                        input.type, input.provider);
+		                        info.type, info.provider);
 	}
 
 	// Register the secret at the secret_manager
-	return RegisterSecretInternal(transaction, std::move(secret), input.on_conflict, input.persist_type,
-	                              input.storage_type);
+	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.persist_type,
+	                              info.storage_type);
 }
 
-BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info) {
+BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info) {
 	InitializeSecrets(transaction);
 
 	auto type = info.type;

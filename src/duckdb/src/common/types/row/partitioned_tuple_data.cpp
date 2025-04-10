@@ -7,25 +7,20 @@
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           shared_ptr<TupleDataLayout> &layout_ptr_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout_ptr(layout_ptr_p), layout(*layout_ptr), count(0),
-      data_size(0) {
+                                           const TupleDataLayout &layout_p)
+    : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()), count(0), data_size(0),
+      allocators(make_shared_ptr<PartitionTupleDataAllocators>()) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout_ptr(other.layout_ptr), layout(*layout_ptr),
-      count(0), data_size(0) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()), count(0), data_size(0) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
 }
 
-shared_ptr<TupleDataLayout> PartitionedTupleData::GetLayoutPtr() const {
-	return layout_ptr;
-}
-
 const TupleDataLayout &PartitionedTupleData::GetLayout() const {
-	return *layout_ptr;
+	return layout;
 }
 
 PartitionedTupleDataType PartitionedTupleData::GetType() const {
@@ -64,7 +59,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	const auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
-		auto &partition_pin_state = state.partition_pin_states[partition_index.GetIndex()];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
 
 		const auto size_before = partition.SizeInBytes();
 		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
@@ -89,7 +84,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input,
                                   const idx_t append_count) {
 	// Compute partition indices and store them in state.partition_indices
-	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices, state.utility_vector);
+	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
 
 	// Build the selection vector for the partitions
 	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
@@ -98,7 +93,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
-		auto &partition_pin_state = state.partition_pin_states[partition_index.GetIndex()];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
 
 		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
 
@@ -203,7 +198,7 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 
 		// Partition, pin state for this partition index
 		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = state.partition_pin_states[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
 
 		// Length and offset for this partition
 		const auto &partition_entry = GETTER::GetValue(it);
@@ -220,7 +215,7 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 void PartitionedTupleData::FlushAppendState(PartitionedTupleDataAppendState &state) {
 	for (idx_t partition_index = 0; partition_index < partitions.size(); partition_index++) {
 		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = state.partition_pin_states[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
 		partition.FinalizePinState(partition_pin_state);
 	}
 }
@@ -256,7 +251,7 @@ void PartitionedTupleData::Reset() {
 	Verify();
 }
 
-void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data) {
+void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
@@ -274,10 +269,6 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 			auto &chunk_state = iterator.GetChunkState();
 			do {
-				// Check for interrupts with each chunk
-				if (context.interrupted) {
-					throw InterruptException();
-				}
 				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 			} while (iterator.Next());
 
@@ -305,7 +296,7 @@ unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartiti
 
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
-	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout);
 
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);
@@ -373,5 +364,9 @@ void PartitionedTupleData::Print() {
 	Printer::Print(ToString());
 }
 // LCOV_EXCL_STOP
+
+void PartitionedTupleData::CreateAllocator() {
+	allocators->allocators.emplace_back(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout));
+}
 
 } // namespace duckdb

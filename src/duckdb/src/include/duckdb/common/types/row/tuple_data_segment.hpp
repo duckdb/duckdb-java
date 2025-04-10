@@ -19,7 +19,6 @@ namespace duckdb {
 
 class TupleDataAllocator;
 class TupleDataLayout;
-struct TupleDataSegment;
 
 struct TupleDataChunkPart {
 public:
@@ -30,8 +29,8 @@ public:
 	TupleDataChunkPart &operator=(const TupleDataChunkPart &) = delete;
 
 	//! Enable move constructors
-	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
-	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
+	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept;
+	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept;
 
 public:
 	//! Mark heap as empty
@@ -54,61 +53,7 @@ public:
 
 private:
 	//! Marker for empty heaps
-	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
-};
-
-class ContinuousIdSet {
-public:
-	ContinuousIdSet() : min_id(INVALID_INDEX), max_id(INVALID_INDEX) {
-	}
-
-public:
-	void Insert(const uint32_t &block_id) {
-		if (Empty()) {
-			min_id = block_id;
-			max_id = block_id;
-		} else {
-			min_id = MinValue(min_id, block_id);
-			max_id = MaxValue(max_id, block_id);
-		}
-	}
-
-	bool Contains(const uint32_t &block_id) const {
-		if (Empty()) {
-			return false;
-		}
-		return block_id >= min_id && block_id <= max_id;
-	}
-
-	bool Empty() const {
-		return min_id == INVALID_INDEX;
-	}
-
-	uint32_t Start() const {
-		D_ASSERT(!Empty());
-		return min_id;
-	}
-
-	uint32_t End() const {
-		D_ASSERT(!Empty());
-		return max_id + 1;
-	}
-
-	uint32_t Size() const {
-		D_ASSERT(!Empty());
-		return End() - Start();
-	}
-
-	void DecrementMax() {
-		D_ASSERT(!Empty());
-		D_ASSERT(Size() > 1);
-		max_id--;
-	}
-
-private:
-	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
-	uint32_t min_id;
-	uint32_t max_id;
+	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
 };
 
 struct TupleDataChunk {
@@ -124,20 +69,19 @@ public:
 	TupleDataChunk &operator=(TupleDataChunk &&) noexcept;
 
 	//! Add a part to this chunk
-	TupleDataChunkPart &AddPart(TupleDataSegment &segment, TupleDataChunkPart &&part);
+	void AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout);
 	//! Tries to merge the last chunk part into the second-to-last one
-	void MergeLastChunkPart(TupleDataSegment &segment);
+	void MergeLastChunkPart(const TupleDataLayout &layout);
 	//! Verify counts of the parts in this chunk
-	void Verify(const TupleDataSegment &segment) const;
+	void Verify() const;
 
 public:
 	//! The parts of this chunk
-	ContinuousIdSet part_ids;
-
+	unsafe_vector<TupleDataChunkPart> parts;
 	//! The row block ids referenced by the chunk
-	ContinuousIdSet row_block_ids;
+	perfect_set_t row_block_ids;
 	//! The heap block ids referenced by the chunk
-	ContinuousIdSet heap_block_ids;
+	perfect_set_t heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
 	//! Lock for recomputing heap pointers
@@ -145,9 +89,6 @@ public:
 };
 
 struct TupleDataSegment {
-	friend struct TupleDataChunkPart;
-	friend struct TupleDataChunk;
-
 public:
 	explicit TupleDataSegment(shared_ptr<TupleDataAllocator> allocator);
 
@@ -176,11 +117,8 @@ public:
 public:
 	//! The allocator for this segment
 	shared_ptr<TupleDataAllocator> allocator;
-	reference<const TupleDataLayout> layout;
 	//! The chunks of this segment
 	unsafe_vector<TupleDataChunk> chunks;
-	//! The chunk parts of this segment
-	unsafe_vector<TupleDataChunkPart> chunk_parts;
 	//! The tuple count of this segment
 	idx_t count;
 	//! The data size of this segment

@@ -30,8 +30,6 @@ public:
 	unique_ptr<BoundQueryNode> left;
 	//! The right side of the set operation
 	unique_ptr<BoundQueryNode> right;
-	//! Target columns for the recursive key variant
-	vector<unique_ptr<Expression>> key_targets;
 
 	//! Index used by the set operation
 	idx_t setop_index;

@@ -5,17 +5,16 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
-	// Set a config setting.
-	if (op.children.empty()) {
-		return Make<PhysicalSet>(op.name, op.value, op.scope, op.estimated_cardinality);
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
+	if (!op.children.empty()) {
+		// set variable
+		auto child = CreatePlan(*op.children[0]);
+		auto set_variable = make_uniq<PhysicalSetVariable>(std::move(op.name), op.estimated_cardinality);
+		set_variable->children.push_back(std::move(child));
+		return std::move(set_variable);
 	}
-
-	// Set a variable.
-	auto &plan = CreatePlan(*op.children[0]);
-	auto &set_variable = Make<PhysicalSetVariable>(std::move(op.name), op.estimated_cardinality);
-	set_variable.children.push_back(plan);
-	return set_variable;
+	// set config setting
+	return make_uniq<PhysicalSet>(op.name, op.value, op.scope, op.estimated_cardinality);
 }
 
 } // namespace duckdb

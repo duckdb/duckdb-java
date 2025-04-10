@@ -11,11 +11,10 @@
 
 namespace duckdb {
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	op.estimated_cardinality = op.EstimateCardinality(context);
-	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	auto plan = CreatePlan(*op.children[0]);
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {
 		D_ASSERT(expr->IsWindow());
@@ -122,15 +121,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		}
 
 		// Chain the new window operator on top of the plan
+		unique_ptr<PhysicalOperator> window;
 		if (i < blocking_count) {
-			auto &window = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
-			window.children.push_back(plan);
-			plan = window;
+			window = make_uniq<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
 		} else {
-			auto &window = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
-			window.children.push_back(plan);
-			plan = window;
+			window = make_uniq<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
 		}
+		window->children.push_back(std::move(plan));
+		plan = std::move(window);
 	}
 
 	// Put everything back into place if it moved
@@ -144,9 +142,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		for (const auto &p : projection_map) {
 			select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
 		}
-		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj.children.push_back(plan);
-		plan = proj;
+		auto proj = make_uniq<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj->children.push_back(std::move(plan));
+		plan = std::move(proj);
 	}
 
 	return plan;

@@ -493,7 +493,7 @@ namespace duckdb_skiplistlib {
 
             const std::string &message() const { return msg; }
 
-            virtual ~Exception() noexcept {}
+            virtual ~Exception() throw() {}
 
         protected:
             std::string msg;
