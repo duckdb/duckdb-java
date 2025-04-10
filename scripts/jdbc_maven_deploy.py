@@ -33,7 +33,7 @@ if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.
     print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
     exit(1)
 
-version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+)$')
+version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+\.\d+)$')
 release_tag = sys.argv[1]
 deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
 is_release = True
