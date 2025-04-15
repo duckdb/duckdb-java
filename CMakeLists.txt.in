@@ -46,7 +46,7 @@ set(DUCKDB_DEFINITIONS
 set(DUCKDB_SRC_FILES 
   ${SOURCES})
 
-set(JEMACLLOC_SRC_FILES 
+set(JEMALLOC_SRC_FILES 
   ${JEMALLOC_SOURCES})
 
 
@@ -95,7 +95,7 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 if(MSVC)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
 else()
-  list(APPEND DUCKDB_SRC_FILES ${JEMACLLOC_SRC_FILES})
+  list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED

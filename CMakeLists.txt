@@ -439,7 +439,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/ub_extension_json_json_functions.cpp)
 
-set(JEMACLLOC_SRC_FILES 
+set(JEMALLOC_SRC_FILES 
   src/duckdb/extension/jemalloc/jemalloc_extension.cpp
   src/duckdb/extension/jemalloc/jemalloc/src/jemalloc.c
   src/duckdb/extension/jemalloc/jemalloc/src/arena.c
@@ -553,7 +553,7 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 if(MSVC)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
 else()
-  list(APPEND DUCKDB_SRC_FILES ${JEMACLLOC_SRC_FILES})
+  list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED
