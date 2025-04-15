@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -27,33 +27,35 @@ jobs:
   java-linux-amd64:
     name: Java Linux (amd64)
     runs-on: ubuntu-latest
-    container:
-      image: quay.io/pypa/manylinux_2_28_x86_64
     env:
-      GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
+      MANYLINUX_PACKAGES: java-1.8.0-openjdk-devel ninja-build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          jdk: 1
-          python_alias: 1
-          aws-cli: 1
-
       - name: Build
         shell: bash
-        run: make release
+        run: |
+          docker run                                    \
+          -v.:/duckdb                                   \
+          -e GEN=ninja                                  \
+          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
+          ${{ env.MANYLINUX_IMAGE }}                    \
+          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb release'
 
-      - name: Java Tests
+      - name: JDBC Tests
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
-        run: make test
+        run: |
+          docker run                                    \
+          -v.:/duckdb                                   \
+          -e GEN=ninja                                  \
+          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
+          ${{ env.MANYLINUX_IMAGE }}                    \
+          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb test'
 
       - name: Deploy
         shell: bash
@@ -71,33 +73,37 @@ jobs:
 
   java-linux-aarch64:
     name: Java Linux (aarch64)
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
+    runs-on: ubuntu-24.04-arm
     needs: java-linux-amd64
     env:
-      GEN: ninja
-      DUCKDB_PLATFORM: linux_arm64
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
+      MANYLINUX_PACKAGES: java-1.8.0-openjdk-devel ninja-build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: ./.github/actions/ubuntu_18_setup
-        with:
-          ccache: 1
-          aarch64_cross_compile: 1
-
-      - name: Install Stuff
-        shell: bash
-        run: >
-          curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
-
       - name: Build
         shell: bash
-        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ OVERRIDE_JDBC_OS_ARCH=arm64 make release
+        run: |
+          docker run                                    \
+          -v.:/duckdb                                   \
+          -e GEN=ninja                                  \
+          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
+          ${{ env.MANYLINUX_IMAGE }}                    \
+          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb release'
+
+      - name: JDBC Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          docker run                                    \
+          -v.:/duckdb                                   \
+          -e GEN=ninja                                  \
+          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
+          ${{ env.MANYLINUX_IMAGE }}                    \
+          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb test'
 
       - name: Deploy
         shell: bash
@@ -120,7 +126,7 @@ jobs:
     runs-on: windows-2019
     needs: java-linux-amd64
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -162,7 +168,7 @@ jobs:
     runs-on: macos-14
     needs: java-linux-amd64
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -210,7 +216,7 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -280,34 +286,24 @@ jobs:
     needs: java-linux-amd64
     container: quay.io/pypa/manylinux_2_28_x86_64
     env:
-      BUILD_JDBC: 1
       GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      JAVA_HOME: /usr/lib/jvm/java-1.8.0-openjdk
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          jdk: 1
-          python_alias: 1
-          aws-cli: 1
+      - name: Install packages
+        shell: bash
+        run: |
+          dnf install java-1.8.0-openjdk-devel ninja-build -y
 
-      - name: Install
+      - name: Install CTS
         shell: bash
         run: |
           git clone https://github.com/cwida/jdbccts.git
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-java' }}
 
       - name: Build
         shell: bash
