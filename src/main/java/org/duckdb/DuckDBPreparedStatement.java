@@ -1,13 +1,14 @@
 package org.duckdb;
 
-import java.io.ByteArrayOutputStream;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.duckdb.StatementReturnType.*;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -31,24 +32,28 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
-    private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
+    private static final Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
 
     private DuckDBConnection conn;
 
-    private ByteBuffer stmt_ref = null;
-    private DuckDBResultSet select_result = null;
-    private int update_result = 0;
+    private ByteBuffer stmtRef = null;
+    final Lock stmtRefLock = new ReentrantLock();
+    volatile boolean closeOnCompletion = false;
+
+    private DuckDBResultSet selectResult = null;
+    private int updateResult = 0;
+
     private boolean returnsChangedRows = false;
     private boolean returnsNothing = false;
     private boolean returnsResultSet = false;
-    boolean closeOnCompletion = false;
     private Object[] params = new Object[0];
     private DuckDBResultSetMetaData meta = null;
     private final List<Object[]> batchedParams = new ArrayList<>();
@@ -76,49 +81,63 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private void startTransaction() throws SQLException {
-        if (this.conn.autoCommit || this.conn.transactionRunning) {
-            return;
-        }
-
-        this.conn.transactionRunning = true;
-
-        // Start transaction via Statement
-        try (Statement s = conn.createStatement()) {
-            s.execute("BEGIN TRANSACTION;");
+        checkOpen();
+        try {
+            if (this.conn.autoCommit || this.conn.transactionRunning) {
+                return;
+            }
+            this.conn.transactionRunning = true;
+            // Start transaction via Statement
+            try (Statement s = conn.createStatement()) {
+                s.execute("BEGIN TRANSACTION;");
+            }
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
         }
     }
 
     private void prepare(String sql) throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Statement was closed");
-        }
+        checkOpen();
         if (sql == null) {
             throw new SQLException("sql query parameter cannot be null");
         }
 
-        // In case the statement is reused, release old one first
-        if (stmt_ref != null) {
-            DuckDBNative.duckdb_jdbc_release(stmt_ref);
-            stmt_ref = null;
-        }
-
-        meta = null;
-        params = null;
-
-        if (select_result != null) {
-            select_result.close();
-        }
-        select_result = null;
-        update_result = 0;
-
+        stmtRefLock.lock();
         try {
-            stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
-            meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmt_ref);
+            checkOpen();
+
+            // In case the statement is reused, release old one first
+            if (stmtRef != null) {
+                DuckDBNative.duckdb_jdbc_release(stmtRef);
+                stmtRef = null;
+            }
+
+            meta = null;
             params = new Object[0];
+
+            if (selectResult != null) {
+                selectResult.close();
+            }
+            selectResult = null;
+            updateResult = 0;
+
+            // Lock connection while still holding statement lock
+            conn.connRefLock.lock();
+            try {
+                conn.checkOpen();
+                stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, sql.getBytes(UTF_8));
+                // Track prepared statement inside the parent connection
+                conn.preparedStatements.add(this);
+            } finally {
+                conn.connRefLock.unlock();
+            }
+
+            meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmtRef);
         } catch (SQLException e) {
-            // Delete stmt_ref as it might already be allocated
             close();
-            throw new SQLException(e);
+            throw e;
+        } finally {
+            stmtRefLock.unlock();
         }
     }
 
@@ -128,47 +147,52 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private boolean execute(boolean startTransaction) throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Statement was closed");
-        }
-        if (stmt_ref == null) {
-            throw new SQLException("Prepare something first");
-        }
+        checkOpen();
+        checkPrepared();
 
-        ByteBuffer result_ref = null;
-        if (select_result != null) {
-            select_result.close();
-        }
-        select_result = null;
+        ByteBuffer resultRef = null;
 
+        stmtRefLock.lock();
         try {
+            checkOpen();
+            checkPrepared();
+
+            if (selectResult != null) {
+                selectResult.close();
+            }
+            selectResult = null;
+
             if (startTransaction) {
                 startTransaction();
             }
-            result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-            DuckDBResultSetMetaData result_meta = DuckDBNative.duckdb_jdbc_query_result_meta(result_ref);
-            select_result = new DuckDBResultSet(this, result_meta, result_ref, conn.conn_ref);
-            returnsResultSet = result_meta.return_type.equals(StatementReturnType.QUERY_RESULT);
-            returnsChangedRows = result_meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
-            returnsNothing = result_meta.return_type.equals(StatementReturnType.NOTHING);
+
+            resultRef = DuckDBNative.duckdb_jdbc_execute(stmtRef, params);
+            DuckDBResultSetMetaData resultMeta = DuckDBNative.duckdb_jdbc_query_result_meta(resultRef);
+            selectResult = new DuckDBResultSet(conn, this, resultMeta, resultRef);
+            returnsResultSet = resultMeta.return_type.equals(QUERY_RESULT);
+            returnsChangedRows = resultMeta.return_type.equals(CHANGED_ROWS);
+            returnsNothing = resultMeta.return_type.equals(NOTHING);
+
         } catch (SQLException e) {
-            // Delete stmt_ref as it cannot be used anymore and
-            // result_ref as it might be allocated
-            if (select_result != null) {
-                select_result.close();
-            } else if (result_ref != null) {
-                DuckDBNative.duckdb_jdbc_free_result(result_ref);
-                result_ref = null;
+            // Delete result set that might have been allocated
+            if (selectResult != null) {
+                selectResult.close();
+            } else if (resultRef != null) {
+                DuckDBNative.duckdb_jdbc_free_result(resultRef);
+                resultRef = null;
             }
             close();
             throw e;
+
+        } finally {
+            stmtRefLock.unlock();
         }
 
         if (returnsChangedRows) {
-            if (select_result.next()) {
-                update_result = select_result.getInt(1);
+            if (selectResult.next()) {
+                updateResult = selectResult.getInt(1);
             }
-            select_result.close();
+            selectResult.close();
         }
 
         return returnsResultSet;
@@ -181,7 +205,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!returnsResultSet) {
             throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
         }
-        return select_result;
+        return selectResult;
     }
 
     @Override
@@ -216,33 +240,27 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Statement was closed");
-        }
-        if (meta == null) {
-            throw new SQLException("Prepare something first");
-        }
+        checkOpen();
+        checkPrepared();
         return meta;
     }
 
     @Override
     public ParameterMetaData getParameterMetaData() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Statement was closed");
-        }
-        if (stmt_ref == null) {
-            throw new SQLException("Prepare something first");
-        }
+        checkOpen();
+        checkPrepared();
         return meta.param_meta;
     }
 
     @Override
     public void setObject(int parameterIndex, Object x) throws SQLException {
-        if (parameterIndex < 1 || parameterIndex > getParameterMetaData().getParameterCount()) {
+        checkOpen();
+        int paramsCount = getParameterMetaData().getParameterCount();
+        if (parameterIndex < 1 || parameterIndex > paramsCount) {
             throw new SQLException("Parameter index out of bounds");
         }
         if (params.length == 0) {
-            params = new Object[getParameterMetaData().getParameterCount()];
+            params = new Object[paramsCount];
         }
         params[parameterIndex - 1] = x;
     }
@@ -294,20 +312,53 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void clearParameters() throws SQLException {
+        checkOpen();
         params = new Object[0];
     }
 
     @Override
     public void close() throws SQLException {
-        if (select_result != null) {
-            select_result.close();
-            select_result = null;
+        if (isClosed()) {
+            return;
         }
-        if (stmt_ref != null) {
-            DuckDBNative.duckdb_jdbc_release(stmt_ref);
-            stmt_ref = null;
+        stmtRefLock.lock();
+        try {
+            if (isClosed()) {
+                return;
+            }
+            if (selectResult != null) {
+                selectResult.close();
+                selectResult = null;
+            }
+            if (stmtRef != null) {
+                // Delete prepared statement
+                DuckDBNative.duckdb_jdbc_release(stmtRef);
+
+                // Untrack prepared statement from parent connection,
+                // if 'closing' flag is set it means that the parent connection itself
+                // is being closed and we don't need to call untrack from the statement.
+                if (!conn.closing) {
+                    conn.connRefLock.lock();
+                    try {
+                        conn.preparedStatements.remove(this);
+                    } finally {
+                        conn.connRefLock.unlock();
+                    }
+                }
+
+                stmtRef = null;
+            }
+            conn = null; // we use this as a check for closed-ness
+        } finally {
+            stmtRefLock.unlock();
         }
-        conn = null; // we use this as a check for closed-ness
+    }
+
+    @Override
+    public boolean isClosed() throws SQLException {
+        // Cannot check stmtRef here because it is created only
+        // when prepare() is called.
+        return conn == null || conn.connRef == null;
     }
 
     protected void finalize() throws Throwable {
@@ -347,14 +398,16 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         logger.log(Level.FINE, "setQueryTimeout not supported");
     }
 
-    /**
-     * This function calls the underlying C++ interrupt function which aborts the query running on that connection.
-     * It is not safe to call this function when the connection is already closed.
-     */
     @Override
-    public synchronized void cancel() throws SQLException {
-        if (conn.conn_ref != null) {
-            DuckDBNative.duckdb_jdbc_interrupt(conn.conn_ref);
+    public void cancel() throws SQLException {
+        try {
+            // Cancel is intended to be called concurrently with execute,
+            // thus we cannot take the statement lock that is held while
+            // query is running. NPE may be thrown if connection is closed
+            // concurrently.
+            conn.interrupt();
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
         }
     }
 
@@ -380,7 +433,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
-        if (stmt_ref == null) {
+        if (stmtRef == null) {
             throw new SQLException("Prepare something first");
         }
 
@@ -389,8 +442,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
 
         // getResultSet can only be called once per result
-        ResultSet to_return = select_result;
-        this.select_result = null;
+        ResultSet to_return = selectResult;
+        this.selectResult = null;
         return to_return;
     }
 
@@ -398,21 +451,21 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
-        if (stmt_ref == null) {
+        if (stmtRef == null) {
             throw new SQLException("Prepare something first");
         }
 
-        if (returnsResultSet || returnsNothing || select_result.isFinished()) {
+        if (returnsResultSet || returnsNothing || selectResult.isFinished()) {
             return -1;
         }
-        return update_result;
+        return updateResult;
     }
 
     @Override
     public int getUpdateCount() throws SQLException {
         // getUpdateCount can only be called once per result
         int to_return = getUpdateCountInternal();
-        update_result = -1;
+        updateResult = -1;
         return to_return;
     }
 
@@ -558,11 +611,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
-    public boolean isClosed() throws SQLException {
-        return conn == null;
-    }
-
-    @Override
     public void setPoolable(boolean poolable) throws SQLException {
         throw new SQLFeatureNotSupportedException("setPoolable");
     }
@@ -574,15 +622,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void closeOnCompletion() throws SQLException {
-        if (isClosed())
-            throw new SQLException("Statement is closed");
+        checkOpen();
+        ;
         closeOnCompletion = true;
     }
 
     @Override
     public boolean isCloseOnCompletion() throws SQLException {
-        if (isClosed())
-            throw new SQLException("Statement is closed");
+        checkOpen();
+        ;
         return closeOnCompletion;
     }
 
@@ -633,6 +681,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
+        checkOpen();
+
         if (x == null) {
             setNull(parameterIndex, targetSqlType);
             return;
@@ -769,6 +819,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch() throws SQLException {
+        checkOpen();
         batchedParams.add(params);
         clearParameters();
         this.isBatch = true;
@@ -937,6 +988,18 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private void requireNonPreparedStatement() throws SQLException {
         if (this.isPreparedStatement) {
             throw new SQLException("Cannot add batched SQL statement to PreparedStatement");
+        }
+    }
+
+    private void checkOpen() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("Statement was closed");
+        }
+    }
+
+    private void checkPrepared() throws SQLException {
+        if (stmtRef == null) {
+            throw new SQLException("Prepare something first");
         }
     }
 }

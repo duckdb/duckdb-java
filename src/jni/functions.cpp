@@ -404,5 +404,6 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profil
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
 
+		return nullptr;
 	}
 }

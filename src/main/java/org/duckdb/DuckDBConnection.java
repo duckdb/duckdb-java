@@ -1,8 +1,9 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -20,10 +21,10 @@ import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Struct;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.duckdb.user.DuckDBMap;
 import org.duckdb.user.DuckDBUserArray;
 import org.duckdb.user.DuckDBUserStruct;
@@ -33,7 +34,11 @@ public final class DuckDBConnection implements java.sql.Connection {
     /** Name of the DuckDB default schema. */
     public static final String DEFAULT_SCHEMA = "main";
 
-    ByteBuffer conn_ref;
+    ByteBuffer connRef;
+    final Lock connRefLock = new ReentrantLock();
+    final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
+    volatile boolean closing = false;
+
     boolean autoCommit = true;
     boolean transactionRunning;
     final String url;
@@ -48,13 +53,12 @@ public final class DuckDBConnection implements java.sql.Connection {
         if (db_dir.length() == 0) {
             db_dir = ":memory:";
         }
-        ByteBuffer nativeReference =
-            DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), readOnly, properties);
+        ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(UTF_8), readOnly, properties);
         return new DuckDBConnection(nativeReference, url, readOnly);
     }
 
     private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly) throws SQLException {
-        conn_ref = connectionReference;
+        this.connRef = connectionReference;
         this.url = url;
         this.readOnly = readOnly;
         DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
@@ -62,9 +66,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
         throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Connection was closed");
-        }
+        checkOpen();
         if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
             return new DuckDBPreparedStatement(this);
         }
@@ -73,9 +75,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
                                               int resultSetHoldability) throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Connection was closed");
-        }
+        checkOpen();
         if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
             return new DuckDBPreparedStatement(this, sql);
         }
@@ -87,10 +87,14 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Connection duplicate() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Connection is closed");
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly);
+        } finally {
+            connRefLock.unlock();
         }
-        return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(conn_ref), url, readOnly);
     }
 
     public void commit() throws SQLException {
@@ -111,15 +115,46 @@ public final class DuckDBConnection implements java.sql.Connection {
         close();
     }
 
-    public synchronized void close() throws SQLException {
-        if (conn_ref != null) {
-            DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
-            conn_ref = null;
+    public void close() throws SQLException {
+        if (isClosed()) {
+            return;
+        }
+        connRefLock.lock();
+        try {
+            if (isClosed()) {
+                return;
+            }
+
+            // Mark this instance as 'closing' to skip untrack call in
+            // prepared statements, that requires connection lock and can
+            // cause a deadlock when the statement closure is caused by the
+            // connection interrupt called by us.
+            this.closing = true;
+
+            // Interrupt running query if any
+            try {
+                interrupt();
+            } catch (SQLException e) {
+                // suppress
+            }
+
+            // Last statement created is first deleted
+            List<DuckDBPreparedStatement> psList = new ArrayList<>(preparedStatements);
+            Collections.reverse(psList);
+            for (DuckDBPreparedStatement ps : psList) {
+                ps.close();
+            }
+            preparedStatements.clear();
+
+            DuckDBNative.duckdb_jdbc_disconnect(connRef);
+            connRef = null;
+        } finally {
+            connRefLock.unlock();
         }
     }
 
     public boolean isClosed() throws SQLException {
-        return conn_ref == null;
+        return connRef == null;
     }
 
     public boolean isValid(int timeout) throws SQLException {
@@ -197,19 +232,47 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void setCatalog(String catalog) throws SQLException {
-        DuckDBNative.duckdb_jdbc_set_catalog(conn_ref, catalog);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            DuckDBNative.duckdb_jdbc_set_catalog(connRef, catalog);
+        } finally {
+            connRefLock.unlock();
+        }
     }
 
     public String getCatalog() throws SQLException {
-        return DuckDBNative.duckdb_jdbc_get_catalog(conn_ref);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            return DuckDBNative.duckdb_jdbc_get_catalog(connRef);
+        } finally {
+            connRefLock.unlock();
+        }
     }
 
     public void setSchema(String schema) throws SQLException {
-        DuckDBNative.duckdb_jdbc_set_schema(conn_ref, schema);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            DuckDBNative.duckdb_jdbc_set_schema(connRef, schema);
+        } finally {
+            connRefLock.unlock();
+        }
     }
 
     public String getSchema() throws SQLException {
-        return DuckDBNative.duckdb_jdbc_get_schema(conn_ref);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            return DuckDBNative.duckdb_jdbc_get_schema(connRef);
+        } finally {
+            connRefLock.unlock();
+        }
     }
 
     @Override
@@ -381,11 +444,49 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerArrowStream(String name, Object arrow_array_stream) {
-        long array_stream_address = getArrowStreamAddress(arrow_array_stream);
-        DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
+        try {
+            checkOpen();
+            long array_stream_address = getArrowStreamAddress(arrow_array_stream);
+            connRefLock.lock();
+            try {
+                checkOpen();
+                DuckDBNative.duckdb_jdbc_arrow_register(connRef, array_stream_address, name.getBytes(UTF_8));
+            } finally {
+                connRefLock.unlock();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
-        return DuckDBNative.duckdb_jdbc_get_profiling_information(conn_ref, format);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            return DuckDBNative.duckdb_jdbc_get_profiling_information(connRef, format);
+        } finally {
+            connRefLock.unlock();
+        }
+    }
+
+    void checkOpen() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("Connection was closed");
+        }
+    }
+
+    /**
+     * This function calls the underlying C++ interrupt function which aborts the query running on this connection.
+     */
+    void interrupt() throws SQLException {
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            DuckDBNative.duckdb_jdbc_interrupt(connRef);
+        } finally {
+            connRefLock.unlock();
+        }
     }
 }

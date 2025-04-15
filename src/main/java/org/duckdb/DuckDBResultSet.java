@@ -32,73 +32,84 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class DuckDBResultSet implements ResultSet {
+    private final DuckDBConnection conn;
     private final DuckDBPreparedStatement stmt;
     private final DuckDBResultSetMetaData meta;
 
     /**
      * {@code null} if this result set is closed.
      */
-    private ByteBuffer result_ref;
-    private DuckDBVector[] current_chunk = {};
-    private int chunk_idx = 0;
-    private boolean finished = false;
-    private boolean was_null;
-    private final ByteBuffer conn_ref;
+    private ByteBuffer resultRef;
+    private final Lock resultRefLock = new ReentrantLock();
 
-    public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref,
-                           ByteBuffer conn_ref) throws SQLException {
-        this.stmt = Objects.requireNonNull(stmt);
-        this.result_ref = Objects.requireNonNull(result_ref);
-        this.meta = Objects.requireNonNull(meta);
-        this.conn_ref = Objects.requireNonNull(conn_ref);
+    private DuckDBVector[] currentChunk = {};
+    private int chunkIdx = 0;
+    private boolean finished = false;
+    private boolean wasNull;
+
+    public DuckDBResultSet(DuckDBConnection conn, DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta,
+                           ByteBuffer resultRef) throws SQLException {
+        try {
+            this.conn = Objects.requireNonNull(conn);
+            this.stmt = Objects.requireNonNull(stmt);
+            this.resultRef = Objects.requireNonNull(resultRef);
+            this.meta = Objects.requireNonNull(meta);
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Statement getStatement() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("ResultSet was closed");
-        }
+        checkOpen();
         return stmt;
     }
 
     public ResultSetMetaData getMetaData() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("ResultSet was closed");
-        }
+        checkOpen();
         return meta;
     }
 
-    public synchronized boolean next() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("ResultSet was closed");
-        }
+    public boolean next() throws SQLException {
+        checkOpen();
         if (finished) {
             return false;
         }
-        chunk_idx++;
-        if (current_chunk.length == 0 || chunk_idx > current_chunk[0].length) {
-            current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref, conn_ref);
-            chunk_idx = 1;
+        chunkIdx++;
+        if (currentChunk.length == 0 || chunkIdx > currentChunk[0].length) {
+            currentChunk = fetchChunk();
+            chunkIdx = 1;
         }
-        if (current_chunk.length == 0) {
+        if (currentChunk.length == 0) {
             finished = true;
             return false;
         }
         return true;
     }
 
-    public synchronized void close() throws SQLException {
-        if (result_ref != null) {
-            DuckDBNative.duckdb_jdbc_free_result(result_ref);
-            // Nullness is used to determine whether we're closed
-            result_ref = null;
-
-            // isCloseOnCompletion() throws if already closed, and we can't check for isClosed() because it could change
-            // between when we check and call isCloseOnCompletion, so access the field directly.
-            if (stmt.closeOnCompletion) {
-                stmt.close();
+    public void close() throws SQLException {
+        if (isClosed()) {
+            return;
+        }
+        resultRefLock.lock();
+        try {
+            if (isClosed()) {
+                return;
             }
+            DuckDBNative.duckdb_jdbc_free_result(resultRef);
+            // Nullness is used to determine whether we're closed
+            resultRef = null;
+        } finally {
+            resultRefLock.unlock();
+        }
+
+        // isCloseOnCompletion() throws if already closed, and we can't check for isClosed() because it could change
+        // between when we check and call isCloseOnCompletion, so access the field directly.
+        if (stmt.closeOnCompletion) {
+            stmt.close();
         }
     }
 
@@ -106,14 +117,12 @@ public class DuckDBResultSet implements ResultSet {
         close();
     }
 
-    public synchronized boolean isClosed() throws SQLException {
-        return result_ref == null;
+    public boolean isClosed() throws SQLException {
+        return resultRef == null;
     }
 
     private void check(int columnIndex) throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("ResultSet was closed");
-        }
+        checkOpen();
         if (columnIndex < 1 || columnIndex > meta.column_count) {
             throw new SQLException("Column index out of bounds");
         }
@@ -128,16 +137,14 @@ public class DuckDBResultSet implements ResultSet {
      */
     public synchronized Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size)
         throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Result set is closed");
-        }
+        checkOpen();
 
         try {
             Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
             if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
                 throw new RuntimeException("Need to pass an Arrow BufferAllocator");
             }
-            Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(result_ref, arrow_batch_size);
+            Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(resultRef, arrow_batch_size);
             Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
             Object arrow_array_stream =
                 arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
@@ -153,38 +160,38 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Object getObject(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getObject(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getObject(chunkIdx - 1);
     }
 
     public Struct getStruct(int columnIndex) throws SQLException {
-        return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getStruct(chunk_idx - 1);
+        return checkAndNull(columnIndex) ? null : currentChunk[columnIndex - 1].getStruct(chunkIdx - 1);
     }
 
     public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getOffsetTime(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getOffsetTime(chunkIdx - 1);
     }
 
     public boolean wasNull() throws SQLException {
         if (isClosed()) {
             throw new SQLException("ResultSet was closed");
         }
-        return was_null;
+        return wasNull;
     }
 
-    private boolean check_and_null(int columnIndex) throws SQLException {
+    private boolean checkAndNull(int columnIndex) throws SQLException {
         check(columnIndex);
         try {
-            was_null = current_chunk[columnIndex - 1].check_and_null(chunk_idx - 1);
+            wasNull = currentChunk[columnIndex - 1].check_and_null(chunkIdx - 1);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new SQLException("No row in context", e);
         }
-        return was_null;
+        return wasNull;
     }
 
     public JsonNode getJsonObject(int columnIndex) throws SQLException {
@@ -193,14 +200,14 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public String getLazyString(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getLazyString(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getLazyString(chunkIdx - 1);
     }
 
     public String getString(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
 
@@ -213,100 +220,98 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public boolean getBoolean(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return false;
         }
-        return current_chunk[columnIndex - 1].getBoolean(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getBoolean(chunkIdx - 1);
     }
 
     public byte getByte(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getByte(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getByte(chunkIdx - 1);
     }
 
     public short getShort(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getShort(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getShort(chunkIdx - 1);
     }
 
     public int getInt(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getInt(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getInt(chunkIdx - 1);
     }
 
     private short getUint8(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getUint8(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUint8(chunkIdx - 1);
     }
 
     private int getUint16(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getUint16(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUint16(chunkIdx - 1);
     }
 
     private long getUint32(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getUint32(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUint32(chunkIdx - 1);
     }
 
     private BigInteger getUint64(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return BigInteger.ZERO;
         }
-        return current_chunk[columnIndex - 1].getUint64(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUint64(chunkIdx - 1);
     }
 
     public long getLong(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return 0;
         }
-        return current_chunk[columnIndex - 1].getLong(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getLong(chunkIdx - 1);
     }
 
     public BigInteger getHugeint(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return BigInteger.ZERO;
         }
-        return current_chunk[columnIndex - 1].getHugeint(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getHugeint(chunkIdx - 1);
     }
 
     public BigInteger getUhugeint(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return BigInteger.ZERO;
         }
-        return current_chunk[columnIndex - 1].getUhugeint(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUhugeint(chunkIdx - 1);
     }
 
     public float getFloat(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return Float.NaN;
         }
-        return current_chunk[columnIndex - 1].getFloat(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getFloat(chunkIdx - 1);
     }
 
     public double getDouble(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return Double.NaN;
         }
-        return current_chunk[columnIndex - 1].getDouble(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getDouble(chunkIdx - 1);
     }
 
     public int findColumn(String columnLabel) throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("ResultSet was closed");
-        }
+        checkOpen();
         for (int col_idx = 0; col_idx < meta.column_count; col_idx++) {
             if (meta.column_names[col_idx].equalsIgnoreCase(columnLabel)) {
                 return col_idx + 1;
@@ -356,15 +361,15 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public byte[] getBytes(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
 
-        return current_chunk[columnIndex - 1].getBytes(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getBytes(chunkIdx - 1);
     }
 
     public Date getDate(int columnIndex) throws SQLException {
-        return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getDate(chunk_idx - 1);
+        return checkAndNull(columnIndex) ? null : currentChunk[columnIndex - 1].getDate(chunkIdx - 1);
     }
 
     public Time getTime(int columnIndex) throws SQLException {
@@ -372,31 +377,31 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getTimestamp(chunkIdx - 1);
     }
 
     private LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getLocalDateTime(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getLocalDateTime(chunkIdx - 1);
     }
 
     private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getOffsetDateTime(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getOffsetDateTime(chunkIdx - 1);
     }
 
     public UUID getUuid(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getUuid(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getUuid(chunkIdx - 1);
     }
 
     public static class DuckDBBlobResult implements Blob {
@@ -505,14 +510,14 @@ public class DuckDBResultSet implements ResultSet {
             return Objects.hash(buffer);
         }
 
-        private ByteBuffer buffer;
+        private final ByteBuffer buffer;
     }
 
     public Blob getBlob(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getBlob(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getBlob(chunkIdx - 1);
     }
 
     public Blob getBlob(String columnLabel) throws SQLException {
@@ -584,10 +589,10 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getBigDecimal(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getBigDecimal(chunkIdx - 1);
     }
 
     public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
@@ -643,31 +648,36 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public void setFetchDirection(int direction) throws SQLException {
+        checkOpen();
         if (direction != ResultSet.FETCH_FORWARD && direction != ResultSet.FETCH_UNKNOWN) {
             throw new SQLFeatureNotSupportedException("setFetchDirection");
         }
     }
 
     public int getFetchDirection() throws SQLException {
+        checkOpen();
         return ResultSet.FETCH_FORWARD;
     }
 
     public void setFetchSize(int rows) throws SQLException {
+        checkOpen();
         if (rows < 0) {
             throw new SQLException("Fetch size has to be >= 0");
         }
-        // whatevs
     }
 
     public int getFetchSize() throws SQLException {
+        checkOpen();
         return DuckDBNative.duckdb_jdbc_fetch_size();
     }
 
     public int getType() throws SQLException {
+        checkOpen();
         return ResultSet.TYPE_FORWARD_ONLY;
     }
 
     public int getConcurrency() throws SQLException {
+        checkOpen();
         return ResultSet.CONCUR_READ_ONLY;
     }
 
@@ -876,10 +886,10 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Array getArray(int columnIndex) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getArray(chunk_idx - 1);
+        return currentChunk[columnIndex - 1].getArray(chunkIdx - 1);
     }
 
     public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
@@ -907,10 +917,10 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getTime(chunk_idx - 1, cal);
+        return currentChunk[columnIndex - 1].getTime(chunkIdx - 1, cal);
     }
 
     public Time getTime(String columnLabel, Calendar cal) throws SQLException {
@@ -918,10 +928,10 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-        if (check_and_null(columnIndex)) {
+        if (checkAndNull(columnIndex)) {
             return null;
         }
-        return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1, cal);
+        return currentChunk[columnIndex - 1].getTimestamp(chunkIdx - 1, cal);
     }
 
     public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
@@ -1161,6 +1171,8 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
+        checkOpen();
+
         if (type == null) {
             throw new SQLException("type is null");
         }
@@ -1319,5 +1331,31 @@ public class DuckDBResultSet implements ResultSet {
 
     boolean isFinished() {
         return finished;
+    }
+
+    private void checkOpen() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("ResultSet was closed");
+        }
+    }
+
+    private DuckDBVector[] fetchChunk() throws SQLException {
+        // Take both result set and connection locks for fetching
+        resultRefLock.lock();
+        try {
+            checkOpen();
+            conn.connRefLock.lock();
+            try {
+                conn.checkOpen();
+                return DuckDBNative.duckdb_jdbc_fetch(resultRef, conn.connRef);
+            } finally {
+                conn.connRefLock.unlock();
+            }
+        } catch (SQLException e) {
+            close();
+            throw e;
+        } finally {
+            resultRefLock.unlock();
+        }
     }
 }
