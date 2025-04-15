@@ -13,6 +13,7 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "functions.hpp"
+#include "holders.hpp"
 #include "refs.hpp"
 #include "types.hpp"
 #include "util.hpp"
@@ -57,40 +58,6 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 		return;
 	}
 	delete_global_refs(env);
-}
-
-/**
- * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
- * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
- * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing a DuckDB is freed, the
- * DuckDB is released as well.
- */
-struct ConnectionHolder {
-	const duckdb::shared_ptr<duckdb::DuckDB> db;
-	const duckdb::unique_ptr<duckdb::Connection> connection;
-
-	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db)
-	    : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
-	}
-};
-
-/**
- * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
- */
-static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	if (!conn_ref_buf) {
-		throw ConnectionException("Invalid connection");
-	}
-	auto conn_holder = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_holder) {
-		throw ConnectionException("Invalid connection");
-	}
-	auto conn_ref = conn_holder->connection.get();
-	if (!conn_ref || !conn_ref->context) {
-		throw ConnectionException("Invalid connection");
-	}
-
-	return conn_ref;
 }
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
@@ -189,10 +156,6 @@ void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	}
 }
 
-struct StatementHolder {
-	duckdb::unique_ptr<PreparedStatement> stmt;
-};
-
 #include "utf8proc_wrapper.hpp"
 
 jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
@@ -232,11 +195,6 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 	}
 	return env->NewDirectByteBuffer(stmt_ref, 0);
 }
-
-struct ResultHolder {
-	duckdb::unique_ptr<QueryResult> res;
-	duckdb::unique_ptr<DataChunk> chunk;
-};
 
 Value ToValue(JNIEnv *env, jobject param, duckdb::shared_ptr<ClientContext> context) {
 	param = env->CallStaticObjectMethod(J_Timestamp, J_Timestamp_valueOf, param);
@@ -930,6 +888,7 @@ static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
 	if (env->IsSameObject(format, J_ProfilerPrintFormat_GRAPHVIZ)) {
 		return ProfilerPrintFormat::GRAPHVIZ;
 	}
+	throw InvalidInputException("Invalid profiling format");
 }
 
 jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
