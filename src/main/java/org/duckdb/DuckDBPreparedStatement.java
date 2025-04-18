@@ -1,13 +1,14 @@
 package org.duckdb;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
+import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.duckdb.io.IOUtils.*;
+
+import java.io.*;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -28,18 +29,12 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
+import java.time.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
-    private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
-
     private DuckDBConnection conn;
 
     private ByteBuffer stmt_ref = null;
@@ -112,7 +107,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         update_result = 0;
 
         try {
-            stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
+            stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(UTF_8));
             meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmt_ref);
             params = new Object[0];
         } catch (SQLException e) {
@@ -238,6 +233,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setObject(int parameterIndex, Object x) throws SQLException {
+        checkOpen();
         if (parameterIndex < 1 || parameterIndex > getParameterMetaData().getParameterCount()) {
             throw new SQLException("Parameter index out of bounds");
         }
@@ -294,6 +290,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void clearParameters() throws SQLException {
+        checkOpen();
         params = new Object[0];
     }
 
@@ -310,41 +307,47 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         conn = null; // we use this as a check for closed-ness
     }
 
+    @Override
     protected void finalize() throws Throwable {
         close();
     }
 
     @Override
     public int getMaxFieldSize() throws SQLException {
+        checkOpen();
         return 0;
     }
 
     @Override
     public void setMaxFieldSize(int max) throws SQLException {
-        logger.log(Level.FINE, "setMaxFieldSize not supported");
+        checkOpen();
     }
 
     @Override
     public int getMaxRows() throws SQLException {
+        checkOpen();
         return 0;
     }
 
     @Override
     public void setMaxRows(int max) throws SQLException {
+        checkOpen();
     }
 
     @Override
     public void setEscapeProcessing(boolean enable) throws SQLException {
+        checkOpen();
     }
 
     @Override
     public int getQueryTimeout() throws SQLException {
+        checkOpen();
         return 0;
     }
 
     @Override
     public void setQueryTimeout(int seconds) throws SQLException {
-        logger.log(Level.FINE, "setQueryTimeout not supported");
+        checkOpen();
     }
 
     /**
@@ -360,21 +363,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public SQLWarning getWarnings() throws SQLException {
+        checkOpen();
         return null;
     }
 
     @Override
     public void clearWarnings() throws SQLException {
+        checkOpen();
     }
 
     @Override
     public void setCursorName(String name) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setCursorName");
+        checkOpen();
     }
 
-    /**
-     * The returned `ResultSet` must be closed by the user to avoid a memory leak
-     */
     @Override
     public ResultSet getResultSet() throws SQLException {
         if (isClosed()) {
@@ -418,11 +420,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean getMoreResults() throws SQLException {
+        checkOpen();
         return false;
     }
 
     @Override
     public void setFetchDirection(int direction) throws SQLException {
+        checkOpen();
         if (direction == ResultSet.FETCH_FORWARD) {
             return;
         }
@@ -431,30 +435,36 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int getFetchDirection() throws SQLException {
+        checkOpen();
         return ResultSet.FETCH_FORWARD;
     }
 
     @Override
     public void setFetchSize(int rows) throws SQLException {
+        checkOpen();
     }
 
     @Override
     public int getFetchSize() throws SQLException {
+        checkOpen();
         return DuckDBNative.duckdb_jdbc_fetch_size();
     }
 
     @Override
     public int getResultSetConcurrency() throws SQLException {
+        checkOpen();
         return ResultSet.CONCUR_READ_ONLY;
     }
 
     @Override
     public int getResultSetType() throws SQLException {
+        checkOpen();
         return ResultSet.TYPE_FORWARD_ONLY;
     }
 
     @Override
     public void addBatch(String sql) throws SQLException {
+        checkOpen();
         requireNonPreparedStatement();
         this.batchedStatements.add(sql);
         this.isBatch = true;
@@ -462,6 +472,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void clearBatch() throws SQLException {
+        checkOpen();
         this.batchedParams.clear();
         this.batchedStatements.clear();
         this.isBatch = false;
@@ -469,6 +480,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int[] executeBatch() throws SQLException {
+        checkOpen();
         try {
             if (this.isPreparedStatement) {
                 return executeBatchedPreparedStatement();
@@ -506,55 +518,74 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public Connection getConnection() throws SQLException {
-        if (isClosed()) {
-            throw new SQLException("Statement was closed");
-        }
+        checkOpen();
         return conn;
     }
 
     @Override
     public boolean getMoreResults(int current) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getMoreResults");
+        checkOpen();
+        return false;
     }
 
     @Override
     public ResultSet getGeneratedKeys() throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("getGeneratedKeys");
     }
 
     @Override
     public int executeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
-        throw new SQLFeatureNotSupportedException("executeUpdate");
+        if (NO_GENERATED_KEYS == autoGeneratedKeys) {
+            return executeUpdate(sql);
+        }
+        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int autoGeneratedKeys)");
     }
 
     @Override
     public int executeUpdate(String sql, int[] columnIndexes) throws SQLException {
-        throw new SQLFeatureNotSupportedException("executeUpdate");
+        if (columnIndexes == null || columnIndexes.length == 0) {
+            return executeUpdate(sql);
+        }
+        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int[] columnIndexes)");
     }
 
     @Override
     public int executeUpdate(String sql, String[] columnNames) throws SQLException {
-        throw new SQLFeatureNotSupportedException("executeUpdate");
+        if (columnNames == null || columnNames.length == 0) {
+            return executeUpdate(sql);
+        }
+        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, String[] columnNames)");
     }
 
     @Override
     public boolean execute(String sql, int autoGeneratedKeys) throws SQLException {
-        throw new SQLFeatureNotSupportedException("execute");
+        if (NO_GENERATED_KEYS == autoGeneratedKeys) {
+            return execute(sql);
+        }
+        throw new SQLFeatureNotSupportedException("execute(String sql, int autoGeneratedKeys)");
     }
 
     @Override
     public boolean execute(String sql, int[] columnIndexes) throws SQLException {
-        throw new SQLFeatureNotSupportedException("execute");
+        if (columnIndexes == null || columnIndexes.length == 0) {
+            return execute(sql);
+        }
+        throw new SQLFeatureNotSupportedException("execute(String sql, int[] columnIndexes)");
     }
 
     @Override
     public boolean execute(String sql, String[] columnNames) throws SQLException {
-        throw new SQLFeatureNotSupportedException("execute");
+        if (columnNames == null || columnNames.length == 0) {
+            return execute(sql);
+        }
+        throw new SQLFeatureNotSupportedException("execute(String sql, String[] columnNames)");
     }
 
     @Override
     public int getResultSetHoldability() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getResultSetHoldability");
+        checkOpen();
+        return ResultSet.HOLD_CURSORS_OVER_COMMIT;
     }
 
     @Override
@@ -564,25 +595,24 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setPoolable(boolean poolable) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setPoolable");
+        checkOpen();
     }
 
     @Override
     public boolean isPoolable() throws SQLException {
-        throw new SQLFeatureNotSupportedException("isPoolable");
+        checkOpen();
+        return false;
     }
 
     @Override
     public void closeOnCompletion() throws SQLException {
-        if (isClosed())
-            throw new SQLException("Statement is closed");
-        closeOnCompletion = true;
+        checkOpen();
+        this.closeOnCompletion = true;
     }
 
     @Override
     public boolean isCloseOnCompletion() throws SQLException {
-        if (isClosed())
-            throw new SQLException("Statement is closed");
+        checkOpen();
         return closeOnCompletion;
     }
 
@@ -603,32 +633,32 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setDate(int parameterIndex, Date x) throws SQLException {
-        setObject(parameterIndex, x);
+        setDate(parameterIndex, x, null);
     }
 
     @Override
     public void setTime(int parameterIndex, Time x) throws SQLException {
-        setObject(parameterIndex, x);
+        setTime(parameterIndex, x, null);
     }
 
     @Override
     public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-        setObject(parameterIndex, x);
+        setTimestamp(parameterIndex, x, null);
     }
 
     @Override
     public void setAsciiStream(int parameterIndex, InputStream x, int length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setAsciiStream");
+        setAsciiStream(parameterIndex, x, (long) length);
     }
 
     @Override
     public void setUnicodeStream(int parameterIndex, InputStream x, int length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setUnicodeStream");
+        setCharacterStreamInternal(parameterIndex, x, length, UTF_8);
     }
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x, int length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setBinaryStream");
+        setBinaryStream(parameterIndex, x, (long) length);
     }
 
     @Override
@@ -769,6 +799,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch() throws SQLException {
+        checkOpen();
         batchedParams.add(params);
         clearParameters();
         this.isBatch = true;
@@ -776,7 +807,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setCharacterStream(int parameterIndex, Reader reader, int length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setCharacterStream");
+        setCharacterStream(parameterIndex, reader, (long) length);
     }
 
     @Override
@@ -786,86 +817,120 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setRef(int parameterIndex, Ref x) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setRef");
     }
 
     @Override
     public void setBlob(int parameterIndex, Blob x) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setBlob");
     }
 
     @Override
     public void setClob(int parameterIndex, Clob x) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setClob");
     }
 
     @Override
     public void setArray(int parameterIndex, Array x) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setArray");
+        setObject(parameterIndex, x);
     }
 
     @Override
     public void setDate(int parameterIndex, Date x, Calendar cal) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setDate");
+        if (null == x || null == cal) {
+            setObject(parameterIndex, x);
+            return;
+        }
+        Instant instant = Instant.ofEpochMilli(x.getTime());
+        ZoneId zoneId = cal.getTimeZone().toZoneId();
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, zoneId);
+        LocalDate ld = zdt.toLocalDate();
+        setObject(parameterIndex, ld);
     }
 
     @Override
     public void setTime(int parameterIndex, Time x, Calendar cal) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setTime");
+        if (null == x || null == cal) {
+            setObject(parameterIndex, x);
+            return;
+        }
+        Instant instant = Instant.ofEpochMilli(x.getTime());
+        ZoneId zoneId = cal.getTimeZone().toZoneId();
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, zoneId);
+        LocalTime lt = zdt.toLocalTime();
+        setObject(parameterIndex, lt);
     }
 
     @Override
     public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setTimestamp");
+        if (null == x || null == cal) {
+            setObject(parameterIndex, x);
+            return;
+        }
+        Instant instant = Instant.ofEpochMilli(x.getTime());
+        ZoneId zoneId = cal.getTimeZone().toZoneId();
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, zoneId);
+        LocalDateTime ldt = zdt.toLocalDateTime();
+        setObject(parameterIndex, ldt);
     }
 
     @Override
     public void setNull(int parameterIndex, int sqlType, String typeName) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setNull");
+        setNull(parameterIndex, sqlType);
     }
 
     @Override
     public void setURL(int parameterIndex, URL x) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setURL");
     }
 
     @Override
     public void setRowId(int parameterIndex, RowId x) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setRowId");
     }
 
     @Override
     public void setNString(int parameterIndex, String value) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setNString");
+        setString(parameterIndex, value);
     }
 
     @Override
     public void setNCharacterStream(int parameterIndex, Reader value, long length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setNCharacterString");
+        setCharacterStream(parameterIndex, value, length);
     }
 
     @Override
     public void setNClob(int parameterIndex, NClob value) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setNClob");
     }
 
     @Override
     public void setClob(int parameterIndex, Reader reader, long length) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setClob");
     }
 
     @Override
     public void setBlob(int parameterIndex, InputStream inputStream, long length) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setBlob");
     }
 
     @Override
     public void setNClob(int parameterIndex, Reader reader, long length) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setNClob");
     }
 
     @Override
     public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setSQLXML");
     }
 
@@ -876,17 +941,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setAsciiStream(int parameterIndex, InputStream x, long length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setAsciiStream");
+        setCharacterStreamInternal(parameterIndex, x, length, US_ASCII);
     }
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x, long length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setBinaryStream");
+        checkOpen();
+        InputStream stream = wrapStreamWithMaxBytes(x, length);
+        byte[] bytes = readAllBytes(stream);
+        setObject(parameterIndex, bytes);
     }
 
     @Override
     public void setCharacterStream(int parameterIndex, Reader reader, long length) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setCharacterStream");
+        setCharacterReaderInternal(parameterIndex, reader, length);
     }
 
     @Override
@@ -896,35 +964,34 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
-        try {
-            setBytes(parameterIndex, JdbcUtils.readAllBytes(x));
-        } catch (IOException ioe) {
-            throw new SQLException("Failed to read from InputStream", ioe);
-        }
+        setBinaryStream(parameterIndex, x, -1);
     }
 
     @Override
     public void setCharacterStream(int parameterIndex, Reader reader) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setCharacterStream");
+        setCharacterStream(parameterIndex, reader, -1);
     }
 
     @Override
     public void setNCharacterStream(int parameterIndex, Reader value) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setNCharacterStream");
+        setNCharacterStream(parameterIndex, value, -1);
     }
 
     @Override
     public void setClob(int parameterIndex, Reader reader) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setClob");
     }
 
     @Override
     public void setBlob(int parameterIndex, InputStream inputStream) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setBlob");
     }
 
     @Override
     public void setNClob(int parameterIndex, Reader reader) throws SQLException {
+        checkOpen();
         throw new SQLFeatureNotSupportedException("setNClob");
     }
 
@@ -938,5 +1005,27 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (this.isPreparedStatement) {
             throw new SQLException("Cannot add batched SQL statement to PreparedStatement");
         }
+    }
+
+    private void checkOpen() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("Statement was closed");
+        }
+    }
+
+    private void setCharacterStreamInternal(int parameterIndex, InputStream x, long length, Charset charset)
+        throws SQLException {
+        checkOpen();
+        InputStream stream = wrapStreamWithMaxBytes(x, length);
+        Reader reader = new InputStreamReader(stream, charset);
+        String str = readToString(reader);
+        setObject(parameterIndex, str);
+    }
+
+    private void setCharacterReaderInternal(int parameterIndex, Reader reader, long lenght) throws SQLException {
+        checkOpen();
+        Reader wrappedReader = wrapReaderWithMaxChars(reader, lenght);
+        String str = readToString(wrappedReader);
+        setObject(parameterIndex, str);
     }
 }
