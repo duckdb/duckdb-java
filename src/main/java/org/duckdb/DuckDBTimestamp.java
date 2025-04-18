@@ -121,6 +121,8 @@ public class DuckDBTimestamp {
             x = new DuckDBDate((Date) x);
         } else if (x instanceof Time) {
             x = new DuckDBTime((Time) x);
+        } else if (x instanceof LocalTime) {
+            x = new DuckDBTime((LocalTime) x);
         }
         return x;
     }
