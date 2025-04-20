@@ -31,6 +31,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare;
