@@ -47,7 +47,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     volatile boolean closeOnCompletion = false;
 
     private DuckDBResultSet selectResult = null;
-    private int updateResult = 0;
+    private long updateResult = 0;
 
     private boolean returnsChangedRows = false;
     private boolean returnsNothing = false;
@@ -188,7 +188,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
         if (returnsChangedRows) {
             if (selectResult.next()) {
-                updateResult = selectResult.getInt(1);
+                updateResult = selectResult.getLong(1);
             }
             selectResult.close();
         }
@@ -208,6 +208,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int executeUpdate() throws SQLException {
+        long res = executeLargeUpdate();
+        return intFromLong(res);
+    }
+
+    @Override
+    public long executeLargeUpdate() throws SQLException {
         requireNonBatch();
         execute();
         if (!(returnsChangedRows || returnsNothing)) {
@@ -232,8 +238,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int executeUpdate(String sql) throws SQLException {
+        long res = executeLargeUpdate(sql);
+        return intFromLong(res);
+    }
+
+    @Override
+    public long executeLargeUpdate(String sql) throws SQLException {
         prepare(sql);
-        return executeUpdate();
+        return executeLargeUpdate();
     }
 
     @Override
@@ -377,12 +389,22 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int getMaxRows() throws SQLException {
+        return (int) getLargeMaxRows();
+    }
+
+    @Override
+    public void setMaxRows(int max) throws SQLException {
+        setLargeMaxRows(max);
+    }
+
+    @Override
+    public long getLargeMaxRows() throws SQLException {
         checkOpen();
         return 0;
     }
 
     @Override
-    public void setMaxRows(int max) throws SQLException {
+    public void setLargeMaxRows(long max) throws SQLException {
         checkOpen();
     }
 
@@ -450,12 +472,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return to_return;
     }
 
-    private Integer getUpdateCountInternal() throws SQLException {
+    private long getUpdateCountInternal() throws SQLException {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
         if (stmtRef == null) {
-            throw new SQLException("Prepare something first");
+            // It is not required by JDBC spec to return anything in this case,
+            // but clients can call this method before preparing/executing the query
+            return -1;
         }
 
         if (returnsResultSet || returnsNothing || selectResult.isFinished()) {
@@ -465,11 +489,17 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
-    public int getUpdateCount() throws SQLException {
+    public long getLargeUpdateCount() throws SQLException {
         // getUpdateCount can only be called once per result
-        int to_return = getUpdateCountInternal();
+        long res = getUpdateCountInternal();
         updateResult = -1;
-        return to_return;
+        return res;
+    }
+
+    @Override
+    public int getUpdateCount() throws SQLException {
+        long res = getLargeUpdateCount();
+        return intFromLong(res);
     }
 
     @Override
@@ -534,6 +564,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int[] executeBatch() throws SQLException {
+        long[] res = executeLargeBatch();
+        return intArrayFromLong(res);
+    }
+
+    @Override
+    public long[] executeLargeBatch() throws SQLException {
         checkOpen();
         try {
             if (this.isPreparedStatement) {
@@ -546,26 +582,26 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
     }
 
-    private int[] executeBatchedPreparedStatement() throws SQLException {
-        int[] updateCounts = new int[this.batchedParams.size()];
+    private long[] executeBatchedPreparedStatement() throws SQLException {
+        long[] updateCounts = new long[this.batchedParams.size()];
 
         startTransaction();
         for (int i = 0; i < this.batchedParams.size(); i++) {
             params = this.batchedParams.get(i);
             execute(false);
-            updateCounts[i] = getUpdateCount();
+            updateCounts[i] = getUpdateCountInternal();
         }
         return updateCounts;
     }
 
-    private int[] executeBatchedStatements() throws SQLException {
-        int[] updateCounts = new int[this.batchedStatements.size()];
+    private long[] executeBatchedStatements() throws SQLException {
+        long[] updateCounts = new long[this.batchedStatements.size()];
 
         startTransaction();
         for (int i = 0; i < this.batchedStatements.size(); i++) {
             prepare(this.batchedStatements.get(i));
             execute(false);
-            updateCounts[i] = getUpdateCount();
+            updateCounts[i] = getUpdateCountInternal();
         }
         return updateCounts;
     }
@@ -590,22 +626,40 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int executeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
+        long res = executeLargeUpdate(sql, autoGeneratedKeys);
+        return intFromLong(res);
+    }
+
+    @Override
+    public long executeLargeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
         if (NO_GENERATED_KEYS == autoGeneratedKeys) {
-            return executeUpdate(sql);
+            return executeLargeUpdate(sql);
         }
         throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int autoGeneratedKeys)");
     }
 
     @Override
     public int executeUpdate(String sql, int[] columnIndexes) throws SQLException {
+        long res = executeLargeUpdate(sql, columnIndexes);
+        return intFromLong(res);
+    }
+
+    @Override
+    public long executeLargeUpdate(String sql, int[] columnIndexes) throws SQLException {
         if (columnIndexes == null || columnIndexes.length == 0) {
-            return executeUpdate(sql);
+            return executeLargeUpdate(sql);
         }
         throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int[] columnIndexes)");
     }
 
     @Override
     public int executeUpdate(String sql, String[] columnNames) throws SQLException {
+        long res = executeLargeUpdate(sql, columnNames);
+        return intFromLong(res);
+    }
+
+    @Override
+    public long executeLargeUpdate(String sql, String[] columnNames) throws SQLException {
         if (columnNames == null || columnNames.length == 0) {
             return executeUpdate(sql);
         }
@@ -1084,5 +1138,21 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         Reader wrappedReader = wrapReaderWithMaxChars(reader, lenght);
         String str = readToString(wrappedReader);
         setObject(parameterIndex, str);
+    }
+
+    private int intFromLong(long val) {
+        if (val <= Integer.MAX_VALUE) {
+            return (int) val;
+        } else {
+            return Integer.MAX_VALUE;
+        }
+    }
+
+    private int[] intArrayFromLong(long[] arr) {
+        int[] res = new int[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            res[i] = intFromLong(arr[i]);
+        }
+        return res;
     }
 }
