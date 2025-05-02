@@ -178,7 +178,11 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main_capi.cpp
   src/duckdb/ub_src_main_capi_cast.cpp
   src/duckdb/ub_src_main_chunk_scan_state.cpp
-  src/duckdb/ub_src_main_extension.cpp
+  src/duckdb/src/main/extension/extension_alias.cpp
+  src/duckdb/src/main/extension/extension_helper.cpp
+  src/duckdb/src/main/extension/extension_install.cpp
+  src/duckdb/src/main/extension/extension_load.cpp
+  src/duckdb/src/main/extension/extension_util.cpp
   src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
   src/duckdb/ub_src_main_settings.cpp
@@ -368,6 +372,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_writer.cpp
   src/duckdb/extension/parquet/parquet_float16.cpp
   src/duckdb/extension/parquet/parquet_crypto.cpp
+  src/duckdb/extension/parquet/parquet_multi_file_info.cpp
   src/duckdb/extension/parquet/parquet_metadata.cpp
   src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/ub_extension_parquet_decoder.cpp
