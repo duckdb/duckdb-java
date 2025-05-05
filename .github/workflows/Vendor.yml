@@ -17,54 +17,141 @@ on:
 
 jobs:
   vendor:
-    runs-on: ubuntu-latest
-    outputs:
-      did_vendor: ${{ steps.vendor.outputs.vendor }}
-
     name: "Update Vendored Sources"
-    if: github.repository == 'duckdb/duckdb-java'
+    if: ${{ github.repository == 'duckdb/duckdb-java' }}
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        id: setup_python
+        with:
+          python-version: '3.12'
+
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - name: Checkout engine
+        uses: actions/checkout@v4
+        id: checkout_engine
         with:
           repository: duckdb/duckdb
           path: .git/duckdb
           fetch-depth: 0
 
-      - name: Get commit SHA
+      - name: Checkout engine rev 
+        id: checkout_engine_rev
         if: ${{ inputs.duckdb-sha != '' }}
+        working-directory: .git/duckdb
         run: |
-          cd .git/duckdb && git checkout ${{ inputs.duckdb-sha }}
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+          echo "Checking out engine ref: ${{ inputs.duckdb-sha }} on branch: ${{ github.ref_name }}"
+          git checkout ${{ inputs.duckdb-sha }}
 
       - name: Vendor sources
+        if: ${{ steps.checkout_engine_rev.outcome == 'success' }}
         id: vendor
         run: |
-          export REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)
-          echo "Updating vendored DuckDB sources to $REV"
+          REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)
+          echo "Updating vendored DuckDB sources to ${REV}"
           git config --global user.email "github_bot@duckdblabs.com"
           git config --global user.name "DuckDB Labs GitHub Bot"
+          # Vendoring branch must exist, it may or may not already have
+          # a pending PR on it, we are rebasing it anyway
+          git checkout vendoring-${{ github.ref_name }}
+          git rebase ${{ github.ref_name }}
+          # Call the vendoring script in the engine
           git rm -rf src/duckdb
           python vendor.py --duckdb .git/duckdb
           git add src/duckdb CMakeLists.txt
+          # Clean up
           rm -rf .git/duckdb
-          git commit -m "Update vendored DuckDB sources to $REV"
-          git push --dry-run
+          # Export vendor revision for use in later steps
+          echo "vendor_rev=${REV}" >> "${GITHUB_OUTPUT}"
+
+      - name: Commit and push the changes
+        id: commit_and_push
+        if: ${{ steps.vendor.outcome == 'success' }}
+        run: |
+          MSG="Update vendored DuckDB sources to ${{ steps.vendor.outputs.vendor_rev }}"
+          git commit -m "${MSG}"
           # Check if ahead of upstream branch
           # If yes, set a step output
-          if [ $(git rev-list HEAD...origin/main --count) -gt 0 ]; then
+          git push -f --dry-run origin vendoring-${{ github.ref_name }}
+          if [ $(git rev-list HEAD...origin/${{ github.ref_name }} --count) -gt 0 ]; then
+            git push -f origin vendoring-${{ github.ref_name }}
             # Avoid set-output, it's deprecated
-            echo "vendor=ok" >> "$GITHUB_OUTPUT"
+            echo "push_performed=true" >> "${GITHUB_OUTPUT}"
+            echo "commit_msg=${MSG}" >> "${GITHUB_OUTPUT}"
           fi
 
-      - if: steps.vendor.outputs.vendor != '' && github.event_name != 'pull_request'
+      - name: Check PR exists
+        id: check_pr_exists
+        if: ${{ steps.commit_and_push.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git push -u origin HEAD
+          PR_NUM=$(gh pr list --head vendoring-${{ github.ref_name }} --json number --jq '.[].number')
+          if [ -z "${PR_NUM}" ]; then
+            echo "No PR exists for branch vendoring-${{ github.ref_name }}"
+            echo "pr_exists=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "PR found for branch vendoring-${{ github.ref_name }}, number: ${PR_NUM}"
+            echo "pr_exists=true" >> "${GITHUB_OUTPUT}"
+            echo "pr_num=${PR_NUM}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Prepare PR message
+        id: prepare_pr_message
+        if: ${{ steps.check_pr_exists.outcome == 'success' }}
+        run: |
+            DATE="$(date +"%Y-%m-%d %H:%M:%S")"
+            CHANGE_LABEL="duckdb/duckdb#${{ steps.vendor.outputs.vendor_rev }}"
+            CHANGE_URL="https://github.com/duckdb/duckdb/commit/${{ steps.vendor.outputs.vendor_rev }}"
+            MSG=" - [${CHANGE_LABEL}](${CHANGE_URL}) imported at ${DATE}"
+            echo "PR message: ${MSG}"
+            echo "pr_msg=${MSG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create PR
+        id: create_pr
+        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'false' }}
+        env:
+          # We cannot use default workflow's GITHUB_TOKEN here, because
+          # it is restricted to not trigger 'pull_request' event that
+          # we need to dispatch the testing workflow.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+            # Write multiline PR msg to a body.txt file 
+            echo "Changes:" > body.txt
+            echo "${{ steps.prepare_pr_message.outputs.pr_msg }}" >> body.txt
+            # Remove empty lines
+            sed -i '/^$/d' body.txt
+            gh pr create \
+             --head "vendoring-${{ github.ref_name }}" \
+             --base "${{ github.ref_name }}" \
+             --title "${{ steps.commit_and_push.outputs.commit_msg }}" \
+             --body-file body.txt
+
+      - name: Update PR
+        id: update_pr
+        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'true' }}
+        env:
+          # We cannot use default workflow's GITHUB_TOKEN here, because
+          # it is restricted to not trigger 'pull_request' event that
+          # we need to dispatch the testing workflow.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+            # Write existing PR body text to a file
+            gh pr view vendoring-${{ github.ref_name }} --json body --jq '.body' > body.txt
+            # Append change description
+            echo "${{ steps.prepare_pr_message.outputs.pr_msg }}" >> body.txt
+            # Remove empty lines
+            sed -i '/^$/d' body.txt
+            gh pr edit ${{ steps.check_pr_exists.outputs.pr_num }} \
+             --title "${{ steps.commit_and_push.outputs.commit_msg }}" \
+             --body-file body.txt 
+            # Close and re-open the PR to trigger the tests
+            gh pr close ${{ steps.check_pr_exists.outputs.pr_num }}
+            gh pr reopen ${{ steps.check_pr_exists.outputs.pr_num }}

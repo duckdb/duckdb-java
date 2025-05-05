@@ -312,3 +312,39 @@ jobs:
       - name: Test
         shell: bash
         run: (cd jdbccts && make DUCKDB_JAR=../build/release/duckdb_jdbc.jar test)
+
+  java-merge-vendoring-pr:
+    name: Merge vendoring PR 
+    if: ${{ github.repository == 'duckdb/duckdb-java' && github.event_name == 'pull_request' && github.head_ref == format('vendoring-{0}', github.ref_name) }}
+    needs:
+      - java-linux-aarch64
+      - java-linux-amd64
+      - java-windows-amd64
+      - java-osx-universal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge vendoring PR
+        id: merge_vendoring_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+            # echo "Merging PR number: ${{ github.event.pull_request.number }} with message: ${{ github.event.pull_request.title }}"
+            gh pr merge vendoring-${{ github.ref_name }} \
+             --rebase \
+             --subject "${{ github.event.pull_request.title }}" \
+             --body ""
+
+      - name: Update vendoring branch
+        id: update_vendoring_branch
+        if: ${{ steps.merge_vendoring_pr.outcome == 'success' }}
+        run: |
+            # Delete vendoring-${{ github.ref_name }} branch and re-create it for future PRs
+            git push --delete origin vendoring-${{ github.ref_name }}
+            git checkout --track origin/main
+            git pull --ff-only
+            git branch vendoring-${{ github.ref_name }}
+            git push origin vendoring-${{ github.ref_name }}
