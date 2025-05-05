@@ -42,35 +42,3 @@ jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str
 	auto j_str = env->CallObjectMethod(j_cb, J_CharBuffer_toString);
 	return j_str;
 }
-
-duckdb::Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
-	jint precision = env->CallIntMethod(decimal, J_Decimal_precision);
-	jint scale = env->CallIntMethod(decimal, J_Decimal_scale);
-
-	// Java BigDecimal type can have scale that exceeds the precision
-	// Which our DECIMAL type does not support (assert(width >= scale))
-	if (scale > precision) {
-		precision = scale;
-	}
-
-	// DECIMAL scale is unsigned, so negative values are not supported
-	if (scale < 0) {
-		throw duckdb::InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
-	}
-
-	duckdb::Value val;
-
-	if (precision <= 18) { // normal sizes -> avoid string processing
-		jobject no_point_dec = env->CallObjectMethod(decimal, J_Decimal_scaleByPowTen, scale);
-		jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
-		val = duckdb::Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
-	} else if (precision <= 38) { // larger than int64 -> get string and cast
-		jobject str_val = env->CallObjectMethod(decimal, J_Decimal_toPlainString);
-		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
-		val = duckdb::Value(str_char);
-		val = val.DefaultCastAs(duckdb::LogicalType::DECIMAL(precision, scale));
-		env->ReleaseStringUTFChars((jstring)str_val, str_char);
-	}
-
-	return val;
-}

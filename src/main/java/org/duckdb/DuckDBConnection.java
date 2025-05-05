@@ -3,6 +3,7 @@ package org.duckdb;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Array;
 import java.sql.Blob;
@@ -468,6 +469,10 @@ public final class DuckDBConnection implements java.sql.Connection {
         } finally {
             connRefLock.unlock();
         }
+    }
+
+    public DuckDBHugeInt createHugeInt(long lower, long upper) throws SQLException {
+        return new DuckDBHugeInt(lower, upper);
     }
 
     void checkOpen() throws SQLException {

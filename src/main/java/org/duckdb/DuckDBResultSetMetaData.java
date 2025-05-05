@@ -125,10 +125,16 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return Types.BOOLEAN;
         case TINYINT:
             return Types.TINYINT;
+        case UTINYINT:
+            return Types.SMALLINT;
         case SMALLINT:
             return Types.SMALLINT;
+        case USMALLINT:
+            return Types.INTEGER;
         case INTEGER:
             return Types.INTEGER;
+        case UINTEGER:
+            return Types.BIGINT;
         case BIGINT:
             return Types.BIGINT;
         case LIST:
@@ -162,7 +168,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case BLOB:
             return Types.BLOB;
         default:
-            return Types.JAVA_OBJECT;
+            return Types.OTHER;
         }
     }
 

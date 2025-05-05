@@ -41,12 +41,12 @@ public class TestExtensionTypes {
 
                 assertEquals(meta.getColumnName(1), "foo");
                 assertEquals(meta.getColumnTypeName(1), "test_type");
-                assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+                assertEquals(meta.getColumnType(1), Types.OTHER);
                 assertEquals(meta.getColumnClassName(1), "java.lang.String");
 
                 assertEquals(meta.getColumnName(2), "bar");
                 assertEquals(meta.getColumnTypeName(2), "byte_test_type");
-                assertEquals(meta.getColumnType(2), Types.JAVA_OBJECT);
+                assertEquals(meta.getColumnType(2), Types.OTHER);
                 assertEquals(meta.getColumnClassName(2), "java.lang.String");
             }
         }

@@ -1298,7 +1298,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
      * @see DuckDBResultSetMetaData#type_to_int(DuckDBColumnType)
      */
     private static String makeDataMap(String srcColumnName, String destColumnName) {
-        return String.format("CASE %s %s ELSE %d END as %s", srcColumnName, dataMap, Types.JAVA_OBJECT, destColumnName);
+        return String.format("CASE %s %s ELSE %d END as %s", srcColumnName, dataMap, Types.OTHER, destColumnName);
     }
 
     private static boolean appendEqualsQual(StringBuilder sb, String colName, String value) {

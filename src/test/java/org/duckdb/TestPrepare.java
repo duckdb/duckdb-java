@@ -215,7 +215,7 @@ public class TestPrepare {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "unknown");
             assertEquals(meta.getColumnTypeName(1), "UNKNOWN");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.OTHER);
 
             try (ResultSet resultSet = stmt.executeQuery()) {
                 ResultSetMetaData metadata = resultSet.getMetaData();
