@@ -583,7 +583,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 return executeBatchedStatements();
             }
         } finally {
-            clearBatch();
+            if (!isClosed()) {
+                clearBatch();
+            }
         }
     }
 

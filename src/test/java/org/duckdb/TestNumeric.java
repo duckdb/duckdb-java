@@ -1,7 +1,6 @@
 package org.duckdb;
 
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
-import static org.duckdb.TestDuckDBJDBC.test_batch_prepared_statement;
 import static org.duckdb.test.Assertions.*;
 
 import java.math.BigDecimal;
