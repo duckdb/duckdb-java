@@ -9,6 +9,7 @@ import java.io.*;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -271,6 +272,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
         if (params.length == 0) {
             params = new Object[paramsCount];
+        }
+        // we are doing lower/upper extraction from BigInteger on Java side
+        if (x instanceof BigInteger) {
+            x = new DuckDBHugeInt((BigInteger) x);
         }
         params[parameterIndex - 1] = x;
     }
@@ -1098,6 +1103,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public void setNClob(int parameterIndex, Reader reader) throws SQLException {
         checkOpen();
         throw new SQLFeatureNotSupportedException("setNClob");
+    }
+
+    public void setHugeInt(int parameterIndex, DuckDBHugeInt hi) throws SQLException {
+        setObject(parameterIndex, hi);
+    }
+
+    public void setBigInteger(int parameterIndex, BigInteger bi) throws SQLException {
+        setObject(parameterIndex, bi);
     }
 
     private void requireNonBatch() throws SQLException {

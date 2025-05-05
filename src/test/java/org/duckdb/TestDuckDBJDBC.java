@@ -320,24 +320,6 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
-    public static void test_throw_wrong_datatype() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        ResultSet rs;
-
-        stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ, t2 TIMESTAMP)");
-        stmt.execute("INSERT INTO t (id, t1, t2) VALUES (1, '2022-01-01T12:11:10+02', '2022-01-01T12:11:10')");
-
-        rs = stmt.executeQuery("SELECT * FROM t");
-        rs.next();
-
-        assertThrows(() -> rs.getShort(2), IllegalArgumentException.class);
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
     public static void test_list_metadata() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT generate_series(2) as list");) {
@@ -367,7 +349,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "map");
             assertEquals(meta.getColumnTypeName(1), "MAP(INTEGER, VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.OTHER);
         }
     }
 
@@ -378,7 +360,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "union");
             assertEquals(meta.getColumnTypeName(1), "UNION(str VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.OTHER);
         }
     }
 
@@ -396,100 +378,6 @@ public class TestDuckDBJDBC {
             assertTrue(rs.next());
             assertListsEqual(toJavaObject(rs.getObject(1)), asList(0L, 1L));
         }
-    }
-
-    public static void test_result() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-
-        ResultSet rs;
-
-        rs = stmt.executeQuery("SELECT CAST(42 AS INTEGER) as a, CAST(4.2 AS DOUBLE) as b");
-        ResultSetMetaData meta = rs.getMetaData();
-        assertEquals(meta.getColumnCount(), 2);
-        assertEquals(meta.getColumnName(1), "a");
-        assertEquals(meta.getColumnName(2), "b");
-        assertEquals(meta.getColumnTypeName(1), "INTEGER");
-        assertEquals(meta.getColumnTypeName(2), "DOUBLE");
-
-        assertThrows(() -> meta.getColumnName(0), ArrayIndexOutOfBoundsException.class);
-
-        assertThrows(() -> meta.getColumnTypeName(0), ArrayIndexOutOfBoundsException.class);
-
-        assertThrows(() -> meta.getColumnName(3), SQLException.class);
-
-        assertThrows(() -> meta.getColumnTypeName(3), SQLException.class);
-
-        assertTrue(rs.next());
-        assertEquals(rs.getInt(1), 42);
-        assertEquals(rs.getString(1), "42");
-        assertEquals(rs.getDouble(1), 42.0, 0.001);
-        assertTrue(rs.getObject(1).equals(42));
-
-        assertEquals(rs.getInt("a"), 42);
-        assertEquals(rs.getString("a"), "42");
-        assertEquals(rs.getDouble("a"), 42.0, 0.001);
-        assertTrue(rs.getObject("a").equals(42));
-
-        assertEquals(rs.getInt(2), 4);
-        assertEquals(rs.getString(2), "4.2");
-        assertEquals(rs.getDouble(2), 4.2, 0.001);
-        assertTrue(rs.getObject(2).equals(4.2));
-
-        assertEquals(rs.getInt("b"), 4);
-        assertEquals(rs.getString("b"), "4.2");
-        assertEquals(rs.getDouble("b"), 4.2, 0.001);
-        assertTrue(rs.getObject("b").equals(4.2));
-
-        assertFalse(rs.next());
-
-        rs.close();
-
-        stmt.close();
-        // test duplication
-        Connection conn2 = conn.unwrap(DuckDBConnection.class).duplicate();
-        ResultSet rs_conn2 = conn2.createStatement().executeQuery("SELECT 42");
-        rs_conn2.next();
-        assertEquals(42, rs_conn2.getInt(1));
-        rs_conn2.close();
-        conn.close();
-        conn2.close();
-    }
-
-    public static void test_empty_table() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE a (i iNTEGER)");
-        ResultSet rs = stmt.executeQuery("SELECT * FROM a");
-        assertFalse(rs.next());
-
-        assertEquals(assertThrows(() -> rs.getObject(1), SQLException.class), "No row in context");
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_broken_next() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE t0(c0 INT8, c1 VARCHAR)");
-        stmt.execute(
-            "INSERT INTO t0(c1, c0) VALUES (-315929644, 1), (-315929644, -315929644), (-634993846, -1981637379)");
-        stmt.execute("INSERT INTO t0(c0, c1) VALUES (-433000283, -433000283)");
-        stmt.execute("INSERT INTO t0(c0) VALUES (-995217820)");
-        stmt.execute("INSERT INTO t0(c1, c0) VALUES (-315929644, -315929644)");
-
-        ResultSet rs = stmt.executeQuery("SELECT c0 FROM t0");
-        while (rs.next()) {
-            assertTrue(!rs.getObject(1).equals(null));
-        }
-
-        rs.close();
-        stmt.close();
-        conn.close();
     }
 
     public static void test_multiple_connections() throws Exception {
@@ -561,90 +449,6 @@ public class TestDuckDBJDBC {
         stmt1.close();
     }
 
-    public static void test_duckdb_getObject_with_class() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
-                     + " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
-                     + " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
-                     + " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, uhin UHUGEINT, blo BLOB)");
-        stmt.execute(
-            "INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
-            +
-            " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
-            + " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, "
-            + " 170141183460469231731687303715884105728, 'yeah'::BLOB)");
-
-        PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
-        ResultSet rs = ps.executeQuery();
-
-        rs.next();
-        assertEquals(rs.getString(1), rs.getObject(1, String.class));
-        assertEquals(rs.getBoolean(2), rs.getObject(2, Boolean.class));
-        assertEquals(rs.getShort(3), rs.getObject(3, Short.class));
-        assertEquals(rs.getInt(4), rs.getObject(4, Integer.class));
-        assertEquals(rs.getLong(5), rs.getObject(5, Long.class));
-        assertEquals(rs.getFloat(6), rs.getObject(6, Float.class));
-        assertEquals(rs.getDouble(7), rs.getObject(7, Double.class));
-        assertEquals(rs.getDate(8), rs.getObject(8, Date.class));
-        assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
-        assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
-        assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.parse("1970-01-03T03:42:23"));
-        assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.of(1970, 1, 3, 3, 42, 23));
-        assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class));
-        assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class));
-        assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class));
-        assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class));
-
-        // Missing implementations, should never reach assertTrue(false)
-        try {
-            rs.getObject(11, Integer.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(12, Integer.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(13, Integer.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(14, Long.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(15, BigInteger.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(16, BigInteger.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        try {
-            rs.getObject(16, Blob.class);
-            assertTrue(false);
-        } catch (SQLException e) {
-        }
-
-        rs.close();
-        ps.close();
-        stmt.close();
-        conn.close();
-    }
-
     public static void test_multiple_statements_execution() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
@@ -672,251 +476,6 @@ public class TestDuckDBJDBC {
         } catch (Exception ex) {
             assertFalse(succ);
         }
-    }
-
-    public static void test_bigdecimal() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        stmt.execute(
-            "CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
-
-        PreparedStatement ps1 =
-            conn.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
-        ps1.setObject(1, new BigDecimal("1"));
-        ps1.setObject(2, new BigDecimal("999.9"));
-        ps1.setObject(3, new BigDecimal("99999.9999"));
-        ps1.setObject(4, new BigDecimal("99999999999.9999999"));
-        ps1.setObject(5, new BigDecimal("9999999999999999999999999999.9999999999"));
-        ps1.execute();
-
-        ps1.clearParameters();
-        ps1.setBigDecimal(1, new BigDecimal("2"));
-        ps1.setBigDecimal(2, new BigDecimal("-999.9"));
-        ps1.setBigDecimal(3, new BigDecimal("-99999.9999"));
-        ps1.setBigDecimal(4, new BigDecimal("-99999999999.9999999"));
-        ps1.setBigDecimal(5, new BigDecimal("-9999999999999999999999999999.9999999999"));
-        ps1.execute();
-
-        ps1.clearParameters();
-        ps1.setObject(1, new BigDecimal("3"), Types.DECIMAL);
-        ps1.setObject(2, new BigDecimal("-5"), Types.DECIMAL);
-        ps1.setObject(3, new BigDecimal("-999"), Types.DECIMAL);
-        ps1.setObject(4, new BigDecimal("-88888888"), Types.DECIMAL);
-        ps1.setObject(5, new BigDecimal("-123456789654321"), Types.DECIMAL);
-        ps1.execute();
-        ps1.close();
-
-        stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
-        stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
-        stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (6, 0, 0, 0, 18446744073709551616)");
-        stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (7, 0, 0, 0, -18446744073709551615)");
-        stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (8, 0, 0, 0, -18446744073709551616)");
-        stmt.close();
-
-        PreparedStatement ps = conn.prepareStatement("SELECT * FROM q ORDER BY id");
-        ResultSet rs = ps.executeQuery();
-        while (rs.next()) {
-            assertEquals(rs.getBigDecimal(1), rs.getObject(1, BigDecimal.class));
-            assertEquals(rs.getBigDecimal(2), rs.getObject(2, BigDecimal.class));
-            assertEquals(rs.getBigDecimal(3), rs.getObject(3, BigDecimal.class));
-            assertEquals(rs.getBigDecimal(4), rs.getObject(4, BigDecimal.class));
-            assertEquals(rs.getBigDecimal(5), rs.getObject(5, BigDecimal.class));
-        }
-
-        rs.close();
-
-        ResultSet rs2 = ps.executeQuery();
-        DuckDBResultSetMetaData meta = rs2.getMetaData().unwrap(DuckDBResultSetMetaData.class);
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("1"));
-        assertEquals(rs2.getBigDecimal(2), new BigDecimal("999.9"));
-        assertEquals(rs2.getBigDecimal(3), new BigDecimal("99999.9999"));
-        assertEquals(rs2.getBigDecimal(4), new BigDecimal("99999999999.9999999"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("9999999999999999999999999999.9999999999"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("2"));
-        assertEquals(rs2.getBigDecimal(2), new BigDecimal("-999.9"));
-        assertEquals(rs2.getBigDecimal(3), new BigDecimal("-99999.9999"));
-        assertEquals(rs2.getBigDecimal(4), new BigDecimal("-99999999999.9999999"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("-9999999999999999999999999999.9999999999"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("3"));
-        assertEquals(rs2.getBigDecimal(2), new BigDecimal("-5.0"));
-        assertEquals(rs2.getBigDecimal(3), new BigDecimal("-999.0000"));
-        assertEquals(rs2.getBigDecimal(4), new BigDecimal("-88888888.0000000"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("-123456789654321.0000000000"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("4"));
-        assertEquals(rs2.getBigDecimal(2), new BigDecimal("-0.0"));
-        assertEquals(rs2.getBigDecimal(3), new BigDecimal("-0.0000"));
-        assertEquals(rs2.getBigDecimal(4), new BigDecimal("-0.0000000"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("-0.0000000000"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("5"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("18446744073709551615.0000000000"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("6"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("18446744073709551616.0000000000"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("7"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551615.0000000000"));
-        rs2.next();
-        assertEquals(rs2.getBigDecimal(1), new BigDecimal("8"));
-        assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551616.0000000000"));
-        rs2.close();
-
-        // Metadata tests
-        assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
-        assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(1)));
-        assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(2)));
-        assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(3)));
-        assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(4)));
-
-        assertEquals(3, meta.getPrecision(1));
-        assertEquals(0, meta.getScale(1));
-        assertEquals(4, meta.getPrecision(2));
-        assertEquals(1, meta.getScale(2));
-        assertEquals(9, meta.getPrecision(3));
-        assertEquals(4, meta.getScale(3));
-        assertEquals(18, meta.getPrecision(4));
-        assertEquals(7, meta.getScale(4));
-        assertEquals(38, meta.getPrecision(5));
-        assertEquals(10, meta.getScale(5));
-
-        conn.close();
-    }
-
-    public static void test_lots_of_decimals() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        // Create the table
-        stmt.execute("CREATE TABLE q (id DECIMAL(4,0),dec32 DECIMAL(9,4),dec64 DECIMAL(18,7),dec128 DECIMAL(38,10))");
-        stmt.close();
-
-        // Create the INSERT prepared statement we will use
-        PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec32, dec64, dec128) VALUES (?, ?, ?, ?)");
-
-        // Create the Java decimals we will be inserting
-        BigDecimal id_org = new BigDecimal("1");
-        BigDecimal dec32_org = new BigDecimal("99999.9999");
-        BigDecimal dec64_org = new BigDecimal("99999999999.9999999");
-        BigDecimal dec128_org = new BigDecimal("9999999999999999999999999999.9999999999");
-
-        // Insert the initial values
-        ps1.setObject(1, id_org);
-        ps1.setObject(2, dec32_org);
-        ps1.setObject(3, dec64_org);
-        ps1.setObject(4, dec128_org);
-        // This does not have a result set
-        assertFalse(ps1.execute());
-
-        // Create the SELECT prepared statement we will use
-        PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM q WHERE id = ?");
-        BigDecimal multiplicant = new BigDecimal("0.987");
-
-        BigDecimal dec32;
-        BigDecimal dec64;
-        BigDecimal dec128;
-
-        ResultSet select_result;
-
-        for (int i = 2; i < 10000; i++) {
-            ps2.setObject(1, new BigDecimal(i - 1));
-
-            // Verify that both the 'getObject' and the 'getBigDecimal' methods return the same value\
-
-            select_result = ps2.executeQuery();
-            assertTrue(select_result.next());
-            dec32 = select_result.getObject(2, BigDecimal.class);
-            dec64 = select_result.getObject(3, BigDecimal.class);
-            dec128 = select_result.getObject(4, BigDecimal.class);
-            assertEquals(dec32_org, dec32);
-            assertEquals(dec64_org, dec64);
-            assertEquals(dec128_org, dec128);
-            select_result.close();
-
-            select_result = ps2.executeQuery();
-            assertTrue(select_result.next());
-            dec32 = select_result.getBigDecimal(2);
-            dec64 = select_result.getBigDecimal(3);
-            dec128 = select_result.getBigDecimal(4);
-            assertEquals(dec32_org, dec32);
-            assertEquals(dec64_org, dec64);
-            assertEquals(dec128_org, dec128);
-            select_result.close();
-
-            // Apply the modification for the next iteration
-
-            dec32_org = dec32_org.multiply(multiplicant).setScale(4, java.math.RoundingMode.HALF_EVEN);
-            dec64_org = dec64_org.multiply(multiplicant).setScale(7, java.math.RoundingMode.HALF_EVEN);
-            dec128_org = dec128_org.multiply(multiplicant).setScale(10, java.math.RoundingMode.HALF_EVEN);
-
-            ps1.clearParameters();
-            ps1.setObject(1, new BigDecimal(i));
-            ps1.setObject(2, dec32_org);
-            ps1.setObject(3, dec64_org);
-            ps1.setObject(4, dec128_org);
-            assertFalse(ps1.execute());
-
-            ps2.clearParameters();
-        }
-        ps1.close();
-        ps2.close();
-        conn.close();
-    }
-
-    public static void test_lots_of_big_data() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        int rows = 10000;
-        stmt.execute("CREATE TABLE a (i iNTEGER)");
-        for (int i = 0; i < rows; i++) {
-            stmt.execute("INSERT INTO a VALUES (" + i + ")");
-        }
-
-        ResultSet rs = stmt.executeQuery(
-            "SELECT CAST(i AS SMALLINT), CAST(i AS INTEGER), CAST(i AS BIGINT), CAST(i AS FLOAT), CAST(i AS DOUBLE), CAST(i as STRING), NULL FROM a");
-        int count = 0;
-        while (rs.next()) {
-            for (int col = 1; col <= 6; col++) {
-                assertEquals(rs.getShort(col), (short) count);
-                assertFalse(rs.wasNull());
-                assertEquals(rs.getInt(col), (int) count);
-                assertFalse(rs.wasNull());
-                assertEquals(rs.getLong(col), (long) count);
-                assertFalse(rs.wasNull());
-                assertEquals(rs.getFloat(col), (float) count, 0.001);
-                assertFalse(rs.wasNull());
-                assertEquals(rs.getDouble(col), (double) count, 0.001);
-                assertFalse(rs.wasNull());
-                assertEquals(Double.parseDouble(rs.getString(col)), (double) count, 0.001);
-                assertFalse(rs.wasNull());
-                Object o = rs.getObject(col);
-                assertFalse(rs.wasNull());
-            }
-            short null_short = rs.getShort(7);
-            assertTrue(rs.wasNull());
-            int null_int = rs.getInt(7);
-            assertTrue(rs.wasNull());
-            long null_long = rs.getLong(7);
-            assertTrue(rs.wasNull());
-            float null_float = rs.getFloat(7);
-            assertTrue(rs.wasNull());
-            double null_double = rs.getDouble(7);
-            assertTrue(rs.wasNull());
-            String null_string = rs.getString(7);
-            assertTrue(rs.wasNull());
-            Object null_object = rs.getObject(7);
-            assertTrue(rs.wasNull());
-
-            count++;
-        }
-
-        assertEquals(rows, count);
-
-        rs.close();
-        stmt.close();
-        conn.close();
     }
 
     public static void test_crash_bug496() throws Exception {
@@ -1076,29 +635,6 @@ public class TestDuckDBJDBC {
                 assertEquals(rs2.getInt(1), 42);
             }
         }
-    }
-
-    public static void test_hugeint() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-
-        ResultSet rs = stmt.executeQuery(
-            "SELECT 42::hugeint hi1, -42::hugeint hi2, 454564646545646546545646545::hugeint hi3, -454564646545646546545646545::hugeint hi4");
-        assertTrue(rs.next());
-        assertEquals(rs.getObject("hi1"), new BigInteger("42"));
-        assertEquals(rs.getObject("hi2"), new BigInteger("-42"));
-        assertEquals(rs.getLong("hi1"), 42L);
-        assertEquals(rs.getLong("hi2"), -42L);
-        assertEquals(rs.getObject("hi3"), new BigInteger("454564646545646546545646545"));
-        assertEquals(rs.getObject("hi4"), new BigInteger("-454564646545646546545646545"));
-        assertTrue(rs.getBigDecimal("hi1").compareTo(new BigDecimal("42")) == 0);
-        assertTrue(rs.getBigDecimal("hi2").compareTo(new BigDecimal("-42")) == 0);
-        assertTrue(rs.getBigDecimal("hi3").compareTo(new BigDecimal("454564646545646546545646545")) == 0);
-        assertTrue(rs.getBigDecimal("hi4").compareTo(new BigDecimal("-454564646545646546545646545")) == 0);
-        assertFalse(rs.next());
-        rs.close();
-        stmt.close();
-        conn.close();
     }
 
     public static void test_temporal_types() throws Exception {
@@ -2331,49 +1867,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_unsigned_integers() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        ResultSet rs = stmt.executeQuery(
-            "SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger uint32, 18446744073709551615::ubigint uint64");
-        assertTrue(rs.next());
-
-        assertEquals(rs.getShort("uint8"), Short.valueOf((short) 201));
-        assertEquals(rs.getObject("uint8"), Short.valueOf((short) 201));
-        assertEquals(rs.getInt("uint8"), Integer.valueOf((int) 201));
-
-        assertEquals(rs.getInt("uint16"), Integer.valueOf((int) 40001));
-        assertEquals(rs.getObject("uint16"), Integer.valueOf((int) 40001));
-        assertEquals(rs.getLong("uint16"), Long.valueOf((long) 40001));
-
-        assertEquals(rs.getLong("uint32"), Long.valueOf((long) 4000000001L));
-        assertEquals(rs.getObject("uint32"), Long.valueOf((long) 4000000001L));
-
-        assertEquals(rs.getObject("uint64"), new BigInteger("18446744073709551615"));
-
-        rs.close();
-
-        rs = stmt.executeQuery(
-            "SELECT NULL::utinyint uint8, NULL::usmallint uint16, NULL::uinteger uint32, NULL::ubigint uint64");
-        assertTrue(rs.next());
-
-        rs.getObject(1);
-        assertTrue(rs.wasNull());
-
-        rs.getObject(2);
-        assertTrue(rs.wasNull());
-
-        rs.getObject(3);
-        assertTrue(rs.wasNull());
-
-        rs.getObject(4);
-        assertTrue(rs.wasNull());
-
-        stmt.close();
-        conn.close();
-    }
-
     public static void test_get_schema() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
 
@@ -2418,7 +1911,7 @@ public class TestDuckDBJDBC {
         try (Statement stmt = conn.createStatement()) {
             ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
             rs.next();
-            assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(rs.getMetaData().getColumnType(1), Types.OTHER);
             JsonNode jsonNode = (JsonNode) rs.getObject(1);
             assertTrue(jsonNode.isArray());
             assertEquals(jsonNode.toString(), "[1,5]");
@@ -2427,7 +1920,7 @@ public class TestDuckDBJDBC {
         try (Statement stmt = conn.createStatement()) {
             ResultSet rs = stmt.executeQuery("select '{\"key\": \"value\"}'::JSON");
             rs.next();
-            assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(rs.getMetaData().getColumnType(1), Types.OTHER);
             JsonNode jsonNode = (JsonNode) rs.getObject(1);
             assertTrue(jsonNode.isObject());
             assertEquals(jsonNode.toString(),
@@ -2437,7 +1930,7 @@ public class TestDuckDBJDBC {
         try (Statement stmt = conn.createStatement()) {
             ResultSet rs = stmt.executeQuery("select '\"hello\"'::JSON");
             rs.next();
-            assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(rs.getMetaData().getColumnType(1), Types.OTHER);
             JsonNode jsonNode = (JsonNode) rs.getObject(1);
             assertTrue(jsonNode.isString());
             assertEquals(jsonNode.toString(), "\"hello\"");
@@ -3231,23 +2724,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    // https://github.com/duckdb/duckdb/issues/7218
-    public static void test_unknown_result_type() throws Exception {
-        try (Connection connection = DriverManager.getConnection(JDBC_URL);
-             PreparedStatement p = connection.prepareStatement(
-                 "select generate_series.generate_series from generate_series(?, ?) order by 1")) {
-            p.setInt(1, 0);
-            p.setInt(2, 1);
-
-            try (ResultSet rs = p.executeQuery()) {
-                rs.next();
-                assertEquals(rs.getInt(1), 0);
-                rs.next();
-                assertEquals(rs.getInt(1), 1);
-            }
-        }
-    }
-
     static List<Object> trio(Object... max) {
         return asList(emptyList(), asList(max), null);
     }
@@ -3524,20 +3000,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_stream_multiple_open_results() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
-
-        String QUERY = "SELECT * FROM range(100000)";
-        try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt1 = conn.createStatement();
-             Statement stmt2 = conn.createStatement()) {
-
-            try (ResultSet rs1 = stmt1.executeQuery(QUERY); ResultSet ignored = stmt2.executeQuery(QUERY)) {
-                assertThrows(rs1::next, SQLException.class);
-            }
-        }
-    }
-
     public static void test_offset_limit() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              Statement s = connection.createStatement()) {
@@ -3580,20 +3042,6 @@ public class TestDuckDBJDBC {
                     assertEquals(uuid, obj);
                 }
             }
-        }
-    }
-
-    public static void test_result_streaming() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
-
-        try (Connection conn = DriverManager.getConnection(JDBC_URL, props);
-             PreparedStatement stmt1 = conn.prepareStatement("SELECT * FROM range(100000)");
-             ResultSet rs = stmt1.executeQuery()) {
-            while (rs.next()) {
-                rs.getInt(1);
-            }
-            assertFalse(rs.next()); // is exhausted
         }
     }
 
@@ -3865,8 +3313,11 @@ public class TestDuckDBJDBC {
         Map<String, JDBCType> expectedTypes = new HashMap<>();
         expectedTypes.put("bool", JDBCType.BOOLEAN);
         expectedTypes.put("tinyint", JDBCType.TINYINT);
+        expectedTypes.put("utinyint", JDBCType.SMALLINT);
         expectedTypes.put("smallint", JDBCType.SMALLINT);
+        expectedTypes.put("usmallint", JDBCType.INTEGER);
         expectedTypes.put("int", JDBCType.INTEGER);
+        expectedTypes.put("uint", JDBCType.BIGINT);
         expectedTypes.put("bigint", JDBCType.BIGINT);
         expectedTypes.put("date", JDBCType.DATE);
         expectedTypes.put("time", JDBCType.TIME);
@@ -3896,7 +3347,7 @@ public class TestDuckDBJDBC {
                     String column = rs.getString("COLUMN_NAME");
                     JDBCType expectedType = expectedTypes.get(column);
                     if (expectedType == null) {
-                        expectedType = JDBCType.JAVA_OBJECT;
+                        expectedType = JDBCType.OTHER;
                     }
                     assertEquals(rs.getInt("DATA_TYPE"), expectedType.getVendorTypeNumber(), column);
                 }
@@ -4108,7 +3559,7 @@ public class TestDuckDBJDBC {
             // extension installation fails on CI, Spatial test is temporary disabled
             statusCode = runTests(args, TestDuckDBJDBC.class, TestClosure.class,
                                   TestExtensionTypes.class /*, TestSpatial.class */, TestParameterMetadata.class,
-                                  TestPrepare.class, TestTimestamp.class);
+                                  TestPrepare.class, TestResults.class, TestTimestamp.class);
         }
         System.exit(statusCode);
     }

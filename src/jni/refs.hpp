@@ -27,7 +27,8 @@ extern jclass J_String;
 extern jclass J_Timestamp;
 extern jmethodID J_Timestamp_valueOf;
 extern jclass J_TimestampTZ;
-extern jclass J_Decimal;
+extern jclass J_BigDecimal;
+extern jclass J_HugeInt;
 extern jclass J_ByteArray;
 
 extern jmethodID J_Bool_booleanValue;
@@ -39,11 +40,13 @@ extern jmethodID J_Float_floatValue;
 extern jmethodID J_Double_doubleValue;
 extern jmethodID J_Timestamp_getMicrosEpoch;
 extern jmethodID J_TimestampTZ_getMicrosEpoch;
-extern jmethodID J_Decimal_precision;
-extern jmethodID J_Decimal_scale;
-extern jmethodID J_Decimal_scaleByPowTen;
-extern jmethodID J_Decimal_toPlainString;
-extern jmethodID J_Decimal_longValue;
+extern jmethodID J_BigDecimal_precision;
+extern jmethodID J_BigDecimal_scale;
+extern jmethodID J_BigDecimal_scaleByPowTen;
+extern jmethodID J_BigDecimal_toPlainString;
+extern jmethodID J_BigDecimal_longValue;
+extern jfieldID J_HugeInt_lower;
+extern jfieldID J_HugeInt_upper;
 
 extern jclass J_DuckResultSetMeta;
 extern jmethodID J_DuckResultSetMeta_init;

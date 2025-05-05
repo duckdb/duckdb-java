@@ -30,7 +30,8 @@ jclass J_String;
 jclass J_Timestamp;
 jmethodID J_Timestamp_valueOf;
 jclass J_TimestampTZ;
-jclass J_Decimal;
+jclass J_BigDecimal;
+jclass J_HugeInt;
 jclass J_ByteArray;
 
 jmethodID J_Bool_booleanValue;
@@ -42,11 +43,13 @@ jmethodID J_Float_floatValue;
 jmethodID J_Double_doubleValue;
 jmethodID J_Timestamp_getMicrosEpoch;
 jmethodID J_TimestampTZ_getMicrosEpoch;
-jmethodID J_Decimal_precision;
-jmethodID J_Decimal_scale;
-jmethodID J_Decimal_scaleByPowTen;
-jmethodID J_Decimal_toPlainString;
-jmethodID J_Decimal_longValue;
+jmethodID J_BigDecimal_precision;
+jmethodID J_BigDecimal_scale;
+jmethodID J_BigDecimal_scaleByPowTen;
+jmethodID J_BigDecimal_toPlainString;
+jmethodID J_BigDecimal_longValue;
+jfieldID J_HugeInt_lower;
+jfieldID J_HugeInt_upper;
 
 jclass J_DuckResultSetMeta;
 jmethodID J_DuckResultSetMeta_init;
@@ -181,7 +184,8 @@ void create_refs(JNIEnv *env) {
 	J_Float = make_class_ref(env, "java/lang/Float");
 	J_Double = make_class_ref(env, "java/lang/Double");
 	J_String = make_class_ref(env, "java/lang/String");
-	J_Decimal = make_class_ref(env, "java/math/BigDecimal");
+	J_BigDecimal = make_class_ref(env, "java/math/BigDecimal");
+	J_HugeInt = make_class_ref(env, "org/duckdb/DuckDBHugeInt");
 	J_ByteArray = make_class_ref(env, "[B");
 
 	J_Timestamp = make_class_ref(env, "org/duckdb/DuckDBTimestamp");
@@ -240,11 +244,13 @@ void create_refs(JNIEnv *env) {
 	J_Double_doubleValue = get_method_id(env, J_Double, "doubleValue", "()D");
 	J_Timestamp_getMicrosEpoch = get_method_id(env, J_Timestamp, "getMicrosEpoch", "()J");
 	J_TimestampTZ_getMicrosEpoch = get_method_id(env, J_TimestampTZ, "getMicrosEpoch", "()J");
-	J_Decimal_precision = get_method_id(env, J_Decimal, "precision", "()I");
-	J_Decimal_scale = get_method_id(env, J_Decimal, "scale", "()I");
-	J_Decimal_scaleByPowTen = get_method_id(env, J_Decimal, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;");
-	J_Decimal_toPlainString = get_method_id(env, J_Decimal, "toPlainString", "()Ljava/lang/String;");
-	J_Decimal_longValue = get_method_id(env, J_Decimal, "longValue", "()J");
+	J_BigDecimal_precision = get_method_id(env, J_BigDecimal, "precision", "()I");
+	J_BigDecimal_scale = get_method_id(env, J_BigDecimal, "scale", "()I");
+	J_BigDecimal_scaleByPowTen = get_method_id(env, J_BigDecimal, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;");
+	J_BigDecimal_toPlainString = get_method_id(env, J_BigDecimal, "toPlainString", "()Ljava/lang/String;");
+	J_BigDecimal_longValue = get_method_id(env, J_BigDecimal, "longValue", "()J");
+	J_HugeInt_lower = get_field_id(env, J_HugeInt, "lower", "J");
+	J_HugeInt_upper = get_field_id(env, J_HugeInt, "upper", "J");
 
 	J_DuckResultSetMeta = make_class_ref(env, "org/duckdb/DuckDBResultSetMetaData");
 	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
