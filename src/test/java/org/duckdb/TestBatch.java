@@ -124,4 +124,86 @@ public class TestBatch {
             }
         }
     }
+
+    public static void test_prepared_statement_batch_autocommit() throws Exception {
+        long count = 1 << 10;
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertTrue(conn.getAutoCommit());
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 BIGINT, col2 VARCHAR)");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?, ?)")) {
+                for (long i = 0; i < count; i++) {
+                    ps.setLong(1, i);
+                    ps.setString(2, i + "foo");
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), count);
+            }
+        }
+    }
+
+    public static void test_statement_batch_autocommit() throws Exception {
+        long count = 1 << 10;
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            assertTrue(conn.getAutoCommit());
+            stmt.execute("CREATE TABLE tab1 (col1 BIGINT, col2 VARCHAR)");
+            for (long i = 0; i < count; i++) {
+                stmt.addBatch("INSERT INTO tab1 VALUES(" + i + ", '" + i + "foo')");
+            }
+            stmt.executeBatch();
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), count);
+            }
+        }
+    }
+
+    public static void test_prepared_statement_batch_rollback() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 BIGINT, col2 VARCHAR)");
+            }
+            conn.setAutoCommit(false);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("INSERT INTO tab1 VALUES(-1, 'bar')");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?, ?)")) {
+                for (long i = 0; i < 1 << 10; i++) {
+                    ps.setLong(1, i);
+                    ps.setString(2, i + "foo");
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+            conn.rollback();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
+    public static void test_statement_batch_rollback() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 BIGINT, col2 VARCHAR)");
+            conn.setAutoCommit(false);
+            stmt.execute("INSERT INTO tab1 VALUES(-1, 'bar')");
+            for (long i = 0; i < 1 << 10; i++) {
+                stmt.addBatch("INSERT INTO tab1 VALUES(" + i + ", '" + i + "foo')");
+            }
+            stmt.executeBatch();
+            conn.rollback();
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
 }
