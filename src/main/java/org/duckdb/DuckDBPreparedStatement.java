@@ -79,16 +79,26 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         prepare(sql);
     }
 
-    private void startTransaction() throws SQLException {
+    private boolean isConnAutoCommit() throws SQLException {
         checkOpen();
         try {
-            if (this.conn.autoCommit || this.conn.transactionRunning) {
-                return;
+            return this.conn.autoCommit;
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
+        }
+    }
+
+    private boolean startTransaction() throws SQLException {
+        checkOpen();
+        try {
+            if (this.conn.transactionRunning) {
+                return false;
             }
             this.conn.transactionRunning = true;
             // Start transaction via Statement
             try (Statement s = conn.createStatement()) {
                 s.execute("BEGIN TRANSACTION;");
+                return true;
             }
         } catch (NullPointerException e) {
             throw new SQLException(e);
@@ -161,7 +171,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             }
             selectResult = null;
 
-            if (startTransaction) {
+            if (startTransaction && !isConnAutoCommit()) {
                 startTransaction();
             }
 
@@ -576,41 +586,62 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public long[] executeLargeBatch() throws SQLException {
         checkOpen();
-        try {
-            if (this.isPreparedStatement) {
-                return executeBatchedPreparedStatement();
-            } else {
-                return executeBatchedStatements();
-            }
-        } finally {
-            if (!isClosed()) {
-                clearBatch();
-            }
+        if (this.isPreparedStatement) {
+            return executeBatchedPreparedStatement();
+        } else {
+            return executeBatchedStatements();
         }
     }
 
     private long[] executeBatchedPreparedStatement() throws SQLException {
-        long[] updateCounts = new long[this.batchedParams.size()];
+        stmtRefLock.lock();
+        try {
+            checkOpen();
+            checkPrepared();
 
-        startTransaction();
-        for (int i = 0; i < this.batchedParams.size(); i++) {
-            params = this.batchedParams.get(i);
-            execute(false);
-            updateCounts[i] = getUpdateCountInternal();
+            boolean tranStarted = startTransaction();
+
+            long[] updateCounts = new long[this.batchedParams.size()];
+            for (int i = 0; i < this.batchedParams.size(); i++) {
+                params = this.batchedParams.get(i);
+                execute(false);
+                updateCounts[i] = getUpdateCountInternal();
+            }
+            clearBatch();
+
+            if (tranStarted && isConnAutoCommit()) {
+                this.conn.commit();
+            }
+
+            return updateCounts;
+        } finally {
+            stmtRefLock.unlock();
         }
-        return updateCounts;
     }
 
     private long[] executeBatchedStatements() throws SQLException {
-        long[] updateCounts = new long[this.batchedStatements.size()];
+        stmtRefLock.lock();
+        try {
+            checkOpen();
 
-        startTransaction();
-        for (int i = 0; i < this.batchedStatements.size(); i++) {
-            prepare(this.batchedStatements.get(i));
-            execute(false);
-            updateCounts[i] = getUpdateCountInternal();
+            boolean tranStarted = startTransaction();
+
+            long[] updateCounts = new long[this.batchedStatements.size()];
+            for (int i = 0; i < this.batchedStatements.size(); i++) {
+                prepare(this.batchedStatements.get(i));
+                execute(false);
+                updateCounts[i] = getUpdateCountInternal();
+            }
+            clearBatch();
+
+            if (tranStarted && isConnAutoCommit()) {
+                this.conn.commit();
+            }
+
+            return updateCounts;
+        } finally {
+            stmtRefLock.unlock();
         }
-        return updateCounts;
     }
 
     @Override

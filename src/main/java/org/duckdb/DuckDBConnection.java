@@ -40,8 +40,8 @@ public final class DuckDBConnection implements java.sql.Connection {
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
     volatile boolean closing = false;
 
-    boolean autoCommit = true;
-    boolean transactionRunning;
+    volatile boolean autoCommit = true;
+    volatile boolean transactionRunning;
     final String url;
     private final boolean readOnly;
 
