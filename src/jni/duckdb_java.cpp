@@ -1,3 +1,6 @@
+extern "C" {
+#include "duckdb.h"
+}
 #include "config.hpp"
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -147,6 +150,16 @@ void _duckdb_jdbc_interrupt(JNIEnv *env, jclass, jobject conn_ref_buf) {
 		return;
 	}
 	conn_ref->Interrupt();
+}
+
+jobject _duckdb_jdbc_query_progress(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return nullptr;
+	}
+	duckdb_query_progress_type qpc = duckdb_query_progress(reinterpret_cast<duckdb_connection>(conn_ref));
+	return env->NewObject(J_QueryProgress, J_QueryProgress_init, static_cast<jdouble>(qpc.percentage),
+	                      uint64_to_jlong(qpc.rows_processed), uint64_to_jlong(qpc.total_rows_to_process));
 }
 
 void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {

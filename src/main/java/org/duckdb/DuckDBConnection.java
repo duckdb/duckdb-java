@@ -494,4 +494,15 @@ public final class DuckDBConnection implements java.sql.Connection {
             connRefLock.unlock();
         }
     }
+
+    QueryProgress queryProgress() throws SQLException {
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            return DuckDBNative.duckdb_jdbc_query_progress(connRef);
+        } finally {
+            connRefLock.unlock();
+        }
+    }
 }

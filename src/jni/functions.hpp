@@ -105,6 +105,10 @@ void _duckdb_jdbc_interrupt(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt(JNIEnv * env, jclass param0, jobject param1);
 
+jobject _duckdb_jdbc_query_progress(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1progress(JNIEnv * env, jclass param0, jobject param1);
+
 void _duckdb_jdbc_appender_close(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1close(JNIEnv * env, jclass param0, jobject param1);

@@ -108,6 +108,9 @@ extern jobject J_ProfilerPrintFormat_NO_OUTPUT;
 extern jobject J_ProfilerPrintFormat_HTML;
 extern jobject J_ProfilerPrintFormat_GRAPHVIZ;
 
+extern jclass J_QueryProgress;
+extern jmethodID J_QueryProgress_init;
+
 void create_refs(JNIEnv *env);
 
 void delete_global_refs(JNIEnv *env) noexcept;
