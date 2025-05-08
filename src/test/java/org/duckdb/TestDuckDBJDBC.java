@@ -3437,6 +3437,53 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_query_progress() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             DuckDBPreparedStatement stmt = conn.createStatement().unwrap(DuckDBPreparedStatement.class)) {
+
+            QueryProgress qpBefore = stmt.getQueryProgress();
+            assertEquals(qpBefore.getPercentage(), (double) -1);
+            assertEquals(qpBefore.getRowsProcessed(), 0L);
+            assertEquals(qpBefore.getTotalRowsToProcess(), 0L);
+
+            stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            stmt.execute("SET enable_progress_bar = true");
+
+            ExecutorService executorService = Executors.newSingleThreadExecutor();
+            Future<QueryProgress> future = executorService.submit(new Callable<QueryProgress>() {
+                @Override
+                public QueryProgress call() throws Exception {
+                    try {
+                        Thread.sleep(1000);
+                        QueryProgress qp = stmt.getQueryProgress();
+                        stmt.cancel();
+                        return qp;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+                }
+            });
+            assertThrows(
+                ()
+                    -> stmt.executeQuery(
+                        "WITH RECURSIVE cte AS ("
+                        +
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                        + "SELECT avg(f) FROM cte"),
+                SQLException.class);
+
+            QueryProgress qpRunning = future.get();
+            assertNotNull(qpRunning);
+            assertEquals(qpRunning.getPercentage(), (double) 25);
+            assertEquals(qpRunning.getRowsProcessed(), 1L);
+            assertEquals(qpRunning.getTotalRowsToProcess(), 4L);
+
+            assertThrows(stmt::getQueryProgress, SQLException.class);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;

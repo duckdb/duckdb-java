@@ -111,6 +111,9 @@ jobject J_ProfilerPrintFormat_NO_OUTPUT;
 jobject J_ProfilerPrintFormat_HTML;
 jobject J_ProfilerPrintFormat_GRAPHVIZ;
 
+jclass J_QueryProgress;
+jmethodID J_QueryProgress_init;
+
 static std::vector<jobject> global_refs;
 
 template <typename T>
@@ -280,6 +283,9 @@ void create_refs(JNIEnv *env) {
 	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "HTML", "Lorg/duckdb/ProfilerPrintFormat;");
 	J_ProfilerPrintFormat_GRAPHVIZ =
 	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
+
+	J_QueryProgress = make_class_ref(env, "org/duckdb/QueryProgress");
+	J_QueryProgress_init = get_method_id(env, J_QueryProgress, "<init>", "(DJJ)V");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {

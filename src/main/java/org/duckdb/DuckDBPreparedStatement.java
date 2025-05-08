@@ -441,12 +441,26 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void cancel() throws SQLException {
+        checkOpen();
         try {
             // Cancel is intended to be called concurrently with execute,
             // thus we cannot take the statement lock that is held while
             // query is running. NPE may be thrown if connection is closed
             // concurrently.
             conn.interrupt();
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
+        }
+    }
+
+    public QueryProgress getQueryProgress() throws SQLException {
+        checkOpen();
+        try {
+            // getQueryProgress is intended to be called concurrently with execute,
+            // thus we cannot take the statement lock that is held while
+            // query is running. NPE may be thrown if connection is closed
+            // concurrently.
+            return conn.queryProgress();
         } catch (NullPointerException e) {
             throw new SQLException(e);
         }

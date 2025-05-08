@@ -122,6 +122,8 @@ final class DuckDBNative {
 
     static native void duckdb_jdbc_interrupt(ByteBuffer conn_ref);
 
+    static native QueryProgress duckdb_jdbc_query_progress(ByteBuffer conn_ref);
+
     static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
 
     static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value) throws SQLException;

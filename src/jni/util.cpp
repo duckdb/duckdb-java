@@ -2,6 +2,9 @@
 
 #include "refs.hpp"
 
+#include <cstdint>
+#include <limits>
+
 void check_java_exception_and_rethrow(JNIEnv *env) {
 	if (env->ExceptionCheck()) {
 		jthrowable exc = env->ExceptionOccurred();
@@ -41,4 +44,11 @@ jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str
 	auto j_cb = env->CallObjectMethod(J_Charset_UTF8, J_Charset_decode, bb);
 	auto j_str = env->CallObjectMethod(j_cb, J_CharBuffer_toString);
 	return j_str;
+}
+
+jlong uint64_to_jlong(uint64_t value) {
+	if (value <= std::numeric_limits<int64_t>::max()) {
+		return static_cast<jlong>(value);
+	}
+	return static_cast<jlong>(std::numeric_limits<int64_t>::max());
 }

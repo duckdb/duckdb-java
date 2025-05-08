@@ -12,3 +12,5 @@ std::string byte_array_to_string(JNIEnv *env, jbyteArray ba_j);
 std::string jstring_to_string(JNIEnv *env, jstring string_j);
 
 jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len);
+
+jlong uint64_to_jlong(uint64_t value);

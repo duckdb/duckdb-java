@@ -37,6 +37,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1statement_1meta;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1result_1meta;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1progress;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog;
