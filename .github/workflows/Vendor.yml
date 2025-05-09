@@ -73,7 +73,6 @@ jobs:
 
       - name: Commit and push the changes
         id: commit_and_push
-        if: ${{ steps.vendor.outcome == 'success' }}
         run: |
           MSG="Update vendored DuckDB sources to ${{ steps.vendor.outputs.vendor_rev }}"
           git commit -m "${MSG}"
@@ -89,7 +88,6 @@ jobs:
 
       - name: Check PR exists
         id: check_pr_exists
-        if: ${{ steps.commit_and_push.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -105,7 +103,6 @@ jobs:
 
       - name: Prepare PR message
         id: prepare_pr_message
-        if: ${{ steps.check_pr_exists.outcome == 'success' }}
         run: |
             DATE="$(date +"%Y-%m-%d %H:%M:%S")"
             CHANGE_LABEL="duckdb/duckdb#${{ steps.vendor.outputs.vendor_rev }}"
@@ -116,7 +113,7 @@ jobs:
 
       - name: Create PR
         id: create_pr
-        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'false' }}
+        if: ${{ steps.check_pr_exists.outputs.pr_exists == 'false' }}
         env:
           # We cannot use default workflow's GITHUB_TOKEN here, because
           # it is restricted to not trigger 'pull_request' event that
@@ -136,7 +133,7 @@ jobs:
 
       - name: Update PR
         id: update_pr
-        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'true' }}
+        if: ${{ steps.check_pr_exists.outputs.pr_exists == 'true' }}
         env:
           # We cannot use default workflow's GITHUB_TOKEN here, because
           # it is restricted to not trigger 'pull_request' event that
