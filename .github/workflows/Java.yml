@@ -301,7 +301,7 @@ jobs:
 
   java-merge-vendoring-pr:
     name: Merge vendoring PR 
-    if: ${{ github.repository == 'duckdb/duckdb-java' && github.event_name == 'pull_request' && startsWith(github.head_ref, 'vendoring-') }}
+    if: ${{ github.repository == 'duckdb/duckdb-java' && github.event_name == 'pull_request' && github.head_ref == format('vendoring-{0}', github.base_ref) }}
     needs:
       - java-linux-aarch64
       - java-linux-amd64
@@ -319,7 +319,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
             echo "Merging PR number: ${{ github.event.pull_request.number }} with message: ${{ github.event.pull_request.title }}"
-            gh pr merge vendoring-${{ github.ref_name }} \
+            gh pr merge vendoring-${{ github.base_ref }} \
              --rebase \
              --subject "${{ github.event.pull_request.title }}" \
              --body ""
@@ -328,33 +328,9 @@ jobs:
         id: update_vendoring_branch
         if: ${{ steps.merge_vendoring_pr.outcome == 'success' }}
         run: |
-            # Delete vendoring-${{ github.ref_name }} branch and re-create it for future PRs
-            git push --delete origin vendoring-${{ github.ref_name }}
+            # Delete vendoring-${{ github.base_ref }} branch and re-create it for future PRs
+            git push --delete origin vendoring-${{ github.base_ref }}
             git checkout --track origin/main
             git pull --ff-only
-            git branch vendoring-${{ github.ref_name }}
-            git push origin vendoring-${{ github.ref_name }}
-
-  java-merge-vendoring-pr-debug:
-    name: Merge vendoring PR Debug
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Merge vendoring PR Debug
-        id: merge_vendoring_pr_debug
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-            echo "github.repository: ${{ github.repository }}"
-            echo "github.event_name: ${{ github.event_name }}"
-            echo "github.head_ref: ${{ github.head_ref }}"
-            echo "github.base_ref: ${{ github.base_ref }}"
-            echo "github.ref_name: ${{ github.ref_name }}"
-            echo "format('vendoring-{0}', github.ref_name): ${{ format('vendoring-{0}', github.ref_name) }}"
-            echo "format('vendoring-{0}', github.base_ref): ${{ format('vendoring-{0}', github.base_ref) }}"
-            echo "startsWith(github.head_ref, 'workflows_minor_'): ${{ startsWith(github.head_ref, 'vendoring-') }}"
-            echo "github.event.pull_request.number: ${{ github.event.pull_request.number }}"
-            echo "github.event.pull_request.title: ${{ github.event.pull_request.title }}"
+            git branch vendoring-${{ github.base_ref }}
+            git push origin vendoring-${{ github.base_ref }}
