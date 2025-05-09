@@ -4,6 +4,8 @@
 
 #include "extension/json/json_functions/json_contains.cpp"
 
+#include "extension/json/json_functions/json_create.cpp"
+
 #include "extension/json/json_functions/json_exists.cpp"
 
 #include "extension/json/json_functions/json_extract.cpp"
@@ -16,9 +18,9 @@
 
 #include "extension/json/json_functions/json_structure.cpp"
 
-#include "extension/json/json_functions/json_transform.cpp"
+#include "extension/json/json_functions/json_table_in_out.cpp"
 
-#include "extension/json/json_functions/json_create.cpp"
+#include "extension/json/json_functions/json_transform.cpp"
 
 #include "extension/json/json_functions/json_type.cpp"
 
