@@ -183,6 +183,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_install.cpp
   src/duckdb/src/main/extension/extension_load.cpp
   src/duckdb/src/main/extension/extension_util.cpp
+  src/duckdb/ub_src_main_http.cpp
   src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
   src/duckdb/ub_src_main_settings.cpp
