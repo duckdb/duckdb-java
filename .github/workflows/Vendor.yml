@@ -63,31 +63,37 @@ jobs:
           git checkout vendoring-${{ github.ref_name }}
           git rebase ${{ github.ref_name }}
           # Call the vendoring script in the engine
-          git rm -rf src/duckdb
+          rm -rf src/duckdb
           python vendor.py --duckdb .git/duckdb
-          git add src/duckdb CMakeLists.txt
           # Clean up
           rm -rf .git/duckdb
           # Export vendor revision for use in later steps
           echo "vendor_rev=${REV}" >> "${GITHUB_OUTPUT}"
 
+      - name: Check for incoming changes
+        if: ${{ steps.vendor.outcome == 'success' }}
+        id: check_for_changes
+        run: |
+          if git diff --exit-code; then
+            echo "No vendoring changes detected, skipping the remaining of the job."
+          else
+            echo "Changes detected, proceeding with commit and push."
+            echo "has_changes=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Commit and push the changes
         id: commit_and_push
+        if: ${{ steps.check_for_changes.outcome == 'success' && steps.check_for_changes.outputs.has_changes == 'true' }}
         run: |
           MSG="Update vendored DuckDB sources to ${{ steps.vendor.outputs.vendor_rev }}"
+          git add src/duckdb CMakeLists.txt
           git commit -m "${MSG}"
-          # Check if ahead of upstream branch
-          # If yes, set a step output
-          git push -f --dry-run origin vendoring-${{ github.ref_name }}
-          if [ $(git rev-list HEAD...origin/${{ github.ref_name }} --count) -gt 0 ]; then
-            git push -f origin vendoring-${{ github.ref_name }}
-            # Avoid set-output, it's deprecated
-            echo "push_performed=true" >> "${GITHUB_OUTPUT}"
-            echo "commit_msg=${MSG}" >> "${GITHUB_OUTPUT}"
-          fi
+          git push -f origin vendoring-${{ github.ref_name }}
+          echo "commit_msg=${MSG}" >> "${GITHUB_OUTPUT}"
 
       - name: Check PR exists
         id: check_pr_exists
+        if: ${{ steps.commit_and_push.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -103,6 +109,7 @@ jobs:
 
       - name: Prepare PR message
         id: prepare_pr_message
+        if: ${{ steps.check_pr_exists.outcome == 'success' }}
         run: |
             DATE="$(date +"%Y-%m-%d %H:%M:%S")"
             CHANGE_LABEL="duckdb/duckdb#${{ steps.vendor.outputs.vendor_rev }}"
@@ -113,7 +120,7 @@ jobs:
 
       - name: Create PR
         id: create_pr
-        if: ${{ steps.check_pr_exists.outputs.pr_exists == 'false' }}
+        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'false' }}
         env:
           # We cannot use default workflow's GITHUB_TOKEN here, because
           # it is restricted to not trigger 'pull_request' event that
@@ -133,7 +140,7 @@ jobs:
 
       - name: Update PR
         id: update_pr
-        if: ${{ steps.check_pr_exists.outputs.pr_exists == 'true' }}
+        if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'true' }}
         env:
           # We cannot use default workflow's GITHUB_TOKEN here, because
           # it is restricted to not trigger 'pull_request' event that
