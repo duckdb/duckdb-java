@@ -115,6 +115,96 @@ jobs:
           path: |
             build/release/duckdb_jdbc.jar
 
+  java-linux-amd64-musl:
+    name: Java Linux (amd64-musl)
+    runs-on: ubuntu-latest
+    needs: java-linux-amd64
+    env:
+      ALPINE_IMAGE: alpine:3.21
+      ALPINE_PACKAGES: cmake g++ make openjdk8-jdk samurai
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        shell: bash
+        run: |
+          docker run                               \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ env.ALPINE_IMAGE }}                  \
+          sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && make -C /duckdb release'
+
+      - name: JDBC Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          docker run                               \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ env.ALPINE_IMAGE }}                  \
+          sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && make -C /duckdb test'
+
+      - name: Deploy
+        shell: bash
+        run: |
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64-musl.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64-musl.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-linux-amd64-musl
+          path: |
+            build/release/duckdb_jdbc.jar
+
+  java-linux-aarch64-musl:
+    name: Java Linux (aarch64-musl)
+    runs-on: ubuntu-24.04-arm
+    needs: java-linux-amd64
+    env:
+      ALPINE_IMAGE: alpine:3.21
+      ALPINE_PACKAGES: cmake g++ make openjdk8-jdk samurai
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        shell: bash
+        run: |
+          docker run                               \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ env.ALPINE_IMAGE }}                  \
+          sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && make -C /duckdb release'
+
+      # Test runs are failing because of linux_arm64_musl extensions missing
+      - name: JDBC Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          docker run                               \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ env.ALPINE_IMAGE }}                  \
+          sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && (make -C /duckdb test || true)'
+
+      - name: Deploy
+        shell: bash
+        run: |
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64-musl.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64-musl.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-linux-aarch64-musl
+          path: |
+            build/release/duckdb_jdbc.jar
 
   java-windows-amd64:
     name: Java Windows (amd64)
@@ -197,8 +287,10 @@ jobs:
     name: Java Combine
     runs-on: ubuntu-latest
     needs:
-      - java-linux-aarch64
       - java-linux-amd64
+      - java-linux-aarch64
+      - java-linux-amd64-musl
+      - java-linux-aarch64-musl
       - java-windows-amd64
       - java-osx-universal
 
@@ -212,13 +304,23 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: java-linux-amd64
+          path: jdbc-artifacts/java-linux-amd64
+
+      - uses: actions/download-artifact@v4
+        with:
           name: java-linux-aarch64
           path: jdbc-artifacts/java-linux-aarch64
 
       - uses: actions/download-artifact@v4
         with:
-          name: java-linux-amd64
-          path: jdbc-artifacts/java-linux-amd64
+          name: java-linux-amd64-musl
+          path: jdbc-artifacts/java-linux-amd64-musl
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-linux-aarch64-musl
+          path: jdbc-artifacts/java-linux-aarch64-musl
 
       - uses: actions/download-artifact@v4
         with:
@@ -303,8 +405,10 @@ jobs:
     name: Merge vendoring PR 
     if: ${{ github.repository == 'duckdb/duckdb-java' && github.event_name == 'pull_request' && github.head_ref == format('vendoring-{0}', github.base_ref) }}
     needs:
-      - java-linux-aarch64
       - java-linux-amd64
+      - java-linux-aarch64
+      - java-linux-amd64-musl
+      - java-linux-aarch64-musl
       - java-windows-amd64
       - java-osx-universal
     runs-on: ubuntu-latest
