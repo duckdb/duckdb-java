@@ -30,7 +30,7 @@ def exec(cmd):
 
 
 if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
-    print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
+    print("Usage: [release_tag, format: v1.2.3.4] [artifact_dir] [jdbc_root_path]")
     exit(1)
 
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+\.\d+)$')
@@ -59,6 +59,8 @@ jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
 
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
+arch_specific_builds = ['linux-amd64-musl', 'linux-aarch64-musl']
+arch_specific_classifiers = ['linux_amd64_musl', 'linux_aarch64_musl']
 
 staging_dir = tempfile.mkdtemp()
 
@@ -66,6 +68,12 @@ binary_jar = '%s/duckdb_jdbc-%s.jar' % (staging_dir, release_version)
 pom = '%s/duckdb_jdbc-%s.pom' % (staging_dir, release_version)
 sources_jar = '%s/duckdb_jdbc-%s-sources.jar' % (staging_dir, release_version)
 javadoc_jar = '%s/duckdb_jdbc-%s-javadoc.jar' % (staging_dir, release_version)
+
+arch_specific_jars = []
+for i in range(len(arch_specific_builds)):
+  build = arch_specific_builds[i]
+  classifier = arch_specific_classifiers[i]
+  arch_specific_jars.append('%s/duckdb_jdbc-%s-%s.jar' % (staging_dir, release_version, classifier))
 
 pom_template = """
 <project>
@@ -145,6 +153,13 @@ exec("javadoc -Xdoclint:-reference -d %s -sourcepath %s/src/main/java org.duckdb
 exec("jar -cvf %s -C %s ." % (javadoc_jar, javadoc_stage_dir))
 exec("jar -cvf %s -C %s/src/main/java org" % (sources_jar, jdbc_root_path))
 
+# copy arch-specific JARs
+for i in range(len(arch_specific_builds)):
+  build = arch_specific_builds[i]
+  src_jar = os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar")
+  dest_jar = arch_specific_jars[i] 
+  shutil.copyfile(src_jar, dest_jar)
+
 # make sure all files exist before continuing
 if (
     not os.path.exists(javadoc_jar)
@@ -178,12 +193,19 @@ if not os.path.exists(results_dir):
 for jar in [binary_jar, sources_jar, javadoc_jar]:
     shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
 
+for jar in arch_specific_jars:
+    shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
+
 print("JARs created, uploading (this can take a while!)")
 deploy_cmd_prefix = 'mvn --no-transfer-progress gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
 
+for i in range(len(arch_specific_builds)):
+  classifier = arch_specific_classifiers[i]
+  jar = arch_specific_jars[i]
+  exec("%s -Dclassifier=%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, classifier, pom, jar))
 
 if not is_release:
     print("Not a release, not closing repo")
