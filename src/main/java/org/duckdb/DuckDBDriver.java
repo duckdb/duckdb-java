@@ -4,6 +4,8 @@ import static org.duckdb.JdbcUtils.isStringTruish;
 import static org.duckdb.JdbcUtils.removeOption;
 
 import java.sql.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
@@ -41,6 +43,13 @@ public class DuckDBDriver implements java.sql.Driver {
         } else { // make a copy because we're removing the read only property below
             info = (Properties) info.clone();
         }
+
+        ParsedProps pp = parsePropsFromUrl(url);
+        for (Map.Entry<String, String> en : pp.props.entrySet()) {
+            info.put(en.getKey(), en.getValue());
+        }
+        url = pp.shortUrl;
+
         String readOnlyStr = removeOption(info, DUCKDB_READONLY_PROPERTY);
         boolean readOnly = isStringTruish(readOnlyStr, false);
         info.put("duckdb_api", "jdbc");
@@ -62,7 +71,7 @@ public class DuckDBDriver implements java.sql.Driver {
     }
 
     public boolean acceptsURL(String url) throws SQLException {
-        return url.startsWith(DUCKDB_URL_PREFIX);
+        return null != url && url.startsWith(DUCKDB_URL_PREFIX);
     }
 
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
@@ -120,5 +129,42 @@ public class DuckDBDriver implements java.sql.Driver {
             query += " AS " + ducklakeAlias;
         }
         return query;
+    }
+
+    private static ParsedProps parsePropsFromUrl(String url) throws SQLException {
+        if (!url.contains(";")) {
+            return new ParsedProps(url);
+        }
+        String[] parts = url.split(";");
+        LinkedHashMap<String, String> props = new LinkedHashMap<>();
+        for (int i = 1; i < parts.length; i++) {
+            String entry = parts[i].trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            String[] kv = entry.split("=");
+            if (2 != kv.length) {
+                throw new SQLException("Invalid URL entry: " + entry);
+            }
+            String key = kv[0].trim();
+            String value = kv[1].trim();
+            props.put(key, value);
+        }
+        String shortUrl = parts[0].trim();
+        return new ParsedProps(shortUrl, props);
+    }
+
+    private static class ParsedProps {
+        final String shortUrl;
+        final LinkedHashMap<String, String> props;
+
+        private ParsedProps(String url) {
+            this(url, new LinkedHashMap<>());
+        }
+
+        private ParsedProps(String shortUrl, LinkedHashMap<String, String> props) {
+            this.shortUrl = shortUrl;
+            this.props = props;
+        }
     }
 }
