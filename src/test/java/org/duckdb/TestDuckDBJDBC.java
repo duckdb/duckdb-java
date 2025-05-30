@@ -3504,6 +3504,58 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_props_from_url() throws Exception {
+        Properties config = new Properties();
+        config.put("allow_community_extensions", false);
+        config.put("allow_unsigned_extensions", true);
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", config);
+             Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT current_setting('allow_community_extensions')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "false");
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT current_setting('allow_unsigned_extensions')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "true");
+            }
+        }
+
+        try (Connection conn = DriverManager.getConnection(
+                 "jdbc:duckdb:;allow_community_extensions=true;;allow_unsigned_extensions = false;", config);
+             Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT current_setting('allow_community_extensions')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "true");
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT current_setting('allow_unsigned_extensions')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "false");
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT current_catalog()")) {
+                rs.next();
+                assertEquals(rs.getString(1), "memory");
+            }
+        }
+
+        try (Connection conn =
+                 DriverManager.getConnection("jdbc:duckdb:test1.db;allow_community_extensions=true;", config);
+             Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT current_setting('allow_community_extensions')")) {
+                rs.next();
+                assertEquals(rs.getString(1), "true");
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT current_catalog()")) {
+                rs.next();
+                assertEquals(rs.getString(1), "test1");
+            }
+        }
+
+        assertThrows(
+            () -> { DriverManager.getConnection("jdbc:duckdb:;allow_unsigned_extensions"); }, SQLException.class);
+        assertThrows(() -> { DriverManager.getConnection("jdbc:duckdb:;foo=bar"); }, SQLException.class);
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;

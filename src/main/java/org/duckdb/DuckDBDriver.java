@@ -5,6 +5,8 @@ import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -44,6 +46,13 @@ public class DuckDBDriver implements java.sql.Driver {
             String prop_clean = prop_val.trim().toLowerCase();
             read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
         }
+
+        ParsedProps pp = parsePropsFromUrl(url);
+        for (Map.Entry<String, String> en : pp.props.entrySet()) {
+            info.put(en.getKey(), en.getValue());
+        }
+        url = pp.shortUrl;
+
         info.put("duckdb_api", "jdbc");
 
         // Apache Spark passes this option when SELECT on a JDBC DataSource
@@ -56,7 +65,7 @@ public class DuckDBDriver implements java.sql.Driver {
     }
 
     public boolean acceptsURL(String url) throws SQLException {
-        return url.startsWith("jdbc:duckdb:");
+        return null != url && url.startsWith("jdbc:duckdb:");
     }
 
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
@@ -78,5 +87,42 @@ public class DuckDBDriver implements java.sql.Driver {
 
     public Logger getParentLogger() throws SQLFeatureNotSupportedException {
         throw new SQLFeatureNotSupportedException("no logger");
+    }
+
+    private static ParsedProps parsePropsFromUrl(String url) throws SQLException {
+        if (!url.contains(";")) {
+            return new ParsedProps(url);
+        }
+        String[] parts = url.split(";");
+        LinkedHashMap<String, String> props = new LinkedHashMap<>();
+        for (int i = 1; i < parts.length; i++) {
+            String entry = parts[i].trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            String[] kv = entry.split("=");
+            if (2 != kv.length) {
+                throw new SQLException("Invalid URL entry: " + entry);
+            }
+            String key = kv[0].trim();
+            String value = kv[1].trim();
+            props.put(key, value);
+        }
+        String shortUrl = parts[0].trim();
+        return new ParsedProps(shortUrl, props);
+    }
+
+    private static class ParsedProps {
+        final String shortUrl;
+        final LinkedHashMap<String, String> props;
+
+        private ParsedProps(String url) {
+            this(url, new LinkedHashMap<>());
+        }
+
+        private ParsedProps(String shortUrl, LinkedHashMap<String, String> props) {
+            this.shortUrl = shortUrl;
+            this.props = props;
+        }
     }
 }

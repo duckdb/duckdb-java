@@ -249,9 +249,9 @@ public class TestBatch {
     }
 
     public static void test_statement_batch_constraint_violation() throws Exception {
-        Properties config = new Properties();
-        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, false);
-        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.setAutoCommit(false);
+            assertFalse(conn.getAutoCommit());
             assertFalse(conn.getAutoCommit());
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
@@ -277,9 +277,8 @@ public class TestBatch {
     }
 
     public static void test_prepared_statement_batch_constraint_violation() throws Exception {
-        Properties config = new Properties();
-        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, false);
-        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.setAutoCommit(false);
             assertFalse(conn.getAutoCommit());
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
