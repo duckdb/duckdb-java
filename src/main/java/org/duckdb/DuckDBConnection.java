@@ -54,6 +54,9 @@ public final class DuckDBConnection implements java.sql.Connection {
         if (db_dir.length() == 0) {
             db_dir = ":memory:";
         }
+        if (db_dir.startsWith("memory:")) {
+            db_dir = ":" + db_dir;
+        }
         ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(UTF_8), readOnly, properties);
         return new DuckDBConnection(nativeReference, url, readOnly);
     }
