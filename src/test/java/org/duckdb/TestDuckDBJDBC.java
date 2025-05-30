@@ -3484,6 +3484,26 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_memory_colon() throws Exception {
+        try (Connection conn1 = DriverManager.getConnection("jdbc:duckdb::memory:");
+             Statement stmt1 = conn1.createStatement();
+             Connection conn2 = DriverManager.getConnection("jdbc:duckdb:memory:");
+             Statement stmt2 = conn2.createStatement(); Statement stmt22 = conn2.createStatement()) {
+            stmt1.execute("CREATE TABLE tab1(col1 int)");
+            assertThrows(() -> { stmt2.execute("DROP TABLE tab1"); }, SQLException.class);
+            stmt22.execute("CREATE TABLE tab1(col1 int)");
+        }
+        try (Connection conn1 = DriverManager.getConnection("jdbc:duckdb::memory:tag1");
+             Statement stmt1 = conn1.createStatement(); Statement stmt12 = conn1.createStatement();
+             Connection conn2 = DriverManager.getConnection("jdbc:duckdb:memory:tag1");
+             Statement stmt2 = conn2.createStatement()) {
+            stmt1.execute("CREATE TABLE tab1(col1 int)");
+            stmt2.execute("DROP TABLE tab1");
+            assertThrows(() -> { stmt1.execute("DROP TABLE tab1"); }, SQLException.class);
+            stmt12.execute("CREATE TABLE tab1(col1 int)");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;
