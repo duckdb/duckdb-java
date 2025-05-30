@@ -1,9 +1,11 @@
 package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.duckdb.DuckDBDriver.JDBC_AUTO_COMMIT;
+import static org.duckdb.JdbcUtils.isStringTruish;
+import static org.duckdb.JdbcUtils.removeOption;
 
 import java.lang.reflect.InvocationTargetException;
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Array;
 import java.sql.Blob;
@@ -38,9 +40,9 @@ public final class DuckDBConnection implements java.sql.Connection {
     ByteBuffer connRef;
     final Lock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
-    volatile boolean closing = false;
+    volatile boolean closing;
 
-    volatile boolean autoCommit = true;
+    volatile boolean autoCommit;
     volatile boolean transactionRunning;
     final String url;
     private final boolean readOnly;
@@ -57,14 +59,19 @@ public final class DuckDBConnection implements java.sql.Connection {
         if (db_dir.startsWith("memory:")) {
             db_dir = ":" + db_dir;
         }
+        String autoCommitStr = removeOption(properties, JDBC_AUTO_COMMIT);
+        boolean autoCommit = isStringTruish(autoCommitStr, true);
         ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(UTF_8), readOnly, properties);
-        return new DuckDBConnection(nativeReference, url, readOnly);
+        return new DuckDBConnection(nativeReference, url, readOnly, autoCommit);
     }
 
-    private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly) throws SQLException {
+    private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly, boolean autoCommit)
+        throws SQLException {
         this.connRef = connectionReference;
         this.url = url;
         this.readOnly = readOnly;
+        this.autoCommit = autoCommit;
+        // Hardcoded 'true' here is intentional, autocommit is handled in stmt#execute()
         DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
     }
 
@@ -95,7 +102,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly);
+            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly, autoCommit);
         } finally {
             connRefLock.unlock();
         }

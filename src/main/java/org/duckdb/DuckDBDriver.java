@@ -1,5 +1,8 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.isStringTruish;
+import static org.duckdb.JdbcUtils.removeOption;
+
 import java.sql.*;
 import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,6 +14,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
+    public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
 
     private static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
 
@@ -32,17 +36,13 @@ public class DuckDBDriver implements java.sql.Driver {
         if (!acceptsURL(url)) {
             return null;
         }
-        boolean read_only = false;
         if (info == null) {
             info = new Properties();
         } else { // make a copy because we're removing the read only property below
             info = (Properties) info.clone();
         }
-        String prop_val = (String) info.remove(DUCKDB_READONLY_PROPERTY);
-        if (prop_val != null) {
-            String prop_clean = prop_val.trim().toLowerCase();
-            read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
-        }
+        String readOnlyStr = removeOption(info, DUCKDB_READONLY_PROPERTY);
+        boolean readOnly = isStringTruish(readOnlyStr, false);
         info.put("duckdb_api", "jdbc");
 
         // Apache Spark passes this option when SELECT on a JDBC DataSource
@@ -54,7 +54,7 @@ public class DuckDBDriver implements java.sql.Driver {
         String ducklake = removeOption(info, DUCKLAKE_OPTION);
         String ducklakeAlias = removeOption(info, DUCKLAKE_ALIAS_OPTION);
 
-        Connection conn = DuckDBConnection.newConnection(url, read_only, info);
+        Connection conn = DuckDBConnection.newConnection(url, readOnly, info);
 
         initDucklake(conn, url, ducklake, ducklakeAlias);
 
@@ -120,13 +120,5 @@ public class DuckDBDriver implements java.sql.Driver {
             query += " AS " + ducklakeAlias;
         }
         return query;
-    }
-
-    private static String removeOption(Properties props, String opt) {
-        Object obj = props.remove(opt);
-        if (null != obj) {
-            return obj.toString();
-        }
-        return null;
     }
 }

@@ -3504,6 +3504,42 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_auto_commit_option() throws Exception {
+        Properties config = new Properties();
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            assertTrue(conn.getAutoCommit());
+        }
+
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, true);
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL, config).unwrap(DuckDBConnection.class)) {
+            assertTrue(conn.getAutoCommit());
+
+            try (Connection dup = conn.duplicate()) {
+                assertTrue(dup.getAutoCommit());
+            }
+        }
+
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, false);
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL, config).unwrap(DuckDBConnection.class)) {
+            assertFalse(conn.getAutoCommit());
+
+            try (Connection dup = conn.duplicate()) {
+                assertFalse(dup.getAutoCommit());
+            }
+        }
+
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, "on");
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            assertTrue(conn.getAutoCommit());
+        }
+
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, "off");
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            assertFalse(conn.getAutoCommit());
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;
