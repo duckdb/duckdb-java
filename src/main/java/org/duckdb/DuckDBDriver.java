@@ -1,15 +1,17 @@
 package org.duckdb;
 
+import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
+import static org.duckdb.JdbcUtils.*;
+
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
@@ -17,8 +19,17 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
+    public static final String JDBC_PIN_DB = "jdbc_pin_db";
+
+    static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
+    static final String MEMORY_DB = ":memory:";
 
     static final ScheduledThreadPoolExecutor scheduler;
+
+    private static final LinkedHashMap<String, ByteBuffer> pinnedDbRefs = new LinkedHashMap<>();
+    private static final ReentrantLock pinnedDbRefsLock = new ReentrantLock();
+    private static boolean pinnedDbRefsShutdownHookRegistered = false;
+    private static boolean pinnedDbRefsShutdownHookRun = false;
 
     static {
         try {
@@ -61,7 +72,14 @@ public class DuckDBDriver implements java.sql.Driver {
         // to be established.
         info.remove("path");
 
-        return DuckDBConnection.newConnection(url, read_only, info);
+        String pinDbOptStr = removeOption(info, JDBC_PIN_DB);
+        boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
+
+        DuckDBConnection conn = DuckDBConnection.newConnection(url, read_only, info);
+
+        pinDB(pinDBOpt, url, conn);
+
+        return conn;
     }
 
     public boolean acceptsURL(String url) throws SQLException {
@@ -112,6 +130,55 @@ public class DuckDBDriver implements java.sql.Driver {
         return new ParsedProps(shortUrl, props);
     }
 
+    private static void pinDB(boolean pinnedDbOpt, String url, DuckDBConnection conn) throws SQLException {
+        if (!pinnedDbOpt) {
+            return;
+        }
+        String dbName = dbNameFromUrl(url);
+        if (":memory:".equals(dbName)) {
+            return;
+        }
+
+        pinnedDbRefsLock.lock();
+        try {
+            // Actual native DB cache uses absolute paths to file DBs,
+            // but that should not make the difference unless CWD is changed,
+            // that is not expected for a JVM process, see JDK-4045688.
+            if (pinnedDbRefsShutdownHookRun || pinnedDbRefs.containsKey(dbName)) {
+                return;
+            }
+            // No need to hold connRef lock here, this connection is not
+            // yet available to client at this point, so it cannot be closed.
+            ByteBuffer dbRef = DuckDBNative.duckdb_jdbc_create_db_ref(conn.connRef);
+            pinnedDbRefs.put(dbName, dbRef);
+
+            if (!pinnedDbRefsShutdownHookRegistered) {
+                Runtime.getRuntime().addShutdownHook(new Thread(new PinnedDbRefsShutdownHook()));
+                pinnedDbRefsShutdownHookRegistered = true;
+            }
+        } finally {
+            pinnedDbRefsLock.unlock();
+        }
+    }
+
+    public static boolean releaseDB(String url) throws SQLException {
+        pinnedDbRefsLock.lock();
+        try {
+            if (pinnedDbRefsShutdownHookRun) {
+                return false;
+            }
+            String dbName = dbNameFromUrl(url);
+            ByteBuffer dbRef = pinnedDbRefs.remove(dbName);
+            if (null == dbRef) {
+                return false;
+            }
+            DuckDBNative.duckdb_jdbc_destroy_db_ref(dbRef);
+            return true;
+        } finally {
+            pinnedDbRefsLock.unlock();
+        }
+    }
+
     private static class ParsedProps {
         final String shortUrl;
         final LinkedHashMap<String, String> props;
@@ -123,6 +190,25 @@ public class DuckDBDriver implements java.sql.Driver {
         private ParsedProps(String shortUrl, LinkedHashMap<String, String> props) {
             this.shortUrl = shortUrl;
             this.props = props;
+        }
+    }
+
+    private static class PinnedDbRefsShutdownHook implements Runnable {
+        @Override
+        public void run() {
+            pinnedDbRefsLock.lock();
+            try {
+                List<ByteBuffer> dbRefsList = new ArrayList<>(pinnedDbRefs.values());
+                Collections.reverse(dbRefsList);
+                for (ByteBuffer dbRef : dbRefsList) {
+                    DuckDBNative.duckdb_jdbc_destroy_db_ref(dbRef);
+                }
+                pinnedDbRefsShutdownHookRun = true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+            } finally {
+                pinnedDbRefsLock.unlock();
+            }
         }
     }
 }

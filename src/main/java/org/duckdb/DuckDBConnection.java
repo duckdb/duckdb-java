@@ -1,9 +1,9 @@
 package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.duckdb.JdbcUtils.*;
 
 import java.lang.reflect.InvocationTargetException;
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Array;
 import java.sql.Blob;
@@ -24,7 +24,6 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.util.*;
 import java.util.concurrent.Executor;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import org.duckdb.user.DuckDBMap;
 import org.duckdb.user.DuckDBUserArray;
@@ -47,17 +46,11 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties)
         throws SQLException {
-        if (!url.startsWith("jdbc:duckdb:")) {
-            throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
+        if (null == properties) {
+            properties = new Properties();
         }
-        String db_dir = url.substring("jdbc:duckdb:".length()).trim();
-        if (db_dir.length() == 0) {
-            db_dir = ":memory:";
-        }
-        if (db_dir.startsWith("memory:")) {
-            db_dir = ":" + db_dir;
-        }
-        ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(UTF_8), readOnly, properties);
+        String dbName = dbNameFromUrl(url);
+        ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties);
         return new DuckDBConnection(nativeReference, url, readOnly);
     }
 

@@ -71,17 +71,33 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 	std::unique_ptr<DBConfig> config = create_db_config(env, read_only, props);
 	bool cache_instance = database != ":memory:" && !database.empty();
 	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, cache_instance);
-	auto conn_holder = new ConnectionHolder(shared_db);
+	auto conn_ref = new ConnectionHolder(shared_db);
 
-	return env->NewDirectByteBuffer(conn_holder, 0);
+	return env->NewDirectByteBuffer(conn_ref, 0);
 }
 
 jobject _duckdb_jdbc_connect(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto conn_ref = get_connection_ref(env, conn_ref_buf);
 	auto config = ClientConfig::GetConfig(*conn_ref->connection->context);
 	auto conn = new ConnectionHolder(conn_ref->db);
 	conn->connection->context->config = config;
 	return env->NewDirectByteBuffer(conn, 0);
+}
+
+jobject _duckdb_jdbc_create_db_ref(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	auto conn_ref = get_connection_ref(env, conn_ref_buf);
+	auto db_ref = conn_ref->create_db_ref();
+	return env->NewDirectByteBuffer(db_ref, 0);
+}
+
+void _duckdb_jdbc_destroy_db_ref(JNIEnv *env, jclass, jobject db_ref_buf) {
+	if (nullptr == db_ref_buf) {
+		return;
+	}
+	auto db_ref = (DBHolder *)env->GetDirectBufferAddress(db_ref_buf);
+	if (db_ref) {
+		delete db_ref;
+	}
 }
 
 jstring _duckdb_jdbc_get_schema(JNIEnv *env, jclass, jobject conn_ref_buf) {
@@ -163,6 +179,9 @@ jobject _duckdb_jdbc_query_progress(JNIEnv *env, jclass, jobject conn_ref_buf) {
 }
 
 void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	if (nullptr == conn_ref_buf) {
+		return;
+	}
 	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (conn_ref) {
 		delete conn_ref;
@@ -251,6 +270,9 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 }
 
 void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
+	if (nullptr == stmt_ref_buf) {
+		return;
+	}
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (stmt_ref) {
 		delete stmt_ref;
@@ -258,6 +280,9 @@ void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
 }
 
 void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
+	if (nullptr == res_ref_buf) {
+		return;
+	}
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (res_ref) {
 		delete res_ref;
