@@ -17,6 +17,14 @@ jobject _duckdb_jdbc_connect(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv * env, jclass param0, jobject param1);
 
+jobject _duckdb_jdbc_create_db_ref(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_1ref(JNIEnv * env, jclass param0, jobject param1);
+
+void _duckdb_jdbc_destroy_db_ref(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref(JNIEnv * env, jclass param0, jobject param1);
+
 void _duckdb_jdbc_set_auto_commit(JNIEnv * env, jclass param0, jobject param1, jboolean param2);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv * env, jclass param0, jobject param1, jboolean param2);

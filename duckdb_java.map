@@ -23,6 +23,8 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_1ref;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute;

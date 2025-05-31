@@ -73,7 +73,11 @@ final class DuckDBNative {
     static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
 
     // returns conn_ref connection reference object
-    static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref) throws SQLException;
+    static native ByteBuffer duckdb_jdbc_connect(ByteBuffer conn_ref) throws SQLException;
+
+    static native ByteBuffer duckdb_jdbc_create_db_ref(ByteBuffer conn_ref) throws SQLException;
+
+    static native void duckdb_jdbc_destroy_db_ref(ByteBuffer db_ref) throws SQLException;
 
     static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
 

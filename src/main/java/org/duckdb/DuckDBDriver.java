@@ -1,8 +1,8 @@
 package org.duckdb;
 
-import static org.duckdb.JdbcUtils.isStringTruish;
-import static org.duckdb.JdbcUtils.removeOption;
+import static org.duckdb.JdbcUtils.*;
 
+import java.nio.ByteBuffer;
 import java.sql.*;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,14 +17,18 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
+    public static final String JDBC_PERSISTENT_DB = "jdbc_persistent_db";
 
-    private static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
+    static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
 
     private static final String DUCKLAKE_OPTION = "ducklake";
     private static final String DUCKLAKE_ALIAS_OPTION = "ducklake_alias";
     private static final Pattern DUCKLAKE_ALIAS_OPTION_PATTERN = Pattern.compile("[a-zA-Z0-9_]+");
     private static final String DUCKLAKE_URL_PREFIX = "ducklake:";
     private static final ReentrantLock DUCKLAKE_INIT_LOCK = new ReentrantLock();
+
+    private static final LinkedHashMap<String, ByteBuffer> PERSISTENT_DB_REFS = new LinkedHashMap<>();
+    private static final ReentrantLock PERSISTENT_DB_REFS_LOCK = new ReentrantLock();
 
     static {
         try {
@@ -60,12 +64,17 @@ public class DuckDBDriver implements java.sql.Driver {
         // to be established.
         info.remove("path");
 
+        String persistentDbStr = removeOption(info, JDBC_PERSISTENT_DB);
+        boolean persistentDB = isStringTruish(persistentDbStr, false);
+
         String ducklake = removeOption(info, DUCKLAKE_OPTION);
         String ducklakeAlias = removeOption(info, DUCKLAKE_ALIAS_OPTION);
 
-        Connection conn = DuckDBConnection.newConnection(url, readOnly, info);
+        DuckDBConnection conn = DuckDBConnection.newConnection(url, readOnly, info);
 
-        initDucklake(conn, url, ducklake, ducklakeAlias);
+        persistDB(persistentDB, url, conn);
+
+        initDucklake(conn, ducklake, ducklakeAlias);
 
         return conn;
     }
@@ -95,8 +104,7 @@ public class DuckDBDriver implements java.sql.Driver {
         throw new SQLFeatureNotSupportedException("no logger");
     }
 
-    private static void initDucklake(Connection conn, String url, String ducklake, String ducklakeAlias)
-        throws SQLException {
+    private static void initDucklake(Connection conn, String ducklake, String ducklakeAlias) throws SQLException {
         if (null == ducklake) {
             return;
         }
@@ -152,6 +160,47 @@ public class DuckDBDriver implements java.sql.Driver {
         }
         String shortUrl = parts[0].trim();
         return new ParsedProps(shortUrl, props);
+    }
+
+    private static void persistDB(boolean persistentDbOpt, String url, DuckDBConnection conn) throws SQLException {
+        if (!persistentDbOpt) {
+            return;
+        }
+        String dbName = dbNameFromUrl(url);
+        if (":memory:".equals(dbName)) {
+            return;
+        }
+
+        PERSISTENT_DB_REFS_LOCK.lock();
+        try {
+            // Actual native DB cache uses absolute paths to file DBs,
+            // but that should not make the difference unless CWD is changed,
+            // that is not expected for a JVM process, see JDK-4045688.
+            if (PERSISTENT_DB_REFS.containsKey(dbName)) {
+                return;
+            }
+            // No need to hold connRef lock here, this connection is not
+            // yet available to client at this point, so it cannot be closed.
+            ByteBuffer dbRef = DuckDBNative.duckdb_jdbc_create_db_ref(conn.connRef);
+            PERSISTENT_DB_REFS.put(dbName, dbRef);
+        } finally {
+            PERSISTENT_DB_REFS_LOCK.unlock();
+        }
+    }
+
+    public static boolean releaseDB(String url) throws SQLException {
+        PERSISTENT_DB_REFS_LOCK.lock();
+        try {
+            String dbName = dbNameFromUrl(url);
+            ByteBuffer dbRef = PERSISTENT_DB_REFS.remove(dbName);
+            if (null == dbRef) {
+                return false;
+            }
+            DuckDBNative.duckdb_jdbc_destroy_db_ref(dbRef);
+            return true;
+        } finally {
+            PERSISTENT_DB_REFS_LOCK.unlock();
+        }
     }
 
     private static class ParsedProps {

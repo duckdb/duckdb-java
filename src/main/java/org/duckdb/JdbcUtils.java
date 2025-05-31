@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.DuckDBDriver.DUCKDB_URL_PREFIX;
+
 import java.sql.SQLException;
 import java.util.Properties;
 
@@ -36,5 +38,29 @@ final class JdbcUtils {
             return false;
         }
         throw new SQLException("Invalid boolean option value: " + val);
+    }
+
+    static String dbNameFromUrl(String url) throws SQLException {
+        if (null == url) {
+            throw new SQLException("Invalid null URL specified");
+        }
+        if (!url.startsWith(DUCKDB_URL_PREFIX)) {
+            throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
+        }
+        final String shortUrl;
+        if (url.contains(";")) {
+            String[] parts = url.split(";");
+            shortUrl = parts[0].trim();
+        } else {
+            shortUrl = url;
+        }
+        String dbName = shortUrl.substring(DUCKDB_URL_PREFIX.length()).trim();
+        if (dbName.length() == 0) {
+            dbName = ":memory:";
+        }
+        if (dbName.startsWith("memory:")) {
+            dbName = ":" + dbName;
+        }
+        return dbName;
     }
 }
