@@ -3592,6 +3592,56 @@ public class TestDuckDBJDBC {
         assertThrows(() -> { DriverManager.getConnection("jdbc:duckdb:;foo=bar"); }, SQLException.class);
     }
 
+    public static void test_persistent_db() throws Exception {
+        Properties config = new Properties();
+        config.put(DuckDBDriver.JDBC_PERSISTENT_DB, true);
+        String memUrl = "jdbc:duckdb:memory:test1";
+
+        try (Connection conn = DriverManager.getConnection(memUrl); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        try (Connection conn = DriverManager.getConnection(memUrl); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        try (Connection conn = DriverManager.getConnection(memUrl, config); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        try (Connection conn = DriverManager.getConnection(memUrl); Statement stmt = conn.createStatement()) {
+            stmt.execute("DROP TABLE tab1");
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        try (Connection conn = DriverManager.getConnection(memUrl); Statement stmt = conn.createStatement()) {
+            stmt.execute("DROP TABLE tab1");
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        assertThrows(
+            () -> { DriverManager.getConnection(memUrl + ";allow_community_extensions=true;"); }, SQLException.class);
+
+        assertTrue(DuckDBDriver.releaseDB(memUrl));
+        assertFalse(DuckDBDriver.releaseDB(memUrl));
+
+        try (Connection conn = DriverManager.getConnection(memUrl); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        assertFalse(DuckDBDriver.releaseDB(memUrl));
+
+        try (Connection conn = DriverManager.getConnection(memUrl + ";allow_community_extensions=true;");
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+        }
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 int)");
+            assertFalse(DuckDBDriver.releaseDB(JDBC_URL));
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;
