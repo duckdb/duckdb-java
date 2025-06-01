@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import static org.duckdb.DuckDBDriver.DUCKDB_URL_PREFIX;
+import static org.duckdb.DuckDBDriver.MEMORY_DB;
 
 import java.sql.SQLException;
 import java.util.Properties;
@@ -19,11 +20,22 @@ final class JdbcUtils {
     }
 
     static String removeOption(Properties props, String opt) {
+        return removeOption(props, opt, null);
+    }
+
+    static String removeOption(Properties props, String opt, String defaultVal) {
         Object obj = props.remove(opt);
         if (null != obj) {
             return obj.toString().trim();
         }
-        return null;
+        return defaultVal;
+    }
+
+    static void setDefaultOptionValue(Properties props, String opt, Object value) {
+        if (props.contains(opt)) {
+            return;
+        }
+        props.put(opt, value);
     }
 
     static boolean isStringTruish(String val, boolean defaultVal) throws SQLException {
@@ -56,9 +68,9 @@ final class JdbcUtils {
         }
         String dbName = shortUrl.substring(DUCKDB_URL_PREFIX.length()).trim();
         if (dbName.length() == 0) {
-            dbName = ":memory:";
+            dbName = MEMORY_DB;
         }
-        if (dbName.startsWith("memory:")) {
+        if (dbName.startsWith(MEMORY_DB.substring(1))) {
             dbName = ":" + dbName;
         }
         return dbName;
