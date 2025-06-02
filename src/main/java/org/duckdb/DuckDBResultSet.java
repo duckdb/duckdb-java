@@ -1399,22 +1399,25 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     private DuckDBVector[] fetchChunk() throws SQLException {
-        // Take both result set and connection locks for fetching
-        resultRefLock.lock();
+        // Take both result set and connection locks for fetching,
+        // connection lock must be taken first because concurrent
+        // rs#close() call can be initiated from conn#close()
+        // that holds connection lock.
+        conn.connRefLock.lock();
         try {
-            checkOpen();
-            conn.connRefLock.lock();
+            conn.checkOpen();
+            resultRefLock.lock();
             try {
-                conn.checkOpen();
+                checkOpen();
                 return DuckDBNative.duckdb_jdbc_fetch(resultRef, conn.connRef);
             } finally {
-                conn.connRefLock.unlock();
+                resultRefLock.unlock();
             }
         } catch (SQLException e) {
             close();
             throw e;
         } finally {
-            resultRefLock.unlock();
+            conn.connRefLock.unlock();
         }
     }
 }

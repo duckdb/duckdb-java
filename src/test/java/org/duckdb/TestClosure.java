@@ -5,6 +5,7 @@ import static org.duckdb.test.Assertions.*;
 
 import java.io.File;
 import java.sql.*;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -217,6 +218,36 @@ public class TestClosure {
                 } catch (SQLException e) {
                 }
                 future.get();
+            }
+        }
+    }
+
+    public static void test_results_fetch_no_hang() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Properties config = new Properties();
+        config.put(DuckDBDriver.JDBC_STREAM_RESULTS, true);
+        long rowsCount = 1 << 24;
+        int iterations = 1;
+        for (int i = 0; i < iterations; i++) {
+            try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+                 Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT i, i::VARCHAR FROM range(0, " + rowsCount + ") AS t(i)")) {
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(100);
+                        conn.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+                long[] resultsCount = new long[1];
+                assertThrows(() -> {
+                    while (rs.next()) {
+                        resultsCount[0]++;
+                    }
+                }, SQLException.class);
+                assertTrue(resultsCount[0] > 0);
+                assertTrue(resultsCount[0] < rowsCount);
             }
         }
     }
