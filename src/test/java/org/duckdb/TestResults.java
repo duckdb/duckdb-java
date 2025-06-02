@@ -9,6 +9,7 @@ import java.math.BigInteger;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.Properties;
+import java.util.UUID;
 
 public class TestResults {
 
@@ -99,13 +100,14 @@ public class TestResults {
                 "CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
                 + " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
                 + " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
-                + " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, uhin UHUGEINT, blo BLOB)");
+                + " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, uhin UHUGEINT, blo BLOB, uid UUID)");
             stmt.execute(
                 "INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
                 +
                 " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
                 + " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, "
-                + " 170141183460469231731687303715884105728, 'yeah'::BLOB)");
+                + " 170141183460469231731687303715884105728, 'yeah'::BLOB, "
+                + "'5b7bce70-4238-43d1-81d2-6e62f23bf9bd'::UUID)");
 
             try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM b"); ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -125,7 +127,14 @@ public class TestResults {
                 assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class));
                 assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class));
                 assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class));
+                assertEquals(rs.getObject(23), rs.getObject(23, UUID.class));
             }
+        }
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT '5b7bce70-4238-43d1-81d2-6e62f23bf9bd'")) {
+            rs.next();
+            assertEquals(UUID.fromString(rs.getString(1)), rs.getObject(1, UUID.class));
         }
     }
 
