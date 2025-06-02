@@ -361,7 +361,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
                 // Untrack prepared statement from parent connection,
                 // if 'closing' flag is set it means that the parent connection itself
-                // is being closed and we don't need to call untrack from the statement.
+                // is being closed and we don't need to untrack this instance from the statement.
                 if (!conn.closing) {
                     conn.connRefLock.lock();
                     try {
