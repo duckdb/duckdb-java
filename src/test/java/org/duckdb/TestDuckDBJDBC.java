@@ -3608,6 +3608,18 @@ public class TestDuckDBJDBC {
         DriverManager.getConnection(memUrl, config).close();
     }
 
+    public static void test_driver_property_info() throws Exception {
+        Driver driver = DriverManager.getDriver(JDBC_URL);
+        DriverPropertyInfo[] dpis = driver.getPropertyInfo(JDBC_URL, null);
+        for (DriverPropertyInfo dpi : dpis) {
+            assertNotNull(dpi.name);
+            assertNotNull(dpi.value);
+            assertNotNull(dpi.description);
+        }
+        assertNotNull(dpis);
+        assertTrue(dpis.length > 0);
+    }
+
     public static void main(String[] args) throws Exception {
         String arg1 = args.length > 0 ? args[0] : "";
         final int statusCode;
