@@ -129,7 +129,7 @@ public final class DuckDBConnection implements java.sql.Connection {
                 return;
             }
 
-            // Mark this instance as 'closing' to skip untrack call in
+            // Mark this instance as 'closing' to skip untrack logic in
             // prepared statements, that requires connection lock and can
             // cause a deadlock when the statement closure is caused by the
             // connection interrupt called by us.
