@@ -1359,10 +1359,16 @@ public class DuckDBResultSet implements ResultSet {
                 throw new SQLException("Can't convert value to Blob, Java type: " + type + ", SQL type: " + sqlType);
                 // return type.cast(getLocalDateTime(columnIndex));
             } else {
-                throw new SQLException("Can't convert value to Blob " + type);
+                throw new SQLException("Can't convert value to Blob, SQL type: " + sqlType);
+            }
+        } else if (type == UUID.class) {
+            if (sqlType == DuckDBColumnType.UUID || sqlType == DuckDBColumnType.VARCHAR) {
+                return type.cast(getUuid(columnIndex));
+            } else {
+                throw new SQLException("Can't convert value to UUID, SQL type: " + sqlType);
             }
         } else {
-            throw new SQLException("Can't convert value to " + type + " " + type);
+            throw new SQLException("Can't convert value to " + type + ", SQL type: " + sqlType);
         }
     }
 
