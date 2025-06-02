@@ -100,8 +100,24 @@ public class DuckDBDriver implements java.sql.Driver {
     }
 
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
-        DriverPropertyInfo[] ret = {};
-        return ret; // no properties
+        List<DriverPropertyInfo> list = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(url, info); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT name, value, description FROM duckdb_settings()")) {
+            while (rs.next()) {
+                String name = rs.getString(1);
+                String value = rs.getString(2);
+                String description = rs.getString(3);
+                list.add(createDriverPropInfo(name, value, description));
+            }
+        }
+        list.add(createDriverPropInfo(DUCKDB_READONLY_PROPERTY, "", "Set connection to read-only mode"));
+        list.add(createDriverPropInfo(DUCKDB_USER_AGENT_PROPERTY, "", "Custom user agent string"));
+        list.add(createDriverPropInfo(JDBC_STREAM_RESULTS, "", "Enable result set streaming"));
+        list.add(createDriverPropInfo(JDBC_AUTO_COMMIT, "", "Set default auto-commit mode"));
+        list.add(createDriverPropInfo(JDBC_PIN_DB, "",
+                                      "Do not close the DB instance after all connections to it are closed"));
+        list.sort((o1, o2) -> o1.name.compareToIgnoreCase(o2.name));
+        return list.toArray(new DriverPropertyInfo[0]);
     }
 
     public int getMajorVersion() {
@@ -227,6 +243,12 @@ public class DuckDBDriver implements java.sql.Driver {
         } finally {
             pinnedDbRefsLock.unlock();
         }
+    }
+
+    private static DriverPropertyInfo createDriverPropInfo(String name, String value, String description) {
+        DriverPropertyInfo dpi = new DriverPropertyInfo(name, value);
+        dpi.description = description;
+        return dpi;
     }
 
     private static class ParsedProps {
