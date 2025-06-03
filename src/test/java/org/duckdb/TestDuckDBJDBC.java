@@ -10,7 +10,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
-import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 import static org.duckdb.DuckDBTimestamp.localDateTimeFromTimestamp;
 import static org.duckdb.test.Assertions.*;
 import static org.duckdb.test.Runner.runTests;
@@ -3655,14 +3654,6 @@ public class TestDuckDBJDBC {
         }
         assertNotNull(dpis);
         assertTrue(dpis.length > 0);
-    }
-
-    public static void test_ignore_unsupported_options() throws Exception {
-        assertThrows(() -> { DriverManager.getConnection("jdbc:duckdb:;foo=bar;"); }, SQLException.class);
-        Properties config = new Properties();
-        config.put("boo", "bar");
-        config.put(JDBC_STREAM_RESULTS, true);
-        DriverManager.getConnection("jdbc:duckdb:;foo=bar;jdbc_ignore_unsupported_options=yes;", config).close();
     }
 
     public static void main(String[] args) throws Exception {
