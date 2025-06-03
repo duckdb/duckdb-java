@@ -36,7 +36,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     public static final String DEFAULT_SCHEMA = "main";
 
     ByteBuffer connRef;
-    final Lock connRefLock = new ReentrantLock();
+    final ReentrantLock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
     volatile boolean closing = false;
 
@@ -488,14 +488,11 @@ public final class DuckDBConnection implements java.sql.Connection {
      * This function calls the underlying C++ interrupt function which aborts the query running on this connection.
      */
     void interrupt() throws SQLException {
-        checkOpen();
-        connRefLock.lock();
-        try {
-            checkOpen();
-            DuckDBNative.duckdb_jdbc_interrupt(connRef);
-        } finally {
-            connRefLock.unlock();
+        if (!connRefLock.isHeldByCurrentThread()) {
+            throw new SQLException("Connection lock state error");
         }
+        checkOpen();
+        DuckDBNative.duckdb_jdbc_interrupt(connRef);
     }
 
     QueryProgress queryProgress() throws SQLException {
