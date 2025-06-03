@@ -6,6 +6,8 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
@@ -14,11 +16,16 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
 
+    static final ScheduledThreadPoolExecutor scheduler;
+
     static {
         try {
             DriverManager.registerDriver(new DuckDBDriver());
+            ThreadFactory tf = r -> new Thread(r, "duckdb-query-cancel-scheduler-thread");
+            scheduler = new ScheduledThreadPoolExecutor(1, tf);
+            scheduler.setRemoveOnCancelPolicy(true);
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 

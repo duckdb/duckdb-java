@@ -18,6 +18,7 @@ jmethodID J_String_getBytes;
 jclass J_Throwable;
 jmethodID J_Throwable_getMessage;
 jclass J_SQLException;
+jclass J_SQLTimeoutException;
 
 jclass J_Bool;
 jclass J_Byte;
@@ -178,6 +179,7 @@ void create_refs(JNIEnv *env) {
 	J_Throwable = make_class_ref(env, "java/lang/Throwable");
 	J_Throwable_getMessage = get_method_id(env, J_Throwable, "getMessage", "()Ljava/lang/String;");
 	J_SQLException = make_class_ref(env, "java/sql/SQLException");
+	J_SQLTimeoutException = make_class_ref(env, "java/sql/SQLTimeoutException");
 
 	J_Bool = make_class_ref(env, "java/lang/Boolean");
 	J_Byte = make_class_ref(env, "java/lang/Byte");
