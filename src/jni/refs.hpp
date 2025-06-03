@@ -15,6 +15,7 @@ extern jmethodID J_String_getBytes;
 extern jclass J_Throwable;
 extern jmethodID J_Throwable_getMessage;
 extern jclass J_SQLException;
+extern jclass J_SQLTimeoutException;
 
 extern jclass J_Bool;
 extern jclass J_Byte;

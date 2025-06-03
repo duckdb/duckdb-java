@@ -5,6 +5,8 @@ import static org.duckdb.JdbcUtils.*;
 import java.nio.ByteBuffer;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -19,6 +21,8 @@ public class DuckDBDriver implements java.sql.Driver {
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
+
+    static final ScheduledThreadPoolExecutor scheduler;
 
     private static final String DUCKLAKE_OPTION = "ducklake";
     private static final String DUCKLAKE_ALIAS_OPTION = "ducklake_alias";
@@ -36,8 +40,11 @@ public class DuckDBDriver implements java.sql.Driver {
     static {
         try {
             DriverManager.registerDriver(new DuckDBDriver());
+            ThreadFactory tf = r -> new Thread(r, "duckdb-query-cancel-scheduler-thread");
+            scheduler = new ScheduledThreadPoolExecutor(1, tf);
+            scheduler.setRemoveOnCancelPolicy(true);
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
