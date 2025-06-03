@@ -251,4 +251,38 @@ public class TestClosure {
             }
         }
     }
+
+    public static void test_stmt_can_only_cancel_self() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt1 = conn.createStatement();
+             Statement stmt2 = conn.createStatement()) {
+            stmt1.execute("DROP TABLE IF EXISTS test_fib1");
+            stmt1.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt1.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            long start = System.currentTimeMillis();
+            Thread th = new Thread(() -> {
+                try {
+                    Thread.sleep(200);
+                    stmt1.cancel();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+            th.start();
+            try (
+                ResultSet rs = stmt2.executeQuery(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 40000) "
+                    + "SELECT avg(f) FROM cte")) {
+                rs.next();
+                assertTrue(rs.getDouble(1) > 0);
+            }
+            th.join();
+            long elapsed = System.currentTimeMillis() - start;
+            assertTrue(elapsed > 1000);
+            assertFalse(conn.isClosed());
+            assertFalse(stmt1.isClosed());
+            assertFalse(stmt2.isClosed());
+        }
+    }
 }

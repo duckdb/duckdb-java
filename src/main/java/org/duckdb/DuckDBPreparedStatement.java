@@ -44,7 +44,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBConnection conn;
 
     private ByteBuffer stmtRef = null;
-    final Lock stmtRefLock = new ReentrantLock();
+    final ReentrantLock stmtRefLock = new ReentrantLock();
     volatile boolean closeOnCompletion = false;
 
     private DuckDBResultSet selectResult = null;
@@ -158,6 +158,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private boolean execute(boolean startTransaction) throws SQLException {
         checkOpen();
         checkPrepared();
+
+        // Wait with dispatching a new query if connection is locked by cancel() call
+        Lock connLock = getConnRefLock();
+        connLock.lock();
+        connLock.unlock();
 
         ByteBuffer resultRef = null;
 
@@ -442,12 +447,27 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public void cancel() throws SQLException {
         checkOpen();
+        // Only proceed to interrupt call after ensuring that the query on
+        // this statement is still running.
+        if (!stmtRefLock.isLocked()) {
+            return;
+        }
+        // Cancel is intended to be called concurrently with execute,
+        // thus we cannot take the statement lock that is held while
+        // query is running. NPE may be thrown if connection is closed
+        // concurrently.
         try {
-            // Cancel is intended to be called concurrently with execute,
-            // thus we cannot take the statement lock that is held while
-            // query is running. NPE may be thrown if connection is closed
-            // concurrently.
-            conn.interrupt();
+            // Taking connection lock will prevent new queries to be executed
+            Lock connLock = getConnRefLock();
+            connLock.lock();
+            try {
+                if (!stmtRefLock.isLocked()) {
+                    return;
+                }
+                conn.interrupt();
+            } finally {
+                connLock.unlock();
+            }
         } catch (NullPointerException e) {
             throw new SQLException(e);
         }
@@ -1214,5 +1234,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             res[i] = intFromLong(arr[i]);
         }
         return res;
+    }
+
+    private Lock getConnRefLock() throws SQLException {
+        // NPE can be thrown if statement is closed concurrently.
+        try {
+            return conn.connRefLock;
+        } catch (NullPointerException e) {
+            throw new SQLException(e);
+        }
     }
 }
