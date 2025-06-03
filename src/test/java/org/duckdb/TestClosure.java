@@ -77,7 +77,6 @@ public class TestClosure {
     public static void test_long_query_conn_close() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
-        stmt.execute("DROP TABLE IF EXISTS test_fib1");
         stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
         stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
         long start = System.currentTimeMillis();
@@ -108,7 +107,6 @@ public class TestClosure {
     public static void test_long_query_stmt_close() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             Statement stmt = conn.createStatement();
-            stmt.execute("DROP TABLE IF EXISTS test_fib1");
             stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
             long start = System.currentTimeMillis();
@@ -272,7 +270,7 @@ public class TestClosure {
                 ResultSet rs = stmt2.executeQuery(
                     "WITH RECURSIVE cte AS ("
                     +
-                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 40000) "
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
                     + "SELECT avg(f) FROM cte")) {
                 rs.next();
                 assertTrue(rs.getDouble(1) > 0);
@@ -283,6 +281,33 @@ public class TestClosure {
             assertFalse(conn.isClosed());
             assertFalse(stmt1.isClosed());
             assertFalse(stmt2.isClosed());
+        }
+    }
+
+    public static void test_stmt_query_timeout() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(1);
+            stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            long start = System.currentTimeMillis();
+            assertThrows(
+                ()
+                    -> stmt.executeQuery(
+                        "WITH RECURSIVE cte AS ("
+                        +
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                        + "SELECT avg(f) FROM cte"),
+                SQLTimeoutException.class);
+            long elapsed = System.currentTimeMillis() - start;
+            assertTrue(elapsed < 1500);
+            assertFalse(conn.isClosed());
+            assertTrue(stmt.isClosed());
+            assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(1);
+            assertThrows(() -> { stmt.execute("FAIL"); }, SQLException.class);
+            assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
         }
     }
 }

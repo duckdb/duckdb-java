@@ -3455,7 +3455,7 @@ public class TestDuckDBJDBC {
                 @Override
                 public QueryProgress call() throws Exception {
                     try {
-                        Thread.sleep(1500);
+                        Thread.sleep(2500);
                         QueryProgress qp = stmt.getQueryProgress();
                         stmt.cancel();
                         return qp;

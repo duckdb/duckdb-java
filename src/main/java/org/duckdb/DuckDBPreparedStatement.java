@@ -2,6 +2,7 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.duckdb.StatementReturnType.*;
 import static org.duckdb.io.IOUtils.*;
 
@@ -37,6 +38,7 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -59,6 +61,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private final List<String> batchedStatements = new ArrayList<>();
     private Boolean isBatch = false;
     private Boolean isPreparedStatement = false;
+    private int queryTimeoutSeconds = 0;
+    private ScheduledFuture<?> cancelQueryFuture = null;
 
     public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
         if (conn == null) {
@@ -180,7 +184,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 startTransaction();
             }
 
+            if (queryTimeoutSeconds > 0) {
+                cleanupCancelQueryTask();
+                cancelQueryFuture =
+                    DuckDBDriver.scheduler.schedule(new CancelQueryTask(), queryTimeoutSeconds, SECONDS);
+            }
+
             resultRef = DuckDBNative.duckdb_jdbc_execute(stmtRef, params);
+            cleanupCancelQueryTask();
             DuckDBResultSetMetaData resultMeta = DuckDBNative.duckdb_jdbc_query_result_meta(resultRef);
             selectResult = new DuckDBResultSet(conn, this, resultMeta, resultRef);
             returnsResultSet = resultMeta.return_type.equals(QUERY_RESULT);
@@ -356,6 +367,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             if (isClosed()) {
                 return;
             }
+            cleanupCancelQueryTask();
             if (selectResult != null) {
                 selectResult.close();
                 selectResult = null;
@@ -436,12 +448,16 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public int getQueryTimeout() throws SQLException {
         checkOpen();
-        return 0;
+        return queryTimeoutSeconds;
     }
 
     @Override
     public void setQueryTimeout(int seconds) throws SQLException {
         checkOpen();
+        if (seconds < 0) {
+            throw new SQLException("Invalid negative timeout value: " + seconds);
+        }
+        this.queryTimeoutSeconds = seconds;
     }
 
     @Override
@@ -1242,6 +1258,27 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             return conn.connRefLock;
         } catch (NullPointerException e) {
             throw new SQLException(e);
+        }
+    }
+
+    private void cleanupCancelQueryTask() {
+        if (cancelQueryFuture != null) {
+            cancelQueryFuture.cancel(false);
+            cancelQueryFuture = null;
+        }
+    }
+
+    private class CancelQueryTask implements Runnable {
+        @Override
+        public void run() {
+            try {
+                if (DuckDBPreparedStatement.this.isClosed()) {
+                    return;
+                }
+                DuckDBPreparedStatement.this.cancel();
+            } catch (SQLException e) {
+                // suppress
+            }
         }
     }
 }
