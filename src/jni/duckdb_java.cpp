@@ -259,9 +259,11 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 
 	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
 	if (res_ref->res->HasError()) {
-		string error_msg = string(res_ref->res->GetError());
+		std::string error_msg = std::string(res_ref->res->GetError());
+		duckdb::ExceptionType error_type = res_ref->res->GetErrorType();
 		res_ref->res = nullptr;
-		ThrowJNI(env, error_msg.c_str());
+		jclass exc_type = duckdb::ExceptionType::INTERRUPT == error_type ? J_SQLTimeoutException : J_SQLException;
+		env->ThrowNew(exc_type, error_msg.c_str());
 		return nullptr;
 	}
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
