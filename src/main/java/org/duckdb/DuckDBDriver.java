@@ -16,6 +16,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_PIN_DB = "jdbc_pin_db";
+    public static final String JDBC_IGNORE_UNSUPPORTED_OPTIONS = "jdbc_ignore_unsupported_options";
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
@@ -26,6 +27,9 @@ public class DuckDBDriver implements java.sql.Driver {
     private static final ReentrantLock pinnedDbRefsLock = new ReentrantLock();
     private static boolean pinnedDbRefsShutdownHookRegistered = false;
     private static boolean pinnedDbRefsShutdownHookRun = false;
+
+    private static final Set<String> supportedOptions = new LinkedHashSet<>();
+    private static final ReentrantLock supportedOptionsLock = new ReentrantLock();
 
     static {
         try {
@@ -42,38 +46,51 @@ public class DuckDBDriver implements java.sql.Driver {
         if (!acceptsURL(url)) {
             return null;
         }
-        boolean read_only = false;
+        final Properties props;
         if (info == null) {
-            info = new Properties();
+            props = new Properties();
         } else { // make a copy because we're removing the read only property below
-            info = (Properties) info.clone();
-        }
-        String prop_val = (String) info.remove(DUCKDB_READONLY_PROPERTY);
-        if (prop_val != null) {
-            String prop_clean = prop_val.trim().toLowerCase();
-            read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
+            props = (Properties) info.clone();
         }
 
+        // URL options
         ParsedProps pp = parsePropsFromUrl(url);
-        for (Map.Entry<String, String> en : pp.props.entrySet()) {
-            info.put(en.getKey(), en.getValue());
-        }
-        url = pp.shortUrl;
 
-        info.put("duckdb_api", "jdbc");
+        // Options in URL take preference
+        for (Map.Entry<String, String> en : pp.props.entrySet()) {
+            props.put(en.getKey(), en.getValue());
+        }
+
+        // Ignore unsupported
+        removeUnsupportedOptions(props);
+
+        // Read-only option
+        String readOnlyStr = removeOption(props, DUCKDB_READONLY_PROPERTY);
+        boolean readOnly = isStringTruish(readOnlyStr, false);
+
+        // Client name option
+        props.put("duckdb_api", "jdbc");
 
         // Apache Spark passes this option when SELECT on a JDBC DataSource
         // table is performed. It is the internal Spark option and is likely
         // passed by mistake, so we need to ignore it to allow the connection
         // to be established.
-        info.remove("path");
+        props.remove("path");
 
-        String pinDbOptStr = removeOption(info, JDBC_PIN_DB);
+        // Pin DB option
+        String pinDbOptStr = removeOption(props, JDBC_PIN_DB);
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
 
-        DuckDBConnection conn = DuckDBConnection.newConnection(url, read_only, info);
+        // Create connection
+        DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, props);
 
-        pinDB(pinDBOpt, url, conn);
+        // Run post-init
+        try {
+            pinDB(pinDBOpt, pp.shortUrl, conn);
+        } catch (SQLException e) {
+            closeQuietly(conn);
+            throw e;
+        }
 
         return conn;
     }
@@ -98,6 +115,8 @@ public class DuckDBDriver implements java.sql.Driver {
         list.add(createDriverPropInfo(JDBC_STREAM_RESULTS, "", "Enable result set streaming"));
         list.add(createDriverPropInfo(JDBC_PIN_DB, "",
                                       "Do not close the DB instance after all connections to it are closed"));
+        list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
+                                      "Silently discard unsupported connection options"));
         list.sort((o1, o2) -> o1.name.compareToIgnoreCase(o2.name));
         return list.toArray(new DriverPropertyInfo[0]);
     }
@@ -194,6 +213,38 @@ public class DuckDBDriver implements java.sql.Driver {
         DriverPropertyInfo dpi = new DriverPropertyInfo(name, value);
         dpi.description = description;
         return dpi;
+    }
+
+    private static void removeUnsupportedOptions(Properties props) throws SQLException {
+        String ignoreStr = removeOption(props, JDBC_IGNORE_UNSUPPORTED_OPTIONS);
+        boolean ignore = isStringTruish(ignoreStr, false);
+        if (!ignore) {
+            return;
+        }
+        supportedOptionsLock.lock();
+        try {
+            if (supportedOptions.isEmpty()) {
+                Driver driver = DriverManager.getDriver(DUCKDB_URL_PREFIX);
+                Properties dpiProps = new Properties();
+                dpiProps.put("threads", 1);
+                DriverPropertyInfo[] dpis = driver.getPropertyInfo(DUCKDB_URL_PREFIX, dpiProps);
+                for (DriverPropertyInfo dpi : dpis) {
+                    supportedOptions.add(dpi.name);
+                }
+            }
+            List<String> unsupportedNames = new ArrayList<>();
+            for (Object nameObj : props.keySet()) {
+                String name = String.valueOf(nameObj);
+                if (!supportedOptions.contains(name)) {
+                    unsupportedNames.add(name);
+                }
+            }
+            for (String name : unsupportedNames) {
+                props.remove(name);
+            }
+        } finally {
+            supportedOptionsLock.unlock();
+        }
     }
 
     private static class ParsedProps {
