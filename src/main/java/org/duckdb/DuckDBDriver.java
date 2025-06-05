@@ -1,14 +1,26 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.READ;
+import static org.duckdb.JdbcUtils.*;
+import static org.duckdb.io.IOUtils.readToString;
+
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
-import static org.duckdb.JdbcUtils.*;
-
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
+import org.duckdb.io.LimitedInputStream;
 
 public class DuckDBDriver implements java.sql.Driver {
 
@@ -30,6 +42,16 @@ public class DuckDBDriver implements java.sql.Driver {
 
     private static final Set<String> supportedOptions = new LinkedHashSet<>();
     private static final ReentrantLock supportedOptionsLock = new ReentrantLock();
+
+    private static final String SESSION_INIT_SQL_FILE_OPTION = "session_init_sql_file";
+    private static final String SESSION_INIT_SQL_FILE_SHA256_OPTION = "session_init_sql_file_sha256";
+    private static final long SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES = 1 << 20; // 1MB
+    private static final String SESSION_INIT_SQL_FILE_URL_EXAMPLE =
+        "jdbc:duckdb:/path/to/db1.db;session_init_sql_file=/path/to/init.sql;session_init_sql_file_sha256=...";
+    private static final String SESSION_INIT_SQL_CONN_INIT_MARKER =
+        "/\\*\\s*DUCKDB_CONNECTION_INIT_BELOW_MARKER\\s*\\*/";
+    private static final LinkedHashSet<String> sessionInitSQLFileDbNames = new LinkedHashSet<>();
+    private static final ReentrantLock sessionInitSQLFileLock = new ReentrantLock();
 
     static {
         try {
@@ -55,6 +77,9 @@ public class DuckDBDriver implements java.sql.Driver {
 
         // URL options
         ParsedProps pp = parsePropsFromUrl(url);
+
+        // Read session init file
+        SessionInitSQLFile sf = readSessionInitSQLFile(pp);
 
         // Options in URL take preference
         for (Map.Entry<String, String> en : pp.props.entrySet()) {
@@ -82,11 +107,12 @@ public class DuckDBDriver implements java.sql.Driver {
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
 
         // Create connection
-        DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, props);
+        DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, sf.origFileText, props);
 
         // Run post-init
         try {
             pinDB(pinDBOpt, pp.shortUrl, conn);
+            runSessionInitSQLFile(conn, pp.shortUrl, sf);
         } catch (SQLException e) {
             closeQuietly(conn);
             throw e;
@@ -143,6 +169,7 @@ public class DuckDBDriver implements java.sql.Driver {
         }
         String[] parts = url.split(";");
         LinkedHashMap<String, String> props = new LinkedHashMap<>();
+        List<String> origPropNames = new ArrayList<>();
         for (int i = 1; i < parts.length; i++) {
             String entry = parts[i].trim();
             if (entry.isEmpty()) {
@@ -154,10 +181,11 @@ public class DuckDBDriver implements java.sql.Driver {
             }
             String key = kv[0].trim();
             String value = kv[1].trim();
+            origPropNames.add(key);
             props.put(key, value);
         }
         String shortUrl = parts[0].trim();
-        return new ParsedProps(shortUrl, props);
+        return new ParsedProps(shortUrl, props, origPropNames);
     }
 
     private static void pinDB(boolean pinnedDbOpt, String url, DuckDBConnection conn) throws SQLException {
@@ -247,17 +275,124 @@ public class DuckDBDriver implements java.sql.Driver {
         }
     }
 
+    private static SessionInitSQLFile readSessionInitSQLFile(ParsedProps pp) throws SQLException {
+        if (!pp.props.containsKey(SESSION_INIT_SQL_FILE_OPTION)) {
+            return new SessionInitSQLFile();
+        }
+
+        List<String> urlOptsList = new ArrayList<>(pp.props.keySet());
+
+        if (!SESSION_INIT_SQL_FILE_OPTION.equals(urlOptsList.get(0))) {
+            throw new SQLException(
+                "'session_init_sql_file' can only be specified as the first parameter in connection string,"
+                + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'");
+        }
+        for (int i = 1; i < pp.origPropNames.size(); i++) {
+            if (SESSION_INIT_SQL_FILE_OPTION.equalsIgnoreCase(pp.origPropNames.get(i))) {
+                throw new SQLException("'session_init_sql_file' option cannot be specified more than once");
+            }
+        }
+        String filePathStr = pp.props.remove(SESSION_INIT_SQL_FILE_OPTION);
+
+        final String expectedSha256;
+        if (pp.props.containsKey(SESSION_INIT_SQL_FILE_SHA256_OPTION)) {
+            if (!SESSION_INIT_SQL_FILE_SHA256_OPTION.equals(urlOptsList.get(1))) {
+                throw new SQLException(
+                    "'session_init_sql_file_sha256' can only be specified as the second parameter in connection string,"
+                    + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'");
+            }
+            for (int i = 2; i < pp.origPropNames.size(); i++) {
+                if (SESSION_INIT_SQL_FILE_SHA256_OPTION.equalsIgnoreCase(pp.origPropNames.get(i))) {
+                    throw new SQLException("'session_init_sql_file_sha256' option cannot be specified more than once");
+                }
+            }
+            expectedSha256 = pp.props.remove(SESSION_INIT_SQL_FILE_SHA256_OPTION);
+        } else {
+            expectedSha256 = "";
+        }
+
+        Path filePath = Paths.get(filePathStr);
+        if (!Files.exists(filePath)) {
+            throw new SQLException("Specified session init SQL file not found, path: " + filePath);
+        }
+
+        final String origFileText;
+        final String actualSha256;
+        try {
+            long fileSize = Files.size(filePath);
+            if (fileSize > SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES) {
+                throw new SQLException("Specified session init SQL file size: " + fileSize +
+                                       " exceeds max allowed size: " + SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES);
+            }
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            try (InputStream is = new DigestInputStream(
+                     new LimitedInputStream(Files.newInputStream(filePath, READ), fileSize), md)) {
+                Reader reader = new InputStreamReader(is, UTF_8);
+                origFileText = readToString(reader);
+                actualSha256 = bytesToHex(md.digest());
+            }
+        } catch (Exception e) {
+            throw new SQLException(e);
+        }
+
+        if (!expectedSha256.isEmpty() && !expectedSha256.toLowerCase().equals(actualSha256)) {
+            throw new SQLException("Session init SQL file SHA-256 mismatch, expected: " + expectedSha256 +
+                                   ", actual: " + actualSha256);
+        }
+
+        String[] parts = origFileText.split(SESSION_INIT_SQL_CONN_INIT_MARKER);
+        if (parts.length > 2) {
+            throw new SQLException("Connection init marker: '" + SESSION_INIT_SQL_CONN_INIT_MARKER +
+                                   "' can only be specified once");
+        }
+        if (1 == parts.length) {
+            return new SessionInitSQLFile(origFileText, parts[0].trim());
+        } else {
+            return new SessionInitSQLFile(origFileText, parts[0].trim(), parts[1].trim());
+        }
+    }
+
+    private static void runSessionInitSQLFile(Connection conn, String url, SessionInitSQLFile sf) throws SQLException {
+        if (sf.isEmpty()) {
+            return;
+        }
+        sessionInitSQLFileLock.lock();
+        try {
+
+            if (!sf.dbInitSQL.isEmpty()) {
+                String dbName = dbNameFromUrl(url);
+                if (MEMORY_DB.equals(dbName) || !sessionInitSQLFileDbNames.contains(dbName)) {
+                    try (Statement stmt = conn.createStatement()) {
+                        stmt.execute(sf.dbInitSQL);
+                    }
+                }
+                sessionInitSQLFileDbNames.add(dbName);
+            }
+
+            if (!sf.connInitSQL.isEmpty()) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute(sf.connInitSQL);
+                }
+            }
+
+        } finally {
+            sessionInitSQLFileLock.unlock();
+        }
+    }
+
     private static class ParsedProps {
         final String shortUrl;
         final LinkedHashMap<String, String> props;
+        final List<String> origPropNames;
 
         private ParsedProps(String url) {
-            this(url, new LinkedHashMap<>());
+            this(url, new LinkedHashMap<>(), new ArrayList<>());
         }
 
-        private ParsedProps(String shortUrl, LinkedHashMap<String, String> props) {
+        private ParsedProps(String shortUrl, LinkedHashMap<String, String> props, List<String> origPropNames) {
             this.shortUrl = shortUrl;
             this.props = props;
+            this.origPropNames = origPropNames;
         }
     }
 
@@ -277,6 +412,30 @@ public class DuckDBDriver implements java.sql.Driver {
             } finally {
                 pinnedDbRefsLock.unlock();
             }
+        }
+    }
+
+    private static class SessionInitSQLFile {
+        final String dbInitSQL;
+        final String connInitSQL;
+        final String origFileText;
+
+        private SessionInitSQLFile() {
+            this(null, null, null);
+        }
+
+        private SessionInitSQLFile(String origFileText, String dbInitSQL) {
+            this(origFileText, dbInitSQL, "");
+        }
+
+        private SessionInitSQLFile(String origFileText, String dbInitSQL, String connInitSQL) {
+            this.origFileText = origFileText;
+            this.dbInitSQL = dbInitSQL;
+            this.connInitSQL = connInitSQL;
+        }
+
+        boolean isEmpty() {
+            return null == dbInitSQL && null == connInitSQL && null == origFileText;
         }
     }
 }

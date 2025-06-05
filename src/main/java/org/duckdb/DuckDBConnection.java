@@ -43,21 +43,29 @@ public final class DuckDBConnection implements java.sql.Connection {
     volatile boolean transactionRunning;
     final String url;
     private final boolean readOnly;
+    private final String sessionInitSQL;
 
-    public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties)
-        throws SQLException {
+    public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties) throws Exception {
+        return newConnection(url, readOnly, null, properties);
+    }
+
+    public static DuckDBConnection newConnection(String url, boolean readOnly, String sessionInitSQL,
+                                                 Properties properties) throws SQLException {
         if (null == properties) {
             properties = new Properties();
         }
         String dbName = dbNameFromUrl(url);
         ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties);
-        return new DuckDBConnection(nativeReference, url, readOnly);
+        return new DuckDBConnection(nativeReference, url, readOnly, sessionInitSQL);
     }
 
-    private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly) throws SQLException {
+    private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly, String sessionInitSQL)
+        throws SQLException {
         this.connRef = connectionReference;
         this.url = url;
         this.readOnly = readOnly;
+        this.sessionInitSQL = sessionInitSQL;
+        // Hardcoded 'true' here is intentional, autocommit is handled in stmt#execute()
         DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
     }
 
@@ -88,7 +96,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly);
+            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly, null);
         } finally {
             connRefLock.unlock();
         }
@@ -469,6 +477,10 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public DuckDBHugeInt createHugeInt(long lower, long upper) throws SQLException {
         return new DuckDBHugeInt(lower, upper);
+    }
+
+    public String getSessionInitSQL() throws SQLException {
+        return sessionInitSQL;
     }
 
     void checkOpen() throws SQLException {
