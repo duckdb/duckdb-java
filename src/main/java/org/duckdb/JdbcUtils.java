@@ -75,4 +75,26 @@ final class JdbcUtils {
         }
         return dbName;
     }
+
+    static String bytesToHex(byte[] bytes) {
+        if (null == bytes) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    static void closeQuietly(AutoCloseable closeable) {
+        if (null == closeable) {
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (Exception e) {
+            // suppress
+        }
+    }
 }
