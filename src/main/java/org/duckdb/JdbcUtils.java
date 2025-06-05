@@ -19,7 +19,6 @@ final class JdbcUtils {
         return (T) obj;
     }
 
-
     static String removeOption(Properties props, String opt) {
         return removeOption(props, opt, null);
     }

@@ -3638,7 +3638,7 @@ public class TestDuckDBJDBC {
         } else {
             statusCode = runTests(args, TestDuckDBJDBC.class, TestBatch.class, TestClosure.class,
                                   TestExtensionTypes.class, TestSpatial.class, TestParameterMetadata.class,
-                                  TestPrepare.class, TestResults.class, TestTimestamp.class);
+                                  TestPrepare.class, TestResults.class, TestSessionInit.class, TestTimestamp.class);
         }
         System.exit(statusCode);
     }
