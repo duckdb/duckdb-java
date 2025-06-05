@@ -301,14 +301,15 @@ jobs:
     name: Java OSX (Universal)
     runs-on: macos-14
     needs: java-linux-amd64
+    env:
+      GEN: ninja
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install Ninja
+        run: brew install ninja
 
       - name: Build
         shell: bash
