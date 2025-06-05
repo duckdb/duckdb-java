@@ -31,7 +31,6 @@ jobs:
     needs: format-check
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
-      MANYLINUX_PACKAGES: java-1.8.0-openjdk-devel ninja-build
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,18 +44,46 @@ jobs:
           -e GEN=ninja                                  \
           -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
           ${{ env.MANYLINUX_IMAGE }}                    \
-          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb release'
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk-devel \
+              ninja-build \
+              gcc-toolset-12-gcc-c++
+            source /opt/rh/gcc-toolset-12/enable
+            make -C /duckdb release
+          "
 
-      - name: JDBC Tests
+      - name: JDBC Tests EL8
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
           docker run                                    \
           -v.:/duckdb                                   \
-          -e GEN=ninja                                  \
-          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
           ${{ env.MANYLINUX_IMAGE }}                    \
-          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb test'
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java -version
+            cd /duckdb
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java \
+              -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+              org.duckdb.TestDuckDBJDBC
+            rm ./test1.db
+          "
+
+      - name: JDBC Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          cat /etc/os-release
+          ${JAVA_HOME_21_X64}/bin/java -version
+          ${JAVA_HOME_21_X64}/bin/java \
+            -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+            org.duckdb.TestDuckDBJDBC
 
       - name: Deploy
         shell: bash
@@ -76,7 +103,6 @@ jobs:
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
-      MANYLINUX_PACKAGES: java-1.8.0-openjdk-devel ninja-build
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,18 +116,46 @@ jobs:
           -e GEN=ninja                                  \
           -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
           ${{ env.MANYLINUX_IMAGE }}                    \
-          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb release'
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk-devel \
+              ninja-build \
+              gcc-toolset-12-gcc-c++
+            source /opt/rh/gcc-toolset-12/enable
+            make -C /duckdb release
+          "
 
-      - name: JDBC Tests
+      - name: JDBC Tests EL8
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
           docker run                                    \
           -v.:/duckdb                                   \
-          -e GEN=ninja                                  \
-          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk  \
           ${{ env.MANYLINUX_IMAGE }}                    \
-          bash -c 'dnf install ${{ env.MANYLINUX_PACKAGES }} -y && make -C /duckdb test'
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java -version
+            cd /duckdb
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java \
+              -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+              org.duckdb.TestDuckDBJDBC
+            rm ./test1.db
+          "
+
+      - name: JDBC Tests
+        shell: bash
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          cat /etc/os-release
+          ${JAVA_HOME_21_X64}/bin/java -version
+          ${JAVA_HOME_21_X64}/bin/java \
+            -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+            org.duckdb.TestDuckDBJDBC
 
       - name: Deploy
         shell: bash
