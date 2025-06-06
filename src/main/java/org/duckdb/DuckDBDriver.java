@@ -18,6 +18,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
     public static final String JDBC_PIN_DB = "jdbc_pin_db";
+    public static final String JDBC_IGNORE_UNSUPPORTED_OPTIONS = "jdbc_ignore_unsupported_options";
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
@@ -36,6 +37,9 @@ public class DuckDBDriver implements java.sql.Driver {
     private static final ReentrantLock pinnedDbRefsLock = new ReentrantLock();
     private static boolean pinnedDbRefsShutdownHookRegistered = false;
     private static boolean pinnedDbRefsShutdownHookRun = false;
+
+    private static final Set<String> supportedOptions = new LinkedHashSet<>();
+    private static final ReentrantLock supportedOptionsLock = new ReentrantLock();
 
     static {
         try {
@@ -59,13 +63,20 @@ public class DuckDBDriver implements java.sql.Driver {
             props = (Properties) info.clone();
         }
 
+        // URL options
         ParsedProps pp = parsePropsFromUrl(url);
         for (Map.Entry<String, String> en : pp.props.entrySet()) {
             props.put(en.getKey(), en.getValue());
         }
 
+        // Ignore unsupported
+        removeUnsupportedOptions(props);
+
+        // Read-only option
         String readOnlyStr = removeOption(props, DUCKDB_READONLY_PROPERTY);
         boolean readOnly = isStringTruish(readOnlyStr, false);
+
+        // Client name option
         props.put("duckdb_api", "jdbc");
 
         // Apache Spark passes this option when SELECT on a JDBC DataSource
@@ -74,6 +85,7 @@ public class DuckDBDriver implements java.sql.Driver {
         // to be established.
         props.remove("path");
 
+        // DuckLake options
         String ducklake = removeOption(props, DUCKLAKE_OPTION);
         String ducklakeAlias = removeOption(props, DUCKLAKE_ALIAS_OPTION, DUCKLAKE_OPTION);
         final String shortUrl;
@@ -90,9 +102,11 @@ public class DuckDBDriver implements java.sql.Driver {
             shortUrl = pp.shortUrl;
         }
 
+        // Pin DB option
         String pinDbOptStr = removeOption(props, JDBC_PIN_DB);
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
 
+        // Create connection
         DuckDBConnection conn = DuckDBConnection.newConnection(shortUrl, readOnly, props);
 
         pinDB(pinDBOpt, shortUrl, conn);
@@ -123,6 +137,8 @@ public class DuckDBDriver implements java.sql.Driver {
         list.add(createDriverPropInfo(JDBC_AUTO_COMMIT, "", "Set default auto-commit mode"));
         list.add(createDriverPropInfo(JDBC_PIN_DB, "",
                                       "Do not close the DB instance after all connections to it are closed"));
+        list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
+                                      "Silently discard unsupported connection options"));
         list.sort((o1, o2) -> o1.name.compareToIgnoreCase(o2.name));
         return list.toArray(new DriverPropertyInfo[0]);
     }
@@ -256,6 +272,38 @@ public class DuckDBDriver implements java.sql.Driver {
         DriverPropertyInfo dpi = new DriverPropertyInfo(name, value);
         dpi.description = description;
         return dpi;
+    }
+
+    private static void removeUnsupportedOptions(Properties props) throws SQLException {
+        String ignoreStr = removeOption(props, JDBC_IGNORE_UNSUPPORTED_OPTIONS);
+        boolean ignore = isStringTruish(ignoreStr, false);
+        if (!ignore) {
+            return;
+        }
+        supportedOptionsLock.lock();
+        try {
+            if (supportedOptions.isEmpty()) {
+                Driver driver = DriverManager.getDriver(DUCKDB_URL_PREFIX);
+                Properties dpiProps = new Properties();
+                dpiProps.put("threads", 1);
+                DriverPropertyInfo[] dpis = driver.getPropertyInfo(DUCKDB_URL_PREFIX, dpiProps);
+                for (DriverPropertyInfo dpi : dpis) {
+                    supportedOptions.add(dpi.name);
+                }
+            }
+            List<String> unsupportedNames = new ArrayList<>();
+            for (Object nameObj : props.keySet()) {
+                String name = String.valueOf(nameObj);
+                if (!supportedOptions.contains(name)) {
+                    unsupportedNames.add(name);
+                }
+            }
+            for (String name : unsupportedNames) {
+                props.remove(name);
+            }
+        } finally {
+            supportedOptionsLock.unlock();
+        }
     }
 
     private static class ParsedProps {
