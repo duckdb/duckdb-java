@@ -16,7 +16,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import org.duckdb.io.LimitedInputStream;
 
 public class DuckDBDriver implements java.sql.Driver {
@@ -30,16 +29,9 @@ public class DuckDBDriver implements java.sql.Driver {
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
+    private static final String DUCKLAKE_URL_PREFIX = DUCKDB_URL_PREFIX + "ducklake:";
 
     static final ScheduledThreadPoolExecutor scheduler;
-
-    private static final String DUCKLAKE_OPTION = "ducklake";
-    private static final String DUCKLAKE_ALIAS_OPTION = "ducklake_alias";
-    private static final Pattern DUCKLAKE_ALIAS_OPTION_PATTERN = Pattern.compile("[a-zA-Z0-9_]+");
-    private static final String DUCKLAKE_URL_PREFIX = "ducklake:";
-    private static final String DUCKLAKE_DEFAULT_DBNAME = MEMORY_DB + "ducklakemem";
-    private static final LinkedHashSet<String> ducklakeInstances = new LinkedHashSet<>();
-    private static final ReentrantLock ducklakeInitLock = new ReentrantLock();
 
     private static final LinkedHashMap<String, ByteBuffer> pinnedDbRefs = new LinkedHashMap<>();
     private static final ReentrantLock pinnedDbRefsLock = new ReentrantLock();
@@ -108,21 +100,10 @@ public class DuckDBDriver implements java.sql.Driver {
         // to be established.
         props.remove("path");
 
-        // DuckLake options
-        String ducklake = removeOption(props, DUCKLAKE_OPTION);
-        String ducklakeAlias = removeOption(props, DUCKLAKE_ALIAS_OPTION, DUCKLAKE_OPTION);
-        final String shortUrl;
-        if (null != ducklake) {
+        // DuckLake connection
+        if (pp.shortUrl.startsWith(DUCKLAKE_URL_PREFIX)) {
             setDefaultOptionValue(props, JDBC_PIN_DB, true);
             setDefaultOptionValue(props, JDBC_STREAM_RESULTS, true);
-            String dbName = dbNameFromUrl(pp.shortUrl);
-            if (MEMORY_DB.equals(dbName)) {
-                shortUrl = DUCKDB_URL_PREFIX + DUCKLAKE_DEFAULT_DBNAME;
-            } else {
-                shortUrl = pp.shortUrl;
-            }
-        } else {
-            shortUrl = pp.shortUrl;
         }
 
         // Pin DB option
@@ -130,13 +111,12 @@ public class DuckDBDriver implements java.sql.Driver {
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
 
         // Create connection
-        DuckDBConnection conn = DuckDBConnection.newConnection(shortUrl, readOnly, sf.origFileText, props);
+        DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, sf.origFileText, props);
 
         // Run post-init
         try {
-            pinDB(pinDBOpt, shortUrl, conn);
-            runSessionInitSQLFile(conn, url, sf);
-            initDucklake(conn, shortUrl, ducklake, ducklakeAlias);
+            pinDB(pinDBOpt, pp.shortUrl, conn);
+            runSessionInitSQLFile(conn, pp.shortUrl, sf);
         } catch (SQLException e) {
             closeQuietly(conn);
             throw e;
@@ -186,43 +166,6 @@ public class DuckDBDriver implements java.sql.Driver {
 
     public Logger getParentLogger() throws SQLFeatureNotSupportedException {
         throw new SQLFeatureNotSupportedException("no logger");
-    }
-
-    private static void initDucklake(Connection conn, String url, String ducklake, String ducklakeAlias)
-        throws SQLException {
-        if (null == ducklake) {
-            return;
-        }
-        ducklakeInitLock.lock();
-        try {
-            String dbName = dbNameFromUrl(url);
-            String key = dbName + "#" + ducklake;
-            if (!ducklakeInstances.contains(key)) {
-                String attachQuery = createAttachQuery(ducklake, ducklakeAlias);
-                try (Statement stmt = conn.createStatement()) {
-                    stmt.execute("INSTALL ducklake");
-                    stmt.execute("LOAD ducklake");
-                    stmt.execute(attachQuery);
-                }
-                ducklakeInstances.add(key);
-            }
-        } finally {
-            ducklakeInitLock.unlock();
-        }
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("USE " + ducklakeAlias);
-        }
-    }
-
-    private static String createAttachQuery(String ducklake, String ducklakeAlias) throws SQLException {
-        ducklake = ducklake.replaceAll("'", "''");
-        if (!ducklake.startsWith(DUCKLAKE_URL_PREFIX)) {
-            ducklake = DUCKLAKE_URL_PREFIX + ducklake;
-        }
-        if (!DUCKLAKE_ALIAS_OPTION_PATTERN.matcher(ducklakeAlias).matches()) {
-            throw new SQLException("Invalid DuckLake alias specified: " + ducklakeAlias);
-        }
-        return "ATTACH '" + ducklake + "' AS " + ducklakeAlias;
     }
 
     private static ParsedProps parsePropsFromUrl(String url) throws SQLException {
