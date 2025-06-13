@@ -63,14 +63,14 @@ public:
 
 template <class T>
 string ConvertParquetElementToString(T &&entry) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << entry;
 	return ss.str();
 }
 
 template <class T>
 string PrintParquetElementToString(T &&entry) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	entry.printTo(ss);
 	return ss.str();
 }
@@ -652,7 +652,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	}
 
 	auto &allocator = Allocator::DefaultAllocator();
-	auto transport = std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 
