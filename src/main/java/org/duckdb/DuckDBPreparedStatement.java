@@ -645,11 +645,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     private long[] executeBatchedPreparedStatement() throws SQLException {
         stmtRefLock.lock();
+        boolean tranStarted = false;
+        DuckDBConnection conn = this.conn;
         try {
             checkOpen();
             checkPrepared();
 
-            boolean tranStarted = startTransaction();
+            tranStarted = startTransaction();
 
             long[] updateCounts = new long[this.batchedParams.size()];
             for (int i = 0; i < this.batchedParams.size(); i++) {
@@ -664,6 +666,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             }
 
             return updateCounts;
+
+        } catch (SQLException e) {
+            if (tranStarted && conn.getAutoCommit()) {
+                conn.rollback();
+            }
+            throw e;
         } finally {
             stmtRefLock.unlock();
         }
@@ -671,10 +679,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     private long[] executeBatchedStatements() throws SQLException {
         stmtRefLock.lock();
+        boolean tranStarted = false;
+        DuckDBConnection conn = this.conn;
         try {
             checkOpen();
 
-            boolean tranStarted = startTransaction();
+            tranStarted = startTransaction();
 
             long[] updateCounts = new long[this.batchedStatements.size()];
             for (int i = 0; i < this.batchedStatements.size(); i++) {
@@ -689,6 +699,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             }
 
             return updateCounts;
+
+        } catch (SQLException e) {
+            if (tranStarted && conn.getAutoCommit()) {
+                conn.rollback();
+            }
+            throw e;
         } finally {
             stmtRefLock.unlock();
         }

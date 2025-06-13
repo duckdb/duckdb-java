@@ -4,6 +4,7 @@ import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
 import java.sql.*;
+import java.util.Properties;
 
 public class TestBatch {
 
@@ -201,6 +202,104 @@ public class TestBatch {
             stmt.executeBatch();
             conn.rollback();
             try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
+    public static void test_statement_batch_autocommit_constraint_violation() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertTrue(conn.getAutoCommit());
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+            }
+            try (Statement stmt = conn.createStatement()) {
+                stmt.addBatch("INSERT INTO tab1 VALUES('foo')");
+                stmt.addBatch("INSERT INTO tab1 VALUES(NULL)");
+                assertThrows(stmt::executeBatch, SQLException.class);
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
+    public static void test_prepared_statement_batch_autocommit_constraint_violation() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertTrue(conn.getAutoCommit());
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?)")) {
+                ps.setString(1, "foo");
+                ps.addBatch();
+                ps.setString(1, null);
+                ps.addBatch();
+                assertThrows(ps::executeBatch, SQLException.class);
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
+    public static void test_statement_batch_constraint_violation() throws Exception {
+        Properties config = new Properties();
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            assertFalse(conn.getAutoCommit());
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+                conn.commit();
+            }
+            boolean thrown = false;
+            try (Statement stmt = conn.createStatement()) {
+                stmt.addBatch("INSERT INTO tab1 VALUES('foo')");
+                stmt.addBatch("INSERT INTO tab1 VALUES(NULL)");
+                stmt.executeBatch();
+                conn.commit();
+            } catch (SQLException e) {
+                thrown = true;
+                conn.rollback();
+            }
+            assertTrue(thrown);
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
+    public static void test_prepared_statement_batch_constraint_violation() throws Exception {
+        Properties config = new Properties();
+        config.put(DuckDBDriver.JDBC_AUTO_COMMIT, false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config)) {
+            assertFalse(conn.getAutoCommit());
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+                conn.commit();
+            }
+            boolean thrown = false;
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?)")) {
+                ps.setString(1, "foo");
+                ps.addBatch();
+                ps.setString(1, null);
+                ps.addBatch();
+                ps.executeBatch();
+                conn.commit();
+            } catch (SQLException e) {
+                thrown = true;
+                conn.rollback();
+            }
+            assertTrue(thrown);
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
                 rs.next();
                 assertEquals(rs.getLong(1), 0L);
             }
