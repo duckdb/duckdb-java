@@ -489,7 +489,7 @@ jobs:
         run: |
             # Delete vendoring-${{ github.base_ref }} branch and re-create it for future PRs
             git push --delete origin vendoring-${{ github.base_ref }}
-            git checkout --track origin/main
+            git checkout --track origin/${{ github.base_ref }}
             git pull --ff-only
             git branch vendoring-${{ github.base_ref }}
             git push origin vendoring-${{ github.base_ref }}
