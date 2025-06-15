@@ -6,6 +6,9 @@
 # <folder>              : Folder to upload to
 # <file>                : File to be uploaded
 
+set -e
+set -x
+
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: ./scripts/upload-staging-asset.sh <folder> <file1> [... <fileN>]"
     exit 1
@@ -55,8 +58,6 @@ fi
 if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
-
-python3 -m pip install awscli
 
 for var in "${@: 2}"
 do
