@@ -32,6 +32,7 @@ public class DuckDBDriver implements java.sql.Driver {
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
+    private static final String DUCKLAKE_URL_PREFIX = DUCKDB_URL_PREFIX + "ducklake:";
 
     static final ScheduledThreadPoolExecutor scheduler;
 
@@ -101,6 +102,12 @@ public class DuckDBDriver implements java.sql.Driver {
         // passed by mistake, so we need to ignore it to allow the connection
         // to be established.
         props.remove("path");
+
+        // DuckLake connection
+        if (pp.shortUrl.startsWith(DUCKLAKE_URL_PREFIX)) {
+            setDefaultOptionValue(props, JDBC_PIN_DB, true);
+            setDefaultOptionValue(props, JDBC_STREAM_RESULTS, true);
+        }
 
         // Pin DB option
         String pinDbOptStr = removeOption(props, JDBC_PIN_DB);
