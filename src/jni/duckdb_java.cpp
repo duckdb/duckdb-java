@@ -13,7 +13,7 @@ extern "C" {
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "functions.hpp"
 #include "holders.hpp"
@@ -791,14 +791,15 @@ void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 	}
 
 	auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
+	ExtensionLoader loader(db_instance, "jdbc");
 	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
 	auto hello_world_type = LogicalType::STRUCT(children);
 	hello_world_type.SetAlias("test_type");
-	ExtensionUtil::RegisterType(db_instance, "test_type", hello_world_type);
+	loader.RegisterType("test_type", hello_world_type);
 
 	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
 	byte_test_type_type.SetAlias("byte_test_type");
-	ExtensionUtil::RegisterType(db_instance, "byte_test_type", byte_test_type_type);
+	loader.RegisterType("byte_test_type", byte_test_type_type);
 }
 
 static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
