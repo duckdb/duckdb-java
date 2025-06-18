@@ -584,7 +584,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	}
 
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		//! We only care about extracting the names of the referenced columns
 		//! remove the exclude + replace lists
 		expr.exclude_list.clear();
@@ -720,6 +721,17 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 		cte_bindings[recurring_alias] =
 		    make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(recurring_alias), types, names, index);
 		cte_references[recurring_alias] = make_shared_ptr<idx_t>(0);
+	}
+}
+
+void BindContext::RemoveCTEBinding(const std::string &alias) {
+	auto it = cte_bindings.find(alias);
+	if (it != cte_bindings.end()) {
+		cte_bindings.erase(it);
+	}
+	auto it2 = cte_references.find(alias);
+	if (it2 != cte_references.end()) {
+		cte_references.erase(it2);
 	}
 }
 
