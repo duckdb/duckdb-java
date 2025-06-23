@@ -7,7 +7,7 @@ set(JAVA_JVM_LIBRARY NotNeeded)
 
 find_package(JNI)
 
-cmake_minimum_required(VERSION 3.11.0)
+cmake_minimum_required(VERSION 3.5...3.29)
 set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -552,6 +552,7 @@ file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g)
 
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
+        MANIFEST META-INF/MANIFEST.MF
         GENERATE_NATIVE_HEADERS duckdb-native)
 add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 
