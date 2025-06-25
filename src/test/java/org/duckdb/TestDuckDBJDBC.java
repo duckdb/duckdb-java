@@ -3451,24 +3451,21 @@ public class TestDuckDBJDBC {
             stmt.execute("SET enable_progress_bar = true");
 
             ExecutorService executorService = Executors.newSingleThreadExecutor();
-            Future<QueryProgress> future = executorService.submit(new Callable<QueryProgress>() {
-                @Override
-                public QueryProgress call() throws Exception {
-                    try {
-                        Thread.sleep(2500);
-                        QueryProgress qp = stmt.getQueryProgress();
-                        stmt.cancel();
-                        return qp;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return null;
-                    }
+            Future<QueryProgress> future = executorService.submit(() -> {
+                try {
+                    Thread.sleep(2500);
+                    QueryProgress qp = stmt.getQueryProgress();
+                    stmt.cancel();
+                    return qp;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return null;
                 }
             });
             assertThrows(
                 ()
                     -> stmt.executeQuery(
-                        "WITH RECURSIVE cte AS ("
+                        "WITH RECURSIVE cte AS NOT MATERIALIZED ("
                         +
                         "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
                         + "SELECT avg(f) FROM cte"),
@@ -3476,9 +3473,10 @@ public class TestDuckDBJDBC {
 
             QueryProgress qpRunning = future.get();
             assertNotNull(qpRunning);
-            assertEquals(qpRunning.getPercentage(), (double) 25);
+            assertTrue(qpRunning.getPercentage() > 0.09);
+            assertTrue(qpRunning.getPercentage() < 0.1);
             assertEquals(qpRunning.getRowsProcessed(), 1L);
-            assertEquals(qpRunning.getTotalRowsToProcess(), 4L);
+            assertEquals(qpRunning.getTotalRowsToProcess(), 1004L);
 
             assertThrows(stmt::getQueryProgress, SQLException.class);
         }
