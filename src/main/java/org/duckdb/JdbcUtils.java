@@ -32,7 +32,7 @@ final class JdbcUtils {
     }
 
     static void setDefaultOptionValue(Properties props, String opt, Object value) {
-        if (props.contains(opt)) {
+        if (props.containsKey(opt)) {
             return;
         }
         props.put(opt, value);
