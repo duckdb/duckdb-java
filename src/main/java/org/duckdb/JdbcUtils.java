@@ -1,8 +1,10 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBDriver.DUCKDB_URL_PREFIX;
 import static org.duckdb.DuckDBDriver.MEMORY_DB;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.Properties;
 
