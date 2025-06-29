@@ -113,6 +113,8 @@ public class DuckDBResultSet implements ResultSet {
         }
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
     protected void finalize() throws Throwable {
         close();
     }
@@ -356,6 +358,7 @@ public class DuckDBResultSet implements ResultSet {
         return getObject(findColumn(columnLabel));
     }
 
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
         throw new SQLFeatureNotSupportedException("getBigDecimal");
     }
@@ -528,6 +531,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getAsciiStream");
     }
 
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(int columnIndex) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }
@@ -536,6 +540,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getBinaryStream");
     }
 
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
         throw new SQLFeatureNotSupportedException("getBigDecimal");
     }
@@ -560,6 +565,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getAsciiStream");
     }
 
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(String columnLabel) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }
@@ -1167,7 +1173,9 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     private boolean isTimestamp(DuckDBColumnType sqlType) {
-        return (sqlType == DuckDBColumnType.TIMESTAMP || sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
+        return (sqlType == DuckDBColumnType.TIMESTAMP || sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE ||
+                sqlType == DuckDBColumnType.TIMESTAMP_S || sqlType == DuckDBColumnType.TIMESTAMP_MS ||
+                sqlType == DuckDBColumnType.TIMESTAMP_NS);
     }
 
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
@@ -1292,7 +1300,7 @@ public class DuckDBResultSet implements ResultSet {
                 throw new SQLException("Can't convert value to Date, Java type: " + type + ", SQL type: " + sqlType);
             }
         } else if (type == Time.class) {
-            if (sqlType == DuckDBColumnType.TIME) {
+            if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
                 return type.cast(getTime(columnIndex));
             } else {
                 throw new SQLException("Can't convert value to Time, Java type: " + type + ", SQL type: " + sqlType);

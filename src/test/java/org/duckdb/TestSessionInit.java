@@ -37,6 +37,7 @@ public class TestSessionInit {
             try (Connection conn1 = DriverManager.getConnection(url);
                  Connection conn2 = DriverManager.getConnection(url); Statement stmt = conn2.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT * FROM tab1")) {
+                assertNotNull(conn1);
                 rs.next();
                 assertEquals(rs.getInt(1), 42);
                 rs.next();

@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Objects;
 import java.util.function.Function;
-import org.duckdb.test.Thrower;
 
 public class Assertions {
     public static void assertTrue(boolean val) throws Exception {
