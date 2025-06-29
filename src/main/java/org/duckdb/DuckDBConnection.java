@@ -37,6 +37,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     ByteBuffer connRef;
     final ReentrantLock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
+    final LinkedHashSet<DuckDBAppender> appenders = new LinkedHashSet<>();
     volatile boolean closing = false;
 
     volatile boolean autoCommit = true;
@@ -116,6 +117,8 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
     protected void finalize() throws Throwable {
         close();
     }
@@ -150,6 +153,14 @@ public final class DuckDBConnection implements java.sql.Connection {
                 ps.close();
             }
             preparedStatements.clear();
+
+            // Last appender created is first deleted
+            List<DuckDBAppender> appList = new ArrayList<>(appenders);
+            Collections.reverse(appList);
+            for (DuckDBAppender app : appList) {
+                app.close();
+            }
+            appenders.clear();
 
             DuckDBNative.duckdb_jdbc_disconnect(connRef);
             connRef = null;
@@ -430,8 +441,24 @@ public final class DuckDBConnection implements java.sql.Connection {
         throw new SQLFeatureNotSupportedException("getNetworkTimeout");
     }
 
+    @SuppressWarnings("deprecation")
+    public DuckDBSingleValueAppender createSingleValueAppender(String schemaName, String tableName)
+        throws SQLException {
+        return new DuckDBSingleValueAppender(this, schemaName, tableName);
+    }
+
+    public DuckDBAppender createAppender(String tableName) throws SQLException {
+        return createAppender(null, null, tableName);
+    }
+
     public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {
-        return new DuckDBAppender(this, schemaName, tableName);
+        return createAppender(null, schemaName, tableName);
+    }
+
+    public DuckDBAppender createAppender(String catalogName, String schemaName, String tableName) throws SQLException {
+        DuckDBAppender appender = new DuckDBAppender(this, catalogName, schemaName, tableName);
+        this.appenders.add(appender);
+        return appender;
     }
 
     private static long getArrowStreamAddress(Object arrow_array_stream) {

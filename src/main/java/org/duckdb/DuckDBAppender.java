@@ -1,106 +1,1598 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.ZoneOffset.UTC;
+import static java.time.temporal.ChronoUnit.*;
+import static org.duckdb.DuckDBBindings.*;
+import static org.duckdb.DuckDBBindings.CAPIType.*;
+import static org.duckdb.DuckDBHugeInt.HUGE_INT_MAX;
+import static org.duckdb.DuckDBHugeInt.HUGE_INT_MIN;
+
 import java.math.BigDecimal;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
+import java.nio.*;
 import java.sql.SQLException;
-import java.time.LocalDateTime;
-import org.duckdb.DuckDBTimestamp;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class DuckDBAppender implements AutoCloseable {
 
-    protected ByteBuffer appender_ref = null;
+    private static final Set<Integer> supportedTypes = new LinkedHashSet<>();
+    static {
+        supportedTypes.add(DUCKDB_TYPE_BOOLEAN.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TINYINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UTINYINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_SMALLINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_USMALLINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_INTEGER.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UINTEGER.typeId);
+        supportedTypes.add(DUCKDB_TYPE_BIGINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UBIGINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_HUGEINT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UHUGEINT.typeId);
 
-    public DuckDBAppender(DuckDBConnection con, String schemaName, String tableName) throws SQLException {
-        if (con == null) {
-            throw new SQLException("Invalid connection");
+        supportedTypes.add(DUCKDB_TYPE_FLOAT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_DOUBLE.typeId);
+
+        supportedTypes.add(DUCKDB_TYPE_DECIMAL.typeId);
+
+        supportedTypes.add(DUCKDB_TYPE_VARCHAR.typeId);
+        supportedTypes.add(DUCKDB_TYPE_BLOB.typeId);
+
+        supportedTypes.add(DUCKDB_TYPE_DATE.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIME.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIME_TZ.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_S.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_MS.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIMESTAMP.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_TZ.typeId);
+        supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_NS.typeId);
+
+        supportedTypes.add(DUCKDB_TYPE_ARRAY.typeId);
+        supportedTypes.add(DUCKDB_TYPE_STRUCT.typeId);
+    }
+    private static final CAPIType[] int8Types = new CAPIType[] {DUCKDB_TYPE_TINYINT, DUCKDB_TYPE_UTINYINT};
+    private static final CAPIType[] int16Types = new CAPIType[] {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_USMALLINT};
+    private static final CAPIType[] int32Types = new CAPIType[] {DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_UINTEGER};
+    private static final CAPIType[] int64Types = new CAPIType[] {DUCKDB_TYPE_BIGINT, DUCKDB_TYPE_UBIGINT};
+    private static final CAPIType[] int128Types = new CAPIType[] {DUCKDB_TYPE_HUGEINT, DUCKDB_TYPE_UHUGEINT};
+    private static final CAPIType[] timestampLocalTypes = new CAPIType[] {
+        DUCKDB_TYPE_TIMESTAMP_S, DUCKDB_TYPE_TIMESTAMP_MS, DUCKDB_TYPE_TIMESTAMP, DUCKDB_TYPE_TIMESTAMP_NS};
+    private static final CAPIType[] timestampMicrosTypes =
+        new CAPIType[] {DUCKDB_TYPE_TIMESTAMP, DUCKDB_TYPE_TIMESTAMP_TZ};
+
+    private static final int STRING_MAX_INLINE_BYTES = 12;
+
+    private static final LocalDateTime EPOCH_DATE_TIME = LocalDateTime.ofEpochSecond(0, 0, UTC);
+
+    private final DuckDBConnection conn;
+
+    private final String catalog;
+    private final String schema;
+    private final String table;
+
+    private final long maxRows;
+
+    private ByteBuffer appenderRef;
+    private final Lock appenderRefLock = new ReentrantLock();
+
+    private final ByteBuffer chunkRef;
+    private final Column[] columns;
+
+    private long rowIdx = 0;
+    private int colIdx = 0;
+    private int structFieldIdx = 0;
+
+    private boolean appendingRow = false;
+    private boolean appendingStruct = false;
+
+    private boolean writeInlinedStrings = true;
+
+    DuckDBAppender(DuckDBConnection conn, String catalog, String schema, String table) throws SQLException {
+        this.conn = conn;
+        this.catalog = catalog;
+        this.schema = schema;
+        this.table = table;
+
+        this.maxRows = duckdb_vector_size();
+
+        ByteBuffer appenderRef = null;
+        ByteBuffer[] colTypes = null;
+        ByteBuffer chunkRef = null;
+        Column[] vectors = null;
+        try {
+            appenderRef = createAppender(conn, catalog, schema, table);
+            colTypes = readTableTypes(appenderRef);
+            chunkRef = createChunk(colTypes);
+            vectors = createVectors(chunkRef, colTypes);
+        } catch (Exception e) {
+            if (null != chunkRef) {
+                duckdb_destroy_data_chunk(chunkRef);
+            }
+            if (null != colTypes) {
+                for (ByteBuffer ct : colTypes) {
+                    if (null != ct) {
+                        duckdb_destroy_logical_type(ct);
+                    }
+                }
+            }
+            if (null != appenderRef) {
+                duckdb_appender_destroy(appenderRef);
+            }
+            throw new SQLException(createErrMsg(e.getMessage()), e);
         }
-        appender_ref = DuckDBNative.duckdb_jdbc_create_appender(
-            con.connRef, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));
+
+        this.appenderRef = appenderRef;
+        this.chunkRef = chunkRef;
+        this.columns = vectors;
     }
 
-    public void beginRow() throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_begin_row(appender_ref);
+    public DuckDBAppender beginRow() throws SQLException {
+        checkOpen();
+        checkAppendingRow(false);
+        checkAppendingStruct(false);
+        if (0 != colIdx) {
+            throw new SQLException(createErrMsg("'endRow' must be called before adding next row"));
+        }
+        this.appendingRow = true;
+        return this;
     }
 
-    public void endRow() throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_end_row(appender_ref);
+    public DuckDBAppender endRow() throws SQLException {
+        checkOpen();
+        checkAppendingRow(true);
+        checkAppendingStruct(false);
+
+        if (columns.length != colIdx) {
+            throw new SQLException(createErrMsg("'endRow' can be called only after adding all columns"));
+        }
+
+        rowIdx++;
+        this.appendingRow = false;
+        if (rowIdx >= maxRows) {
+            try {
+                flush();
+            } catch (SQLException e) {
+                this.appendingRow = true;
+                rowIdx--;
+                throw e;
+            }
+        }
+
+        colIdx = 0;
+        return this;
+    }
+
+    public DuckDBAppender beginStruct() throws Exception {
+        checkOpen();
+        checkAppendingStruct(false);
+        this.appendingStruct = true;
+        return this;
+    }
+
+    public DuckDBAppender endStruct() throws Exception {
+        checkOpen();
+        checkAppendingStruct(true);
+        this.structFieldIdx = 0;
+        this.appendingStruct = false;
+        incrementColOrStructFieldIdx();
+        return this;
     }
 
     public void flush() throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_flush(appender_ref);
-    }
+        checkOpen();
+        checkAppendingRow(false);
+        checkAppendingStruct(false);
 
-    public void append(boolean value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_boolean(appender_ref, value);
-    }
+        if (0 == rowIdx) {
+            return;
+        }
 
-    public void append(byte value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_byte(appender_ref, value);
-    }
+        appenderRefLock.lock();
+        try {
+            checkOpen();
 
-    public void append(short value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_short(appender_ref, value);
-    }
+            duckdb_data_chunk_set_size(chunkRef, rowIdx);
 
-    public void append(int value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_int(appender_ref, value);
-    }
+            int appendState = duckdb_append_data_chunk(appenderRef, chunkRef);
+            if (0 != appendState) {
+                byte[] errorUTF8 = duckdb_appender_error(appenderRef);
+                String error = null != errorUTF8 ? strFromUTF8(errorUTF8) : "";
+                throw new SQLException(createErrMsg(error));
+            }
 
-    public void append(long value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_long(appender_ref, value);
-    }
+            int flushState = duckdb_appender_flush(appenderRef);
+            if (0 != flushState) {
+                byte[] errorUTF8 = duckdb_appender_error(appenderRef);
+                String error = null != errorUTF8 ? strFromUTF8(errorUTF8) : "";
+                throw new SQLException(createErrMsg(error));
+            }
 
-    // New naming schema for object params to keep compatibility with calling "append(null)"
-    public void appendLocalDateTime(LocalDateTime value) throws SQLException {
-        if (value == null) {
-            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
-        } else {
-            long timeInMicros = DuckDBTimestamp.localDateTime2Micros(value);
-            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
+            duckdb_data_chunk_reset(chunkRef);
+            try {
+                for (Column col : columns) {
+                    col.reset();
+                }
+            } catch (SQLException e) {
+                throw new SQLException(createErrMsg(e.getMessage()), e);
+            }
+
+            rowIdx = 0;
+        } finally {
+            appenderRefLock.unlock();
         }
     }
 
-    public void appendBigDecimal(BigDecimal value) throws SQLException {
-        if (value == null) {
-            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
-        } else {
-            DuckDBNative.duckdb_jdbc_appender_append_decimal(appender_ref, value);
+    @Override
+    public void close() throws SQLException {
+        if (isClosed()) {
+            return;
+        }
+        appenderRefLock.lock();
+        try {
+            if (isClosed()) {
+                return;
+            }
+            if (rowIdx > 0) {
+                try {
+                    flush();
+                } catch (SQLException e) {
+                    // suppress
+                }
+            }
+            for (Column col : columns) {
+                col.destroy();
+            }
+            duckdb_destroy_data_chunk(chunkRef);
+            duckdb_appender_close(appenderRef);
+            duckdb_appender_destroy(appenderRef);
+
+            // Untrack the appender from parent connection,
+            // if 'closing' flag is set it means that the parent connection itself
+            // is being closed and we don't need to untrack this instance from the connection.
+            if (!conn.closing) {
+                conn.connRefLock.lock();
+                try {
+                    conn.appenders.remove(this);
+                } finally {
+                    conn.connRefLock.unlock();
+                }
+            }
+
+            appenderRef = null;
+        } finally {
+            appenderRefLock.unlock();
         }
     }
 
-    public void append(float value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_float(appender_ref, value);
+    public boolean isClosed() throws SQLException {
+        return appenderRef == null;
     }
 
-    public void append(double value) throws SQLException {
-        DuckDBNative.duckdb_jdbc_appender_append_double(appender_ref, value);
+    // append primitives
+
+    public DuckDBAppender append(boolean value) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_BOOLEAN);
+        byte val = (byte) (value ? 1 : 0);
+        col.data.put(val);
+        incrementColOrStructFieldIdx();
+        return this;
     }
 
-    public void append(String value) throws SQLException {
+    public DuckDBAppender append(char value) throws SQLException {
+        String str = String.valueOf(value);
+        return append(str);
+    }
+
+    public DuckDBAppender append(byte value) throws SQLException {
+        Column col = currentColumnWithRowPos(int8Types);
+        col.data.put(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(short value) throws SQLException {
+        Column col = currentColumnWithRowPos(int16Types);
+        col.data.putShort(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(int value) throws SQLException {
+        Column col = currentColumnWithRowPos(int32Types);
+        col.data.putInt(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(long value) throws SQLException {
+        Column col = currentColumnWithRowPos(int64Types);
+        col.data.putLong(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(float value) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_FLOAT);
+        col.data.putFloat(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(double value) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_DOUBLE);
+        col.data.putDouble(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    // append primitive wrappers, int128 and decimal
+
+    public DuckDBAppender append(Boolean value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_BOOLEAN);
         if (value == null) {
-            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
-        } else {
-            DuckDBNative.duckdb_jdbc_appender_append_string(appender_ref, value.getBytes(StandardCharsets.UTF_8));
+            return appendNull();
+        }
+        return append(value.booleanValue());
+    }
+
+    public DuckDBAppender append(Character value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_VARCHAR);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.charValue());
+    }
+
+    public DuckDBAppender append(Byte value) throws SQLException {
+        checkCurrentColumnType(int8Types);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.byteValue());
+    }
+
+    public DuckDBAppender append(Short value) throws SQLException {
+        checkCurrentColumnType(int16Types);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.shortValue());
+    }
+
+    public DuckDBAppender append(Integer value) throws SQLException {
+        checkCurrentColumnType(int32Types);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.intValue());
+    }
+
+    public DuckDBAppender append(Long value) throws SQLException {
+        checkCurrentColumnType(int64Types);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.longValue());
+    }
+
+    public DuckDBAppender append(Float value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_FLOAT);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.floatValue());
+    }
+
+    public DuckDBAppender append(Double value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_DOUBLE);
+        if (value == null) {
+            return appendNull();
+        }
+        return append(value.doubleValue());
+    }
+
+    public DuckDBAppender appendHugeInt(long lower, long upper) throws SQLException {
+        Column col = currentColumnWithRowPos(int128Types);
+        col.data.putLong(lower);
+        col.data.putLong(upper);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(BigInteger value) throws SQLException {
+        checkCurrentColumnType(int128Types);
+        if (value == null) {
+            return appendNull();
+        }
+        if (value.compareTo(HUGE_INT_MIN) < 0 || value.compareTo(HUGE_INT_MAX) > 0) {
+            throw new SQLException("Specified BigInteger value is out of range for HUGEINT field");
+        }
+        long lower = value.longValue();
+        long upper = value.shiftRight(64).longValue();
+        return appendHugeInt(lower, upper);
+    }
+
+    public DuckDBAppender appendDecimal(short value) throws SQLException {
+        Column col = currentDecimalColumnWithRowPos(DUCKDB_TYPE_SMALLINT);
+        col.data.putShort(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendDecimal(int value) throws SQLException {
+        Column col = currentDecimalColumnWithRowPos(DUCKDB_TYPE_INTEGER);
+        col.data.putInt(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendDecimal(long value) throws SQLException {
+        Column col = currentDecimalColumnWithRowPos(DUCKDB_TYPE_BIGINT);
+        col.data.putLong(value);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendDecimal(long lower, long upper) throws SQLException {
+        Column col = currentDecimalColumnWithRowPos(DUCKDB_TYPE_HUGEINT);
+        col.data.putLong(lower);
+        col.data.putLong(upper);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(BigDecimal value) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_DECIMAL);
+        if (value == null) {
+            return appendNull();
+        }
+        if (value.precision() > col.decimalPrecision) {
+            throw new SQLException(createErrMsg("invalid decimal precision, max expected: " + col.decimalPrecision +
+                                                ", actual: " + value.precision()));
+        }
+        if (col.decimalScale != value.scale()) {
+            throw new SQLException(
+                createErrMsg("invalid decimal scale, expected: " + col.decimalScale + ", actual: " + value.scale()));
+        }
+
+        switch (col.decimalInternalType) {
+        case DUCKDB_TYPE_SMALLINT: {
+            checkDecimalPrecision(value, DUCKDB_TYPE_SMALLINT, 4);
+            short shortValue = value.unscaledValue().shortValueExact();
+            return appendDecimal(shortValue);
+        }
+        case DUCKDB_TYPE_INTEGER: {
+            checkDecimalPrecision(value, DUCKDB_TYPE_INTEGER, 9);
+            int intValue = value.unscaledValue().intValueExact();
+            return appendDecimal(intValue);
+        }
+        case DUCKDB_TYPE_BIGINT: {
+            checkDecimalPrecision(value, DUCKDB_TYPE_BIGINT, 18);
+            long longValue = value.unscaledValue().longValueExact();
+            return appendDecimal(longValue);
+        }
+        case DUCKDB_TYPE_HUGEINT: {
+            checkDecimalPrecision(value, DUCKDB_TYPE_HUGEINT, 38);
+            BigInteger unscaledValue = value.unscaledValue();
+            long lower = unscaledValue.longValue();
+            long upper = unscaledValue.shiftRight(64).longValue();
+            return appendDecimal(lower, upper);
+        }
+        default:
+            throw new SQLException(createErrMsg("invalid decimal internal type: '" + col.decimalInternalType + "'"));
         }
     }
 
-    public void append(byte[] value) throws SQLException {
+    // append arrays
+
+    public DuckDBAppender append(boolean[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(boolean[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(DUCKDB_TYPE_BOOLEAN);
+        if (values == null) {
+            return appendNull();
+        }
+
+        byte[] bytes = new byte[values.length];
+        for (int i = 0; i < values.length; i++) {
+            bytes[i] = (byte) (values[i] ? 1 : 0);
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        int pos = (int) (rowIdx * col.arraySize);
+        col.data.position(pos);
+        col.data.put(bytes);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(boolean[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(boolean[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(DUCKDB_TYPE_BOOLEAN);
+        byte[] buf = new byte[(int) col.arraySize];
+
+        for (int i = 0; i < values.length; i++) {
+            boolean[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            for (int j = 0; j < childValues.length; j++) {
+                buf[j] = (byte) (childValues[j] ? 1 : 0);
+            }
+
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            col.data.position(pos);
+            col.data.put(buf);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendByteArray(byte[] values) throws SQLException {
+        return appendByteArray(values, null);
+    }
+
+    public DuckDBAppender appendByteArray(byte[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(int8Types);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        int pos = (int) (rowIdx * col.arraySize);
+        col.data.position(pos);
+        col.data.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendByteArray(byte[][] values) throws SQLException {
+        return appendByteArray(values, null);
+    }
+
+    public DuckDBAppender appendByteArray(byte[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(int8Types);
+
+        for (int i = 0; i < values.length; i++) {
+            byte[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            col.data.position(pos);
+            col.data.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(byte[] values) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_BLOB);
+        if (values == null) {
+            return appendNull();
+        }
+        return appendStringOrBlobInternal(DUCKDB_TYPE_BLOB, values);
+    }
+
+    public DuckDBAppender append(char[] characters) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_VARCHAR);
+        if (characters == null) {
+            return appendNull();
+        }
+        String str = String.valueOf(characters);
+        return append(str);
+    }
+
+    public DuckDBAppender append(short[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(short[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(int16Types);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        ShortBuffer shortData = col.data.asShortBuffer();
+        int pos = (int) (rowIdx * col.arraySize);
+        shortData.position(pos);
+        shortData.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(short[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(short[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(int16Types);
+
+        for (int i = 0; i < values.length; i++) {
+            short[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            ShortBuffer shortBuffer = col.data.asShortBuffer();
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            shortBuffer.position(pos);
+            shortBuffer.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(int[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(int[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(int32Types);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        IntBuffer intData = col.data.asIntBuffer();
+        int pos = (int) (rowIdx * col.arraySize);
+        intData.position(pos);
+        intData.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(int[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(int[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(int32Types);
+
+        for (int i = 0; i < values.length; i++) {
+            int[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            IntBuffer intData = col.data.asIntBuffer();
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            intData.position(pos);
+            intData.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(long[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(long[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(int64Types);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        LongBuffer longData = col.data.asLongBuffer();
+        int pos = (int) (rowIdx * col.arraySize);
+        longData.position(pos);
+        longData.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(long[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(long[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(int64Types);
+
+        for (int i = 0; i < values.length; i++) {
+            long[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            LongBuffer longData = col.data.asLongBuffer();
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            longData.position(pos);
+            longData.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(float[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(float[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(DUCKDB_TYPE_FLOAT);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        FloatBuffer floatData = col.data.asFloatBuffer();
+        int pos = (int) (rowIdx * col.arraySize);
+        floatData.position(pos);
+        floatData.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(float[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(float[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(DUCKDB_TYPE_FLOAT);
+
+        for (int i = 0; i < values.length; i++) {
+            float[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            FloatBuffer floatData = col.data.asFloatBuffer();
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            floatData.position(pos);
+            floatData.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(double[] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(double[] values, boolean[] nullMask) throws SQLException {
+        Column col = currentArrayInnerColumn(DUCKDB_TYPE_DOUBLE);
+        if (values == null) {
+            return appendNull();
+        }
+
+        checkArrayLength(col, values.length);
+        setArrayNullMask(col, nullMask);
+
+        DoubleBuffer doubleData = col.data.asDoubleBuffer();
+        int pos = (int) (rowIdx * col.arraySize);
+        doubleData.position(pos);
+        doubleData.put(values);
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(double[][] values) throws SQLException {
+        return append(values, null);
+    }
+
+    public DuckDBAppender append(double[][] values, boolean[][] nullMask) throws SQLException {
+        Column arrayCol = currentArrayInnerColumn(DUCKDB_TYPE_ARRAY);
+        if (values == null) {
+            return appendNull();
+        }
+        checkArrayLength(arrayCol, values.length);
+
+        Column col = currentNestedArrayInnerColumn(DUCKDB_TYPE_DOUBLE);
+
+        for (int i = 0; i < values.length; i++) {
+            double[] childValues = values[i];
+
+            if (childValues == null) {
+                arrayCol.setNull(rowIdx, i);
+                continue;
+            }
+            checkArrayLength(col, childValues.length);
+            if (nullMask != null) {
+                setArrayNullMask(col, nullMask[i], i);
+            }
+
+            DoubleBuffer doubleBuffer = col.data.asDoubleBuffer();
+            int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
+            doubleBuffer.position(pos);
+            doubleBuffer.put(childValues);
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    // append objects
+
+    public DuckDBAppender append(String value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_VARCHAR);
         if (value == null) {
-            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
-        } else {
-            DuckDBNative.duckdb_jdbc_appender_append_bytes(appender_ref, value);
+            return appendNull();
+        }
+
+        byte[] bytes = value.getBytes(UTF_8);
+        return appendStringOrBlobInternal(DUCKDB_TYPE_VARCHAR, bytes);
+    }
+
+    public DuckDBAppender appendEpochDays(int days) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_DATE);
+        col.data.putInt(days);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(LocalDate value) throws SQLException {
+        if (value == null) {
+            return appendNull();
+        }
+        long days = value.toEpochDay();
+        if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
+            throw new SQLException(createErrMsg("unsupported number of days: " + days + ", must fit into 'int32_t'"));
+        }
+        return appendEpochDays((int) days);
+    }
+
+    public DuckDBAppender appendDayMicros(long micros) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_TIME);
+        col.data.putLong(micros);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(LocalTime value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_TIME);
+        if (value == null) {
+            return appendNull();
+        }
+        long micros = value.toNanoOfDay() / 1000;
+        return appendDayMicros(micros);
+    }
+
+    public DuckDBAppender appendDayMicros(long micros, int offset) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_TIME_TZ);
+        long packed = ((micros & 0xFFFFFFFFFFL) << 24) | (long) (offset & 0xFFFFFF);
+        col.data.putLong(packed);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(OffsetTime value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_TIME_TZ);
+        if (value == null) {
+            return appendNull();
+        }
+        int offset = value.getOffset().getTotalSeconds();
+        long micros = value.toLocalTime().toNanoOfDay() / 1000;
+        return appendDayMicros(micros, offset);
+    }
+
+    public DuckDBAppender appendEpochSeconds(long seconds) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_TIMESTAMP_S);
+        col.data.putLong(seconds);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendEpochMillis(long millis) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_TIMESTAMP_MS);
+        col.data.putLong(millis);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendEpochMicros(long micros) throws SQLException {
+        Column col = currentColumnWithRowPos(timestampMicrosTypes);
+        col.data.putLong(micros);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendEpochNanos(long nanos) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_TIMESTAMP_NS);
+        col.data.putLong(nanos);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(LocalDateTime value) throws SQLException {
+        Column col = currentColumn();
+        checkCurrentColumnType(timestampLocalTypes);
+        if (value == null) {
+            return appendNull();
+        }
+        switch (col.colType) {
+        case DUCKDB_TYPE_TIMESTAMP_S:
+            long seconds = EPOCH_DATE_TIME.until(value, SECONDS);
+            return appendEpochSeconds(seconds);
+        case DUCKDB_TYPE_TIMESTAMP_MS: {
+            long millis = EPOCH_DATE_TIME.until(value, MILLIS);
+            return appendEpochMillis(millis);
+        }
+        case DUCKDB_TYPE_TIMESTAMP: {
+            long micros = EPOCH_DATE_TIME.until(value, MICROS);
+            return appendEpochMicros(micros);
+        }
+        case DUCKDB_TYPE_TIMESTAMP_NS: {
+            long nanos = EPOCH_DATE_TIME.until(value, NANOS);
+            return appendEpochNanos(nanos);
+        }
+        default:
+            throw new SQLException(createErrMsg("invalid column type: " + col.colType));
         }
     }
 
-    protected void finalize() throws Throwable {
-        close();
+    public DuckDBAppender append(java.util.Date value) throws SQLException {
+        Column col = currentColumn();
+        checkCurrentColumnType(timestampLocalTypes);
+        if (value == null) {
+            return appendNull();
+        }
+        switch (col.colType) {
+        case DUCKDB_TYPE_TIMESTAMP_S:
+            long seconds = value.getTime() / 1000;
+            return appendEpochSeconds(seconds);
+        case DUCKDB_TYPE_TIMESTAMP_MS: {
+            long millis = value.getTime();
+            return appendEpochMillis(millis);
+        }
+        case DUCKDB_TYPE_TIMESTAMP: {
+            long micros = Math.multiplyExact(value.getTime(), 1000);
+            return appendEpochMicros(micros);
+        }
+        case DUCKDB_TYPE_TIMESTAMP_NS: {
+            long nanos = Math.multiplyExact(value.getTime(), 1000000);
+            return appendEpochNanos(nanos);
+        }
+        default:
+            throw new SQLException(createErrMsg("invalid column type: " + col.colType));
+        }
     }
 
-    public synchronized void close() throws SQLException {
-        if (appender_ref != null) {
-            DuckDBNative.duckdb_jdbc_appender_close(appender_ref);
-            appender_ref = null;
+    public DuckDBAppender append(OffsetDateTime value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_TIMESTAMP_TZ);
+        if (value == null) {
+            return appendNull();
+        }
+        ZonedDateTime zdt = value.atZoneSameInstant(ZoneOffset.UTC);
+        LocalDateTime ldt = zdt.toLocalDateTime();
+        long micros = EPOCH_DATE_TIME.until(ldt, MICROS);
+        return appendEpochMicros(micros);
+    }
+
+    // append special
+
+    public DuckDBAppender appendNull() throws SQLException {
+        Column col = currentColumn();
+        col.setNull(rowIdx);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender appendDefault() throws SQLException {
+        currentColumn();
+        appenderRefLock.lock();
+        try {
+            checkOpen();
+            duckdb_append_default_to_chunk(appenderRef, chunkRef, colIdx, rowIdx);
+        } finally {
+            appenderRefLock.unlock();
+        }
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    // options
+
+    public boolean getWriteInlinedStrings() {
+        return writeInlinedStrings;
+    }
+
+    public void setWriteInlinedStrings(boolean writeInlinedStrings) {
+        this.writeInlinedStrings = writeInlinedStrings;
+    }
+
+    private String createErrMsg(String error) {
+        return "Appender error"
+            + ", catalog: '" + catalog + "'"
+            + ", schema: '" + schema + "'"
+            + ", table: '" + table + "'"
+            + ", message: " + (null != error ? error : "N/A");
+    }
+
+    private void checkOpen() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException(createErrMsg("appender was closed"));
+        }
+    }
+
+    private void checkAppendingRow(boolean expected) throws SQLException {
+        if (appendingRow != expected) {
+            throw new SQLException(createErrMsg("'beginRow' and 'endRow' calls must be paired"));
+        }
+    }
+
+    private void checkAppendingStruct(boolean expected) throws SQLException {
+        if (appendingStruct != expected) {
+            throw new SQLException(
+                createErrMsg("'beginStruct' and 'endStruct' calls cannot be interleaved with 'beginRow' and 'endRow'"));
+        }
+    }
+
+    private void incrementColOrStructFieldIdx() throws SQLException {
+        if (appendingStruct) {
+            structFieldIdx++;
+            return;
+        }
+        if (appendingRow) {
+            colIdx++;
+            return;
+        }
+        throw new SQLException(createErrMsg("'beginRow' must be called before calling `append`"));
+    }
+
+    private Column currentColumn() throws SQLException {
+        checkOpen();
+
+        if (colIdx >= columns.length) {
+            throw new SQLException(
+                createErrMsg("invalid columns count, expected: " + columns.length + ", actual: " + (colIdx + 1)));
+        }
+
+        Column col = columns[colIdx];
+
+        if (!appendingStruct || col.colType != DUCKDB_TYPE_STRUCT) {
+            return col;
+        }
+
+        if (structFieldIdx >= col.children.size()) {
+            throw new SQLException(createErrMsg("invalid struct fields count, expected: " + columns.length +
+                                                ", actual: " + (structFieldIdx + 1)));
+        }
+
+        return col.children.get(structFieldIdx);
+    }
+
+    private Column currentArrayInnerColumn(CAPIType ctype) throws SQLException {
+        return currentArrayInnerColumn(ctype.typeArray);
+    }
+
+    private Column currentArrayInnerColumn(CAPIType[] ctypes) throws SQLException {
+        Column parentCol = currentColumn();
+        if (parentCol.colType != DUCKDB_TYPE_ARRAY) {
+            throw new SQLException(createErrMsg("invalid array column type: '" + parentCol.colType + "'"));
+        }
+
+        Column col = parentCol.children.get(0);
+        for (CAPIType ct : ctypes) {
+            if (col.colType == ct) {
+                return col;
+            }
+        }
+        throw new SQLException(createErrMsg("invalid array inner column type, expected one of: '" +
+                                            Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"));
+    }
+
+    private Column currentNestedArrayInnerColumn(CAPIType ctype) throws SQLException {
+        return currentNestedArrayInnerColumn(ctype.typeArray);
+    }
+
+    private Column currentNestedArrayInnerColumn(CAPIType[] ctypes) throws SQLException {
+        Column parentCol = currentColumn();
+        if (parentCol.colType != DUCKDB_TYPE_ARRAY) {
+            throw new SQLException(createErrMsg("invalid array column type: '" + parentCol.colType + "'"));
+        }
+
+        Column arrayCol = parentCol.children.get(0);
+        if (arrayCol.colType != DUCKDB_TYPE_ARRAY) {
+            throw new SQLException(createErrMsg("invalid nested array column type: '" + arrayCol.colType + "'"));
+        }
+
+        Column col = arrayCol.children.get(0);
+        for (CAPIType ct : ctypes) {
+            if (col.colType == ct) {
+                return col;
+            }
+        }
+        throw new SQLException(createErrMsg("invalid  nested array inner column type, expected one of: '" +
+                                            Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"));
+    }
+
+    private void checkCurrentColumnType(CAPIType ctype) throws SQLException {
+        checkCurrentColumnType(ctype.typeArray);
+    }
+
+    private void checkCurrentColumnType(CAPIType[] ctypes) throws SQLException {
+        Column col = currentColumn();
+        checkColumnType(col, ctypes);
+    }
+
+    private void checkColumnType(Column col, CAPIType ctype) throws SQLException {
+        checkColumnType(col, ctype.typeArray);
+    }
+
+    private void checkColumnType(Column col, CAPIType[] ctypes) throws SQLException {
+        for (CAPIType ct : ctypes) {
+            if (col.colType == ct) {
+                return;
+            }
+        }
+        throw new SQLException(createErrMsg("invalid column type, expected one of: '" + Arrays.toString(ctypes) +
+                                            "', actual: '" + col.colType + "'"));
+    }
+
+    private void checkArrayLength(Column col, int length) throws SQLException {
+        if (col.arraySize != length) {
+            throw new SQLException(
+                createErrMsg("invalid array size, expected: " + col.arraySize + ", actual: " + length));
+        }
+    }
+
+    private void setArrayNullMask(Column col, boolean[] nullMask) throws SQLException {
+        setArrayNullMask(col, nullMask, 0);
+    }
+
+    private void setArrayNullMask(Column col, boolean[] nullMask, int parentArrayIdx) throws SQLException {
+        if (null == nullMask) {
+            return;
+        }
+        //        if (nullMask.length != col.arraySize) {
+        //            throw new SQLException(createErrMsg("invalid null mask size, expected: " + col.arraySize +
+        //                                                ", actual: " + nullMask.length));
+        //        }
+        for (int i = 0; i < nullMask.length; i++) {
+            if (nullMask[i]) {
+                col.setNull(rowIdx, (int) (i + col.arraySize * parentArrayIdx));
+            }
+        }
+    }
+
+    private Column currentDecimalColumnWithRowPos(CAPIType decimalInternalType) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_DECIMAL);
+        if (col.decimalInternalType != decimalInternalType) {
+            throw new SQLException(createErrMsg("invalid decimal internal type, expected: '" + col.decimalInternalType +
+                                                "', actual: '" + decimalInternalType + "'"));
+        }
+        setRowPos(col, col.decimalInternalType.widthBytes);
+        return col;
+    }
+
+    private Column currentColumnWithRowPos(CAPIType ctype) throws SQLException {
+        return currentColumnWithRowPos(ctype.typeArray);
+    }
+
+    private void setRowPos(Column col, long widthBytes) throws SQLException {
+        long pos = rowIdx * widthBytes;
+        if (pos >= col.data.capacity()) {
+            throw new SQLException(
+                createErrMsg("invalid calculated position: " + pos + ", type: '" + col.colType + "'"));
+        }
+        col.data.position((int) (pos));
+    }
+
+    private Column currentColumnWithRowPos(CAPIType[] ctypes) throws SQLException {
+        Column col = currentColumn();
+
+        boolean typeMatches = false;
+        for (CAPIType ct : ctypes) {
+            if (col.colType.typeId == ct.typeId) {
+                typeMatches = true;
+            }
+            if (col.colType.widthBytes != ct.widthBytes) {
+                throw new SQLException(
+                    createErrMsg("invalid columns type width, expected: '" + ct + "', actual: '" + col.colType + "'"));
+            }
+        }
+        if (!typeMatches) {
+            String[] typeStrs = new String[ctypes.length];
+            for (int i = 0; i < ctypes.length; i++) {
+                typeStrs[i] = String.valueOf(ctypes[i]);
+            }
+            throw new SQLException(createErrMsg("invalid columns type, expected one of: '" + Arrays.toString(typeStrs) +
+                                                "', actual: '" + col.colType + "'"));
+        }
+
+        if (col.colType.widthBytes > 0) {
+            setRowPos(col, col.colType.widthBytes);
+        }
+
+        return col;
+    }
+
+    private void checkDecimalPrecision(BigDecimal value, CAPIType decimalInternalType, int maxPrecision)
+        throws SQLException {
+        if (value.precision() > maxPrecision) {
+            throw new SQLException(createErrMsg("invalid decimal precision, value: " + value.precision() +
+                                                ", max value: " + maxPrecision +
+                                                ", decimal internal type: " + decimalInternalType));
+        }
+    }
+
+    private DuckDBAppender appendStringOrBlobInternal(CAPIType ctype, byte[] bytes) throws SQLException {
+        if (writeInlinedStrings && bytes.length < STRING_MAX_INLINE_BYTES) {
+            Column col = currentColumnWithRowPos(ctype);
+            col.data.putInt(bytes.length);
+            if (bytes.length > 0) {
+                col.data.put(bytes);
+            }
+        } else {
+            Column col = currentColumn();
+            checkColumnType(col, ctype);
+            appenderRefLock.lock();
+            try {
+                checkOpen();
+                duckdb_vector_assign_string_element_len(col.vectorRef, rowIdx, bytes);
+            } finally {
+                appenderRefLock.unlock();
+            }
+        }
+
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    private static byte[] utf8(String str) {
+        if (null == str) {
+            return null;
+        }
+        return str.getBytes(UTF_8);
+    }
+
+    private static String strFromUTF8(byte[] utf8) {
+        if (null == utf8) {
+            return null;
+        }
+        return new String(utf8, UTF_8);
+    }
+
+    private static ByteBuffer createAppender(DuckDBConnection conn, String catalog, String schema, String table)
+        throws SQLException {
+        conn.checkOpen();
+        Lock connRefLock = conn.connRefLock;
+        connRefLock.lock();
+        try {
+            ByteBuffer[] out = new ByteBuffer[1];
+            int state = duckdb_appender_create_ext(conn.connRef, utf8(catalog), utf8(schema), utf8(table), out);
+            if (0 != state) {
+                throw new SQLException("duckdb_appender_create_ext error");
+            }
+            return out[0];
+        } finally {
+            connRefLock.unlock();
+        }
+    }
+
+    private static ByteBuffer[] readTableTypes(ByteBuffer appenderRef) throws SQLException {
+        long colCountLong = duckdb_appender_column_count(appenderRef);
+        if (colCountLong > Integer.MAX_VALUE || colCountLong < 0) {
+            throw new SQLException("invalid columns count: " + colCountLong);
+        }
+        int colCount = (int) colCountLong;
+
+        ByteBuffer[] res = new ByteBuffer[colCount];
+
+        for (int i = 0; i < colCount; i++) {
+            ByteBuffer colType = duckdb_appender_column_type(appenderRef, i);
+            if (null == colType) {
+                throw new SQLException("cannot get logical type for column: " + i);
+            }
+            int typeId = duckdb_get_type_id(colType);
+            if (!supportedTypes.contains(typeId)) {
+                for (ByteBuffer lt : res) {
+                    if (null != lt) {
+                        duckdb_destroy_logical_type(lt);
+                    }
+                }
+                throw new SQLException("unsupported C API type: " + typeId);
+            }
+            res[i] = colType;
+        }
+
+        return res;
+    }
+
+    private static ByteBuffer createChunk(ByteBuffer[] colTypes) throws SQLException {
+        ByteBuffer chunkRef = duckdb_create_data_chunk(colTypes);
+        if (null == chunkRef) {
+            throw new SQLException("cannot create data chunk");
+        }
+        return chunkRef;
+    }
+
+    private static void initVecChildren(Column parent) throws SQLException {
+        List<ByteBuffer> children = new ArrayList<>();
+
+        switch (parent.colType) {
+        case DUCKDB_TYPE_LIST:
+        case DUCKDB_TYPE_MAP: {
+            ByteBuffer vec = duckdb_list_vector_get_child(parent.vectorRef);
+            children.add(vec);
+            break;
+        }
+        case DUCKDB_TYPE_STRUCT:
+        case DUCKDB_TYPE_UNION: {
+            long count = duckdb_struct_type_child_count(parent.colTypeRef);
+            for (int i = 0; i < count; i++) {
+                ByteBuffer vec = duckdb_struct_vector_get_child(parent.vectorRef, i);
+                children.add(vec);
+            }
+            break;
+        }
+        case DUCKDB_TYPE_ARRAY: {
+            ByteBuffer vec = duckdb_array_vector_get_child(parent.vectorRef);
+            children.add(vec);
+            break;
+        }
+        }
+
+        for (ByteBuffer child : children) {
+            if (null == child) {
+                throw new SQLException("cannot initialize data chunk child list vector");
+            }
+            ByteBuffer lt = duckdb_vector_get_column_type(child);
+            if (null == lt) {
+                throw new SQLException("cannot initialize data chunk child list vector type");
+            }
+            Column cvec = new Column(parent, lt, child);
+            parent.children.add(cvec);
+        }
+    }
+
+    private static Column[] createVectors(ByteBuffer chunkRef, ByteBuffer[] colTypes) throws SQLException {
+        Column[] vectors = new Column[colTypes.length];
+        try {
+            for (int i = 0; i < colTypes.length; i++) {
+                ByteBuffer vector = duckdb_data_chunk_get_vector(chunkRef, i);
+                vectors[i] = new Column(null, colTypes[i], vector);
+                colTypes[i] = null;
+            }
+        } catch (Exception e) {
+            for (Column col : vectors) {
+                if (null != col) {
+                    col.destroy();
+                }
+            }
+            throw e;
+        }
+        return vectors;
+    }
+
+    private static class Column {
+        private final Column parent;
+        private ByteBuffer colTypeRef;
+        private final CAPIType colType;
+        private final CAPIType decimalInternalType;
+        private final int decimalPrecision;
+        private final int decimalScale;
+        private final long arraySize;
+        private final ByteBuffer vectorRef;
+        private ByteBuffer data;
+        private ByteBuffer validity;
+        private final List<Column> children = new ArrayList<>();
+
+        private Column(Column parent, ByteBuffer colTypeRef, ByteBuffer vector) throws SQLException {
+            this.parent = parent;
+            this.colTypeRef = colTypeRef;
+            int colTypeId = duckdb_get_type_id(colTypeRef);
+            this.colType = capiTypeFromTypeId(colTypeId);
+
+            if (colType == DUCKDB_TYPE_DECIMAL) {
+                int decimalInternalTypeId = duckdb_decimal_internal_type(colTypeRef);
+                this.decimalInternalType = capiTypeFromTypeId(decimalInternalTypeId);
+                this.decimalPrecision = duckdb_decimal_width(colTypeRef);
+                this.decimalScale = duckdb_decimal_scale(colTypeRef);
+            } else {
+                this.decimalInternalType = DUCKDB_TYPE_INVALID;
+                this.decimalPrecision = -1;
+                this.decimalScale = -1;
+            }
+
+            if (null == parent || parent.colType != DUCKDB_TYPE_ARRAY) {
+                this.arraySize = 1;
+            } else {
+                this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
+            }
+
+            this.vectorRef = vector;
+            if (null == this.vectorRef) {
+                throw new SQLException("cannot initialize data chunk vector");
+            }
+
+            if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL) {
+                this.data = duckdb_vector_get_data(vectorRef, widthBytes() * arraySize * parentArraySize());
+                if (null == this.data) {
+                    throw new SQLException("cannot initialize data chunk vector data");
+                }
+            } else {
+                this.data = null;
+            }
+
+            duckdb_vector_ensure_validity_writable(vectorRef);
+            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            if (null == this.validity) {
+                throw new SQLException("cannot initialize data chunk vector validity");
+            }
+
+            // last call in constructor
+            initVecChildren(this);
+        }
+
+        void reset() throws SQLException {
+            if (null != this.data) {
+                this.data = duckdb_vector_get_data(vectorRef, widthBytes() * arraySize * parentArraySize());
+                if (null == this.data) {
+                    throw new SQLException("cannot reset data chunk vector data");
+                }
+            }
+
+            duckdb_vector_ensure_validity_writable(vectorRef);
+            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            if (null == this.validity) {
+                throw new SQLException("cannot reset data chunk vector validity");
+            }
+
+            for (Column col : children) {
+                col.reset();
+            }
+        }
+
+        void destroy() {
+            for (Column cvec : children) {
+                cvec.destroy();
+            }
+            children.clear();
+            if (null != colTypeRef) {
+                duckdb_destroy_logical_type(colTypeRef);
+                colTypeRef = null;
+            }
+        }
+
+        void setNull(long rowIdx) throws SQLException {
+            if (1 != arraySize) {
+                throw new SQLException("Invalid API usage for array, size: " + arraySize);
+            }
+            setNull(rowIdx, 0);
+            for (Column col : children) {
+                for (int i = 0; i < col.arraySize; i++) {
+                    col.setNull(rowIdx, i);
+                }
+            }
+        }
+
+        void setNull(long rowIdx, int arrayIdx) {
+            LongBuffer entries = this.validity.asLongBuffer();
+
+            long vectorPos = rowIdx * arraySize * parentArraySize() + arrayIdx;
+            long validityPos = vectorPos / 64;
+            entries.position((int) validityPos);
+            long mask = entries.get();
+
+            long idxInEntry = vectorPos % 64;
+            mask &= ~(1L << idxInEntry);
+            entries.position((int) validityPos);
+            entries.put(mask);
+        }
+
+        long widthBytes() {
+            if (colType == DUCKDB_TYPE_DECIMAL) {
+                return decimalInternalType.widthBytes;
+            } else {
+                return colType.widthBytes;
+            }
+        }
+
+        long parentArraySize() {
+            if (null == parent) {
+                return 1;
+            }
+            return parent.arraySize;
         }
     }
 }
