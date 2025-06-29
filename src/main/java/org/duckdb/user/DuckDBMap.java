@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class DuckDBMap<K, V> extends HashMap<K, V> {
+    private static final long serialVersionUID = 0L;
     private final String typeName;
 
     public DuckDBMap(String typeName, Map<K, V> map) {

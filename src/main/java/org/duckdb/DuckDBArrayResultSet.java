@@ -119,6 +119,7 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
         if (columnIndex == 1) {
             return BigDecimal.valueOf(getIndexColumnValue());
@@ -152,6 +153,7 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(int columnIndex) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }
@@ -202,6 +204,7 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
         return getBigDecimal(findColumn(columnLabel), scale);
     }
@@ -232,6 +235,7 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(String columnLabel) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }

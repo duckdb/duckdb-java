@@ -549,7 +549,7 @@ endif()
 
 file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
-set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g)
+set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g -Xlint:all)
 
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
         MANIFEST META-INF/MANIFEST.MF
@@ -566,6 +566,12 @@ else()
 endif()
 
 add_library(duckdb_java SHARED
+  src/jni/bindings_appender.cpp
+  src/jni/bindings_common.cpp
+  src/jni/bindings_data_chunk.cpp
+  src/jni/bindings_logical_type.cpp
+  src/jni/bindings_validity.cpp
+  src/jni/bindings_vector.cpp
   src/jni/config.cpp
   src/jni/duckdb_java.cpp
   src/jni/functions.cpp

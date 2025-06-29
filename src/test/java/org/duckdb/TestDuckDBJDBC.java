@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.SecureRandom;
 import java.sql.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -604,15 +603,8 @@ public class TestDuckDBJDBC {
 
         conn_rw.close();
 
-        try (Statement ignored = conn_rw.createStatement()) {
-            fail("Connection was already closed; shouldn't be able to create a statement");
-        } catch (SQLException e) {
-        }
-
-        try (Connection ignored = conn_rw.unwrap(DuckDBConnection.class).duplicate()) {
-            fail("Connection was already closed; shouldn't be able to duplicate");
-        } catch (SQLException e) {
-        }
+        assertThrows(conn_rw::createStatement, SQLException.class);
+        assertThrows(() -> { conn_rw.unwrap(DuckDBConnection.class).duplicate(); }, SQLException.class);
 
         // // we can create two parallel read only connections and query them, too
         try (Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
@@ -1175,519 +1167,6 @@ public class TestDuckDBJDBC {
         assertTrue(rs.getString(2) != null);
 
         rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_numbers() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        // int8, int4, int2, int1, float8, float4
-        stmt.execute("CREATE TABLE numbers (a BIGINT, b INTEGER, c SMALLINT, d TINYINT, e DOUBLE, f FLOAT)");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "numbers");
-
-        for (int i = 0; i < 50; i++) {
-            appender.beginRow();
-            appender.append(Long.MAX_VALUE - i);
-            appender.append(Integer.MAX_VALUE - i);
-            appender.append(Short.MAX_VALUE - i);
-            appender.append(Byte.MAX_VALUE - i);
-            appender.append(i);
-            appender.append(i);
-            appender.endRow();
-        }
-        appender.close();
-
-        ResultSet rs = stmt.executeQuery("SELECT max(a), max(b), max(c), max(d), max(e), max(f) FROM numbers");
-        assertFalse(rs.isClosed());
-        assertTrue(rs.next());
-
-        long resA = rs.getLong(1);
-        assertEquals(resA, Long.MAX_VALUE);
-
-        int resB = rs.getInt(2);
-        assertEquals(resB, Integer.MAX_VALUE);
-
-        short resC = rs.getShort(3);
-        assertEquals(resC, Short.MAX_VALUE);
-
-        byte resD = rs.getByte(4);
-        assertEquals(resD, Byte.MAX_VALUE);
-
-        double resE = rs.getDouble(5);
-        assertEquals(resE, 49.0d);
-
-        float resF = rs.getFloat(6);
-        assertEquals(resF, 49.0f);
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_date_and_time() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE date_and_time (id INT4, a TIMESTAMP)");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "date_and_time");
-
-        LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
-        LocalDateTime ldt2 = LocalDateTime.of(-23434, 3, 5, 23, 2);
-        LocalDateTime ldt3 = LocalDateTime.of(1970, 1, 1, 0, 0);
-        LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999000);
-
-        appender.beginRow();
-        appender.append(1);
-        appender.appendLocalDateTime(ldt1);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(2);
-        appender.appendLocalDateTime(ldt2);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(3);
-        appender.appendLocalDateTime(ldt3);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(4);
-        appender.appendLocalDateTime(ldt4);
-        appender.endRow();
-        appender.close();
-
-        ResultSet rs = stmt.executeQuery("SELECT a FROM date_and_time ORDER BY id");
-        assertFalse(rs.isClosed());
-        assertTrue(rs.next());
-
-        LocalDateTime res1 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res1, ldt1);
-        assertTrue(rs.next());
-
-        LocalDateTime res2 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res2, ldt2);
-        assertTrue(rs.next());
-
-        LocalDateTime res3 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res3, ldt3);
-        assertTrue(rs.next());
-
-        LocalDateTime res4 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res4, ldt4);
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_decimal() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute(
-            "CREATE TABLE decimals (id INT4, a DECIMAL(4,2), b DECIMAL(8,4), c DECIMAL(18,6), d DECIMAL(38,20))");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-
-        BigDecimal bigdec16 = new BigDecimal("12.34").setScale(2);
-        BigDecimal bigdec32 = new BigDecimal("1234.5678").setScale(4);
-        BigDecimal bigdec64 = new BigDecimal("123456789012.345678").setScale(6);
-        BigDecimal bigdec128 = new BigDecimal("123456789012345678.90123456789012345678").setScale(20);
-        BigDecimal negbigdec16 = new BigDecimal("-12.34").setScale(2);
-        BigDecimal negbigdec32 = new BigDecimal("-1234.5678").setScale(4);
-        BigDecimal negbigdec64 = new BigDecimal("-123456789012.345678").setScale(6);
-        BigDecimal negbigdec128 = new BigDecimal("-123456789012345678.90123456789012345678").setScale(20);
-        BigDecimal smallbigdec16 = new BigDecimal("-1.34").setScale(2);
-        BigDecimal smallbigdec32 = new BigDecimal("-123.5678").setScale(4);
-        BigDecimal smallbigdec64 = new BigDecimal("-12345678901.345678").setScale(6);
-        BigDecimal smallbigdec128 = new BigDecimal("-12345678901234567.90123456789012345678").setScale(20);
-        BigDecimal intbigdec16 = new BigDecimal("-1").setScale(2);
-        BigDecimal intbigdec32 = new BigDecimal("-123").setScale(4);
-        BigDecimal intbigdec64 = new BigDecimal("-12345678901").setScale(6);
-        BigDecimal intbigdec128 = new BigDecimal("-12345678901234567").setScale(20);
-        BigDecimal onebigdec16 = new BigDecimal("1").setScale(2);
-        BigDecimal onebigdec32 = new BigDecimal("1").setScale(4);
-        BigDecimal onebigdec64 = new BigDecimal("1").setScale(6);
-        BigDecimal onebigdec128 = new BigDecimal("1").setScale(20);
-
-        appender.beginRow();
-        appender.append(1);
-        appender.appendBigDecimal(bigdec16);
-        appender.appendBigDecimal(bigdec32);
-        appender.appendBigDecimal(bigdec64);
-        appender.appendBigDecimal(bigdec128);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(2);
-        appender.appendBigDecimal(negbigdec16);
-        appender.appendBigDecimal(negbigdec32);
-        appender.appendBigDecimal(negbigdec64);
-        appender.appendBigDecimal(negbigdec128);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(3);
-        appender.appendBigDecimal(smallbigdec16);
-        appender.appendBigDecimal(smallbigdec32);
-        appender.appendBigDecimal(smallbigdec64);
-        appender.appendBigDecimal(smallbigdec128);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(4);
-        appender.appendBigDecimal(intbigdec16);
-        appender.appendBigDecimal(intbigdec32);
-        appender.appendBigDecimal(intbigdec64);
-        appender.appendBigDecimal(intbigdec128);
-        appender.endRow();
-        appender.beginRow();
-        appender.append(5);
-        appender.appendBigDecimal(onebigdec16);
-        appender.appendBigDecimal(onebigdec32);
-        appender.appendBigDecimal(onebigdec64);
-        appender.appendBigDecimal(onebigdec128);
-        appender.endRow();
-        appender.close();
-
-        ResultSet rs = stmt.executeQuery("SELECT a,b,c,d FROM decimals ORDER BY id");
-        assertFalse(rs.isClosed());
-        assertTrue(rs.next());
-
-        BigDecimal rs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
-        BigDecimal rs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
-        BigDecimal rs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
-        BigDecimal rs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
-
-        assertEquals(rs1, bigdec16);
-        assertEquals(rs2, bigdec32);
-        assertEquals(rs3, bigdec64);
-        assertEquals(rs4, bigdec128);
-        assertTrue(rs.next());
-
-        BigDecimal nrs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
-        BigDecimal nrs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
-        BigDecimal nrs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
-        BigDecimal nrs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
-
-        assertEquals(nrs1, negbigdec16);
-        assertEquals(nrs2, negbigdec32);
-        assertEquals(nrs3, negbigdec64);
-        assertEquals(nrs4, negbigdec128);
-        assertTrue(rs.next());
-
-        BigDecimal srs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
-        BigDecimal srs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
-        BigDecimal srs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
-        BigDecimal srs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
-
-        assertEquals(srs1, smallbigdec16);
-        assertEquals(srs2, smallbigdec32);
-        assertEquals(srs3, smallbigdec64);
-        assertEquals(srs4, smallbigdec128);
-        assertTrue(rs.next());
-
-        BigDecimal irs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
-        BigDecimal irs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
-        BigDecimal irs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
-        BigDecimal irs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
-
-        assertEquals(irs1, intbigdec16);
-        assertEquals(irs2, intbigdec32);
-        assertEquals(irs3, intbigdec64);
-        assertEquals(irs4, intbigdec128);
-        assertTrue(rs.next());
-
-        BigDecimal oners1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
-        BigDecimal oners2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
-        BigDecimal oners3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
-        BigDecimal oners4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
-
-        assertEquals(oners1, onebigdec16);
-        assertEquals(oners2, onebigdec32);
-        assertEquals(oners3, onebigdec64);
-        assertEquals(oners4, onebigdec128);
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_decimal_wrong_scale() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute(
-            "CREATE TABLE decimals (id INT4, a DECIMAL(4,2), b DECIMAL(8,4), c DECIMAL(18,6), d DECIMAL(38,20))");
-
-        assertThrows(() -> {
-            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender.append(1);
-            appender.beginRow();
-            appender.appendBigDecimal(new BigDecimal("121.14").setScale(2));
-        }, SQLException.class);
-
-        assertThrows(() -> {
-            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender.beginRow();
-            appender.append(2);
-            appender.appendBigDecimal(new BigDecimal("21.1").setScale(2));
-            appender.appendBigDecimal(new BigDecimal("12111.1411").setScale(4));
-        }, SQLException.class);
-
-        assertThrows(() -> {
-            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
-            appender.beginRow();
-            appender.append(3);
-            appender.appendBigDecimal(new BigDecimal("21.1").setScale(2));
-            appender.appendBigDecimal(new BigDecimal("21.1").setScale(4));
-            appender.appendBigDecimal(new BigDecimal("1234567890123.123456").setScale(6));
-        }, SQLException.class);
-
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_int_string() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER, s VARCHAR)");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        for (int i = 0; i < 1000; i++) {
-            appender.beginRow();
-            appender.append(i);
-            appender.append("str " + i);
-            appender.endRow();
-        }
-        appender.close();
-
-        ResultSet rs = stmt.executeQuery("SELECT max(a), min(s) FROM data");
-        assertFalse(rs.isClosed());
-
-        assertTrue(rs.next());
-        int resA = rs.getInt(1);
-        assertEquals(resA, 999);
-        String resB = rs.getString(2);
-        assertEquals(resB, "str 0");
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_string_with_emoji() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (str_value VARCHAR(10))");
-        String expectedValue = "䭔\uD86D\uDF7C🔥\uD83D\uDE1C";
-        try (DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data")) {
-            appender.beginRow();
-            appender.append(expectedValue);
-            appender.endRow();
-        }
-
-        ResultSet rs = stmt.executeQuery("SELECT str_value FROM data");
-        assertFalse(rs.isClosed());
-        assertTrue(rs.next());
-
-        String appendedValue = rs.getString(1);
-        assertEquals(appendedValue, expectedValue);
-
-        rs.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_table_does_not_exist() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        assertThrows(() -> {
-            @SuppressWarnings("unused")
-            DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-        }, SQLException.class);
-
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_table_deleted() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER)");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        appender.beginRow();
-        appender.append(1);
-        appender.endRow();
-
-        stmt.execute("DROP TABLE data");
-
-        appender.beginRow();
-        appender.append(2);
-        appender.endRow();
-
-        assertThrows(appender::close, SQLException.class);
-
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_append_too_many_columns() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER)");
-        stmt.close();
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        assertThrows(() -> {
-            appender.beginRow();
-            appender.append(1);
-            appender.append(2);
-        }, SQLException.class);
-
-        conn.close();
-    }
-
-    public static void test_appender_append_too_few_columns() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER, b INTEGER)");
-        stmt.close();
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        assertThrows(() -> {
-            appender.beginRow();
-            appender.append(1);
-            appender.endRow();
-        }, SQLException.class);
-
-        conn.close();
-    }
-
-    public static void test_appender_type_mismatch() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER)");
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        assertThrows(() -> {
-            appender.beginRow();
-            appender.append("str");
-        }, SQLException.class);
-
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_null_integer() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a INTEGER)");
-
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        appender.beginRow();
-
-        // int foo = null won't compile
-        // Integer foo = null will compile, but NPE on cast to int
-        // So, use the String appender to pass an arbitrary null value
-        appender.append((String) null);
-        appender.endRow();
-        appender.flush();
-        appender.close();
-
-        ResultSet results = stmt.executeQuery("SELECT * FROM data");
-        assertTrue(results.next());
-        // java.sql.ResultSet.getInt(int) returns 0 if the value is NULL
-        assertEquals(0, results.getInt(1));
-        assertTrue(results.wasNull());
-
-        results.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_null_varchar() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a VARCHAR)");
-
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        appender.beginRow();
-        appender.append((String) null);
-        appender.endRow();
-        appender.flush();
-        appender.close();
-
-        ResultSet results = stmt.executeQuery("SELECT * FROM data");
-        assertTrue(results.next());
-        assertNull(results.getString(1));
-        assertTrue(results.wasNull());
-
-        results.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_null_blob() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a BLOB)");
-
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-
-        appender.beginRow();
-        appender.append((byte[]) null);
-        appender.endRow();
-        appender.flush();
-        appender.close();
-
-        ResultSet results = stmt.executeQuery("SELECT * FROM data");
-        assertTrue(results.next());
-        assertNull(results.getString(1));
-        assertTrue(results.wasNull());
-
-        results.close();
-        stmt.close();
-        conn.close();
-    }
-
-    public static void test_appender_roundtrip_blob() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-        Statement stmt = conn.createStatement();
-
-        stmt.execute("CREATE TABLE data (a BLOB)");
-
-        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-        SecureRandom random = SecureRandom.getInstanceStrong();
-        byte[] data = new byte[512];
-        random.nextBytes(data);
-
-        appender.beginRow();
-        appender.append(data);
-        appender.endRow();
-        appender.flush();
-        appender.close();
-
-        ResultSet results = stmt.executeQuery("SELECT * FROM data");
-        assertTrue(results.next());
-
-        Blob resultBlob = results.getBlob(1);
-        byte[] resultBytes = resultBlob.getBytes(1, (int) resultBlob.length());
-        assertTrue(Arrays.equals(resultBytes, data), "byte[] data is round tripped untouched");
-
-        results.close();
         stmt.close();
         conn.close();
     }
@@ -2522,6 +2001,7 @@ public class TestDuckDBJDBC {
         }
     }
 
+    @SuppressWarnings("try")
     public static void test_array_resultset() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              Statement statement = connection.createStatement()) {
@@ -2655,10 +2135,12 @@ public class TestDuckDBJDBC {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> List<T> arrayToList(Array array) throws SQLException {
         return arrayToList((T[]) array.getArray());
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> List<T> arrayToList(T[] array) throws SQLException {
         List<T> out = new ArrayList<>();
         for (Object t : array) {
@@ -2667,6 +2149,7 @@ public class TestDuckDBJDBC {
         return out;
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> T toJavaObject(Object t) {
         try {
             if (t instanceof Array) {
@@ -2754,6 +2237,7 @@ public class TestDuckDBJDBC {
                                                           .toFormatter()
                                                           .withResolverStyle(ResolverStyle.LENIENT);
 
+    @SuppressWarnings("unchecked")
     static <K, V> Map<K, V> mapOf(Object... pairs) {
         Map<K, V> result = new HashMap<>(pairs.length / 2);
         for (int i = 0; i < pairs.length - 1; i += 2) {
@@ -2902,6 +2386,7 @@ public class TestDuckDBJDBC {
         TimeZone.setDefault(defaultTimeZone);
     }
 
+    @SuppressWarnings("unchecked")
     public static void test_all_types() throws Exception {
         TimeZone defaultTimeZone = TimeZone.getDefault();
         TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
@@ -3431,6 +2916,7 @@ public class TestDuckDBJDBC {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.execute("SET enable_profiling = 'no_output';");
             try (ResultSet rs = stmt.executeQuery("SELECT 1+1")) {
+                assertNotNull(rs);
                 String profile = ((DuckDBConnection) conn).getProfilingInformation(ProfilerPrintFormat.JSON);
                 assertTrue(profile.contains("\"query_name\": \"SELECT 1+1\","));
             }
@@ -3634,9 +3120,10 @@ public class TestDuckDBJDBC {
             Class<?> clazz = Class.forName("org.duckdb." + arg1);
             statusCode = runTests(new String[0], clazz);
         } else {
-            statusCode = runTests(args, TestDuckDBJDBC.class, TestBatch.class, TestClosure.class,
-                                  TestExtensionTypes.class, TestSpatial.class, TestParameterMetadata.class,
-                                  TestPrepare.class, TestResults.class, TestSessionInit.class, TestTimestamp.class);
+            statusCode = runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestSingleValueAppender.class,
+                                  TestBatch.class, TestBindings.class, TestClosure.class, TestExtensionTypes.class,
+                                  TestSpatial.class, TestParameterMetadata.class, TestPrepare.class, TestResults.class,
+                                  TestSessionInit.class, TestTimestamp.class);
         }
         System.exit(statusCode);
     }

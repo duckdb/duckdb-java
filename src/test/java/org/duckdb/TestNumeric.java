@@ -97,7 +97,7 @@ public class TestNumeric {
                     assertEquals(rs2.getBigDecimal(5), new BigDecimal("-18446744073709551616.0000000000"));
 
                     // Metadata tests
-                    assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
+                    assertEquals(Types.DECIMAL, DuckDBResultSetMetaData.type_to_int(DuckDBColumnType.DECIMAL));
                     assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(1)));
                     assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(2)));
                     assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(3)));
@@ -125,7 +125,6 @@ public class TestNumeric {
                 // Create the table
                 stmt.execute(
                     "CREATE TABLE q (id DECIMAL(4,0),dec32 DECIMAL(9,4),dec64 DECIMAL(18,7),dec128 DECIMAL(38,10))");
-                stmt.close();
             }
 
             // Create the INSERT prepared statement we will use
@@ -228,16 +227,16 @@ public class TestNumeric {
                     "SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger uint32, 18446744073709551615::ubigint uint64")) {
                 assertTrue(rs.next());
 
-                assertEquals(rs.getShort("uint8"), Short.valueOf((short) 201));
-                assertEquals(rs.getObject("uint8"), Short.valueOf((short) 201));
-                assertEquals(rs.getInt("uint8"), Integer.valueOf((int) 201));
+                assertEquals(rs.getShort("uint8"), (short) 201);
+                assertEquals(rs.getObject("uint8"), (short) 201);
+                assertEquals(rs.getInt("uint8"), 201);
 
-                assertEquals(rs.getInt("uint16"), Integer.valueOf((int) 40001));
-                assertEquals(rs.getObject("uint16"), Integer.valueOf((int) 40001));
-                assertEquals(rs.getLong("uint16"), Long.valueOf((long) 40001));
+                assertEquals(rs.getInt("uint16"), 40001);
+                assertEquals(rs.getObject("uint16"), 40001);
+                assertEquals(rs.getLong("uint16"), 40001L);
 
-                assertEquals(rs.getLong("uint32"), Long.valueOf((long) 4000000001L));
-                assertEquals(rs.getObject("uint32"), Long.valueOf((long) 4000000001L));
+                assertEquals(rs.getLong("uint32"), 4000000001L);
+                assertEquals(rs.getObject("uint32"), 4000000001L);
 
                 assertEquals(rs.getObject("uint64"), new BigInteger("18446744073709551615"));
             }
@@ -282,8 +281,8 @@ public class TestNumeric {
     public static void test_duckdb_get_object_tinyint() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::TINYINT")) {
-                Class<?>[] classes = new Class[] {Byte.class, Short.class,      Integer.class,
-                                                  Long.class, BigInteger.class, BigDecimal.class};
+                Class<?>[] classes = new Class<?>[] {Byte.class, Short.class,      Integer.class,
+                                                     Long.class, BigInteger.class, BigDecimal.class};
                 ps.setByte(1, Byte.MIN_VALUE);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
@@ -302,7 +301,7 @@ public class TestNumeric {
 
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::UTINYINT")) {
                 Class<?>[] classes =
-                    new Class[] {Short.class, Integer.class, Long.class, BigInteger.class, BigDecimal.class};
+                    new Class<?>[] {Short.class, Integer.class, Long.class, BigInteger.class, BigDecimal.class};
                 short MAX_UTINYINT = (1 << 8) - 1;
                 ps.setShort(1, MAX_UTINYINT);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -320,7 +319,7 @@ public class TestNumeric {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::SMALLINT")) {
                 Class<?>[] classes =
-                    new Class[] {Short.class, Integer.class, Long.class, BigInteger.class, BigDecimal.class};
+                    new Class<?>[] {Short.class, Integer.class, Long.class, BigInteger.class, BigDecimal.class};
                 ps.setShort(1, Short.MIN_VALUE);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
@@ -337,7 +336,7 @@ public class TestNumeric {
                 }
             }
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::USMALLINT")) {
-                Class<?>[] classes = new Class[] {Integer.class, Long.class, BigInteger.class, BigDecimal.class};
+                Class<?>[] classes = new Class<?>[] {Integer.class, Long.class, BigInteger.class, BigDecimal.class};
                 int MAX_USMALLINT = (1 << 16) - 1;
                 ps.setInt(1, MAX_USMALLINT);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -355,7 +354,7 @@ public class TestNumeric {
     public static void test_duckdb_get_object_integer() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::INTEGER")) {
-                Class<?>[] classes = new Class[] {Integer.class, Long.class, BigInteger.class, BigDecimal.class};
+                Class<?>[] classes = new Class<?>[] {Integer.class, Long.class, BigInteger.class, BigDecimal.class};
                 ps.setInt(1, Integer.MIN_VALUE);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
@@ -372,7 +371,7 @@ public class TestNumeric {
                 }
             }
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::UINTEGER")) {
-                Class<?>[] classes = new Class[] {Long.class, BigInteger.class, BigDecimal.class};
+                Class<?>[] classes = new Class<?>[] {Long.class, BigInteger.class, BigDecimal.class};
                 long MAX_UINTEGER = (1L << 32) - 1;
                 ps.setLong(1, MAX_UINTEGER);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -391,7 +390,7 @@ public class TestNumeric {
     public static void test_duckdb_get_object_bigint() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
             try (PreparedStatement ps = conn.prepareStatement("SELECT ?::BIGINT")) {
-                Class<?>[] classes = new Class[] {Long.class, BigInteger.class, BigDecimal.class};
+                Class<?>[] classes = new Class<?>[] {Long.class, BigInteger.class, BigDecimal.class};
                 ps.setLong(1, Long.MIN_VALUE);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();

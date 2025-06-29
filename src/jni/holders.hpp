@@ -1,6 +1,10 @@
 #pragma once
 
+extern "C" {
+#include "duckdb.h"
+}
 #include "duckdb.hpp"
+#include "refs.hpp"
 
 #include <jni.h>
 
@@ -69,4 +73,23 @@ inline duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 	}
 
 	return conn_ref;
+}
+
+inline duckdb_connection conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
+	if (conn_ref_buf == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid connection buffer");
+		return nullptr;
+	}
+	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
+	if (conn_holder == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid connection holder");
+		return nullptr;
+	}
+	auto conn_ref = conn_holder->connection.get();
+	if (conn_ref == nullptr || conn_ref->context == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return nullptr;
+	}
+
+	return reinterpret_cast<duckdb_connection>(conn_ref);
 }
