@@ -23,9 +23,9 @@ public class TestPrepare {
             ps.setByte(2, (byte) 42);
             ps.setShort(3, (short) 43);
             ps.setInt(4, 44);
-            ps.setLong(5, (long) 45);
+            ps.setLong(5, 45);
             ps.setFloat(6, (float) 4.6);
-            ps.setDouble(7, (double) 4.7);
+            ps.setDouble(7, 4.7);
             ps.setString(8, "four eight");
 
             try (ResultSet rs = ps.executeQuery()) {
@@ -46,7 +46,7 @@ public class TestPrepare {
             ps.setInt(4, 84);
             ps.setLong(5, (long) 85);
             ps.setFloat(6, (float) 8.6);
-            ps.setDouble(7, (double) 8.7);
+            ps.setDouble(7, 8.7);
             ps.setString(8, "eight eight\n\t");
 
             try (ResultSet rs = ps.executeQuery()) {
@@ -67,7 +67,7 @@ public class TestPrepare {
             ps.setObject(4, 84);
             ps.setObject(5, (long) 85);
             ps.setObject(6, (float) 8.6);
-            ps.setObject(7, (double) 8.7);
+            ps.setObject(7, 8.7);
             ps.setObject(8, "𫝼🔥😜䭔🟢");
 
             try (ResultSet rs = ps.executeQuery()) {

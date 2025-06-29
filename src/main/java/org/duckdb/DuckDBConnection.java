@@ -39,6 +39,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     ByteBuffer connRef;
     final ReentrantLock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
+    final LinkedHashSet<DuckDBCAPIAppender> appenders = new LinkedHashSet<>();
     volatile boolean closing;
 
     volatile boolean autoCommit;
@@ -122,6 +123,8 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
     protected void finalize() throws Throwable {
         close();
     }
@@ -156,6 +159,14 @@ public final class DuckDBConnection implements java.sql.Connection {
                 ps.close();
             }
             preparedStatements.clear();
+
+            // Last appender created is first deleted
+            List<DuckDBCAPIAppender> appList = new ArrayList<>(appenders);
+            Collections.reverse(appList);
+            for (DuckDBCAPIAppender app : appList) {
+                app.close();
+            }
+            appenders.clear();
 
             DuckDBNative.duckdb_jdbc_disconnect(connRef);
             connRef = null;
@@ -438,6 +449,21 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {
         return new DuckDBAppender(this, schemaName, tableName);
+    }
+
+    public DuckDBCAPIAppender createCAPIAppender(String tableName) throws SQLException {
+        return createCAPIAppender(null, null, tableName);
+    }
+
+    public DuckDBCAPIAppender createCAPIAppender(String schemaName, String tableName) throws SQLException {
+        return createCAPIAppender(null, schemaName, tableName);
+    }
+
+    public DuckDBCAPIAppender createCAPIAppender(String catalogName, String schemaName, String tableName)
+        throws SQLException {
+        DuckDBCAPIAppender appender = new DuckDBCAPIAppender(this, catalogName, schemaName, tableName);
+        this.appenders.add(appender);
+        return appender;
     }
 
     private static long getArrowStreamAddress(Object arrow_array_stream) {

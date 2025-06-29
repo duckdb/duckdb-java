@@ -113,6 +113,8 @@ public class DuckDBResultSet implements ResultSet {
         }
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
     protected void finalize() throws Throwable {
         close();
     }
@@ -356,6 +358,7 @@ public class DuckDBResultSet implements ResultSet {
         return getObject(findColumn(columnLabel));
     }
 
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
         throw new SQLFeatureNotSupportedException("getBigDecimal");
     }
@@ -528,6 +531,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getAsciiStream");
     }
 
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(int columnIndex) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }
@@ -536,6 +540,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getBinaryStream");
     }
 
+    @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
         throw new SQLFeatureNotSupportedException("getBigDecimal");
     }
@@ -560,6 +565,7 @@ public class DuckDBResultSet implements ResultSet {
         throw new SQLFeatureNotSupportedException("getAsciiStream");
     }
 
+    @SuppressWarnings("deprecation")
     public InputStream getUnicodeStream(String columnLabel) throws SQLException {
         throw new SQLFeatureNotSupportedException("getUnicodeStream");
     }
