@@ -99,8 +99,7 @@ public class TestTimestamp {
 
                 // Metadata tests
                 assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
-                             (meta.unwrap(DuckDBResultSetMetaData.class)
-                                  .type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)));
+                             DuckDBResultSetMetaData.type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
                 assertTrue(OffsetDateTime.class.getName().equals(meta.getColumnClassName(2)));
             }
         }

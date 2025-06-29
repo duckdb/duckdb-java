@@ -67,7 +67,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 duckdb::DBInstanceCache instance_cache;
 
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
-	auto database = byte_array_to_string(env, database_j);
+	auto database = jbyteArray_to_string(env, database_j);
 	std::unique_ptr<DBConfig> config = create_db_config(env, read_only, props);
 	bool cache_instance = database != ":memory:" && !database.empty();
 	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, cache_instance);
@@ -196,7 +196,7 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 		return nullptr;
 	}
 
-	auto query = byte_array_to_string(env, query_j);
+	auto query = jbyteArray_to_string(env, query_j);
 
 	auto statements = conn_ref->ExtractStatements(query.c_str());
 	if (statements.empty()) {
@@ -625,8 +625,8 @@ jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, 
 	if (!conn_ref) {
 		return nullptr;
 	}
-	auto schema_name = byte_array_to_string(env, schema_name_j);
-	auto table_name = byte_array_to_string(env, table_name_j);
+	auto schema_name = jbyteArray_to_string(env, schema_name_j);
+	auto table_name = jbyteArray_to_string(env, table_name_j);
 	auto appender = new Appender(*conn_ref, schema_name, table_name);
 	return env->NewDirectByteBuffer(appender, 0);
 }
@@ -701,7 +701,7 @@ void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_r
 		return;
 	}
 
-	auto string_value = byte_array_to_string(env, value);
+	auto string_value = jbyteArray_to_string(env, value);
 	get_appender(env, appender_ref_buf)->Append(string_value.c_str());
 }
 
@@ -711,7 +711,7 @@ void _duckdb_jdbc_appender_append_bytes(JNIEnv *env, jclass, jobject appender_re
 		return;
 	}
 
-	auto string_value = byte_array_to_string(env, value);
+	auto string_value = jbyteArray_to_string(env, value);
 	get_appender(env, appender_ref_buf)->Append(Value::BLOB_RAW(string_value));
 }
 
@@ -771,7 +771,7 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	if (conn == nullptr) {
 		return;
 	}
-	auto name = byte_array_to_string(env, name_j);
+	auto name = jbyteArray_to_string(env, name_j);
 
 	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
 

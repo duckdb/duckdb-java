@@ -52,6 +52,17 @@ public class TestClosure {
         assertTrue(stmt2.isClosed());
     }
 
+    public static void test_appender_auto_closed_on_conn_close() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 VARCHAR)");
+        }
+        DuckDBAppender appender = conn.createAppender("tab1");
+        appender.beginRow().append(42).append("foo").endRow().flush();
+        conn.close();
+        assertTrue(appender.isClosed());
+    }
+
     public static void test_results_auto_closed_on_conn_close() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
@@ -220,6 +231,7 @@ public class TestClosure {
         }
     }
 
+    @SuppressWarnings("try")
     public static void test_results_fetch_no_hang() throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Properties config = new Properties();

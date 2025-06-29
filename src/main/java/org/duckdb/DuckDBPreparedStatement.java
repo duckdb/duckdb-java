@@ -404,6 +404,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     protected void finalize() throws Throwable {
         close();
     }
@@ -795,6 +796,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public int getResultSetHoldability() throws SQLException {
         checkOpen();
         return ResultSet.HOLD_CURSORS_OVER_COMMIT;
@@ -859,6 +861,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setUnicodeStream(int parameterIndex, InputStream x, int length) throws SQLException {
         setCharacterStreamInternal(parameterIndex, x, length, UTF_8);
     }
@@ -923,7 +926,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof String) {
                 setObject(parameterIndex, Integer.parseInt((String) x));
             } else if (x instanceof Boolean) {
-                setObject(parameterIndex, (int) (((Boolean) x) ? 1 : 0));
+                setObject(parameterIndex, ((Boolean) x) ? 1 : 0);
             } else {
                 throw new SQLException("Can't convert value to int " + x.getClass().toString());
             }

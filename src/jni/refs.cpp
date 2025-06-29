@@ -75,6 +75,9 @@ jclass J_DuckStruct;
 jmethodID J_DuckStruct_init;
 
 jclass J_ByteBuffer;
+jmethodID J_ByteBuffer_order;
+jclass J_ByteOrder;
+jobject J_ByteOrder_LITTLE_ENDIAN;
 
 jclass J_DuckMap;
 jmethodID J_DuckMap_getSQLTypeName;
@@ -271,6 +274,9 @@ void create_refs(JNIEnv *env) {
 	J_DuckVector_varlen = get_field_id(env, J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
 
 	J_ByteBuffer = make_class_ref(env, "java/nio/ByteBuffer");
+	J_ByteBuffer_order = get_method_id(env, J_ByteBuffer, "order", "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
+	J_ByteOrder = make_class_ref(env, "java/nio/ByteOrder");
+	J_ByteOrder_LITTLE_ENDIAN = make_static_object_field_ref(env, J_ByteOrder, "LITTLE_ENDIAN", "Ljava/nio/ByteOrder;");
 
 	J_ProfilerPrintFormat = make_class_ref(env, "org/duckdb/ProfilerPrintFormat");
 	J_ProfilerPrintFormat_QUERY_TREE =
