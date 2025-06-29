@@ -197,7 +197,7 @@ duckdb::Value to_duckdb_value(JNIEnv *env, jobject param, duckdb::ClientContext 
 		auto param_string = jstring_to_string(env, (jstring)param);
 		return (duckdb::Value(param_string));
 	} else if (env->IsInstanceOf(param, J_ByteArray)) {
-		return (duckdb::Value::BLOB_RAW(byte_array_to_string(env, (jbyteArray)param)));
+		return (duckdb::Value::BLOB_RAW(jbyteArray_to_string(env, (jbyteArray)param)));
 	} else if (env->IsInstanceOf(param, J_UUID)) {
 		return create_value_from_uuid(env, param);
 	} else if (env->IsInstanceOf(param, J_DuckMap)) {

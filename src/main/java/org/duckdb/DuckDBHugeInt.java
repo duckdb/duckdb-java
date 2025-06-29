@@ -4,8 +4,8 @@ import java.math.BigInteger;
 import java.sql.SQLException;
 
 class DuckDBHugeInt {
-    private static final BigInteger HUGE_INT_MIN = BigInteger.ONE.shiftLeft(127).negate();
-    private static final BigInteger HUGE_INT_MAX = BigInteger.ONE.shiftLeft(127).subtract(BigInteger.ONE);
+    static final BigInteger HUGE_INT_MIN = BigInteger.ONE.shiftLeft(127).negate();
+    static final BigInteger HUGE_INT_MAX = BigInteger.ONE.shiftLeft(127).subtract(BigInteger.ONE);
 
     private final long lower;
     private final long upper;

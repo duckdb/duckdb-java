@@ -72,6 +72,9 @@ extern jclass J_DuckStruct;
 extern jmethodID J_DuckStruct_init;
 
 extern jclass J_ByteBuffer;
+extern jmethodID J_ByteBuffer_order;
+extern jclass J_ByteOrder;
+extern jobject J_ByteOrder_LITTLE_ENDIAN;
 
 extern jclass J_DuckMap;
 extern jmethodID J_DuckMap_getSQLTypeName;
