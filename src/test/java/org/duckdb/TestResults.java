@@ -175,13 +175,13 @@ public class TestResults {
                     for (int col = 1; col <= 6; col++) {
                         assertEquals(rs.getShort(col), (short) count);
                         assertFalse(rs.wasNull());
-                        assertEquals(rs.getInt(col), (int) count);
+                        assertEquals(rs.getInt(col), count);
                         assertFalse(rs.wasNull());
                         assertEquals(rs.getLong(col), (long) count);
                         assertFalse(rs.wasNull());
                         assertEquals(rs.getFloat(col), (float) count, 0.001);
                         assertFalse(rs.wasNull());
-                        assertEquals(rs.getDouble(col), (double) count, 0.001);
+                        assertEquals(rs.getDouble(col), count, 0.001);
                         assertFalse(rs.wasNull());
                         assertEquals(Double.parseDouble(rs.getString(col)), (double) count, 0.001);
                         assertFalse(rs.wasNull());
@@ -250,7 +250,8 @@ public class TestResults {
         try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt1 = conn.createStatement();
              Statement stmt2 = conn.createStatement()) {
 
-            try (ResultSet rs1 = stmt1.executeQuery(QUERY); ResultSet ignored = stmt2.executeQuery(QUERY)) {
+            try (ResultSet rs1 = stmt1.executeQuery(QUERY); ResultSet rs2 = stmt2.executeQuery(QUERY)) {
+                assertNotNull(rs2);
                 assertThrows(rs1::next, SQLException.class);
             }
         }
