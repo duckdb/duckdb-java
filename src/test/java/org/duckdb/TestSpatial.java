@@ -350,7 +350,7 @@ public class TestSpatial {
             // WKB_BLOB parameter - not implemented
         }
     }
-    
+
     public static void test_geometry_deserialisation() throws Exception {
         String QUERY = "select ST_GeomFromGeoJSON('{\"type\": \"Point\", \"coordinates\": [30.0, 10.0]}') as p;";
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
@@ -363,15 +363,16 @@ public class TestSpatial {
             }
         }
     }
-    
+
     public static void test_geometry_array_deserialisation() throws Exception {
-        String QUERY = "WITH example AS (\n"
-                       + "  SELECT ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 2, 2 1))') AS geography)\n"
-                       + "SELECT\n"
-                       + "  geography AS original_geography,\n"
-                       + "  ST_DUMP(geography) AS dumped_geographies\n"
-                       + "FROM example;";
-                       
+        String QUERY =
+            "WITH example AS (\n"
+            + "  SELECT ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 2, 2 1))') AS geography)\n"
+            + "SELECT\n"
+            + "  geography AS original_geography,\n"
+            + "  ST_DUMP(geography) AS dumped_geographies\n"
+            + "FROM example;";
+
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.executeUpdate("INSTALL spatial;");
             stmt.executeUpdate("LOAD spatial;");

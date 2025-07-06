@@ -475,12 +475,12 @@ public class TestTimestamp {
         //	Nail down the location for test portability.
         TimeZone originalTz = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-        
+
         Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
-            try ( ResultSet rs = stmt.executeQuery(
-                 "SELECT '2019-11-26 21:11:43.123456'::timestamp ts, '2019-11-26'::date dt, '21:11:00'::time te")) {
-                     
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT '2019-11-26 21:11:43.123456'::timestamp ts, '2019-11-26'::date dt, '21:11:00'::time te")) {
+
                 assertTrue(rs.next());
                 assertEquals(rs.getTimestamp("ts", cal), Timestamp.valueOf("2019-11-27 05:11:43.123456"));
 

@@ -214,8 +214,8 @@ public class DuckDBResultSet implements ResultSet {
         Object res = getObject(columnIndex);
         if (res == null) {
             return null;
-        } else if (res instanceof Blob && "GEOMETRY".equalsIgnoreCase(meta.column_types_string[columnIndex-1])) {
-            return DuckDBGeometryDeserializer.deserializeToWKT( (Blob) res);
+        } else if (res instanceof Blob && "GEOMETRY".equalsIgnoreCase(meta.column_types_string[columnIndex - 1])) {
+            return DuckDBGeometryDeserializer.deserializeToWKT((Blob) res);
         } else {
             return res.toString();
         }
