@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import java.sql.Blob;
 import java.sql.SQLException;
 import java.sql.Struct;
 import java.util.LinkedHashMap;
@@ -48,11 +49,28 @@ public class DuckDBStruct implements Struct {
         return result;
     }
 
+    public Map<String, String> getStringMap() throws SQLException {
+        Object[] values = getAttributes();
+        Map<String, String> result = new LinkedHashMap<>();
+        for (int i = 0; i < values.length; i++) {
+            
+            Object res = values[i];
+            if (res == null) {
+                result.put(keys[i], null);
+            } else if (res instanceof Blob) {
+                result.put(keys[i], DuckDBGeometryDeserializer.deserializeToWKT( (Blob) res));
+            } else {
+               result.put(keys[i], res.toString());
+            }
+        }
+        return result;
+    }    
+        
     @Override
     public String toString() {
         Object v = null;
         try {
-            v = getMap();
+            v = getStringMap();
         } catch (SQLException e) {
             v = e;
         }
