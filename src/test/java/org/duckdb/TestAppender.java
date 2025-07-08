@@ -786,7 +786,7 @@ public class TestAppender {
                 appender.flush();
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = 41")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = 41")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 41);
                 assertTrue(rs.next());
@@ -796,7 +796,7 @@ public class TestAppender {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = 42")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = 42")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 44);
                 assertTrue(rs.next());
@@ -848,7 +848,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (byte j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getBoolean(1), true);
@@ -894,7 +894,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -938,7 +939,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (byte j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getByte(1), (byte) ((row % 8) + j));
@@ -984,7 +985,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -1028,7 +1030,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (int j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getShort(1), (short) (row + j));
@@ -1074,7 +1076,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -1118,7 +1121,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (int j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getInt(1), row + j);
@@ -1144,7 +1147,7 @@ public class TestAppender {
                     .endRow();
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 WHERE col1 = 41")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2[:]) FROM tab1 WHERE col1 = 41")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 41);
                 Object[] array1 = (Object[]) rs.getArray(2).getArray();
@@ -1169,7 +1172,7 @@ public class TestAppender {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 WHERE col1 = 48")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2[:]) FROM tab1 WHERE col1 = 48")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 48);
                 Object[] array1 = (Object[]) rs.getArray(2).getArray();
@@ -1191,7 +1194,7 @@ public class TestAppender {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 WHERE col1 = 55")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2[:]) FROM tab1 WHERE col1 = 55")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 55);
                 Object[] array1 = (Object[]) rs.getArray(2).getArray();
@@ -1254,7 +1257,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -1298,7 +1302,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (int j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getLong(1), (long) (row + j));
@@ -1344,7 +1348,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -1388,7 +1393,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (int j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getFloat(1), (float) (row + j + 0.001));
@@ -1434,7 +1439,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
@@ -1478,7 +1484,7 @@ public class TestAppender {
 
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = " + row)) {
+                 ResultSet rs2 = stmt2.executeQuery("SELECT unnest(col2[:]) FROM tab1 WHERE col1 = " + row)) {
                 for (int j = 0; j < arrayLen; j++) {
                     assertTrue(rs2.next());
                     assertEquals(rs2.getDouble(1), (row + j + 0.001));
@@ -1524,7 +1530,8 @@ public class TestAppender {
             int row = count - 2;
             try (Statement stmt2 = conn.createStatement();
                  ResultSet rs2 = stmt2.executeQuery(
-                     "SELECT unnest(ucol2) FROM (SELECT unnest(col2) as ucol2 FROM tab1 WHERE col1 = " + row + ")")) {
+                     "SELECT unnest(ucol2[:]) FROM (SELECT unnest(col2[:]) as ucol2 FROM tab1 WHERE col1 = " + row +
+                     ")")) {
                 for (int j = 0; j < arrayLen; j++) {
                     for (int k = 0; k < childLen; k++) {
                         assertTrue(rs2.next());
