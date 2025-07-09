@@ -35,7 +35,7 @@ if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.
 
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+\.\d+)$')
 release_tag = sys.argv[1]
-deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+deploy_url = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
 is_release = True
 
 if release_tag == 'main':
@@ -47,7 +47,7 @@ if release_tag == 'main':
         raise ValueError("Could not parse last tag %s" % last_tag)
     release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
     # orssh uses a different deploy url for snapshots yay
-    deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
+    deploy_url = 'https://ossrh-staging-api.central.sonatype.com/content/repositories/snapshots/'
     is_release = False
 elif version_regex.match(release_tag):
     release_version = version_regex.search(release_tag).group(1)
@@ -124,7 +124,7 @@ pom_template = """
         <extensions>true</extensions>
         <configuration>
           <serverId>ossrh</serverId>
-          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+          <nexusUrl>https://ossrh-staging-api.central.sonatype.com/</nexusUrl>
        </configuration>
      </plugin>
    </plugins>

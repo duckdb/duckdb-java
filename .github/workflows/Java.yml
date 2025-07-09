@@ -398,7 +398,7 @@ jobs:
               <servers>
                 <server>
                   <id>ossrh</id>
-                  <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+                  <username>${{ secrets.MAVEN_USERNAME }}</username> <!-- Sonatype OSSRH JIRA user/pw -->
                   <password>PASSWORD</password>
                 </server>
               </servers>
