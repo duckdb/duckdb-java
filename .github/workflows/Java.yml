@@ -397,8 +397,8 @@ jobs:
               https://maven.apache.org/xsd/settings-1.0.0.xsd">
               <servers>
                 <server>
-                  <id>ossrh</id>
-                  <username>${{ secrets.MAVEN_USERNAME }}</username> <!-- Sonatype OSSRH JIRA user/pw -->
+                  <id>central</id>
+                  <username>${{ secrets.MAVEN_USERNAME }}</username> <!-- Sonatype Central Portal user/pw -->
                   <password>PASSWORD</password>
                 </server>
               </servers>

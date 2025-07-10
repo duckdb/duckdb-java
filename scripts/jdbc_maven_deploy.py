@@ -1,5 +1,4 @@
-# https://central.sonatype.org/pages/manual-staging-bundle-creation-and-deployment.html
-# https://issues.sonatype.org/browse/OSSRH-58179
+# https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/
 
 # this is the pgp key we use to sign releases
 # if this key should be lost, generate a new one with `gpg --full-generate-key`
@@ -45,7 +44,7 @@ if release_tag == 'main':
     re_result = version_regex.search(last_tag)
     if re_result is None:
         raise ValueError("Could not parse last tag %s" % last_tag)
-    release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
+    release_version = "%d.%d.0.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
     # orssh uses a different deploy url for snapshots yay
     deploy_url = 'https://ossrh-staging-api.central.sonatype.com/content/repositories/snapshots/'
     is_release = False
@@ -178,8 +177,8 @@ if (
 #   https://maven.apache.org/xsd/settings-1.0.0.xsd">
 #   <servers>
 #     <server>
-#       <id>ossrh</id>
-#       <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+#       <id>central</id>
+#       <username>[...]</username> <!-- Sonatype OSSRH JIRA user/pw -->
 #       <password>[...]</password>
 #     </server>
 #   </servers>
@@ -197,7 +196,7 @@ for jar in arch_specific_jars:
     shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
 
 print("JARs created, uploading (this can take a while!)")
-deploy_cmd_prefix = 'mvn --no-transfer-progress gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
+deploy_cmd_prefix = 'mvn --no-transfer-progress gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=central' % deploy_url
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
