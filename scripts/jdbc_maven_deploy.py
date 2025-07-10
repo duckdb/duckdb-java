@@ -122,7 +122,7 @@ pom_template = """
         <version>1.6.14</version>
         <extensions>true</extensions>
         <configuration>
-          <serverId>ossrh</serverId>
+          <serverId>central</serverId>
           <nexusUrl>https://ossrh-staging-api.central.sonatype.com/</nexusUrl>
        </configuration>
      </plugin>
@@ -178,7 +178,7 @@ if (
 #   <servers>
 #     <server>
 #       <id>central</id>
-#       <username>[...]</username> <!-- Sonatype OSSRH JIRA user/pw -->
+#       <username>[...]</username> <!-- Sonatype Central Portal user/pw -->
 #       <password>[...]</password>
 #     </server>
 #   </servers>
