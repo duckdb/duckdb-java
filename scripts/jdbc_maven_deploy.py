@@ -193,7 +193,7 @@ token = base64.b64encode(f"{maven_username}:{maven_password}".encode("utf-8")).d
 subprocess.run([
   "curl",
   # "--verbose", do NOT enable it on CI, it leaks the auth token
-  "--silent"
+  "--silent",
   "--header", f"Authorization: Bearer {token}",
   "--form", f"name={release_version}",
   "--form", "publishingType=AUTOMATIC",
