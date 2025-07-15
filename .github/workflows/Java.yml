@@ -389,25 +389,13 @@ jobs:
 
       - name: Combine JARs
         shell: bash
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
         run: |
           mkdir -m  700 -p ~/.gnupg
           echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb-java" ]] ; then
-          export XML='
-            <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-              https://maven.apache.org/xsd/settings-1.0.0.xsd">
-              <servers>
-                <server>
-                  <id>ossrh</id>
-                  <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
-                  <password>PASSWORD</password>
-                </server>
-              </servers>
-            </settings> '
-            mkdir ~/.m2
-            echo $XML | sed "s|PASSWORD|${{ secrets.MAVEN_PASSWORD }}|" > ~/.m2/settings.xml
             echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
             gpg --batch --import maven_pgp_key
             python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts .

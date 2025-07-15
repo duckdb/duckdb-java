@@ -1,5 +1,4 @@
-# https://central.sonatype.org/pages/manual-staging-bundle-creation-and-deployment.html
-# https://issues.sonatype.org/browse/OSSRH-58179
+# https://central.sonatype.org/publish/publish-portal-api/
 
 # this is the pgp key we use to sign releases
 # if this key should be lost, generate a new one with `gpg --full-generate-key`
@@ -19,6 +18,9 @@ import sys
 import tempfile
 import zipfile
 import re
+import base64
+import hashlib
+from os import path
 
 
 def exec(cmd):
@@ -35,7 +37,7 @@ if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.
 
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+\.\d+)$')
 release_tag = sys.argv[1]
-deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+deploy_url = 'https://central.sonatype.com/api/v1/publisher/upload'
 is_release = True
 
 if release_tag == 'main':
@@ -45,9 +47,7 @@ if release_tag == 'main':
     re_result = version_regex.search(last_tag)
     if re_result is None:
         raise ValueError("Could not parse last tag %s" % last_tag)
-    release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
-    # orssh uses a different deploy url for snapshots yay
-    deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
+    release_version = "%d.%d.0.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
     is_release = False
 elif version_regex.match(release_tag):
     release_version = version_regex.search(release_tag).group(1)
@@ -115,21 +115,6 @@ pom_template = """
     <url>http://github.com/duckdb/duckdb/tree/main</url>
   </scm>
 
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.sonatype.plugins</groupId>
-        <artifactId>nexus-staging-maven-plugin</artifactId>
-        <version>1.6.14</version>
-        <extensions>true</extensions>
-        <configuration>
-          <serverId>ossrh</serverId>
-          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-       </configuration>
-     </plugin>
-   </plugins>
- </build>
-
 </project>
 <!-- Note: this cannot be used to build the JDBC driver, we only use it to deploy -->
 """
@@ -160,64 +145,60 @@ for i in range(len(arch_specific_builds)):
   dest_jar = arch_specific_jars[i] 
   shutil.copyfile(src_jar, dest_jar)
 
+files_to_deploy = [
+  binary_jar,
+  sources_jar,
+  javadoc_jar,
+  pom
+]
+for jar in arch_specific_jars:
+  files_to_deploy.append(jar)
+
 # make sure all files exist before continuing
-if (
-    not os.path.exists(javadoc_jar)
-    or not os.path.exists(sources_jar)
-    or not os.path.exists(pom)
-    or not os.path.exists(binary_jar)
-):
-    raise ValueError('could not create all required files')
+for file in files_to_deploy:
+  if not path.isfile(file):
+    raise ValueError(f"Could not create all required files: {file}")
 
 # now sign and upload everything
-# for this to work, you must have entry in ~/.m2/settings.xml:
+# for this to work, you must have MAVEN_USERNAME and MAVEN_PASSWORD
+# environment variables for the Sonatype Central Portal
 
-# <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-#   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-#   xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-#   https://maven.apache.org/xsd/settings-1.0.0.xsd">
-#   <servers>
-#     <server>
-#       <id>ossrh</id>
-#       <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
-#       <password>[...]</password>
-#     </server>
-#   </servers>
-# </settings>
+bundle_root_dir = path.join(staging_dir, "central-bundle")
+bundle_zip = path.join(staging_dir, "central-bundle.zip")
 
-results_dir = os.path.join(jdbc_artifact_dir, "results")
-if not os.path.exists(results_dir):
-    os.mkdir(results_dir)
+bundle_dir = path.join(bundle_root_dir, "org", "duckdb", "duckdb_jdbc", release_version)
+os.makedirs(bundle_dir)
 
+for file in files_to_deploy:
+  file_name = path.basename(file)
+  bundle_file = path.join(bundle_dir, file_name)
+  shutil.copyfile(file, bundle_file)
+  subprocess.run(["gpg", "--sign", "-ab", file_name], cwd=bundle_dir)
+  with open(bundle_file, "rb") as fd:
+    file_bytes = fd.read()
+  for alg in ["md5", "sha1", "sha256"]:
+    digest = hashlib.new(alg)
+    digest.update(file_bytes)
+    hashsum = digest.hexdigest()
+    with open(f"{bundle_file}.{alg}", "w") as fd:
+      fd.write(hashsum)
 
-for jar in [binary_jar, sources_jar, javadoc_jar]:
-    shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
+subprocess.run(["ls", "-laR", bundle_root_dir])
+subprocess.run(["zip", "-qr", bundle_zip, "org"], cwd=bundle_root_dir)
 
-for jar in arch_specific_jars:
-    shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
+maven_username = os.environ["MAVEN_USERNAME"]
+maven_password = os.environ["MAVEN_PASSWORD"]
+token = base64.b64encode(f"{maven_username}:{maven_password}".encode("utf-8")).decode("utf-8")
 
-print("JARs created, uploading (this can take a while!)")
-deploy_cmd_prefix = 'mvn --no-transfer-progress gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
-exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
-exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
-exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
-
-for i in range(len(arch_specific_builds)):
-  classifier = arch_specific_classifiers[i]
-  jar = arch_specific_jars[i]
-  exec("%s -Dclassifier=%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, classifier, pom, jar))
-
-if not is_release:
-    print("Not a release, not closing repo")
-    exit(0)
-
-print("Close/Release steps")
-# # beautiful
-os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
-
-# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
-repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
-exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
-exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
+subprocess.run([
+  "curl",
+  # "--verbose", do NOT enable it on CI, it leaks the auth token
+  "--silent",
+  "--header", f"Authorization: Bearer {token}",
+  "--form", f"name={release_version}",
+  "--form", "publishingType=AUTOMATIC",
+  "--form", f"bundle=@{bundle_zip}",
+  deploy_url,
+  ], cwd=bundle_root_dir, check=True)
 
 print("Done?")
