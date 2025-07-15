@@ -308,9 +308,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Ninja
-        run: brew install ninja
-
       - name: Build
         shell: bash
         run: make release
