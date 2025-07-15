@@ -109,7 +109,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
-	payload_layout->Initialize(payload_types, false);
+	payload_layout->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 
 	// Sort the output projection columns so we're gathering the columns in order
 	std::sort(output_projection_columns.begin(), output_projection_columns.end(),
@@ -298,11 +298,9 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	gstate.UpdateLocalState(lstate);
 	guard.unlock(); // Can unlock now, local state is definitely up-to-date
 
-	// We should always succeed this time
-	const auto success = TryFinishSink(gstate, lstate, guard);
-	if (!success) {
-		throw InternalException("Unable to finish Sort::Sink");
-	}
+	// This can return false if we somehow still don't have enough memory
+	// We'll likely run into an OOM exception
+	TryFinishSink(gstate, lstate, guard);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
