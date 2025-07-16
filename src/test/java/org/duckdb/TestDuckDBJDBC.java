@@ -2939,7 +2939,7 @@ public class TestDuckDBJDBC {
             ExecutorService executorService = Executors.newSingleThreadExecutor();
             Future<QueryProgress> future = executorService.submit(() -> {
                 try {
-                    Thread.sleep(3500);
+                    Thread.sleep(3000);
                     QueryProgress qp = stmt.getQueryProgress();
                     stmt.cancel();
                     return qp;
@@ -2953,7 +2953,7 @@ public class TestDuckDBJDBC {
                     -> stmt.executeQuery(
                         "WITH RECURSIVE cte AS NOT MATERIALIZED ("
                         +
-                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 200000) "
                         + "SELECT avg(f) FROM cte"),
                 SQLException.class);
 
