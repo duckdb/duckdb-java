@@ -85,6 +85,39 @@ jobs:
             -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
             org.duckdb.TestDuckDBJDBC
 
+      - name: Checkout Platform TCK
+        if: ${{ inputs.skip_tests != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: jakartaee/platform-tck
+          ref: 10.0.6
+          path: platform-tck
+
+      - name: Checkout CTS Runner 
+        if: ${{ inputs.skip_tests != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb/jdbc_compatibility_test_suite_runner
+          path: jdbc_compatibility_test_suite_runner
+
+      - name: CTS tests
+        if: ${{ inputs.skip_tests != 'true' }}
+        shell: bash
+        run: |
+          docker run                                           \
+          -v.:/duckdb                                          \
+          -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk         \
+          -e DUCKDB_JAR=/duckdb/build/release/duckdb_jdbc.jar  \
+          -e PLATFORM_TCK_DIR=/duckdb/platform-tck             \
+          ${{ env.MANYLINUX_IMAGE }}                           \
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk-devel
+            make -C /duckdb/jdbc_compatibility_test_suite_runner test
+          "
+
       - name: Deploy
         shell: bash
         run: |
@@ -403,40 +436,6 @@ jobs:
           name: java-jars
           path: |
             jdbc-artifacts
-
-  jdbc-compliance:
-    name: JDBC Compliance
-    runs-on: ubuntu-latest
-    if: ${{ inputs.skip_tests != 'true' }}
-    needs: java-linux-amd64
-    container: quay.io/pypa/manylinux_2_28_x86_64
-    env:
-      GEN: ninja
-      JAVA_HOME: /usr/lib/jvm/java-1.8.0-openjdk
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - name: Install packages
-        shell: bash
-        run: |
-          dnf install java-1.8.0-openjdk-devel ninja-build -y
-
-      - name: Install CTS
-        shell: bash
-        run: |
-          git clone https://github.com/cwida/jdbccts.git
-
-      - name: Build
-        shell: bash
-        run: make release
-
-      - name: Test
-        shell: bash
-        run: (cd jdbccts && make DUCKDB_JAR=../build/release/duckdb_jdbc.jar test)
 
   java-merge-vendoring-pr:
     name: Merge vendoring PR 
