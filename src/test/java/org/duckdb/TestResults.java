@@ -256,4 +256,45 @@ public class TestResults {
             }
         }
     }
+
+    public static void test_results_strings_cast() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+
+            // BLOB
+            try (ResultSet rs = stmt.executeQuery("SELECT 'foo'::BLOB")) {
+                rs.next();
+                assertEquals(rs.getString(1), "foo");
+            }
+
+            // LIST
+            try (ResultSet rs = stmt.executeQuery("SELECT ['foo', 'bar', 'baz']")) {
+                rs.next();
+                assertEquals(rs.getString(1), "[foo, bar, baz]");
+            }
+
+            // STRUCT
+            try (ResultSet rs = stmt.executeQuery("SELECT struct_pack(s1 := 'foo', s2 := 42)")) {
+                rs.next();
+                assertEquals(rs.getString(1), "{'s1': foo, 's2': 42}");
+            }
+
+            // MAP
+            try (ResultSet rs = stmt.executeQuery("SELECT MAP{'foo': 42}")) {
+                rs.next();
+                assertEquals(rs.getString(1), "{foo=42}");
+            }
+
+            // UNION
+            try (ResultSet rs = stmt.executeQuery("SELECT union_value(foo := 42)")) {
+                rs.next();
+                assertEquals(rs.getString(1), "42");
+            }
+
+            // ARRAY
+            try (ResultSet rs = stmt.executeQuery("SELECT ARRAY['foo', 'bar', 'baz']")) {
+                rs.next();
+                assertEquals(rs.getString(1), "[foo, bar, baz]");
+            }
+        }
+    }
 }

@@ -41,6 +41,14 @@ class DuckDBVector {
                                 .toFormatter())
             .toFormatter();
 
+    private final DuckDBColumnTypeMetaData meta;
+    protected final DuckDBColumnType duckdb_type;
+    final int length;
+    private final boolean[] nullmask;
+    private ByteBuffer constlen_data = null;
+    private Object[] varlen_data = null;
+    String[] string_data = null;
+
     DuckDBVector(String duckdb_type, int length, boolean[] nullmask) {
         super();
         this.duckdb_type = DuckDBResultSetMetaData.TypeNameToType(duckdb_type);
@@ -50,12 +58,6 @@ class DuckDBVector {
         this.length = length;
         this.nullmask = nullmask;
     }
-    private final DuckDBColumnTypeMetaData meta;
-    protected final DuckDBColumnType duckdb_type;
-    final int length;
-    private final boolean[] nullmask;
-    private ByteBuffer constlen_data = null;
-    private Object[] varlen_data = null;
 
     Object getObject(int idx) throws SQLException {
         if (check_and_null(idx)) {
