@@ -58,6 +58,8 @@ public class TestTimestamp {
     }
 
     public static void test_timestamp_tz() throws Exception {
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
             stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
@@ -102,6 +104,8 @@ public class TestTimestamp {
                              DuckDBResultSetMetaData.type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
                 assertTrue(OffsetDateTime.class.getName().equals(meta.getColumnClassName(2)));
             }
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
         }
     }
 
@@ -465,21 +469,21 @@ public class TestTimestamp {
     }
 
     public static void test_calendar_types() throws Exception {
-        //	Nail down the location for test portability.
-        Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
-
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Sofia"));
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
 
              ResultSet rs = stmt.executeQuery(
                  "SELECT '2019-11-26 21:11:43.123456'::timestamp ts, '2019-11-26'::date dt, '21:11:00'::time te")) {
+            Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
+
             assertTrue(rs.next());
-            assertEquals(rs.getTimestamp("ts", cal), Timestamp.valueOf("2019-11-27 05:11:43.123456"));
-
+            assertEquals(rs.getTimestamp("ts", cal), Timestamp.valueOf("2019-11-27 07:11:43.123456"));
             assertEquals(rs.getDate("dt", cal), Date.valueOf("2019-11-26"));
-
             assertEquals(rs.getTime("te", cal), Time.valueOf("21:11:00"));
-
             assertFalse(rs.next());
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
         }
     }
 
