@@ -195,6 +195,17 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	}
 }
 
+JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1result_1to_1strings(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3) {
+	try {
+		return _duckdb_jdbc_cast_result_to_strings(env, param0, param1, param2, param3);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+		return nullptr;
+	}
+}
+
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv * env, jclass param0) {
 	try {
 		return _duckdb_jdbc_fetch_size(env, param0);

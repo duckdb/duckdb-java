@@ -109,6 +109,9 @@ final class DuckDBNative {
 
     static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref, ByteBuffer conn_ref) throws SQLException;
 
+    static native String[] duckdb_jdbc_cast_result_to_strings(ByteBuffer res_ref, ByteBuffer conn_ref, long col_idx)
+        throws SQLException;
+
     static native int duckdb_jdbc_fetch_size();
 
     static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, long batch_size);
