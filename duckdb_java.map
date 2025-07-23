@@ -29,6 +29,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1result_1to_1strings;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit;
