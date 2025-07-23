@@ -217,7 +217,39 @@ public class DuckDBResultSet implements ResultSet {
         if (res == null) {
             return null;
         } else {
-            return res.toString();
+            DuckDBColumnType sqlType = meta.column_types[columnIndex - 1];
+            switch (sqlType) {
+            case BLOB:
+            case LIST:
+            case STRUCT:
+            case MAP:
+            case ARRAY:
+            case UNKNOWN:
+            case UNION: {
+                DuckDBVector vec = currentChunk[columnIndex - 1];
+                if (vec.string_data == null) {
+                    conn.connRefLock.lock();
+                    try {
+                        conn.checkOpen();
+                        resultRefLock.lock();
+                        try {
+                            checkOpen();
+                            if (vec.string_data == null) {
+                                vec.string_data = DuckDBNative.duckdb_jdbc_cast_result_to_strings(
+                                    resultRef, conn.connRef, columnIndex - 1);
+                            }
+                        } finally {
+                            resultRefLock.unlock();
+                        }
+                    } finally {
+                        conn.connRefLock.unlock();
+                    }
+                }
+                return vec.string_data[chunkIdx - 1];
+            }
+            default:
+                return res.toString();
+            }
         }
     }
 
