@@ -139,6 +139,31 @@ public class TestAppender {
         }
     }
 
+    public static void test_appender_uuid() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 UUID)");
+            UUID uuid1 = UUID.randomUUID();
+            UUID uuid2 = UUID.randomUUID();
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow().append(1).append(uuid1).endRow();
+                appender.beginRow().append(2).append(uuid2).endRow();
+                appender.flush();
+            }
+
+            try (DuckDBResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1").unwrap(DuckDBResultSet.class)) {
+                assertTrue(rs.next());
+                assertEquals(rs.getUuid(2), uuid1);
+                assertEquals(rs.getObject(2, UUID.class), uuid1);
+                assertTrue(rs.next());
+                assertEquals(rs.getUuid(2), uuid2);
+                assertEquals(rs.getObject(2, UUID.class), uuid2);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_appender_long_string() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {

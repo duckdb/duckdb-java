@@ -52,6 +52,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         supportedTypes.add(DUCKDB_TYPE_ARRAY.typeId);
         supportedTypes.add(DUCKDB_TYPE_STRUCT.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UUID.typeId);
     }
     private static final CAPIType[] int8Types = new CAPIType[] {DUCKDB_TYPE_TINYINT, DUCKDB_TYPE_UTINYINT};
     private static final CAPIType[] int16Types = new CAPIType[] {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_USMALLINT};
@@ -920,6 +921,26 @@ public class DuckDBAppender implements AutoCloseable {
 
         byte[] bytes = value.getBytes(UTF_8);
         return appendStringOrBlobInternal(DUCKDB_TYPE_VARCHAR, bytes);
+    }
+
+    public DuckDBAppender appendUUID(long mostSigBits, long leastSigBits) throws SQLException {
+        Column col = currentColumnWithRowPos(DUCKDB_TYPE_UUID);
+        col.data.putLong(leastSigBits);
+        mostSigBits ^= Long.MIN_VALUE;
+        col.data.putLong(mostSigBits);
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender append(UUID value) throws SQLException {
+        checkCurrentColumnType(DUCKDB_TYPE_UUID);
+        if (value == null) {
+            return appendNull();
+        }
+
+        long mostSigBits = value.getMostSignificantBits();
+        long leastSigBits = value.getLeastSignificantBits();
+        return appendUUID(mostSigBits, leastSigBits);
     }
 
     public DuckDBAppender appendEpochDays(int days) throws SQLException {

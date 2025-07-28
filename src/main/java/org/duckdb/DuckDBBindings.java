@@ -171,7 +171,7 @@ public class DuckDBBindings {
         // duckdb_array, only useful as logical type
         DUCKDB_TYPE_ARRAY(33, 0),
         // duckdb_hugeint
-        DUCKDB_TYPE_UUID(27),
+        DUCKDB_TYPE_UUID(27, 16),
         // union type, only useful as logical type
         DUCKDB_TYPE_UNION(28),
         // duckdb_bit
