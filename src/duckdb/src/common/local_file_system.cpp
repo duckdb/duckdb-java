@@ -805,7 +805,7 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 
 	// Convert wide string to UTF-8
 	std::wstring wideMessage(messageBuffer, size);
-	std::string message = WindowsUtil::UnicodeToUTF8(wideMessage);
+	std::string message = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
 
 	// Free the buffer.
 	LocalFree(messageBuffer);
