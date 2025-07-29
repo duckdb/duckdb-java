@@ -152,7 +152,8 @@ public class TestAppender {
                 appender.flush();
             }
 
-            try (DuckDBResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1").unwrap(DuckDBResultSet.class)) {
+            try (DuckDBResultSet rs =
+                     stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1").unwrap(DuckDBResultSet.class)) {
                 assertTrue(rs.next());
                 assertEquals(rs.getUuid(2), uuid1);
                 assertEquals(rs.getObject(2, UUID.class), uuid1);
