@@ -239,6 +239,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_transaction.cpp
   src/duckdb/src/verification/copied_statement_verifier.cpp
   src/duckdb/src/verification/deserialized_statement_verifier.cpp
+  src/duckdb/src/verification/explain_statement_verifier.cpp
   src/duckdb/src/verification/external_statement_verifier.cpp
   src/duckdb/src/verification/fetch_row_verifier.cpp
   src/duckdb/src/verification/no_operator_caching_verifier.cpp
