@@ -399,6 +399,40 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 	return vec_array;
 }
 
+jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf,
+                                                 jlong col_idx) {
+	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+		throw InvalidInputException("Invalid result set");
+	}
+
+	if (!res_ref->chunk) {
+		return nullptr;
+	}
+
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (conn_ref == nullptr) {
+		return nullptr;
+	}
+
+	auto row_count = res_ref->chunk->size();
+	auto &complex_vec = res_ref->chunk->data[col_idx];
+	Vector vec(LogicalType::VARCHAR);
+	VectorOperations::Cast(*conn_ref->context, complex_vec, vec, row_count);
+
+	jobjectArray string_data = env->NewObjectArray(row_count, J_String, nullptr);
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		if (FlatVector::IsNull(vec, row_idx)) {
+			continue;
+		}
+		auto d_str = (reinterpret_cast<string_t *>(FlatVector::GetData(vec)))[row_idx];
+		auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
+		env->SetObjectArrayElement(string_data, row_idx, j_str);
+	}
+
+	return string_data;
+}
+
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
