@@ -1449,11 +1449,11 @@ public class TestDuckDBJDBC {
 
     public static void test_valid_but_local_config_throws_exception() throws Exception {
         Properties info = new Properties();
-        info.put("ordered_aggregate_threshold", "123");
+        info.put("errors_as_json", "true");
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Could not set option \"ordered_aggregate_threshold\" as a global option"));
+        assertTrue(message.contains("Could not set option \"errors_as_json\" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {
