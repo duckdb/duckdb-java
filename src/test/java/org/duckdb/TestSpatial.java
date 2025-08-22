@@ -1,8 +1,7 @@
 package org.duckdb;
 
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
-import static org.duckdb.test.Assertions.assertEquals;
-import static org.duckdb.test.Assertions.assertListsEqual;
+import static org.duckdb.test.Assertions.*;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -347,6 +346,28 @@ public class TestSpatial {
             }
 
             // WKB_BLOB parameter - not implemented
+        }
+    }
+
+    public static void test_spatial_GEOMETRY_as_string() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("INSTALL spatial");
+            stmt.executeUpdate("LOAD spatial");
+
+            // GEOMETRY as string
+            try (ResultSet rs = stmt.executeQuery("SELECT 42, unnest(["
+                                                  + "ST_GeomFromText('POINT(41.1 42.2)'),"
+                                                  + "NULL,"
+                                                  + "ST_GeomFromText('POINT(43.3 44.4)'),"
+                                                  + "])")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(2), "POINT (41.1 42.2)");
+                assertTrue(rs.next());
+                assertNull(rs.getString(2));
+                assertTrue(rs.next());
+                assertEquals(rs.getString(2), "POINT (43.3 44.4)");
+                assertFalse(rs.next());
+            }
         }
     }
 }
