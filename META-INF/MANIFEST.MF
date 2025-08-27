@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: DuckDB JDBC Driver
 Bundle-SymbolicName: org.duckdb.duckdb_jdbc
-Bundle-Version: 1.4.0.0
+Bundle-Version: 1.3.2.1
 Bundle-Vendor: DuckDB Labs
 Bundle-Description: A JDBC-compliant driver for the DuckDB data management system
 Bundle-License: https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE
