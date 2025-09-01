@@ -182,13 +182,13 @@ public class DuckDBAppender implements AutoCloseable {
         return this;
     }
 
-    public void flush() throws SQLException {
+    public long flush() throws SQLException {
         checkOpen();
         checkAppendingRow(false);
         checkAppendingStruct(false);
 
         if (0 == rowIdx) {
-            return;
+            return rowIdx;
         }
 
         appenderRefLock.lock();
@@ -220,7 +220,9 @@ public class DuckDBAppender implements AutoCloseable {
                 throw new SQLException(createErrMsg(e.getMessage()), e);
             }
 
+            long ret = rowIdx;
             rowIdx = 0;
+            return ret;
         } finally {
             appenderRefLock.unlock();
         }
