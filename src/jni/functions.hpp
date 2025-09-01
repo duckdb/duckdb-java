@@ -81,6 +81,10 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv * env, jclass param0, jobject param1, job
 
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv * env, jclass param0, jobject param1, jobject param2);
 
+jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
+
+JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1result_1to_1strings(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
+
 jint _duckdb_jdbc_fetch_size(JNIEnv * env, jclass param0);
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv * env, jclass param0);
