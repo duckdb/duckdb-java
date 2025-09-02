@@ -22,7 +22,7 @@ public class TestAppender {
             stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 VARCHAR)");
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(Integer.MAX_VALUE).append("foo").endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -43,7 +43,7 @@ public class TestAppender {
                 String str = null;
                 appender.beginRow().append(41).append(str).endRow();
                 appender.beginRow().append(42).appendNull().endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 2L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -65,7 +65,7 @@ public class TestAppender {
             stmt.execute("CREATE TABLE tab1(col1 INTEGER DEFAULT 42, col2 VARCHAR DEFAULT 'foo')");
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().appendDefault().appendDefault().endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -85,7 +85,7 @@ public class TestAppender {
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(41).append(true).endRow();
                 appender.beginRow().append(42).append(false).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 2L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -118,7 +118,7 @@ public class TestAppender {
                     .append(-2)
                     .append((long) -2)
                     .endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 2L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -149,7 +149,7 @@ public class TestAppender {
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(1).append(uuid1).endRow();
                 appender.beginRow().append(2).append(uuid2).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 2L);
             }
 
             try (DuckDBResultSet rs =
@@ -182,7 +182,7 @@ public class TestAppender {
                 appender.beginRow().append(41).append(inlineStr).endRow();
                 appender.beginRow().append(42).append(longStr).endRow();
                 appender.beginRow().append(43).append(emptyStr).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 3L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -211,7 +211,7 @@ public class TestAppender {
                     .append(HUGE_INT_MAX.subtract(BigInteger.ONE))
                     .append(HUGE_INT_MAX.subtract(BigInteger.ONE))
                     .endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 4L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -253,7 +253,7 @@ public class TestAppender {
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(42).append(ldt).append(ldt).append(ldt).append(ldt).endRow();
                 appender.beginRow().append(43).append(dt).append(dt).append(dt).append(dt).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 2L);
             }
 
             // todo: check rounding rules
@@ -299,7 +299,7 @@ public class TestAppender {
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(42).append(odt).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -331,7 +331,7 @@ public class TestAppender {
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(42).append(lt).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -371,7 +371,7 @@ public class TestAppender {
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(42).append(ot).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
@@ -425,7 +425,8 @@ public class TestAppender {
             // int8, int4, int2, int1, float8, float4
             stmt.execute("CREATE TABLE numbers (a BIGINT, b INTEGER, c SMALLINT, d TINYINT, e DOUBLE, f FLOAT)");
             try (DuckDBAppender appender = conn.createAppender("numbers")) {
-                for (int i = 0; i < 50; i++) {
+                int count = 50;
+                for (int i = 0; i < count; i++) {
                     appender.beginRow()
                         .append(Long.MAX_VALUE - i)
                         .append(Integer.MAX_VALUE - i)
@@ -435,7 +436,7 @@ public class TestAppender {
                         .append((float) i)
                         .endRow();
                 }
-                appender.flush();
+                assertEquals(appender.flush(), (long) count);
             }
 
             try (ResultSet rs =
@@ -496,7 +497,8 @@ public class TestAppender {
                     .beginRow()
                     .append(5);
                 assertThrows(() -> { appender.append(ld5); }, SQLException.class);
-                appender.append(ld4).endRow().flush();
+                long count = appender.append(ld4).endRow().flush();
+                assertEquals(count, 5L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT a FROM date_only ORDER BY id")) {
@@ -541,7 +543,7 @@ public class TestAppender {
                 appender.beginRow().append(2).append(cjk1).endRow();
                 // append char array
                 appender.beginRow().append(3).append(new char[] {cjk1, cjk2}).endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 3L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT str_value FROM data ORDER BY id")) {
@@ -623,7 +625,8 @@ public class TestAppender {
             stmt.execute("CREATE TABLE data (a INTEGER)");
 
             try (DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data")) {
-                appender.beginRow().appendNull().endRow().flush();
+                long count = appender.beginRow().appendNull().endRow().flush();
+                assertEquals(count, 1L);
             }
 
             try (ResultSet results = stmt.executeQuery("SELECT * FROM data")) {
@@ -664,42 +667,43 @@ public class TestAppender {
                 "CREATE TABLE decimals (id INT4, a DECIMAL(4,2), b DECIMAL(8,4), c DECIMAL(18,6), d DECIMAL(38,20))");
 
             try (DuckDBAppender appender = conn.createAppender("decimals")) {
-                appender.beginRow()
-                    .append(1)
-                    .append(bigdec16)
-                    .append(bigdec32)
-                    .append(bigdec64)
-                    .append(bigdec128)
-                    .endRow()
-                    .beginRow()
-                    .append(2)
-                    .append(negbigdec16)
-                    .append(negbigdec32)
-                    .append(negbigdec64)
-                    .append(negbigdec128)
-                    .endRow()
-                    .beginRow()
-                    .append(3)
-                    .append(smallbigdec16)
-                    .append(smallbigdec32)
-                    .append(smallbigdec64)
-                    .append(smallbigdec128)
-                    .endRow()
-                    .beginRow()
-                    .append(4)
-                    .append(intbigdec16)
-                    .append(intbigdec32)
-                    .append(intbigdec64)
-                    .append(intbigdec128)
-                    .endRow()
-                    .beginRow()
-                    .append(5)
-                    .append(onebigdec16)
-                    .append(onebigdec32)
-                    .append(onebigdec64)
-                    .append(onebigdec128)
-                    .endRow()
-                    .flush();
+                long count = appender.beginRow()
+                                 .append(1)
+                                 .append(bigdec16)
+                                 .append(bigdec32)
+                                 .append(bigdec64)
+                                 .append(bigdec128)
+                                 .endRow()
+                                 .beginRow()
+                                 .append(2)
+                                 .append(negbigdec16)
+                                 .append(negbigdec32)
+                                 .append(negbigdec64)
+                                 .append(negbigdec128)
+                                 .endRow()
+                                 .beginRow()
+                                 .append(3)
+                                 .append(smallbigdec16)
+                                 .append(smallbigdec32)
+                                 .append(smallbigdec64)
+                                 .append(smallbigdec128)
+                                 .endRow()
+                                 .beginRow()
+                                 .append(4)
+                                 .append(intbigdec16)
+                                 .append(intbigdec32)
+                                 .append(intbigdec64)
+                                 .append(intbigdec128)
+                                 .endRow()
+                                 .beginRow()
+                                 .append(5)
+                                 .append(onebigdec16)
+                                 .append(onebigdec32)
+                                 .append(onebigdec64)
+                                 .append(onebigdec128)
+                                 .endRow()
+                                 .flush();
+                assertEquals(count, 5L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT a,b,c,d FROM decimals ORDER BY id")) {
@@ -809,7 +813,7 @@ public class TestAppender {
                     .append(new int[] {44, 45, 46}, new boolean[] {false, true, false})
                     .endRow();
                 appender.beginRow().append(43).appendNull().endRow();
-                appender.flush();
+                assertEquals(appender.flush(), 3L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) FROM tab1 WHERE col1 = 41")) {
@@ -1573,7 +1577,8 @@ public class TestAppender {
             stmt.execute("CREATE TABLE data (a BLOB)");
 
             try (DuckDBAppender appender = conn.createAppender("data")) {
-                appender.beginRow().append(data).endRow().flush();
+                long count = appender.beginRow().append(data).endRow().flush();
+                assertEquals(count, 1L);
             }
 
             try (ResultSet results = stmt.executeQuery("SELECT * FROM data")) {
@@ -1592,27 +1597,28 @@ public class TestAppender {
             stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARCHAR))");
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
-                appender.beginRow()
-                    .append(42)
-                    .beginStruct()
-                    .append(43)
-                    .append("foo")
-                    .endStruct()
-                    .endRow()
+                long count = appender.beginRow()
+                                 .append(42)
+                                 .beginStruct()
+                                 .append(43)
+                                 .append("foo")
+                                 .endStruct()
+                                 .endRow()
 
-                    .beginRow()
-                    .append(44)
-                    .beginStruct()
-                    .append(45)
-                    .appendNull()
-                    .endStruct()
-                    .endRow()
+                                 .beginRow()
+                                 .append(44)
+                                 .beginStruct()
+                                 .append(45)
+                                 .appendNull()
+                                 .endStruct()
+                                 .endRow()
 
-                    .beginRow()
-                    .append(46)
-                    .appendNull()
-                    .endRow()
-                    .flush();
+                                 .beginRow()
+                                 .append(46)
+                                 .appendNull()
+                                 .endRow()
+                                 .flush();
+                assertEquals(count, 3L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 WHERE col1 = 42")) {
@@ -1656,14 +1662,15 @@ public class TestAppender {
             stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 INTEGER[2]))");
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
-                appender.beginRow()
-                    .append(42)
-                    .beginStruct()
-                    .append(43)
-                    .append(new int[] {44, 45})
-                    .endStruct()
-                    .endRow()
-                    .flush();
+                long count = appender.beginRow()
+                                 .append(42)
+                                 .beginStruct()
+                                 .append(43)
+                                 .append(new int[] {44, 45})
+                                 .endStruct()
+                                 .endRow()
+                                 .flush();
+                assertEquals(count, 1L);
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1")) {
