@@ -220,9 +220,10 @@ public class DuckDBAppender implements AutoCloseable {
                 throw new SQLException(createErrMsg(e.getMessage()), e);
             }
 
-            return rowIdx;
-        } finally {
+            long ret = rowIdx;
             rowIdx = 0;
+            return ret;
+        } finally {
             appenderRefLock.unlock();
         }
     }
