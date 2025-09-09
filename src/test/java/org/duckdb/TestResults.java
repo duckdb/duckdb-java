@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.*;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -294,6 +295,71 @@ public class TestResults {
             try (ResultSet rs = stmt.executeQuery("SELECT ARRAY['foo', 'bar', 'baz']")) {
                 rs.next();
                 assertEquals(rs.getString(1), "[foo, bar, baz]");
+            }
+        }
+    }
+
+    public static void test_results_precision() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT TRUE::BOOLEAN")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 5);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::TINYINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 3);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::UTINYINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 3);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::SMALLINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 5);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::USMALLINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 5);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::INTEGER")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 10);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::UINTEGER")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 10);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::BIGINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 19);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::UBIGINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 19);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::HUGEINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 38);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::UHUGEINT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 38);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::FLOAT")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 8);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::DOUBLE")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 17);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT 42::DECIMAL(15,3)")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 15);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::TIME")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 15);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::DATE")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 13);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::TIMESTAMP")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 29);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::TIMESTAMP WITH TIME ZONE")) {
+                assertEquals(rs.getMetaData().getPrecision(1), 35);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::VARCHAR")) {
+                assertEquals(rs.getMetaData().getPrecision(1), Integer.MAX_VALUE);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::BLOB")) {
+                assertEquals(rs.getMetaData().getPrecision(1), Integer.MAX_VALUE);
             }
         }
     }
