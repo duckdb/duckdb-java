@@ -310,17 +310,58 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
     }
 
     public int getPrecision(int column) throws SQLException {
-        DuckDBColumnTypeMetaData typeMetaData = typeMetadataForColumn(column);
+        checkColumn(column);
+        DuckDBColumnTypeMetaData typeMetaData = column_types_meta[column - 1];
 
-        if (typeMetaData == null) {
-            return 0;
+        if (typeMetaData != null) {
+            return typeMetaData.width;
         }
 
-        return typeMetaData.width;
+        DuckDBColumnType colType = column_types[column - 1];
+        switch (colType) {
+        case BOOLEAN:
+            return 5;
+        case TINYINT:
+        case UTINYINT:
+            return 3;
+        case SMALLINT:
+        case USMALLINT:
+            return 5;
+        case INTEGER:
+        case UINTEGER:
+            return 10;
+        case BIGINT:
+        case UBIGINT:
+            return 19;
+        case HUGEINT:
+        case UHUGEINT:
+            return 38;
+        case FLOAT:
+            return 8;
+        case DOUBLE:
+            return 17;
+        case TIME:
+            return 15;
+        case DATE:
+            return 13;
+        case TIMESTAMP:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+            return 29;
+        case TIMESTAMP_WITH_TIME_ZONE:
+            return 35;
+        case VARCHAR:
+        case BLOB:
+            return Integer.MAX_VALUE;
+        default:
+            return 0;
+        }
     }
 
     public int getScale(int column) throws SQLException {
-        DuckDBColumnTypeMetaData typeMetaData = typeMetadataForColumn(column);
+        checkColumn(column);
+        DuckDBColumnTypeMetaData typeMetaData = column_types_meta[column - 1];
 
         if (typeMetaData == null) {
             return 0;
@@ -347,10 +388,9 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         return iface.isInstance(this);
     }
 
-    private DuckDBColumnTypeMetaData typeMetadataForColumn(int columnIndex) throws SQLException {
+    private void checkColumn(int columnIndex) throws SQLException {
         if (columnIndex > column_count) {
             throw new SQLException("Column index out of bounds");
         }
-        return column_types_meta[columnIndex - 1];
     }
 }
