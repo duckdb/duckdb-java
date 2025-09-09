@@ -10,6 +10,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
@@ -194,6 +195,10 @@ void AttachedDatabase::FinalizeLoad(optional_ptr<ClientContext> context) {
 	catalog->FinalizeLoad(context);
 }
 
+bool AttachedDatabase::HasStorageManager() const {
+	return storage.get();
+}
+
 StorageManager &AttachedDatabase::GetStorageManager() {
 	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");
@@ -245,7 +250,7 @@ void AttachedDatabase::Close() {
 
 	// shutting down: attempt to checkpoint the database
 	// but only if we are not cleaning up as part of an exception unwind
-	if (!Exception::UncaughtException() && storage && !storage->InMemory()) {
+	if (!Exception::UncaughtException() && storage && !storage->InMemory() && !ValidChecker::IsInvalidated(db)) {
 		try {
 			auto &config = DBConfig::GetConfig(db);
 			if (config.options.checkpoint_on_shutdown) {
