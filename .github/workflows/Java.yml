@@ -14,6 +14,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
 
 jobs:
+
   format-check:
     name: Format Check
     runs-on: ubuntu-latest
@@ -31,13 +32,29 @@ jobs:
     needs: format-check
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
+      # Spark testing env vars below
+      DUCKDB_JDBC_JAR: ${{ github.workspace }}/build/release/duckdb_jdbc.jar
+      SPARK_SQL_EXE: ${{ github.workspace }}/sparktest/spark-3.5.3-bin-hadoop3/bin/spark-sql
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
+      POSTGRES_MAINTENANCE_DB: postgres
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      DUCKLAKE_CATALOG_DB: lake_test
+      PARQUET_FILE_URL: https://blobs.duckdb.org/data/taxi_2019_04.parquet
+      SESSION_INIT_SQL_FILE: ${{ github.workspace }}/sparktest/spark-session-init.sql
+      MINIO_EXE: ${{ github.workspace }}/sparktest/minio
+      MINIO_PID: ${{ github.workspace }}/sparktest/minio.pid
+      MC_EXE: ${{ github.workspace }}/sparktest/mc
+      MINIO_DATA: ${{ github.workspace }}/sparktest/minio_data
+      MINIO_HOST: 127.0.0.1
+      MINIO_PORT: 9000
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Build
-        shell: bash
         run: |
           docker run                                    \
           -v.:/duckdb                                   \
@@ -56,7 +73,6 @@ jobs:
           "
 
       - name: JDBC Tests EL8
-        shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
           docker run                                    \
@@ -76,7 +92,6 @@ jobs:
           "
 
       - name: JDBC Tests
-        shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
           cat /etc/os-release
@@ -102,7 +117,6 @@ jobs:
 
       - name: CTS tests
         if: ${{ inputs.skip_tests != 'true' }}
-        shell: bash
         run: |
           docker run                                           \
           -v.:/duckdb                                          \
@@ -117,6 +131,51 @@ jobs:
               java-1.8.0-openjdk-devel
             make -C /duckdb/jdbc_compatibility_test_suite_runner test
           "
+
+      - name: Spark Test Resources
+        run: |
+          mkdir sparktest
+          cd sparktest
+          cmake ..
+
+      - name: Setup Postgres
+        uses: ikalnytskyi/action-setup-postgres@v7
+        with:
+          postgres-version: '17'
+          username: ${{ env.POSTGRES_USERNAME }}
+          password: ${{ env.POSTGRES_PASSWORD }}
+          database: ${{ env.POSTGRES_MAINTENANCE_DB }}
+          port: ${{ env.POSTGRES_PORT }}
+          ssl: true
+
+      - name: Setup Minio
+        working-directory: sparktest
+        run: |
+          wget -nv https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
+          ./minio --version
+          wget -nv https://dl.min.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+          ./mc --version
+          java -version
+          java ${{ github.workspace }}/src/test/external/SetupMinio.java
+
+      - name: Setup DuckLake
+        working-directory: sparktest
+        run: |
+          cat ${{ env.SESSION_INIT_SQL_FILE }}
+          wget -nv https://github.com/pgjdbc/pgjdbc/releases/download/REL42.7.7/postgresql-42.7.7.jar
+          java -version
+          java -cp ${{ env.DUCKDB_JDBC_JAR }}:postgresql-42.7.7.jar ${{ github.workspace }}/src/test/external/SetupDuckLake.java
+
+      - name: Spark Tests
+        working-directory: sparktest
+        run: |
+          wget -nv https://blobs.duckdb.org/ci/spark-3.5.3-bin-hadoop3.tgz
+          tar xf spark-3.5.3-bin-hadoop3.tgz
+          cat spark-test.sql
+          java -version
+          java ${{ github.workspace }}/src/test/external/RunSpark.java spark-test.sql
 
       - name: Deploy
         shell: bash
