@@ -658,3 +658,12 @@ add_custom_command(
           $<TARGET_FILE_DIR:duckdb_java> $<TARGET_FILE_NAME:duckdb_java>)
 
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)
+
+# test resources
+
+configure_file(
+  src/test/external/spark-session-init.sql
+  spark-session-init.sql)
+configure_file(
+  src/test/external/spark-test.sql
+  spark-test.sql)
