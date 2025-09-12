@@ -7,7 +7,9 @@ import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.util.Arrays;
 
 public class TestBindings {
 
@@ -171,6 +173,11 @@ public class TestBindings {
                                                           new byte[][] {"foo".getBytes(UTF_8), "bar".getBytes(UTF_8)});
         assertTrue(duckdb_get_type_id(structType) != DUCKDB_TYPE_INVALID.typeId);
         assertEquals(duckdb_struct_type_child_count(structType), 2L);
+
+        assertEquals(duckdb_struct_type_child_name(structType, 0), "foo".getBytes(UTF_8));
+        assertEquals(duckdb_struct_type_child_name(structType, 1), "bar".getBytes(UTF_8));
+        assertThrows(() -> { duckdb_struct_type_child_name(structType, -1); }, SQLException.class);
+        assertThrows(() -> { duckdb_struct_type_child_name(structType, 2); }, SQLException.class);
 
         ByteBuffer vec = duckdb_create_vector(structType);
 
