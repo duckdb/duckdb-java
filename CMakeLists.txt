@@ -158,6 +158,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_function.cpp
   src/duckdb/ub_src_function_cast.cpp
   src/duckdb/ub_src_function_cast_union.cpp
+  src/duckdb/ub_src_function_cast_variant.cpp
   src/duckdb/ub_src_function_pragma.cpp
   src/duckdb/ub_src_function_scalar_compressed_materialization.cpp
   src/duckdb/ub_src_function_scalar.cpp
@@ -171,6 +172,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_function_scalar_string_regexp.cpp
   src/duckdb/ub_src_function_scalar_struct.cpp
   src/duckdb/ub_src_function_scalar_system.cpp
+  src/duckdb/ub_src_function_scalar_variant.cpp
   src/duckdb/ub_src_function_table_arrow.cpp
   src/duckdb/ub_src_function_table.cpp
   src/duckdb/ub_src_function_table_system.cpp
