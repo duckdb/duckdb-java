@@ -1746,4 +1746,179 @@ public class TestAppender {
             }
         }
     }
+
+    public static void test_appender_struct_incomplete() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARCHAR))");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                // underflow
+                assertThrows(() -> {
+                    appender.beginRow()
+                        .append(42)
+                        .beginStruct()
+                        .append(43)
+                        //                            .append("foo")
+                        .endStruct();
+                }, SQLException.class);
+            }
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                // overflow
+                assertThrows(() -> {
+                    appender.beginRow()
+                        .append(42)
+                        .beginStruct()
+                        .append(43)
+                        .append("foo")
+                        .append(44) // extra field
+                        .endStruct();
+                }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_appender_begin_misuse() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARCHAR))");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                assertThrows(() -> { appender.beginRow().beginRow(); }, SQLException.class);
+            }
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                assertThrows(() -> { appender.beginStruct().beginStruct(); }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_appender_incomplete_flush() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARCHAR))");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                assertThrows(() -> { appender.beginRow().append(42).flush(); }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_appender_union_basic() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 UNION(u1 INTEGER, u2 VARCHAR))");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                long count = appender.beginRow()
+                                 .append(42)
+                                 .beginUnion("u1")
+                                 .append(43)
+                                 .endUnion()
+                                 .endRow()
+
+                                 .beginRow()
+                                 .append(44)
+                                 .beginUnion("u1")
+                                 .appendNull()
+                                 .endUnion()
+                                 .endRow()
+
+                                 .beginRow()
+                                 .append(45)
+                                 .beginUnion("u2")
+                                 .append("foo")
+                                 .endUnion()
+                                 .endRow()
+
+                                 .flush();
+                assertEquals(count, 3L);
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+
+                assertEquals(rs.getInt(1), 42);
+                Object obj = rs.getObject(2);
+                assertTrue(obj instanceof Integer);
+                assertEquals(obj, 43);
+
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+
+                assertEquals(rs.getInt(1), 44);
+                Object obj = rs.getObject(2);
+                assertNull(obj);
+                //                assertTrue(rs.wasNull());
+
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 WHERE col1 = 45")) {
+                assertTrue(rs.next());
+
+                assertEquals(rs.getInt(1), 45);
+                Object obj = rs.getObject(2);
+                assertTrue(obj instanceof String);
+                assertEquals(obj, "foo");
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_union_flush() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            int count = 1 << 12; // auto flush twice
+            int tail = 17;       // flushed on close
+
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 UNION(u1 INTEGER, u2 INTEGER[2], u3 VARCHAR))");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    appender.beginRow().append(i);
+                    switch (i % 3) {
+                    case 0:
+                        appender.beginUnion("u1").append(i + 1);
+                        break;
+                    case 1:
+                        appender.beginUnion("u2").append(new int[] {i + 2, i + 3});
+                        break;
+                    default:
+                        appender.beginUnion("u3").append("foo" + i);
+                    }
+                    appender.endUnion();
+                    appender.endRow();
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                    Object obj = rs.getObject(2);
+                    switch (i % 3) {
+                    case 0:
+                        assertTrue(obj instanceof Integer);
+                        assertEquals(obj, i + 1);
+                        break;
+                    case 1:
+                        assertTrue(obj instanceof DuckDBArray);
+                        DuckDBArray arrayWrapper = (DuckDBArray) obj;
+                        Object[] array = (Object[]) arrayWrapper.getArray();
+                        assertEquals(array.length, 2);
+                        assertEquals(array[0], i + 2);
+                        assertEquals(array[1], i + 3);
+                        break;
+                    default:
+                        assertTrue(obj instanceof String);
+                        assertEquals(obj, "foo" + i);
+                    }
+                }
+
+                assertFalse(rs.next());
+            }
+        }
+    }
 }

@@ -2,6 +2,7 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstring>
 #include <vector>
 
 duckdb_logical_type logical_type_buf_to_logical_type(JNIEnv *env, jobject logical_type_buf) {
@@ -209,8 +210,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1struct_
 		if (env->ExceptionCheck()) {
 			return nullptr;
 		}
-		names_cstr_vec.emplace_back(str.c_str());
 		names_vec.emplace_back(std::move(str));
+		std::string &str_ref = names_vec.back();
+		names_cstr_vec.emplace_back(str_ref.c_str());
 	}
 
 	duckdb_logical_type struct_type =
@@ -235,6 +237,40 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1struct_1type_1chi
 	idx_t count = duckdb_struct_type_child_count(lt);
 
 	return static_cast<jlong>(count);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_struct_type_child_name
+ * Signature: (Ljava/nio/ByteBuffer;J)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1struct_1type_1child_1name(JNIEnv *env, jclass,
+                                                                                              jobject logical_type,
+                                                                                              jlong index) {
+
+	duckdb_logical_type lt = logical_type_buf_to_logical_type(env, logical_type);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	idx_t index_idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+
+	idx_t count = duckdb_struct_type_child_count(lt);
+	if (index_idx >= count) {
+		env->ThrowNew(J_SQLException, "Invalid struct field index specified");
+		return nullptr;
+	}
+
+	auto name_ptr = varchar_ptr(duckdb_struct_type_child_name(lt, index_idx), varchar_deleter);
+	if (name_ptr.get() == nullptr) {
+		return nullptr;
+	}
+
+	idx_t len = static_cast<idx_t>(std::strlen(name_ptr.get()));
+
+	return make_jbyteArray(env, name_ptr.get(), len);
 }
 
 /*

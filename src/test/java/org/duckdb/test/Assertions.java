@@ -39,6 +39,10 @@ public class Assertions {
         assertTrue(Objects.equals(actual, expected), message);
     }
 
+    public static void assertEquals(byte[] actual, byte[] expected) throws Exception {
+        assertEquals(actual, expected, "");
+    }
+
     public static void assertEquals(byte[] actual, byte[] expected, String message) throws Exception {
         assertTrue(Arrays.equals(actual, expected), message);
     }
