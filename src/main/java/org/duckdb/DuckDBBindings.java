@@ -37,6 +37,8 @@ public class DuckDBBindings {
 
     static native long duckdb_struct_type_child_count(ByteBuffer logical_type);
 
+    static native byte[] duckdb_struct_type_child_name(ByteBuffer logical_type, long index);
+
     static native long duckdb_array_type_array_size(ByteBuffer logical_type);
 
     static native void duckdb_destroy_logical_type(ByteBuffer logical_type);

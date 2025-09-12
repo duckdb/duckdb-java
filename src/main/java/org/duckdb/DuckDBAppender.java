@@ -50,9 +50,11 @@ public class DuckDBAppender implements AutoCloseable {
         supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_TZ.typeId);
         supportedTypes.add(DUCKDB_TYPE_TIMESTAMP_NS.typeId);
 
+        supportedTypes.add(DUCKDB_TYPE_UUID.typeId);
+
         supportedTypes.add(DUCKDB_TYPE_ARRAY.typeId);
         supportedTypes.add(DUCKDB_TYPE_STRUCT.typeId);
-        supportedTypes.add(DUCKDB_TYPE_UUID.typeId);
+        supportedTypes.add(DUCKDB_TYPE_UNION.typeId);
     }
     private static final CAPIType[] int8Types = new CAPIType[] {DUCKDB_TYPE_TINYINT, DUCKDB_TYPE_UTINYINT};
     private static final CAPIType[] int16Types = new CAPIType[] {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_USMALLINT};
@@ -85,6 +87,7 @@ public class DuckDBAppender implements AutoCloseable {
     private long rowIdx = 0;
     private int colIdx = 0;
     private int structFieldIdx = 0;
+    private int unionFieldIdx = 0;
 
     private boolean appendingRow = false;
     private boolean appendingStruct = false;
@@ -147,7 +150,8 @@ public class DuckDBAppender implements AutoCloseable {
         checkAppendingStruct(false);
 
         if (columns.length != colIdx) {
-            throw new SQLException(createErrMsg("'endRow' can be called only after adding all columns"));
+            throw new SQLException(createErrMsg("'endRow' can be called only after adding all columns, expected: " +
+                                                columns.length + ", actual: " + colIdx));
         }
 
         rowIdx++;
@@ -166,17 +170,66 @@ public class DuckDBAppender implements AutoCloseable {
         return this;
     }
 
-    public DuckDBAppender beginStruct() throws Exception {
+    public DuckDBAppender beginStruct() throws SQLException {
         checkOpen();
+        checkCurrentColumnType(DUCKDB_TYPE_STRUCT);
         checkAppendingStruct(false);
         this.appendingStruct = true;
         return this;
     }
 
-    public DuckDBAppender endStruct() throws Exception {
+    public DuckDBAppender endStruct() throws SQLException {
         checkOpen();
         checkAppendingStruct(true);
+        Column structCol = currentTopLevelColumn();
+        if (structCol.children.size() != structFieldIdx) {
+            throw new SQLException(
+                createErrMsg("'endStruct' can be called only after adding all struct fields, expected: " +
+                             structCol.children.size() + ", actual: " + structFieldIdx));
+        }
         this.structFieldIdx = 0;
+        this.appendingStruct = false;
+        incrementColOrStructFieldIdx();
+        return this;
+    }
+
+    public DuckDBAppender beginUnion(String tag) throws SQLException {
+        checkOpen();
+        checkCurrentColumnType(DUCKDB_TYPE_UNION);
+        checkAppendingUnion(false);
+
+        Column structCol = currentTopLevelColumn();
+        int fieldWithTag = 0;
+        for (int i = 1; i < structCol.children.size(); i++) {
+            Column childCol = structCol.children.get(i);
+            if (childCol.structFieldName.equals(tag)) {
+                fieldWithTag = i;
+            }
+        }
+        if (0 == fieldWithTag) {
+            throw new SQLException(createErrMsg("specified union field not found, value: '" + tag + "'"));
+        }
+
+        this.appendingStruct = true;
+        // set tag
+        append((byte) (fieldWithTag - 1));
+        // set other fields to NULL
+        for (int i = 1; i < structCol.children.size(); i++) {
+            if (i == fieldWithTag) {
+                continue;
+            }
+            Column childCol = structCol.children.get(i);
+            childCol.setNull(rowIdx);
+        }
+        this.unionFieldIdx = fieldWithTag;
+        return this;
+    }
+
+    public DuckDBAppender endUnion() throws SQLException {
+        checkOpen();
+        checkAppendingUnion(true);
+        this.structFieldIdx = 0;
+        this.unionFieldIdx = 0;
         this.appendingStruct = false;
         incrementColOrStructFieldIdx();
         return this;
@@ -200,14 +253,14 @@ public class DuckDBAppender implements AutoCloseable {
             int appendState = duckdb_append_data_chunk(appenderRef, chunkRef);
             if (0 != appendState) {
                 byte[] errorUTF8 = duckdb_appender_error(appenderRef);
-                String error = null != errorUTF8 ? strFromUTF8(errorUTF8) : "";
+                String error = strFromUTF8(errorUTF8);
                 throw new SQLException(createErrMsg(error));
             }
 
             int flushState = duckdb_appender_flush(appenderRef);
             if (0 != flushState) {
                 byte[] errorUTF8 = duckdb_appender_error(appenderRef);
-                String error = null != errorUTF8 ? strFromUTF8(errorUTF8) : "";
+                String error = strFromUTF8(errorUTF8);
                 throw new SQLException(createErrMsg(error));
             }
 
@@ -1144,8 +1197,21 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void checkAppendingStruct(boolean expected) throws SQLException {
         if (appendingStruct != expected) {
-            throw new SQLException(
-                createErrMsg("'beginStruct' and 'endStruct' calls cannot be interleaved with 'beginRow' and 'endRow'"));
+            throw new SQLException(createErrMsg(
+                "'beginStruct' and 'endStruct' calls must be paired and cannot be interleaved with 'beginRow' and 'endRow'"));
+        }
+    }
+
+    private void checkAppendingUnion(boolean expected) throws SQLException {
+        if (appendingStruct != expected) {
+            throw new SQLException(createErrMsg(
+                "'beginUnion' and 'endUnion' calls must be paired and cannot be interleaved with 'beginRow' and 'endRow'"));
+        }
+        if (appendingStruct && unionFieldIdx == 0) {
+            throw new SQLException(createErrMsg("invalid zero union field index"));
+        }
+        if (!appendingStruct && unionFieldIdx != 0) {
+            throw new SQLException(createErrMsg("invalid non-zero union field index"));
         }
     }
 
@@ -1161,7 +1227,7 @@ public class DuckDBAppender implements AutoCloseable {
         throw new SQLException(createErrMsg("'beginRow' must be called before calling `append`"));
     }
 
-    private Column currentColumn() throws SQLException {
+    private Column currentTopLevelColumn() throws SQLException {
         checkOpen();
 
         if (colIdx >= columns.length) {
@@ -1169,10 +1235,22 @@ public class DuckDBAppender implements AutoCloseable {
                 createErrMsg("invalid columns count, expected: " + columns.length + ", actual: " + (colIdx + 1)));
         }
 
-        Column col = columns[colIdx];
+        return columns[colIdx];
+    }
 
-        if (!appendingStruct || col.colType != DUCKDB_TYPE_STRUCT) {
+    private Column currentColumn() throws SQLException {
+        Column col = currentTopLevelColumn();
+
+        if (!appendingStruct || (col.colType != DUCKDB_TYPE_STRUCT && col.colType != DUCKDB_TYPE_UNION)) {
             return col;
+        }
+
+        if (unionFieldIdx > 0) {
+            if (unionFieldIdx > col.children.size()) {
+                throw new SQLException(createErrMsg("invalid union fields count, expected: " + columns.length +
+                                                    ", actual: " + (structFieldIdx + 1)));
+            }
+            return col.children.get(unionFieldIdx);
         }
 
         if (structFieldIdx >= col.children.size()) {
@@ -1370,7 +1448,7 @@ public class DuckDBAppender implements AutoCloseable {
 
     private static String strFromUTF8(byte[] utf8) {
         if (null == utf8) {
-            return null;
+            return "";
         }
         return new String(utf8, UTF_8);
     }
@@ -1430,13 +1508,12 @@ public class DuckDBAppender implements AutoCloseable {
     }
 
     private static void initVecChildren(Column parent) throws SQLException {
-        List<ByteBuffer> children = new ArrayList<>();
-
         switch (parent.colType) {
         case DUCKDB_TYPE_LIST:
         case DUCKDB_TYPE_MAP: {
             ByteBuffer vec = duckdb_list_vector_get_child(parent.vectorRef);
-            children.add(vec);
+            Column col = new Column(parent, null, vec);
+            parent.children.add(col);
             break;
         }
         case DUCKDB_TYPE_STRUCT:
@@ -1444,27 +1521,17 @@ public class DuckDBAppender implements AutoCloseable {
             long count = duckdb_struct_type_child_count(parent.colTypeRef);
             for (int i = 0; i < count; i++) {
                 ByteBuffer vec = duckdb_struct_vector_get_child(parent.vectorRef, i);
-                children.add(vec);
+                Column col = new Column(parent, null, vec, i);
+                parent.children.add(col);
             }
             break;
         }
         case DUCKDB_TYPE_ARRAY: {
             ByteBuffer vec = duckdb_array_vector_get_child(parent.vectorRef);
-            children.add(vec);
+            Column col = new Column(parent, null, vec);
+            parent.children.add(col);
             break;
         }
-        }
-
-        for (ByteBuffer child : children) {
-            if (null == child) {
-                throw new SQLException("cannot initialize data chunk child list vector");
-            }
-            ByteBuffer lt = duckdb_vector_get_column_type(child);
-            if (null == lt) {
-                throw new SQLException("cannot initialize data chunk child list vector type");
-            }
-            Column cvec = new Column(parent, lt, child);
-            parent.children.add(cvec);
         }
     }
 
@@ -1495,22 +1562,42 @@ public class DuckDBAppender implements AutoCloseable {
         private final int decimalPrecision;
         private final int decimalScale;
         private final long arraySize;
+        private final String structFieldName;
+
         private final ByteBuffer vectorRef;
         private ByteBuffer data;
         private ByteBuffer validity;
         private final List<Column> children = new ArrayList<>();
 
         private Column(Column parent, ByteBuffer colTypeRef, ByteBuffer vector) throws SQLException {
+            this(parent, colTypeRef, vector, -1);
+        }
+
+        private Column(Column parent, ByteBuffer colTypeRef, ByteBuffer vector, int structFieldIdx)
+            throws SQLException {
             this.parent = parent;
-            this.colTypeRef = colTypeRef;
-            int colTypeId = duckdb_get_type_id(colTypeRef);
+
+            if (null == vector) {
+                throw new SQLException("cannot initialize data chunk vector");
+            }
+
+            if (null == colTypeRef) {
+                this.colTypeRef = duckdb_vector_get_column_type(vector);
+                if (null == this.colTypeRef) {
+                    throw new SQLException("cannot initialize data chunk vector type");
+                }
+            } else {
+                this.colTypeRef = colTypeRef;
+            }
+
+            int colTypeId = duckdb_get_type_id(this.colTypeRef);
             this.colType = capiTypeFromTypeId(colTypeId);
 
             if (colType == DUCKDB_TYPE_DECIMAL) {
-                int decimalInternalTypeId = duckdb_decimal_internal_type(colTypeRef);
+                int decimalInternalTypeId = duckdb_decimal_internal_type(this.colTypeRef);
                 this.decimalInternalType = capiTypeFromTypeId(decimalInternalTypeId);
-                this.decimalPrecision = duckdb_decimal_width(colTypeRef);
-                this.decimalScale = duckdb_decimal_scale(colTypeRef);
+                this.decimalPrecision = duckdb_decimal_width(this.colTypeRef);
+                this.decimalScale = duckdb_decimal_scale(this.colTypeRef);
             } else {
                 this.decimalInternalType = DUCKDB_TYPE_INVALID;
                 this.decimalPrecision = -1;
@@ -1523,10 +1610,14 @@ public class DuckDBAppender implements AutoCloseable {
                 this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
             }
 
-            this.vectorRef = vector;
-            if (null == this.vectorRef) {
-                throw new SQLException("cannot initialize data chunk vector");
+            if (structFieldIdx >= 0) {
+                byte[] nameUTF8 = duckdb_struct_type_child_name(parent.colTypeRef, structFieldIdx);
+                this.structFieldName = strFromUTF8(nameUTF8);
+            } else {
+                this.structFieldName = null;
             }
+
+            this.vectorRef = vector;
 
             if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL) {
                 this.data = duckdb_vector_get_data(vectorRef, widthBytes() * arraySize * parentArraySize());
