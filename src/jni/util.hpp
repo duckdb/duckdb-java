@@ -9,9 +9,13 @@ extern "C" {
 #include <memory>
 #include <string>
 
-using jstring_ptr = std::unique_ptr<const char, std::function<void(const char *)>>;
-
 using jbyteArray_ptr = std::unique_ptr<char, std::function<void(char *)>>;
+
+using varchar_ptr = std::unique_ptr<char, void (*)(char *)>;
+
+inline void varchar_deleter(char *val) {
+	duckdb_free(val);
+}
 
 void check_java_exception_and_rethrow(JNIEnv *env);
 
