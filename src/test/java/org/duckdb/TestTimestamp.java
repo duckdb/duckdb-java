@@ -70,7 +70,7 @@ public class TestTimestamp {
             OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
             OffsetDateTime odt1Rounded = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12000, ZoneOffset.ofHours(7));
             OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
-            OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 8, 13000, ZoneOffset.ofHours(-5));
+            OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 13000, ZoneOffset.ofHours(-5));
             OffsetDateTime odt3 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(2));
             OffsetDateTime odt4 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(0));
             OffsetDateTime odt5 = OffsetDateTime.of(1900, 11, 27, 23, 59, 59, 0, ZoneOffset.ofHours(1));
@@ -102,7 +102,7 @@ public class TestTimestamp {
                 // Metadata tests
                 assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
                              DuckDBResultSetMetaData.type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
-                assertTrue(OffsetDateTime.class.getName().equals(meta.getColumnClassName(2)));
+                assertEquals(OffsetDateTime.class.getName(), meta.getColumnClassName(2));
             }
         } finally {
             TimeZone.setDefault(defaultTimeZone);
@@ -296,7 +296,7 @@ public class TestTimestamp {
                 ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
                 try (ResultSet rs6 = ps.executeQuery()) {
                     assertTrue(rs6.next());
-                    assertEquals(rs6.getTimestamp(1), Timestamp.valueOf("1905-11-02 07:59:59.12345"));
+                    assertEquals(rs6.getTimestamp(1), Timestamp.valueOf("1905-11-02 07:59:58.12345"));
                 }
             }
         }
@@ -553,6 +553,32 @@ public class TestTimestamp {
                 rs.next();
                 rs.getObject(1);
             }
+        }
+    }
+
+    public static void test_timestamp_before_epoch() throws Exception {
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone activeTimeZone = TimeZone.getTimeZone("Europe/Sofia");
+        TimeZone.setDefault(activeTimeZone);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+
+            try (ResultSet rs = stmt.executeQuery("SELECT TIMESTAMP '1969-01-01 00:00:00.123456'")) {
+                rs.next();
+                assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(1969, 1, 1, 0, 0, 0, 123456000));
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT TIMESTAMP_NS '1969-01-01 00:00:00.123456789'")) {
+                rs.next();
+                assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(1969, 1, 1, 0, 0, 0, 123456789));
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT TIMESTAMP WITH TIME ZONE '1969-01-01 00:00:00.123456Z'")) {
+                rs.next();
+                assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(1969, 1, 1, 2, 0, 0, 123456000));
+            }
+
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
         }
     }
 }
