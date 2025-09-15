@@ -40,13 +40,13 @@ public class DuckDBTimestamp {
         case MILLIS:
             return Instant.ofEpochMilli(value);
         case MICROS: {
-            long epochSecond = value / 1_000_000;
-            int nanoAdjustment = nanosPartMicros(value);
+            long epochSecond = value / 1_000_000L;
+            long nanoAdjustment = (value % 1_000_000L) * 1000L;
             return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
         }
         case NANOS: {
-            long epochSecond = value / 1_000_000_000;
-            long nanoAdjustment = nanosPartNanos(value);
+            long epochSecond = value / 1_000_000_000L;
+            long nanoAdjustment = value % 1_000_000_000L;
             return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
         }
         default:
@@ -164,22 +164,6 @@ public class DuckDBTimestamp {
             return (int) ((micros % 1000_000L) * 1000);
         } else {
             return (int) ((1000_000L + (micros % 1000_000L)) * 1000);
-        }
-    }
-
-    private static long nanos2seconds(long nanos) {
-        if ((nanos % 1_000_000_000L) >= 0) {
-            return nanos / 1_000_000_000L;
-        } else {
-            return (nanos / 1_000_000_000L) - 1;
-        }
-    }
-
-    private static int nanosPartNanos(long nanos) {
-        if ((nanos % 1_000_000_000L) >= 0) {
-            return (int) ((nanos % 1_000_000_000L));
-        } else {
-            return (int) ((1_000_000_000L + (nanos % 1_000_000_000L)));
         }
     }
 }
