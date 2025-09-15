@@ -2283,7 +2283,7 @@ public class TestDuckDBJDBC {
                                     localDateTimeToOffset(LocalDateTime.ofInstant(
                                         Instant.parse("+294247-01-10T04:00:54.775807Z"), ZoneId.systemDefault())),
                                     localDateTimeToOffset(LocalDateTime.ofInstant(
-                                        Instant.parse("-290308-12-21T19:59:06.224193Z"), ZoneId.systemDefault())),
+                                        Instant.parse("-290308-12-21T19:59:05.224193Z"), ZoneId.systemDefault())),
                                     null,
                                     localDateTimeToOffset(LocalDateTime.ofInstant(Instant.parse("2022-05-12T23:23:45Z"),
                                                                                   ZoneId.systemDefault()))));
