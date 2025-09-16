@@ -72,6 +72,10 @@ jobs:
             make -C /duckdb release
           "
 
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_linux_amd64
+
       - name: JDBC Tests EL8
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
@@ -218,6 +222,9 @@ jobs:
             source /opt/rh/gcc-toolset-12/enable
             make -C /duckdb release
           "
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_linux_arm64
 
       - name: JDBC Tests EL8
         shell: bash
@@ -283,6 +290,10 @@ jobs:
           ${{ env.ALPINE_IMAGE }}                  \
           sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && make -C /duckdb release'
 
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_linux_amd64
+
       - name: JDBC Tests
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
@@ -328,6 +339,10 @@ jobs:
           ${{ env.ALPINE_IMAGE }}                  \
           sh -c 'apk add ${{ env.ALPINE_PACKAGES }} && make -C /duckdb release'
 
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_linux_arm64
+
       # Test runs are failing because of linux_arm64_musl extensions missing
       - name: JDBC Tests
         shell: bash
@@ -370,6 +385,12 @@ jobs:
         shell: bash
         run: make release
 
+      - name: List Symbols
+        shell: cmd
+        run: |
+          call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_amd64
+
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
@@ -403,6 +424,10 @@ jobs:
       - name: Build
         shell: bash
         run: make release
+
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_osx_universal
 
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
