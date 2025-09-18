@@ -814,7 +814,7 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	parameters.push_back(Value::POINTER((uintptr_t)factory));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	conn->TableFunction("arrow_scan", parameters)->CreateView(name, true, true);
 }
 
 void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
