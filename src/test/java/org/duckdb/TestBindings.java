@@ -47,7 +47,7 @@ public class TestBindings {
         ByteBuffer vec = duckdb_create_vector(lt);
         assertNotNull(vec);
 
-        ByteBuffer data = duckdb_vector_get_data(vec, 4);
+        ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 4);
         assertNotNull(data);
         assertEquals(data.capacity(), (int) duckdb_vector_size() * 4);
 
@@ -69,7 +69,7 @@ public class TestBindings {
 
         byte[] bytes = str.getBytes(UTF_8);
         duckdb_vector_assign_string_element_len(vec, idx, bytes);
-        ByteBuffer data = duckdb_vector_get_data(vec, 16);
+        ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 16);
         assertEquals(data.remaining(), (int) duckdb_vector_size() * 16);
 
         int lengthPos = STRING_T_SIZE_BYTES * idx;
@@ -92,7 +92,7 @@ public class TestBindings {
         String str = "bar";
         int idx = 9;
         duckdb_vector_assign_string_element_len(vec, idx, str.getBytes(UTF_8));
-        ByteBuffer data = duckdb_vector_get_data(vec, 16);
+        ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 16);
 
         int lengthPos = STRING_T_SIZE_BYTES * idx;
         int length = data.getInt(lengthPos);
@@ -132,7 +132,7 @@ public class TestBindings {
 
         ByteBuffer childVec = duckdb_list_vector_get_child(vec);
         assertNotNull(childVec);
-        ByteBuffer data = duckdb_vector_get_data(childVec, 16);
+        ByteBuffer data = duckdb_vector_get_data(childVec, duckdb_vector_size() * 16);
         assertNotNull(data);
         assertEquals(data.capacity(), (int) duckdb_vector_size() * 16);
         checkVectorInsertString(childVec);
@@ -156,7 +156,7 @@ public class TestBindings {
 
         ByteBuffer childVec = duckdb_array_vector_get_child(vec);
         assertNotNull(childVec);
-        ByteBuffer data = duckdb_vector_get_data(childVec, 16);
+        ByteBuffer data = duckdb_vector_get_data(childVec, duckdb_vector_size() * 16);
         assertNotNull(data);
         assertEquals(data.capacity(), (int) duckdb_vector_size() * 16);
         checkVectorInsertString(childVec);
@@ -183,7 +183,7 @@ public class TestBindings {
 
         ByteBuffer childVec = duckdb_struct_vector_get_child(vec, 1);
         assertNotNull(childVec);
-        ByteBuffer data = duckdb_vector_get_data(childVec, 16);
+        ByteBuffer data = duckdb_vector_get_data(childVec, duckdb_vector_size() * 16);
         assertNotNull(data);
         assertEquals(data.capacity(), (int) duckdb_vector_size() * 16);
         checkVectorInsertString(childVec);
@@ -226,7 +226,7 @@ public class TestBindings {
 
         ByteBuffer vec = duckdb_data_chunk_get_vector(chunk, 1);
         assertNotNull(vec);
-        ByteBuffer data = duckdb_vector_get_data(vec, 16);
+        ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 16);
         assertNotNull(data);
         assertEquals(data.capacity(), (int) duckdb_vector_size() * 16);
         checkVectorInsertString(vec);
@@ -264,7 +264,7 @@ public class TestBindings {
 
             ByteBuffer col1Vec = duckdb_data_chunk_get_vector(chunk, 0);
             duckdb_vector_ensure_validity_writable(col1Vec);
-            ByteBuffer col1Data = duckdb_vector_get_data(col1Vec, 4);
+            ByteBuffer col1Data = duckdb_vector_get_data(col1Vec, duckdb_vector_size() * 4);
             col1Data.putInt(42);
             col1Data.putInt(43);
             duckdb_append_default_to_chunk(appender, chunk, 0, 2);
