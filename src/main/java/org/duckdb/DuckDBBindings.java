@@ -51,7 +51,7 @@ public class DuckDBBindings {
 
     static native ByteBuffer duckdb_vector_get_column_type(ByteBuffer vector);
 
-    static native ByteBuffer duckdb_vector_get_data(ByteBuffer vector, long col_width_bytes);
+    static native ByteBuffer duckdb_vector_get_data(ByteBuffer vector, long size_bytes);
 
     static native ByteBuffer duckdb_vector_get_validity(ByteBuffer vector, long array_size);
 
@@ -165,7 +165,7 @@ public class DuckDBBindings {
         // enum type, only useful as logical type
         DUCKDB_TYPE_ENUM(23),
         // list type, only useful as logical type
-        DUCKDB_TYPE_LIST(24),
+        DUCKDB_TYPE_LIST(24, 16),
         // struct type, only useful as logical type
         DUCKDB_TYPE_STRUCT(25, 0),
         // map type, only useful as logical type

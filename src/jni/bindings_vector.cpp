@@ -80,13 +80,13 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1co
  * Signature: (Ljava/nio/ByteBuffer;)Ljava/nio/ByteBuffer;
  */
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1data(JNIEnv *env, jclass, jobject vector,
-                                                                                   jlong col_width_bytes) {
+                                                                                   jlong size_bytes) {
 
 	duckdb_vector vec = vector_buf_to_vector(env, vector);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
-	idx_t width = jlong_to_idx(env, col_width_bytes);
+	idx_t vector_size = jlong_to_idx(env, size_bytes);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
@@ -94,7 +94,6 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1da
 	void *data = duckdb_vector_get_data(vec);
 
 	if (data != nullptr) {
-		idx_t vector_size = duckdb_vector_size() * width;
 		return make_data_buf(env, data, vector_size);
 	}
 
