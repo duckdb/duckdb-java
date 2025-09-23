@@ -53,6 +53,8 @@ public class DuckDBAppender implements AutoCloseable {
         supportedTypes.add(DUCKDB_TYPE_UUID.typeId);
 
         supportedTypes.add(DUCKDB_TYPE_ARRAY.typeId);
+        supportedTypes.add(DUCKDB_TYPE_LIST.typeId);
+
         supportedTypes.add(DUCKDB_TYPE_STRUCT.typeId);
         supportedTypes.add(DUCKDB_TYPE_UNION.typeId);
     }
@@ -572,9 +574,9 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
-        int pos = (int) (rowIdx * col.arraySize);
         col.data.position(pos);
         col.data.put(bytes);
 
@@ -600,12 +602,12 @@ public class DuckDBAppender implements AutoCloseable {
             boolean[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             for (int j = 0; j < childValues.length; j++) {
@@ -632,9 +634,9 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
-        int pos = (int) (rowIdx * col.arraySize);
         col.data.position(pos);
         col.data.put(values);
 
@@ -659,12 +661,12 @@ public class DuckDBAppender implements AutoCloseable {
             byte[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             int pos = (int) ((rowIdx * arrayCol.arraySize + i) * col.arraySize);
@@ -704,10 +706,10 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
         ShortBuffer shortData = col.data.asShortBuffer();
-        int pos = (int) (rowIdx * col.arraySize);
         shortData.position(pos);
         shortData.put(values);
 
@@ -732,12 +734,12 @@ public class DuckDBAppender implements AutoCloseable {
             short[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             ShortBuffer shortBuffer = col.data.asShortBuffer();
@@ -761,10 +763,10 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
         IntBuffer intData = col.data.asIntBuffer();
-        int pos = (int) (rowIdx * col.arraySize);
         intData.position(pos);
         intData.put(values);
 
@@ -789,12 +791,12 @@ public class DuckDBAppender implements AutoCloseable {
             int[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             IntBuffer intData = col.data.asIntBuffer();
@@ -818,10 +820,10 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
         LongBuffer longData = col.data.asLongBuffer();
-        int pos = (int) (rowIdx * col.arraySize);
         longData.position(pos);
         longData.put(values);
 
@@ -846,12 +848,12 @@ public class DuckDBAppender implements AutoCloseable {
             long[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             LongBuffer longData = col.data.asLongBuffer();
@@ -875,10 +877,10 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
         FloatBuffer floatData = col.data.asFloatBuffer();
-        int pos = (int) (rowIdx * col.arraySize);
         floatData.position(pos);
         floatData.put(values);
 
@@ -903,12 +905,12 @@ public class DuckDBAppender implements AutoCloseable {
             float[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             FloatBuffer floatData = col.data.asFloatBuffer();
@@ -932,10 +934,10 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         checkArrayLength(col, values.length);
-        setArrayNullMask(col, nullMask);
+        int pos = prepareListColumn(col, values.length);
+        setNullMask(col, nullMask, values.length);
 
         DoubleBuffer doubleData = col.data.asDoubleBuffer();
-        int pos = (int) (rowIdx * col.arraySize);
         doubleData.position(pos);
         doubleData.put(values);
 
@@ -960,12 +962,12 @@ public class DuckDBAppender implements AutoCloseable {
             double[] childValues = values[i];
 
             if (childValues == null) {
-                arrayCol.setNull(rowIdx, i);
+                arrayCol.setNullOnArrayIdx(rowIdx, i);
                 continue;
             }
             checkArrayLength(col, childValues.length);
             if (nullMask != null) {
-                setArrayNullMask(col, nullMask[i], i);
+                setArrayNullMask(col, nullMask[i], childValues.length, i);
             }
 
             DoubleBuffer doubleBuffer = col.data.asDoubleBuffer();
@@ -1183,8 +1185,9 @@ public class DuckDBAppender implements AutoCloseable {
         return writeInlinedStrings;
     }
 
-    public void setWriteInlinedStrings(boolean writeInlinedStrings) {
+    public DuckDBAppender setWriteInlinedStrings(boolean writeInlinedStrings) {
         this.writeInlinedStrings = writeInlinedStrings;
+        return this;
     }
 
     private String createErrMsg(String error) {
@@ -1249,8 +1252,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private Column currentArrayInnerColumn(CAPIType[] ctypes) throws SQLException {
         Column parentCol = currentColumn();
-        if (parentCol.colType != DUCKDB_TYPE_ARRAY) {
-            throw new SQLException(createErrMsg("invalid array column type: '" + parentCol.colType + "'"));
+        if (parentCol.colType != DUCKDB_TYPE_ARRAY && parentCol.colType != DUCKDB_TYPE_LIST) {
+            throw new SQLException(createErrMsg("invalid array/list column type: '" + parentCol.colType + "'"));
         }
 
         Column col = parentCol.children.get(0);
@@ -1259,7 +1262,7 @@ public class DuckDBAppender implements AutoCloseable {
                 return col;
             }
         }
-        throw new SQLException(createErrMsg("invalid array inner column type, expected one of: '" +
+        throw new SQLException(createErrMsg("invalid array/list inner column type, expected one of: '" +
                                             Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"));
     }
 
@@ -1312,27 +1315,71 @@ public class DuckDBAppender implements AutoCloseable {
     }
 
     private void checkArrayLength(Column col, int length) throws SQLException {
+        if (null == col.parent) {
+            throw new SQLException(createErrMsg("invalid array/list column specified"));
+        }
+        switch (col.parent.colType) {
+        case DUCKDB_TYPE_LIST:
+            return;
+        case DUCKDB_TYPE_ARRAY:
+            break;
+        default:
+            throw new SQLException(createErrMsg("invalid array/list column type: " + col.colType));
+        }
         if (col.arraySize != length) {
             throw new SQLException(
                 createErrMsg("invalid array size, expected: " + col.arraySize + ", actual: " + length));
         }
     }
 
-    private void setArrayNullMask(Column col, boolean[] nullMask) throws SQLException {
-        setArrayNullMask(col, nullMask, 0);
+    private void setNullMask(Column col, boolean[] nullMask, int elementsCount) throws SQLException {
+        if (null == col.parent) {
+            throw new SQLException(createErrMsg("invalid array/list column specified"));
+        }
+        switch (col.parent.colType) {
+        case DUCKDB_TYPE_ARRAY:
+            setArrayNullMask(col, nullMask, elementsCount, 0);
+            return;
+        case DUCKDB_TYPE_LIST:
+            setListNullMask(col, nullMask, elementsCount);
+            return;
+        default:
+            throw new SQLException(createErrMsg("invalid array/list column type: " + col.colType));
+        }
     }
 
-    private void setArrayNullMask(Column col, boolean[] nullMask, int parentArrayIdx) throws SQLException {
+    private void setArrayNullMask(Column col, boolean[] nullMask, int elementsCount, int parentArrayIdx)
+        throws SQLException {
         if (null == nullMask) {
             return;
         }
-        //        if (nullMask.length != col.arraySize) {
-        //            throw new SQLException(createErrMsg("invalid null mask size, expected: " + col.arraySize +
-        //                                                ", actual: " + nullMask.length));
-        //        }
+        if (nullMask.length != elementsCount) {
+            throw new SQLException(
+                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length));
+        }
         for (int i = 0; i < nullMask.length; i++) {
             if (nullMask[i]) {
-                col.setNull(rowIdx, (int) (i + col.arraySize * parentArrayIdx));
+                col.setNullOnArrayIdx(rowIdx, (int) (i + col.arraySize * parentArrayIdx));
+            }
+        }
+    }
+
+    private void setListNullMask(Column col, boolean[] nullMask, int elementsCount) throws SQLException {
+        if (null == nullMask) {
+            return;
+        }
+        if (nullMask.length != elementsCount) {
+            throw new SQLException(
+                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length));
+        }
+        if (col.listSize < elementsCount) {
+            throw new SQLException(
+                createErrMsg("invalid list state, list size: " + col.listSize + ", elements count: " + elementsCount));
+        }
+        for (int i = 0; i < nullMask.length; i++) {
+            if (nullMask[i]) {
+                long vectorPos = col.listSize - elementsCount + i;
+                col.setNullOnPos(vectorPos);
             }
         }
     }
@@ -1463,6 +1510,46 @@ public class DuckDBAppender implements AutoCloseable {
         return null == currentColumn && null == prevColumn;
     }
 
+    private int prepareListColumn(Column innerCol, long listElementsCount) throws SQLException {
+        if (null == innerCol.parent) {
+            throw new SQLException(createErrMsg("invalid array/list column specified"));
+        }
+        Column col = innerCol.parent;
+        switch (col.colType) {
+        case DUCKDB_TYPE_ARRAY:
+            return (int) (rowIdx * innerCol.arraySize);
+        case DUCKDB_TYPE_LIST:
+            break;
+        default:
+            throw new SQLException(createErrMsg("invalid array/list column type: " + col.colType));
+        }
+        appenderRefLock.lock();
+        try {
+            checkOpen();
+            long offset = duckdb_list_vector_get_size(col.vectorRef);
+            LongBuffer longBuffer = col.data.asLongBuffer();
+            int pos = (int) (rowIdx * DUCKDB_TYPE_LIST.widthBytes / Long.BYTES);
+            longBuffer.position(pos);
+            longBuffer.put(offset);
+            longBuffer.put(listElementsCount);
+            long listSize = offset + listElementsCount;
+            int reserveStatus = duckdb_list_vector_reserve(col.vectorRef, listSize);
+            if (0 != reserveStatus) {
+                throw new SQLException(
+                    createErrMsg("'duckdb_list_vector_reserve' call failed, list size: " + listSize));
+            }
+            innerCol.reset(listSize);
+            int setStatus = duckdb_list_vector_set_size(col.vectorRef, listSize);
+            if (0 != setStatus) {
+                throw new SQLException(
+                    createErrMsg("'duckdb_list_vector_set_size' call failed, list size: " + listSize));
+            }
+            return (int) offset;
+        } finally {
+            appenderRefLock.unlock();
+        }
+    }
+
     private static byte[] utf8(String str) {
         if (null == str) {
             return null;
@@ -1591,9 +1678,11 @@ public class DuckDBAppender implements AutoCloseable {
         private final String structFieldName;
 
         private final ByteBuffer vectorRef;
-        private ByteBuffer data;
-        private ByteBuffer validity;
         private final List<Column> children = new ArrayList<>();
+
+        private long listSize = 0;
+        private ByteBuffer data = null;
+        private ByteBuffer validity = null;
 
         private Column(Column parent, int idx, ByteBuffer colTypeRef, ByteBuffer vector) throws SQLException {
             this(parent, idx, colTypeRef, vector, -1);
@@ -1631,12 +1720,6 @@ public class DuckDBAppender implements AutoCloseable {
                 this.decimalScale = -1;
             }
 
-            if (null == parent || parent.colType != DUCKDB_TYPE_ARRAY) {
-                this.arraySize = 1;
-            } else {
-                this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
-            }
-
             if (structFieldIdx >= 0) {
                 byte[] nameUTF8 = duckdb_struct_type_child_name(parent.colTypeRef, structFieldIdx);
                 this.structFieldName = strFromUTF8(nameUTF8);
@@ -1646,8 +1729,14 @@ public class DuckDBAppender implements AutoCloseable {
 
             this.vectorRef = vector;
 
+            if (null == parent || parent.colType != DUCKDB_TYPE_ARRAY) {
+                this.arraySize = 1;
+            } else {
+                this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
+            }
+
             if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL) {
-                this.data = duckdb_vector_get_data(vectorRef, widthBytes() * arraySize * parentArraySize());
+                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
                 if (null == this.data) {
                     throw new SQLException("cannot initialize data chunk vector data");
                 }
@@ -1665,9 +1754,17 @@ public class DuckDBAppender implements AutoCloseable {
             initVecChildren(this);
         }
 
+        void reset(long listSize) throws SQLException {
+            if (null == parent || parent.colType != DUCKDB_TYPE_LIST) {
+                throw new SQLException("invalid list column");
+            }
+            this.listSize = listSize;
+            reset();
+        }
+
         void reset() throws SQLException {
             if (null != this.data) {
-                this.data = duckdb_vector_get_data(vectorRef, widthBytes() * arraySize * parentArraySize());
+                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
                 if (null == this.data) {
                     throw new SQLException("cannot reset data chunk vector data");
                 }
@@ -1699,22 +1796,27 @@ public class DuckDBAppender implements AutoCloseable {
             if (1 != arraySize) {
                 throw new SQLException("Invalid API usage for array, size: " + arraySize);
             }
-            setNull(rowIdx, 0);
+            setNullOnArrayIdx(rowIdx, 0);
+            if (colType == DUCKDB_TYPE_LIST) {
+                return;
+            }
             for (Column col : children) {
                 for (int i = 0; i < col.arraySize; i++) {
-                    col.setNull(rowIdx, i);
+                    col.setNullOnArrayIdx(rowIdx, i);
                 }
             }
         }
 
-        void setNull(long rowIdx, int arrayIdx) {
-            LongBuffer entries = this.validity.asLongBuffer();
-
+        void setNullOnArrayIdx(long rowIdx, int arrayIdx) {
             long vectorPos = rowIdx * arraySize * parentArraySize() + arrayIdx;
+            setNullOnPos(vectorPos);
+        }
+
+        void setNullOnPos(long vectorPos) {
             long validityPos = vectorPos / 64;
+            LongBuffer entries = this.validity.asLongBuffer();
             entries.position((int) validityPos);
             long mask = entries.get();
-
             long idxInEntry = vectorPos % 64;
             mask &= ~(1L << idxInEntry);
             entries.position((int) validityPos);
@@ -1734,6 +1836,14 @@ public class DuckDBAppender implements AutoCloseable {
                 return 1;
             }
             return parent.arraySize;
+        }
+
+        long vectorSize() {
+            if (null != parent && parent.colType == DUCKDB_TYPE_LIST) {
+                return listSize * widthBytes();
+            } else {
+                return duckdb_vector_size() * widthBytes() * arraySize * parentArraySize();
+            }
         }
     }
 }
