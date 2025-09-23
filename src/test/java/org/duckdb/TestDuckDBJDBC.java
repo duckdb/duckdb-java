@@ -3155,9 +3155,10 @@ public class TestDuckDBJDBC {
             Class<?> clazz = Class.forName("org.duckdb." + arg1);
             statusCode = runTests(new String[0], clazz);
         } else {
-            statusCode = runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestSingleValueAppender.class,
-                                  TestBatch.class, TestBindings.class, TestClosure.class, TestExtensionTypes.class,
-                                  TestSpatial.class, TestParameterMetadata.class, TestPrepare.class, TestResults.class,
+            statusCode = runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
+                                  TestAppenderComposite.class, TestSingleValueAppender.class, TestBatch.class,
+                                  TestBindings.class, TestClosure.class, TestExtensionTypes.class, TestSpatial.class,
+                                  TestParameterMetadata.class, TestPrepare.class, TestResults.class,
                                   TestSessionInit.class, TestTimestamp.class);
         }
         System.exit(statusCode);
