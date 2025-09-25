@@ -144,8 +144,8 @@ public class TestAppender {
              Statement stmt = conn.createStatement()) {
 
             stmt.execute("CREATE TABLE tab1(col1 INT, col2 UUID)");
-            UUID uuid1 = UUID.randomUUID();
-            UUID uuid2 = UUID.randomUUID();
+            UUID uuid1 = UUID.fromString("777dfbdb-83e7-40f5-ae1b-e12215bdd798");
+            UUID uuid2 = UUID.fromString("b8708825-3b58-45a1-9a6e-dab053c3f387");
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow().append(1).append(uuid1).endRow();
                 appender.beginRow().append(2).append(uuid2).endRow();

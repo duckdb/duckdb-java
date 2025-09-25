@@ -6,7 +6,7 @@ import static org.duckdb.test.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 public class TestParameterMetadata {
 
@@ -117,7 +117,7 @@ public class TestParameterMetadata {
             try (PreparedStatement ps = conn.prepareStatement("INSERT INTO metadata_test_map_1 VALUES(?)")) {
                 ParameterMetaData meta = ps.getParameterMetaData();
                 assertEquals(meta.getParameterTypeName(1), "MAP(INTEGER, DOUBLE)");
-                assertEquals(meta.getParameterClassName(1), HashMap.class.getName());
+                assertEquals(meta.getParameterClassName(1), LinkedHashMap.class.getName());
                 assertEquals(meta.getPrecision(1), 0);
                 assertEquals(meta.getScale(1), 0);
             }
