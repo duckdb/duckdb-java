@@ -1,13 +1,18 @@
 package org.duckdb;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
+import static org.duckdb.test.Helpers.createMap;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Map;
+import java.util.*;
 
 public class TestAppenderComposite {
 
@@ -470,6 +475,197 @@ public class TestAppenderComposite {
                 assertEquals(map2.get("us3"), "bar");
                 assertEquals(rs.getString(3), "baz");
 
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    private static void assertFetchedStructEquals(Object dbs, Collection<Object> struct) throws Exception {
+        DuckDBStruct dbStruct = (DuckDBStruct) dbs;
+        Map<String, Object> map = dbStruct.getMap();
+        Collection<Object> fetched = map.values();
+        assertEquals(fetched.size(), struct.size());
+        List<Object> structList = new ArrayList<>(struct);
+        int i = 0;
+        for (Object f : fetched) {
+            assertEquals(f, structList.get(i));
+            i++;
+        }
+    }
+
+    public static void test_appender_list_basic_struct() throws Exception {
+        Collection<Object> struct1 = asList(42, "foo");
+        Collection<Object> struct2 = asList(null, "bar");
+        Collection<Object> struct3 = asList(43, null);
+        Collection<Object> struct4 = asList(44, "baz");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 STRUCT(s1 INT, s2 VARCHAR)[])");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList(struct1, struct2, struct3))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, struct4))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct1);
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct2);
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct3);
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct4);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_struct_as_map() throws Exception {
+        LinkedHashMap<Object, Object> struct1 = createMap("key1", 42, "key2", "foo");
+        LinkedHashMap<Object, Object> struct2 = createMap("key1", null, "key2", "bar");
+        LinkedHashMap<Object, Object> struct3 = createMap("key1", 43, "key2", null);
+        LinkedHashMap<Object, Object> struct4 = createMap("key1", 44, "key2", "baz");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 STRUCT(s1 INT, s2 VARCHAR)[])");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList(struct1, struct2, struct3))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, struct4))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct1.values());
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct2.values());
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct3.values());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct4.values());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_struct_with_primitives() throws Exception {
+        Collection<Object> struct1 = asList(true, (byte) 42, (short) 43, 44, 45L, BigInteger.valueOf(46), 47.1F, 48.1D,
+                                            BigDecimal.valueOf(49.123));
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 STRUCT("
+                         + "s1 BOOL,"
+                         + "s2 TINYINT,"
+                         + "s3 SMALLINT,"
+                         + "s4 INTEGER,"
+                         + "s5 BIGINT,"
+                         + "s6 HUGEINT,"
+                         + "s7 FLOAT,"
+                         + "s8 DOUBLE,"
+                         + "s9 DECIMAL"
+                         + ")[])");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow().append(42).append(singletonList(struct1)).endRow().flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct1);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_union() throws Exception {
+        Map.Entry<String, Object> union1 = new AbstractMap.SimpleEntry<>("u1", 42);
+        Map.Entry<String, Object> union2 = new AbstractMap.SimpleEntry<>("u2", "foo");
+        Map.Entry<String, Object> union3 = new AbstractMap.SimpleEntry<>("u1", null);
+        Map.Entry<String, Object> union4 = new AbstractMap.SimpleEntry<>("u2", "bar");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 UNION(u1 INT, u2 VARCHAR)[])");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList(union1, union2, union3))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, union4))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), union1.getValue());
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), union2.getValue());
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), union3.getValue());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), union4.getValue());
                 assertFalse(rs.next());
             }
         }
