@@ -286,7 +286,7 @@ class DuckDBVector {
         }
 
         Object[] entries = (Object[]) (((Array) varlen_data[idx]).getArray());
-        Map<Object, Object> result = new HashMap<>();
+        Map<Object, Object> result = new LinkedHashMap<>();
 
         for (Object entry : entries) {
             Object[] entry_val = ((Struct) entry).getAttributes();
