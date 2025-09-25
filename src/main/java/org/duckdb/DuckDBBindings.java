@@ -169,7 +169,7 @@ public class DuckDBBindings {
         // struct type, only useful as logical type
         DUCKDB_TYPE_STRUCT(25, 0),
         // map type, only useful as logical type
-        DUCKDB_TYPE_MAP(26),
+        DUCKDB_TYPE_MAP(26, 16),
         // duckdb_array, only useful as logical type
         DUCKDB_TYPE_ARRAY(33, 0),
         // duckdb_hugeint
