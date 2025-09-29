@@ -343,7 +343,7 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_arm64
 
-      # Test runs are failing because of linux_arm64_musl extensions missing
+      # Test runs are failing because linux_arm64_musl extensions are missing
       - name: JDBC Tests
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
@@ -395,7 +395,7 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
         run: |
-          ls -R .
+          java -version
           make test
 
       - name: Deploy
@@ -407,6 +407,50 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: java-windows-amd64
+          path: |
+            build/release/duckdb_jdbc.jar
+
+  java-windows-aarch64:
+    name: Java Windows (aarch64)
+    runs-on: windows-11-arm
+    needs: java-linux-amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        shell: bash
+        run: make release
+
+      - name: List Symbols
+        shell: cmd
+        run: |
+          call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
+          dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_arm64
+
+      # Test runs are failing because windows_arm64 extensions are missing
+      - name: Java Tests
+        if: ${{ inputs.skip_tests != 'true' }}
+        shell: bash
+        run: |
+          java -version
+          make test || true
+
+      - name: Deploy
+        shell: bash
+        run: |
+          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-aarch64.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-aarch64.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-windows-aarch64
           path: |
             build/release/duckdb_jdbc.jar
 
@@ -461,6 +505,7 @@ jobs:
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
       - java-windows-amd64
+      - java-windows-aarch64
       - java-osx-universal
 
     steps:
@@ -498,6 +543,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: java-windows-aarch64
+          path: jdbc-artifacts/java-windows-aarch64
+
+      - uses: actions/download-artifact@v4
+        with:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
 
@@ -530,6 +580,7 @@ jobs:
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
       - java-windows-amd64
+      - java-windows-aarch64
       - java-osx-universal
     runs-on: ubuntu-latest
     steps:
