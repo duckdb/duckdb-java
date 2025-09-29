@@ -59,8 +59,8 @@ jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
 
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
-arch_specific_builds = ['linux-amd64-musl', 'linux-aarch64-musl']
-arch_specific_classifiers = ['linux_amd64_musl', 'linux_aarch64_musl']
+arch_specific_builds = ['linux-amd64-musl', 'linux-aarch64-musl', 'windows-aarch64']
+arch_specific_classifiers = ['linux_amd64_musl', 'linux_aarch64_musl', 'windows_aarch64']
 
 staging_dir = tempfile.mkdtemp()
 
