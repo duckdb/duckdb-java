@@ -389,6 +389,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_parquet_reader.cpp
   src/duckdb/ub_extension_parquet_reader_variant.cpp
   src/duckdb/ub_extension_parquet_writer.cpp
+  src/duckdb/ub_extension_parquet_writer_variant.cpp
   src/duckdb/third_party/parquet/parquet_types.cpp
   src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
   src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
