@@ -113,7 +113,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_common_row_operations.cpp
   src/duckdb/ub_src_common_serializer.cpp
   src/duckdb/ub_src_common_sort.cpp
-  src/duckdb/ub_src_common_sorting.cpp
   src/duckdb/ub_src_common_tree_renderer.cpp
   src/duckdb/ub_src_common_types.cpp
   src/duckdb/ub_src_common_types_column.cpp
@@ -377,9 +376,11 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_timestamp.cpp
   src/duckdb/extension/parquet/parquet_float16.cpp
   src/duckdb/extension/parquet/parquet_statistics.cpp
+  src/duckdb/extension/parquet/parquet_shredding.cpp
   src/duckdb/extension/parquet/parquet_multi_file_info.cpp
   src/duckdb/extension/parquet/column_reader.cpp
   src/duckdb/extension/parquet/geo_parquet.cpp
+  src/duckdb/extension/parquet/parquet_field_id.cpp
   src/duckdb/extension/parquet/parquet_extension.cpp
   src/duckdb/extension/parquet/column_writer.cpp
   src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
