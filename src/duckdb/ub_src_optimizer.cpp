@@ -8,6 +8,8 @@
 
 #include "src/optimizer/common_aggregate_optimizer.cpp"
 
+#include "src/optimizer/common_subplan_optimizer.cpp"
+
 #include "src/optimizer/compressed_materialization.cpp"
 
 #include "src/optimizer/cse_optimizer.cpp"
@@ -47,6 +49,8 @@
 #include "src/optimizer/limit_pushdown.cpp"
 
 #include "src/optimizer/topn_optimizer.cpp"
+
+#include "src/optimizer/topn_window_elimination.cpp"
 
 #include "src/optimizer/unnest_rewriter.cpp"
 
