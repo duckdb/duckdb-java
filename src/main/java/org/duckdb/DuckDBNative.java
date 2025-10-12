@@ -15,38 +15,48 @@ import java.util.Properties;
 
 final class DuckDBNative {
     static {
-        try {
-            String os_name = "";
-            String os_arch;
-            String os_name_detect = System.getProperty("os.name").toLowerCase().trim();
-            String os_arch_detect = System.getProperty("os.arch").toLowerCase().trim();
-            switch (os_arch_detect) {
-            case "x86_64":
-            case "amd64":
-                os_arch = "amd64";
-                break;
-            case "aarch64":
-            case "arm64":
-                os_arch = "arm64";
-                break;
-            case "i386":
-                os_arch = "i386";
-                break;
-            default:
-                throw new IllegalStateException("Unsupported system architecture");
-            }
-            if (os_name_detect.startsWith("windows")) {
-                os_name = "windows";
-            } else if (os_name_detect.startsWith("mac")) {
-                os_name = "osx";
-                os_arch = "universal";
-            } else if (os_name_detect.startsWith("linux")) {
-                os_name = "linux";
-            }
-            String lib_res_name = "/libduckdb_java.so"
-                                  + "_" + os_name + "_" + os_arch;
+        String libname = "duckdb_java";
+        boolean loaded = loadLibraryByName(libname);
+        if (!loaded) {
+            // Fallback, load from a classpath or from a local file path
+            loadLibraryFromFile(libname);
+        }
+    }
 
-            Path lib_file = Files.createTempFile("libduckdb_java", ".so");
+    private static void loadLibraryFromFile(String libname) {
+        String full_libname  = "lib" + libname;
+        String lib_suffix = ".so";
+        String os_name = "";
+        String os_arch;
+        String os_name_detect = System.getProperty("os.name").toLowerCase().trim();
+        String os_arch_detect = System.getProperty("os.arch").toLowerCase().trim();
+        switch (os_arch_detect) {
+        case "x86_64":
+        case "amd64":
+            os_arch = "amd64";
+            break;
+        case "aarch64":
+        case "arm64":
+            os_arch = "arm64";
+            break;
+        case "i386":
+            os_arch = "i386";
+            break;
+        default:
+            throw new IllegalStateException("Unsupported system architecture");
+        }
+        if (os_name_detect.startsWith("windows")) {
+            os_name = "windows";
+        } else if (os_name_detect.startsWith("mac")) {
+            os_name = "osx";
+            os_arch = "universal";
+        } else if (os_name_detect.startsWith("linux")) {
+            os_name = "linux";
+        }
+        String lib_res_name = "/" + full_libname + lib_suffix
+                              + "_" + os_name + "_" + os_arch;
+        try {
+            Path lib_file = Files.createTempFile(full_libname, lib_suffix);
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
             if (lib_res == null) {
                 System.load(Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString());
@@ -59,6 +69,15 @@ final class DuckDBNative {
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private static boolean loadLibraryByName(String libname) {
+        try {
+            System.loadLibrary(libname);
+            return true;
+        } catch (Throwable e) {
+            return false;
         }
     }
     // We use zero-length ByteBuffer-s as a hacky but cheap way to pass C++ pointers
