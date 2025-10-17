@@ -11,6 +11,7 @@ cmake_minimum_required(VERSION 3.5...3.29)
 set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR "No compatible Java/JNI found")
@@ -152,10 +153,7 @@ target_compile_definitions(duckdb_java PRIVATE
   -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT
   -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT)
 
-if(MSVC)
-  target_compile_definitions(duckdb_java PRIVATE
-    -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-else()
+if(NOT MSVC)
   target_compile_definitions(duckdb_java PRIVATE
     -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
 endif()
