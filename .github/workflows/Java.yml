@@ -463,6 +463,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          dumpbin.exe /imports build\release\libduckdb_java.so_windows_amd64
           dumpbin.exe /exports build\release\libduckdb_java.so_windows_amd64
 
       - name: Java Tests
@@ -544,15 +545,15 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
+          dumpbin.exe /imports build\release\libduckdb_java.so_windows_arm64
           dumpbin.exe /exports build\release\libduckdb_java.so_windows_arm64
 
-      # Test runs are failing because windows_arm64 extensions are missing
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
         run: |
           java -version
-          make test || true
+          make test
 
       - name: Deploy
         shell: bash
