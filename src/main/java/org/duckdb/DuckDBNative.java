@@ -24,7 +24,7 @@ final class DuckDBNative {
     }
 
     private static void loadLibraryFromFile(String libname) {
-        String full_libname  = "lib" + libname;
+        String full_libname = "lib" + libname;
         String lib_suffix = ".so";
         String os_name = "";
         String os_arch;
@@ -53,8 +53,7 @@ final class DuckDBNative {
         } else if (os_name_detect.startsWith("linux")) {
             os_name = "linux";
         }
-        String lib_res_name = "/" + full_libname + lib_suffix
-                              + "_" + os_name + "_" + os_arch;
+        String lib_res_name = "/" + full_libname + lib_suffix + "_" + os_name + "_" + os_arch;
         try {
             Path lib_file = Files.createTempFile(full_libname, lib_suffix);
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
