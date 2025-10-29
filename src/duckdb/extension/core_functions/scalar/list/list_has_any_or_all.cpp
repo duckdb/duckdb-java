@@ -7,6 +7,7 @@
 namespace duckdb {
 
 static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &result) {
+
 	auto &l_vec = args.data[0];
 	auto &r_vec = args.data[1];
 
@@ -62,6 +63,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		    // Use the smaller list to build the set
 		    if (r_list.length < l_list.length) {
+
 			    build_list = r_list;
 			    probe_list = l_list;
 
@@ -94,6 +96,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 }
 
 static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto swap = func_expr.function.name == "<@";
 

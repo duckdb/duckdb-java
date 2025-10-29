@@ -53,6 +53,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 
 SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &context,
                                                             OperatorSinkNextBatchInput &input) const {
+
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
 

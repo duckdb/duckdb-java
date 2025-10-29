@@ -87,7 +87,6 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::GEOMETRY:
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
@@ -152,6 +151,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__set_JSON(duckdb_parquet::JsonType());
+		return;
+	}
+	if (duckdb_type.GetAlias() == "WKB_BLOB" && allow_geometry) {
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.GEOMETRY = true;
+		// TODO: Set CRS in the future
+		schema_ele.logicalType.GEOMETRY.__isset.crs = false;
 		return;
 	}
 	switch (duckdb_type.id()) {
@@ -258,13 +264,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.DECIMAL.precision = schema_ele.precision;
 		schema_ele.logicalType.DECIMAL.scale = schema_ele.scale;
 		break;
-	case LogicalTypeId::GEOMETRY:
-		if (allow_geometry) { // Don't set this if we write GeoParquet V1
-			schema_ele.__isset.logicalType = true;
-			schema_ele.logicalType.__isset.GEOMETRY = true;
-			// TODO: Set CRS in the future
-			schema_ele.logicalType.GEOMETRY.__isset.crs = false;
-		}
 	default:
 		break;
 	}
@@ -347,6 +346,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       total_written(0), num_row_groups(0) {
+
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -670,6 +670,7 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 };
 
 struct GeoStatsUnifier : public ColumnStatsUnifier {
+
 	void UnifyGeoStats(const GeometryStatsData &other) override {
 		if (geo_stats) {
 			geo_stats->Merge(other);
@@ -793,9 +794,11 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		}
 	}
 	case LogicalTypeId::BLOB:
-		return make_uniq<BlobStatsUnifier>();
-	case LogicalTypeId::GEOMETRY:
-		return make_uniq<GeoStatsUnifier>();
+		if (type.GetAlias() == "WKB_BLOB") {
+			return make_uniq<GeoStatsUnifier>();
+		} else {
+			return make_uniq<BlobStatsUnifier>();
+		}
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
@@ -888,6 +891,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 			const auto &types = stats_unifier->geo_stats->types;
 
 			if (bbox.HasXY()) {
+
 				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
 				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
 				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);
@@ -917,6 +921,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 }
 
 void ParquetWriter::Finalize() {
+
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {

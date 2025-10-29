@@ -595,6 +595,7 @@ void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
+
 	const auto block_size = block_manager.GetBlockSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
 	auto vector_segment_size = block_size;

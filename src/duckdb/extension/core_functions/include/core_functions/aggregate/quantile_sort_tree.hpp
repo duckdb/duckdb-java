@@ -300,6 +300,7 @@ struct QuantileIncluded {
 };
 
 struct QuantileSortTree {
+
 	unique_ptr<WindowIndexTree> index_tree;
 
 	QuantileSortTree(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition) {

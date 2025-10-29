@@ -111,6 +111,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
                                           vector<unordered_set<string>> &lambda_params,
                                           const bool within_function_expression) {
+
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -176,6 +177,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 
 void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                   vector<unordered_set<string>> &lambda_params) {
+
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
@@ -226,6 +228,7 @@ void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, u
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    const string &field_name) {
+
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
 	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));

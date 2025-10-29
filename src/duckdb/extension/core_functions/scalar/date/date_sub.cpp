@@ -37,6 +37,7 @@ struct DateSub {
 	struct MonthOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA start_ts, TB end_ts) {
+
 			if (start_ts > end_ts) {
 				return -MonthOperator::Operation<TA, TB, TR>(end_ts, start_ts);
 			}

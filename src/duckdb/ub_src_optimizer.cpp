@@ -36,8 +36,6 @@
 
 #include "src/optimizer/late_materialization.cpp"
 
-#include "src/optimizer/late_materialization_helper.cpp"
-
 #include "src/optimizer/optimizer.cpp"
 
 #include "src/optimizer/regex_range_filter.cpp"

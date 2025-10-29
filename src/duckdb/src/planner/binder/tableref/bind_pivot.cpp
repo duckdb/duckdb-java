@@ -681,6 +681,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 			vector<string> result;
 			ExtractUnpivotColumnName(*unpivot_expr, result);
 			if (result.empty()) {
+
 				throw BinderException(
 				    *unpivot_expr,
 				    "UNPIVOT clause must contain exactly one column - expression \"%s\" does not contain any",

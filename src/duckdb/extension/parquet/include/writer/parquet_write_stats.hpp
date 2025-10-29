@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_writer.hpp"
-#include "parquet_geometry.hpp"
+#include "geo_parquet.hpp"
 
 namespace duckdb {
 
