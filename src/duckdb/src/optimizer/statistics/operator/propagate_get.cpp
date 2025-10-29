@@ -46,12 +46,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		// replace BoundColumnRefs with BoundRefs
 		ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
 		expr_filter.expr = std::move(filter_expr);
-
-		// If we were able to prune solely based on the expression, return that result
-		if (propagate_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			return propagate_result;
-		}
-		// Otherwise, check the statistics
+		return propagate_result;
 	}
 	return filter.CheckStatistics(stats);
 }

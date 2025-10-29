@@ -232,6 +232,7 @@ void BignumAddition(data_ptr_t result, int64_t result_end, bool is_target_absolu
 }
 
 string_t BignumIntermediate::Negate(Vector &result_vector) const {
+
 	auto target = StringVector::EmptyString(result_vector, size + Bignum::BIGNUM_HEADER_SIZE);
 	auto ptr = target.GetDataWriteable();
 

@@ -17,6 +17,7 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
+
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name

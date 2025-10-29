@@ -920,8 +920,7 @@ Value Value::BIGNUM(const string &data) {
 }
 
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
-	Value result;
-	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
+	Value result(LogicalTypeId::GEOMETRY);
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;

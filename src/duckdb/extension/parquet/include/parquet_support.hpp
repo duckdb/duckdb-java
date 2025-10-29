@@ -118,6 +118,7 @@ public:
 };
 
 class ColumnReader {
+
 public:
 	ColumnReader(const EncodingKey &ek, StripeStreams &stripe);
 

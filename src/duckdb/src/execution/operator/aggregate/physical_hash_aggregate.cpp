@@ -221,6 +221,7 @@ public:
 class HashAggregateLocalSinkState : public LocalSinkState {
 public:
 	HashAggregateLocalSinkState(const PhysicalHashAggregate &op, ExecutionContext &context) {
+
 		auto &payload_types = op.grouped_aggregate_data.payload_types;
 		if (!payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(payload_types);
@@ -414,6 +415,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 // Combine
 //===--------------------------------------------------------------------===//
 void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+
 	auto &global_sink = input.global_state.Cast<HashAggregateGlobalSinkState>();
 	auto &sink = input.local_state.Cast<HashAggregateLocalSinkState>();
 

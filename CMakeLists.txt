@@ -163,7 +163,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_function_scalar.cpp
   src/duckdb/ub_src_function_scalar_date.cpp
   src/duckdb/ub_src_function_scalar_generic.cpp
-  src/duckdb/ub_src_function_scalar_geometry.cpp
   src/duckdb/ub_src_function_scalar_list.cpp
   src/duckdb/ub_src_function_scalar_map.cpp
   src/duckdb/ub_src_function_scalar_operator.cpp
@@ -378,9 +377,9 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_float16.cpp
   src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_shredding.cpp
-  src/duckdb/extension/parquet/parquet_geometry.cpp
   src/duckdb/extension/parquet/parquet_multi_file_info.cpp
   src/duckdb/extension/parquet/column_reader.cpp
+  src/duckdb/extension/parquet/geo_parquet.cpp
   src/duckdb/extension/parquet/parquet_field_id.cpp
   src/duckdb/extension/parquet/parquet_extension.cpp
   src/duckdb/extension/parquet/column_writer.cpp
