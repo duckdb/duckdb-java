@@ -34,6 +34,7 @@ struct FlagBufferConstants {
 // So we can just read/write from left to right
 template <bool EMPTY>
 class FlagBuffer {
+
 public:
 	FlagBuffer() : counter(0), buffer(nullptr) {
 	}

@@ -16,6 +16,7 @@ ICUDateFunc::BindData::BindData(const BindData &other)
 
 ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_setting_p)
     : tz_setting(tz_setting_p), cal_setting(cal_setting_p) {
+
 	InitCalendar();
 }
 

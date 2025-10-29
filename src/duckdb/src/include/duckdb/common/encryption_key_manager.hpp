@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class EncryptionKey {
+
 public:
 	explicit EncryptionKey(data_ptr_t encryption_key);
 	~EncryptionKey();
@@ -41,6 +42,7 @@ private:
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {
+
 public:
 	static EncryptionKeyManager &GetInternal(ObjectCache &cache);
 	static EncryptionKeyManager &Get(ClientContext &context);

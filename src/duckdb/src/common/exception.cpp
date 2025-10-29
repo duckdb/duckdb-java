@@ -309,10 +309,6 @@ IOException::IOException(const unordered_map<string, string> &extra_info, const 
     : Exception(extra_info, ExceptionType::IO, msg) {
 }
 
-NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)
-    : Exception(extra_info, ExceptionType::NOT_IMPLEMENTED, msg) {
-}
-
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
@@ -340,10 +336,6 @@ InternalException::InternalException(const string &msg) : Exception(ExceptionTyp
 	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg + "\n" + StackTrace::GetStackTrace());
 	abort();
 #endif
-}
-
-InternalException::InternalException(const unordered_map<string, string> &extra_info, const string &msg)
-    : Exception(extra_info, ExceptionType::INTERNAL, msg) {
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {

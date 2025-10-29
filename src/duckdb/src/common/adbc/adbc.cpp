@@ -196,6 +196,7 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 }
 
 AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *error) {
+
 	if (database && database->private_data) {
 		auto wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
 
@@ -536,8 +537,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto count = duckdb_column_count(&result_wrapper->result);
 	std::vector<duckdb_logical_type> types(count);
 
-	std::vector<std::string> owned_names;
-	owned_names.reserve(count);
+	std::vector<std::string> owned_names(count);
 	duckdb::vector<const char *> names(count);
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
@@ -605,6 +605,7 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> stream_produce(uintptr_t factory_ptr,
                                                                    duckdb::ArrowStreamParameters &parameters) {
+
 	// TODO this will ignore any projections or filters but since we don't expose the scan it should be sort of fine
 	auto res = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
 	res->arrow_array_stream = *reinterpret_cast<ArrowArrayStream *>(factory_ptr);
@@ -618,6 +619,7 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
                       struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
                       bool temporary) {
+
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -791,8 +793,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		count = 1;
 	}
 	std::vector<duckdb_logical_type> types(count);
-	std::vector<std::string> owned_names;
-	owned_names.reserve(count);
+	std::vector<std::string> owned_names(count);
 	duckdb::vector<const char *> names(count);
 
 	for (idx_t i = 0; i < count; i++) {

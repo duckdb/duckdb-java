@@ -35,6 +35,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          idx_t group_count,
                                                                          const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(context, aggregator, STANDARD_VECTOR_SIZE), statef(aggr) {
+
 	// Locate the partition boundaries
 	if (partition_mask.AllValid()) {
 		partition_offsets.emplace_back(0);
@@ -200,6 +201,7 @@ BoundWindowExpression &WindowConstantAggregator::RebindAggregate(ClientContext &
 WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
                                                    ClientContext &context)
     : WindowAggregator(RebindAggregate(context, wexpr)) {
+
 	// We only need these values for Sink
 	for (auto &child : wexpr.children) {
 		child_idx.emplace_back(shared.RegisterSink(child));

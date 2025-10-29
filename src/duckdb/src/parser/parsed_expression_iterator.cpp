@@ -162,6 +162,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 
 void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
     QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
 		case ResultModifierType::LIMIT_MODIFIER: {

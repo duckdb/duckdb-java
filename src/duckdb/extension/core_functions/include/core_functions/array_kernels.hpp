@@ -13,6 +13,7 @@ struct InnerProductOp {
 
 	template <class TYPE>
 	static TYPE Operation(const TYPE *lhs_data, const TYPE *rhs_data, const idx_t count) {
+
 		TYPE result = 0;
 
 		auto lhs_ptr = lhs_data;
@@ -42,6 +43,7 @@ struct CosineSimilarityOp {
 
 	template <class TYPE>
 	static TYPE Operation(const TYPE *lhs_data, const TYPE *rhs_data, const idx_t count) {
+
 		TYPE distance = 0;
 		TYPE norm_l = 0;
 		TYPE norm_r = 0;
@@ -76,6 +78,7 @@ struct DistanceSquaredOp {
 
 	template <class TYPE>
 	static TYPE Operation(const TYPE *lhs_data, const TYPE *rhs_data, const idx_t count) {
+
 		TYPE distance = 0;
 
 		auto l_ptr = lhs_data;
