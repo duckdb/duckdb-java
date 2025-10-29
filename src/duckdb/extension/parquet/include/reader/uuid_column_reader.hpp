@@ -50,6 +50,7 @@ struct UUIDValueConversion {
 };
 
 class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConversion> {
+
 public:
 	UUIDColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
 	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, schema) {

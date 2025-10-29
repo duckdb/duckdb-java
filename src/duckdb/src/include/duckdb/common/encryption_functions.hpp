@@ -27,6 +27,7 @@ private:
 };
 
 class EncryptionEngine {
+
 public:
 	EncryptionEngine();
 	~EncryptionEngine();

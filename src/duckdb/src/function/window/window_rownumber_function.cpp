@@ -92,6 +92,7 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
+
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
@@ -141,6 +142,7 @@ void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {
+
 	// NTILE has one argument
 	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
 }

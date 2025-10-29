@@ -262,6 +262,7 @@ private:
 };
 
 struct TemplateTypeInfo : public ExtraTypeInfo {
+
 	explicit TemplateTypeInfo(string name_p);
 
 	// The name of the template, e.g. `T`, or `KEY_TYPE`. Used to distinguish between different template types within
