@@ -28,6 +28,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types),
                        estimated_cardinality),
       aggregates(std::move(expressions)) {
+
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
 	if (!distinct_collection_info) {
 		return;
@@ -238,6 +239,7 @@ public:
 public:
 	void InitializeDistinctAggregates(const PhysicalUngroupedAggregate &op,
 	                                  const UngroupedAggregateGlobalSinkState &gstate, ExecutionContext &context) {
+
 		if (!op.distinct_data) {
 			return;
 		}

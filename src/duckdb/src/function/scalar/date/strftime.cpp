@@ -148,6 +148,7 @@ inline bool StrpTimeTryResult(StrpTimeFormat &format, string_t &input, timestamp
 }
 
 struct StrpTimeFunction {
+
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();

@@ -895,9 +895,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
-	case LogicalTypeId::GEOMETRY:
-		// TODO: Make GeometryColumnReader
-		return make_uniq<StringColumnReader>(reader, schema);
+		break;
 	case LogicalTypeId::UUID:
 		return make_uniq<UUIDColumnReader>(reader, schema);
 	case LogicalTypeId::INTERVAL:

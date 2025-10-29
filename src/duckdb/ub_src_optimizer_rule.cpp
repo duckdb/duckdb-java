@@ -36,5 +36,3 @@
 
 #include "src/optimizer/rule/timestamp_comparison.cpp"
 
-#include "src/optimizer/rule/constant_order_normalization.cpp"
-

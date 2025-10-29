@@ -66,6 +66,7 @@ struct AlpTypedConstants {};
 
 template <>
 struct AlpTypedConstants<float> {
+
 	static constexpr float MAGIC_NUMBER = 12582912.0; //! 2^22 + 2^23
 	static constexpr uint8_t MAX_EXPONENT = 10;
 
@@ -79,6 +80,7 @@ struct AlpTypedConstants<float> {
 
 template <>
 struct AlpTypedConstants<double> {
+
 	static constexpr double MAGIC_NUMBER = 6755399441055744.0; //! 2^51 + 2^52
 	static constexpr uint8_t MAX_EXPONENT = 18;                //! 10^18 is the maximum int64
 
