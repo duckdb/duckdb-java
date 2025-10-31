@@ -670,4 +670,216 @@ public class TestAppenderComposite {
             }
         }
     }
+
+    private static void assertMapsEqual(Object obj1, Map<?, ?> map2) throws Exception {
+        Map<?, ?> map1 = (Map<?, ?>) obj1;
+        assertEquals(map1.size(), map2.size());
+        List<Map.Entry<?, ?>> list2 = new ArrayList<>(map2.entrySet());
+        int i = 0;
+        for (Map.Entry<?, ?> en : map1.entrySet()) {
+            assertEquals(en.getKey(), list2.get(i).getKey());
+            assertEquals(en.getValue(), list2.get(i).getValue());
+            i += 1;
+        }
+    }
+
+    public static void test_appender_map_basic() throws Exception {
+        Map<Integer, String> map1 = createMap(41, "foo", 42, "bar");
+        Map<Integer, String> map2 = createMap(41, "foo", 42, null, 43, "baz");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 MAP(INTEGER, VARCHAR))");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(41)
+                    .append(map1)
+                    .endRow()
+                    .beginRow()
+                    .append(42)
+                    .append(map2)
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 FROM tab1 ORDER BY col1")) {
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map1);
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map2);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_map_string_long() throws Exception {
+        int count = 1 << 12;        // auto flush twice
+        int tail = 7;               // flushed on close
+        int mapSize = (1 << 6) + 7; // increase this for stress tests
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 MAP(VARCHAR, BIGINT))");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    Map<String, Long> map = new LinkedHashMap<>();
+                    for (long j = 0; j < Math.min(i, mapSize); j++) {
+                        String key = "foo_" + i + "_" + j;
+                        if (0 == (i + j) % 13) {
+                            map.put(key, null);
+                        } else {
+                            map.put(key, i + j);
+                        }
+                    }
+                    appender.beginRow().append(i).append(map).endRow();
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), count + tail);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) FROM (SELECT unnest(map_keys(col2)) FROM tab1 WHERE col1 = " + (mapSize - 7) +
+                     ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), mapSize - 7);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT col1, unnest(map_keys(col2)), unnest(map_values(col2)) FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    for (long j = 0; j < Math.min(i, mapSize); j++) {
+                        assertTrue(rs.next());
+                        assertEquals(rs.getInt(1), i);
+                        assertEquals(rs.getString(2), "foo_" + i + "_" + j);
+                        if (0 == (i + j) % 13) {
+                            assertNull(rs.getObject(3));
+                            assertTrue(rs.wasNull());
+                        } else {
+                            assertEquals(rs.getLong(3), i + j);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void test_appender_map_string_struct() throws Exception {
+        int count = 1 << 12;        // auto flush twice
+        int tail = 7;               // flushed on close
+        int mapSize = (1 << 5) + 7; // increase this for stress tests
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 MAP(VARCHAR, STRUCT(s1 INTEGER, s2 BIGINT)))");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    for (long j = 0; j < Math.min(i, mapSize); j++) {
+                        String key = "foo_" + i + "_" + j;
+                        if (0 == (i + j) % 13) {
+                            map.put(key, null);
+                        } else if (0 == (i + j) % 17) {
+                            map.put(key, asList(null, j));
+                        } else {
+                            map.put(key, asList(i, j));
+                        }
+                    }
+                    appender.beginRow().append(i).append(map).endRow();
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), count + tail);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) FROM (SELECT unnest(map_keys(col2)) FROM tab1 WHERE col1 = " + (mapSize - 7) +
+                     ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), mapSize - 7);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT col1, unnest(map_keys(col2)), unnest(map_values(col2)) FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    for (long j = 0; j < Math.min(i, mapSize); j++) {
+                        assertTrue(rs.next());
+                        assertEquals(rs.getInt(1), i);
+                        assertEquals(rs.getString(2), "foo_" + i + "_" + j);
+                        if (0 == (i + j) % 13) {
+                            assertNull(rs.getObject(3));
+                            assertTrue(rs.wasNull());
+                        } else {
+                            DuckDBStruct struct = (DuckDBStruct) rs.getObject(3);
+                            Map<String, Object> map = struct.getMap();
+                            if (0 == (i + j) % 17) {
+                                assertNull(map.get("s1"));
+                            } else {
+                                assertEquals(map.get("s1"), i);
+                            }
+                            assertEquals(map.get("s2"), j);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_map() throws Exception {
+        Map<Integer, String> map1 = createMap(41, "foo1", 42, "bar1", 43, "baz1");
+        Map<Integer, String> map2 = createMap(44, null, 45, "bar2");
+        Map<Integer, String> map3 = new LinkedHashMap<>();
+        Map<Integer, String> map4 = createMap(46, "foo3");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 MAP(INTEGER, VARCHAR)[])");
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList(map1, map2, map3))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, map4))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map1);
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map2);
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map3);
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertMapsEqual(rs.getObject(1), map4);
+                assertFalse(rs.next());
+            }
+        }
+    }
 }

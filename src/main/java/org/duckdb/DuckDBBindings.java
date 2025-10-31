@@ -53,7 +53,7 @@ public class DuckDBBindings {
 
     static native ByteBuffer duckdb_vector_get_data(ByteBuffer vector, long size_bytes);
 
-    static native ByteBuffer duckdb_vector_get_validity(ByteBuffer vector, long array_size);
+    static native ByteBuffer duckdb_vector_get_validity(ByteBuffer vector, long vector_size_elems);
 
     static native void duckdb_vector_ensure_validity_writable(ByteBuffer vector);
 
