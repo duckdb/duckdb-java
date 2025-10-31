@@ -107,16 +107,24 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1da
  */
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1validity(JNIEnv *env, jclass,
                                                                                        jobject vector,
-                                                                                       jlong array_size) {
+                                                                                       jlong vector_size_elems) {
 
 	duckdb_vector vec = vector_buf_to_vector(env, vector);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
 
+	idx_t vector_size = jlong_to_idx(env, vector_size_elems);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+
 	uint64_t *mask = duckdb_vector_get_validity(vec);
-	idx_t vec_len = duckdb_vector_size();
-	idx_t mask_len = vec_len * sizeof(uint64_t) * array_size / 64;
+	idx_t vector_size_rounded = vector_size;
+	if (vector_size % 64 != 0) {
+		vector_size_rounded += 64 - (vector_size % 64);
+	}
+	idx_t mask_len = vector_size_rounded * sizeof(uint64_t) / 64;
 
 	return make_data_buf(env, mask, mask_len);
 }

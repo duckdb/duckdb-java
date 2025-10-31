@@ -112,11 +112,11 @@ public class TestBindings {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);
 
-        ByteBuffer emptyValidity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer emptyValidity = duckdb_vector_get_validity(vec, duckdb_vector_size());
         assertNull(emptyValidity);
 
         duckdb_vector_ensure_validity_writable(vec);
-        ByteBuffer validity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, duckdb_vector_size());
         assertNotNull(validity);
         assertEquals(validity.capacity(), (int) duckdb_vector_size() / 8);
 
@@ -198,7 +198,7 @@ public class TestBindings {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);
         duckdb_vector_ensure_validity_writable(vec);
-        ByteBuffer validity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, duckdb_vector_size());
 
         long row = 7;
         assertTrue(duckdb_validity_row_is_valid(validity, row));
@@ -232,9 +232,9 @@ public class TestBindings {
         checkVectorInsertString(vec);
 
         duckdb_vector_ensure_validity_writable(vec);
-        assertNotNull(duckdb_vector_get_validity(vec, 1));
+        assertNotNull(duckdb_vector_get_validity(vec, duckdb_vector_size()));
         duckdb_data_chunk_reset(chunk);
-        assertNull(duckdb_vector_get_validity(vec, 1));
+        assertNull(duckdb_vector_get_validity(vec, duckdb_vector_size()));
 
         duckdb_destroy_data_chunk(chunk);
         duckdb_destroy_logical_type(varcharType);
