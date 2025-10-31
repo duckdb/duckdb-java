@@ -74,13 +74,13 @@ public class DuckDBAppender implements AutoCloseable {
 
     private static final LocalDateTime EPOCH_DATE_TIME = LocalDateTime.ofEpochSecond(0, 0, UTC);
 
+    private static final long MAX_TOP_LEVEL_ROWS = duckdb_vector_size();
+
     private final DuckDBConnection conn;
 
     private final String catalog;
     private final String schema;
     private final String table;
-
-    private final long maxRows;
 
     private ByteBuffer appenderRef;
     private final Lock appenderRefLock = new ReentrantLock();
@@ -100,8 +100,6 @@ public class DuckDBAppender implements AutoCloseable {
         this.catalog = catalog;
         this.schema = schema;
         this.table = table;
-
-        this.maxRows = duckdb_vector_size();
 
         ByteBuffer appenderRef = null;
         ByteBuffer[] colTypes = null;
@@ -163,7 +161,7 @@ public class DuckDBAppender implements AutoCloseable {
         rowIdx++;
         Column prev = prevColumn;
         this.prevColumn = null;
-        if (rowIdx >= maxRows) {
+        if (rowIdx >= MAX_TOP_LEVEL_ROWS) {
             try {
                 flush();
             } catch (SQLException e) {
@@ -2325,8 +2323,10 @@ public class DuckDBAppender implements AutoCloseable {
                 this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
             }
 
+            long maxElems = maxElementsCount();
             if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL) {
-                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
+                long vectorSizeBytes = maxElems * widthBytes();
+                this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
                     throw new SQLException("cannot initialize data chunk vector data");
                 }
@@ -2335,7 +2335,7 @@ public class DuckDBAppender implements AutoCloseable {
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
-            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
                 throw new SQLException("cannot initialize data chunk vector validity");
             }
@@ -2353,15 +2353,18 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         void reset() throws SQLException {
+            long maxElems = maxElementsCount();
+
             if (null != this.data) {
-                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
+                long vectorSizeBytes = maxElems * widthBytes();
+                this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
                     throw new SQLException("cannot reset data chunk vector data");
                 }
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
-            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
                 throw new SQLException("cannot reset data chunk vector validity");
             }
@@ -2432,12 +2435,17 @@ public class DuckDBAppender implements AutoCloseable {
             return parent.arraySize;
         }
 
-        long vectorSize() {
-            if (null != parent && (parent.colType == DUCKDB_TYPE_LIST || parent.colType == DUCKDB_TYPE_MAP)) {
-                return listSize * widthBytes();
-            } else {
-                return duckdb_vector_size() * widthBytes() * arraySize * parentArraySize();
+        long maxElementsCount() {
+            Column ancestor = this;
+            while (null != ancestor) {
+                if (null != ancestor.parent &&
+                    (ancestor.parent.colType == DUCKDB_TYPE_LIST || ancestor.parent.colType == DUCKDB_TYPE_MAP)) {
+                    break;
+                }
+                ancestor = ancestor.parent;
             }
+            long maxEntries = null != ancestor ? ancestor.listSize : DuckDBAppender.MAX_TOP_LEVEL_ROWS;
+            return maxEntries * arraySize * parentArraySize();
         }
     }
 }
