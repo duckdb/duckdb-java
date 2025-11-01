@@ -92,7 +92,7 @@ static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
              optional_idx footer_size) {
-	auto file_proto = CreateThriftFileProtocol(QueryContext(context), file_handle, false);
+	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -570,7 +570,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
-	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	if (next_schema_idx >= file_meta_data->schema.size()) {
+		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
+		                            next_schema_idx);
+	}
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
@@ -727,23 +730,28 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 	idx_t next_file_idx = 0;
 
 	if (file_meta_data->schema.empty()) {
-		throw IOException("Parquet reader: no schema elements found");
+		throw IOException("Failed to read Parquet file \"%s\": no schema elements found", file.path);
 	}
 	if (file_meta_data->schema[0].num_children == 0) {
-		throw IOException("Parquet reader: root schema element has no children");
+		throw IOException("Failed to read Parquet file \"%s\": root schema element has no children", file.path);
 	}
 	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
 	if (root.type.id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("Root element of Parquet file must be a struct");
+		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
+		                            file.path);
 	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
-	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
+	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": row group does not have enough columns",
+		                            file.path);
+	}
 	if (parquet_options.file_row_number) {
 		for (auto &column : root.children) {
 			auto &name = column.name;
 			if (StringUtil::CIEquals(name, "file_row_number")) {
-				throw BinderException(
-				    "Using file_row_number option on file with column named file_row_number is not supported");
+				throw BinderException("Failed to read Parquet file \"%s\": Using file_row_number option on file with "
+				                      "column named file_row_number is not supported",
+				                      file.path);
 			}
 		}
 		root.children.push_back(FileRowNumberSchema());
@@ -837,7 +845,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(QueryContext(context_p), file, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -1236,7 +1244,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(QueryContext(context), file, flags);
+		state.file_handle = fs.OpenFile(context, file, flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
@@ -1247,7 +1255,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(QueryContext(context), *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);

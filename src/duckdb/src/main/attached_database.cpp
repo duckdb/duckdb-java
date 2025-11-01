@@ -14,12 +14,17 @@
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseFilePathManager &manager, string path_p, const string &name)
-    : manager(manager), path(std::move(path_p)) {
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
+                                       const string &name)
+    : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
 	manager.EraseDatabasePath(path);
+}
+
+void StoredDatabasePath::OnDetach() {
+	manager.DetachDatabase(db_manager, path);
 }
 
 //===--------------------------------------------------------------------===//
@@ -157,6 +162,13 @@ bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
+string AttachedDatabase::StoredPath() const {
+	if (stored_database_path) {
+		return stored_database_path->path;
+	}
+	return string();
+}
+
 static string RemoveQueryParams(const string &name) {
 	auto vec = StringUtil::Split(name, "?");
 	D_ASSERT(!vec.empty());
@@ -181,7 +193,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(QueryContext(context));
+		storage->Initialize(context);
 	}
 }
 
@@ -231,6 +243,9 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (catalog) {
 		catalog->OnDetach(context);
+	}
+	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
+		stored_database_path->OnDetach();
 	}
 }
 

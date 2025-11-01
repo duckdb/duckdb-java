@@ -37,11 +37,15 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseFilePathManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
 	~StoredDatabasePath();
 
+	DatabaseManager &db_manager;
 	DatabaseFilePathManager &manager;
 	string path;
+
+public:
+	void OnDetach();
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
@@ -115,6 +119,7 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
