@@ -59,8 +59,24 @@ jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
 
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
-arch_specific_builds = ['linux-amd64-musl', 'linux-aarch64-musl', 'windows-aarch64']
-arch_specific_classifiers = ['linux_amd64_musl', 'linux_aarch64_musl', 'windows_aarch64']
+arch_specific_builds = [
+  'linux-amd64',
+  'linux-aarch64',
+  'linux-amd64-musl',
+  'linux-aarch64-musl',
+  'osx-universal',
+  'windows-amd64',
+  'windows-aarch64',
+]
+arch_specific_classifiers = [
+  'linux_amd64',
+  'linux_arm64',
+  'linux_amd64_musl',
+  'linux_arm64_musl',
+  'macos_universal',
+  'windows_amd64',
+  'windows_arm64',
+]
 
 staging_dir = tempfile.mkdtemp()
 
@@ -68,6 +84,7 @@ binary_jar = '%s/duckdb_jdbc-%s.jar' % (staging_dir, release_version)
 pom = '%s/duckdb_jdbc-%s.pom' % (staging_dir, release_version)
 sources_jar = '%s/duckdb_jdbc-%s-sources.jar' % (staging_dir, release_version)
 javadoc_jar = '%s/duckdb_jdbc-%s-javadoc.jar' % (staging_dir, release_version)
+nolib_jar = '%s/duckdb_jdbc-%s-nolib.jar' % (staging_dir, release_version)
 
 arch_specific_jars = []
 for i in range(len(arch_specific_builds)):
@@ -123,9 +140,20 @@ pom_template = """
 pom_path = pathlib.Path(pom)
 pom_path.write_text(pom_template.replace("${VERSION}", release_version))
 
-# fatten up jar to add other binaries, start with first one
-shutil.copyfile(os.path.join(jdbc_artifact_dir, "java-" + combine_builds[0], "duckdb_jdbc.jar"), binary_jar)
-for build in combine_builds[1:]:
+# prepare 'empty' jar
+linux_amd64_src_jar = os.path.join(jdbc_artifact_dir, "java-" + combine_builds[0], "duckdb_jdbc.jar")
+with zipfile.ZipFile(linux_amd64_src_jar) as linux_amd64:
+  with zipfile.ZipFile(binary_jar, mode='w') as nolib:
+    for item in linux_amd64.infolist():
+      if item.filename != "libduckdb_java.so_linux_amd64":
+        buffer = linux_amd64.read(item.filename)
+        nolib.writestr(item, buffer)
+
+# copy 'empty' jar to '-nolib' classifier
+shutil.copyfile(binary_jar, nolib_jar)
+
+# fatten up 'empty' jar adding native libs
+for build in combine_builds:
     old_jar = zipfile.ZipFile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), 'r')
     for zip_entry in old_jar.namelist():
         if zip_entry.startswith('libduckdb_java.so'):
@@ -149,6 +177,7 @@ files_to_deploy = [
   binary_jar,
   sources_jar,
   javadoc_jar,
+  nolib_jar,
   pom
 ]
 for jar in arch_specific_jars:
