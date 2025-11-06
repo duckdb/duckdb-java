@@ -342,4 +342,30 @@ public class TestBindings {
             assertEquals(duckdb_appender_destroy(appender), 0);
         }
     }
+
+    public static void test_bindings_enum_type() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 mood)");
+
+            ByteBuffer[] out = new ByteBuffer[1];
+            int state =
+                duckdb_appender_create_ext(conn.connRef, "memory".getBytes(UTF_8), null, "tab1".getBytes(UTF_8), out);
+            assertEquals(state, 0);
+            ByteBuffer appender = out[0];
+            assertNotNull(appender);
+
+            ByteBuffer enumType = duckdb_appender_column_type(appender, 0);
+            assertEquals(duckdb_enum_internal_type(enumType), DUCKDB_TYPE_UTINYINT.typeId);
+            assertEquals(duckdb_enum_dictionary_size(enumType), 3L);
+            assertEquals(duckdb_enum_dictionary_value(enumType, 0), "sad".getBytes(UTF_8));
+            assertEquals(duckdb_enum_dictionary_value(enumType, 1), "ok".getBytes(UTF_8));
+            assertEquals(duckdb_enum_dictionary_value(enumType, 2), "happy".getBytes(UTF_8));
+
+            assertThrows(() -> { duckdb_enum_dictionary_value(enumType, 3); }, SQLException.class);
+            assertThrows(() -> { duckdb_enum_dictionary_value(enumType, -1); }, SQLException.class);
+        }
+    }
 }

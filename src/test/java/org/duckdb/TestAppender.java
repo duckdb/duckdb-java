@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.ZoneOffset.UTC;
 import static org.duckdb.DuckDBHugeInt.HUGE_INT_MAX;
 import static org.duckdb.DuckDBHugeInt.HUGE_INT_MIN;
@@ -845,6 +846,77 @@ public class TestAppender {
             stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARCHAR))");
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 assertThrows(() -> { appender.beginRow().append(42).flush(); }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_appender_varchar_as_bytes() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 VARCHAR)");
+            String cjkValue = "\u4B54\uD86D\uDF7C\uD83D\uDD25\uD83D\uDE1C";
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(41)
+                    .append("foo".getBytes(UTF_8))
+                    .endRow()
+                    .beginRow()
+                    .append(42)
+                    .append(cjkValue.getBytes(UTF_8))
+                    .endRow();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 FROM tab1 ORDER BY col1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "foo");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), cjkValue);
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_appender_basic_enum() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 mood)");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow().append(41).append("sad").endRow();
+                appender.beginRow().append(42).append("happy").endRow();
+                appender.beginRow().append(43).appendDefault().endRow();
+                appender.beginRow().append(44).appendNull().endRow();
+                appender.beginRow().append(45).append("ok").endRow();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT CAST(col2 AS VARCHAR) FROM tab1 ORDER BY col1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "sad");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "happy");
+
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "ok");
+
+                assertFalse(rs.next());
+            }
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                assertThrows(() -> { appender.beginRow().append(44).append("foobar").endRow(); }, SQLException.class);
             }
         }
     }
