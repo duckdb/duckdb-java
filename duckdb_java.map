@@ -59,6 +59,9 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1struct_1type_1child_1count;
     Java_org_duckdb_DuckDBBindings_duckdb_1struct_1type_1child_1name;
     Java_org_duckdb_DuckDBBindings_duckdb_1array_1type_1array_1size;
+    Java_org_duckdb_DuckDBBindings_duckdb_1enum_1internal_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1enum_1dictionary_1size;
+    Java_org_duckdb_DuckDBBindings_duckdb_1enum_1dictionary_1value;
     Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1logical_1type;
     Java_org_duckdb_DuckDBBindings_duckdb_1create_1vector;
     Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1vector;
