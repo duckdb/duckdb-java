@@ -882,4 +882,57 @@ public class TestAppenderComposite {
             }
         }
     }
+
+    public static void test_appender_list_basic_struct_enum() throws Exception {
+        Collection<Object> struct1 = asList(42, "sad");
+        Collection<Object> struct2 = asList(null, "ok");
+        Collection<Object> struct3 = asList(43, null);
+        Collection<Object> struct4 = asList(44, "happy");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 STRUCT(s1 INT, s2 mood)[])");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList(struct1, struct2, struct3))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, struct4))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct1);
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct2);
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct3);
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertFetchedStructEquals(rs.getObject(1), struct4);
+                assertFalse(rs.next());
+            }
+        }
+    }
 }

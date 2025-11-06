@@ -43,6 +43,12 @@ public class DuckDBBindings {
 
     static native void duckdb_destroy_logical_type(ByteBuffer logical_type);
 
+    static native int duckdb_enum_internal_type(ByteBuffer logical_type);
+
+    static native long duckdb_enum_dictionary_size(ByteBuffer logical_type);
+
+    static native byte[] duckdb_enum_dictionary_value(ByteBuffer logical_type, long index);
+
     // vector
 
     static native ByteBuffer duckdb_create_vector(ByteBuffer logical_type);
@@ -163,7 +169,7 @@ public class DuckDBBindings {
         // duckdb_timestamp_ns (nanoseconds)
         DUCKDB_TYPE_TIMESTAMP_NS(22, 8),
         // enum type, only useful as logical type
-        DUCKDB_TYPE_ENUM(23),
+        DUCKDB_TYPE_ENUM(23, 0),
         // list type, only useful as logical type
         DUCKDB_TYPE_LIST(24, 16),
         // struct type, only useful as logical type
