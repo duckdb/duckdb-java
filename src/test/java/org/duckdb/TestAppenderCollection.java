@@ -1,11 +1,13 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 import static org.duckdb.test.Assertions.assertFalse;
 import static org.duckdb.test.Helpers.createMap;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.time.*;
 import java.util.*;
@@ -1459,6 +1461,112 @@ public class TestAppenderCollection {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    public static void test_appender_list_enum() throws Exception {
+        int count = 1 << 12;        // auto flush twice
+        int tail = 7;               // flushed on close
+        int listLen = (1 << 6) + 7; // increase this for stress tests
+
+        List<String> enumKeys = asList("sad", "ok", "happy");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 mood[])");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    List<String> list = new ArrayList<>();
+                    for (int j = 0; j < Math.min(i, listLen); j++) {
+                        if (0 == (i + j) % 13) {
+                            list.add(null);
+                        } else {
+                            String key = enumKeys.get((i + j) % enumKeys.size());
+                            list.add(key);
+                        }
+                    }
+                    appender.beginRow().append(i).append(list).endRow();
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), count + tail);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) FROM (SELECT unnest(col2) FROM tab1 WHERE col1 = " + (listLen - 7) + ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), listLen - 7);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    for (int j = 0; j < Math.min(i, listLen); j++) {
+                        assertTrue(rs.next());
+                        assertEquals(rs.getInt(1), i);
+                        if (0 == (i + j) % 13) {
+                            assertNull(rs.getObject(2));
+                            assertTrue(rs.wasNull());
+                        } else {
+                            String expected = enumKeys.get((i + j) % enumKeys.size());
+                            assertEquals(rs.getString(2), expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_blob() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 BLOB[])");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .append(asList("foo".getBytes(UTF_8), "barbazboo0123456789".getBytes(UTF_8), "bar".getBytes(UTF_8)))
+                    .endRow()
+                    .beginRow()
+                    .append(43)
+                    .append((List<Object>) null)
+                    .endRow()
+                    .beginRow()
+                    .append(44)
+                    .append(asList(null, "boo".getBytes(UTF_8)))
+                    .endRow()
+                    .flush();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getBytes(1), "foo".getBytes(UTF_8));
+                assertTrue(rs.next());
+                assertEquals(rs.getBytes(1), "barbazboo0123456789".getBytes(UTF_8));
+                assertTrue(rs.next());
+                assertEquals(rs.getBytes(1), "bar".getBytes(UTF_8));
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 44")) {
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1));
+                assertTrue(rs.wasNull());
+                assertTrue(rs.next());
+                assertEquals(rs.getBytes(1), "boo".getBytes(UTF_8));
+                assertFalse(rs.next());
             }
         }
     }

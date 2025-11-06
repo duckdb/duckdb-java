@@ -293,6 +293,76 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1array_1type_1arra
 
 /*
  * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_enum_internal_type
+ * Signature: (Ljava/nio/ByteBuffer;)I
+ */
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1enum_1internal_1type(JNIEnv *env, jclass,
+                                                                                   jobject logical_type) {
+
+	duckdb_logical_type lt = logical_type_buf_to_logical_type(env, logical_type);
+	if (env->ExceptionCheck()) {
+		return -1;
+	}
+
+	duckdb_type type_id = duckdb_enum_internal_type(lt);
+
+	return static_cast<jint>(type_id);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_enum_dictionary_size
+ * Signature: (Ljava/nio/ByteBuffer;)J
+ */
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1enum_1dictionary_1size(JNIEnv *env, jclass,
+                                                                                      jobject logical_type) {
+
+	duckdb_logical_type lt = logical_type_buf_to_logical_type(env, logical_type);
+	if (env->ExceptionCheck()) {
+		return -1;
+	}
+
+	idx_t size = duckdb_enum_dictionary_size(lt);
+
+	return static_cast<jlong>(size);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_enum_dictionary_value
+ * Signature: (Ljava/nio/ByteBuffer;J)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1enum_1dictionary_1value(JNIEnv *env, jclass,
+                                                                                            jobject logical_type,
+                                                                                            jlong index) {
+
+	duckdb_logical_type lt = logical_type_buf_to_logical_type(env, logical_type);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	idx_t index_idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+
+	idx_t size = duckdb_enum_dictionary_size(lt);
+	if (index_idx >= size) {
+		env->ThrowNew(J_SQLException, "Invalid enum field index specified");
+		return nullptr;
+	}
+
+	auto name_ptr = varchar_ptr(duckdb_enum_dictionary_value(lt, index_idx), varchar_deleter);
+	if (name_ptr.get() == nullptr) {
+		return nullptr;
+	}
+
+	idx_t len = static_cast<idx_t>(std::strlen(name_ptr.get()));
+
+	return make_jbyteArray(env, name_ptr.get(), len);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_destroy_logical_type
  * Signature: (Ljava/nio/ByteBuffer;)V
  */
