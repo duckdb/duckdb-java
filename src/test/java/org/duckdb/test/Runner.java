@@ -40,7 +40,7 @@ public class Runner {
         boolean anyFailed = false;
         for (Method m : methods) {
             if (m.getName().startsWith("test_")) {
-                if (quick_run && m.getName().startsWith("test_lots_")) {
+                if (quick_run && (m.getName().startsWith("test_lots_") || m.getName().startsWith("test_nolib_"))) {
                     continue;
                 }
                 if (specific_test != null && !m.getName().contains(specific_test)) {
