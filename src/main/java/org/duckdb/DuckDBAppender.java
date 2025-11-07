@@ -58,6 +58,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         supportedTypes.add(DUCKDB_TYPE_STRUCT.typeId);
         supportedTypes.add(DUCKDB_TYPE_UNION.typeId);
+        supportedTypes.add(DUCKDB_TYPE_ENUM.typeId);
     }
     private static final CAPIType[] int8Types = new CAPIType[] {DUCKDB_TYPE_TINYINT, DUCKDB_TYPE_UTINYINT};
     private static final CAPIType[] int16Types = new CAPIType[] {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_USMALLINT};
@@ -69,18 +70,20 @@ public class DuckDBAppender implements AutoCloseable {
     private static final CAPIType[] timestampMicrosTypes =
         new CAPIType[] {DUCKDB_TYPE_TIMESTAMP, DUCKDB_TYPE_TIMESTAMP_TZ};
     private static final CAPIType[] collectionTypes = new CAPIType[] {DUCKDB_TYPE_ARRAY, DUCKDB_TYPE_LIST};
+    private static final CAPIType[] varlenTypes = new CAPIType[] {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_BLOB};
+    private static final CAPIType[] varcharOrEnumTypes = new CAPIType[] {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_ENUM};
 
     private static final int STRING_MAX_INLINE_BYTES = 12;
 
     private static final LocalDateTime EPOCH_DATE_TIME = LocalDateTime.ofEpochSecond(0, 0, UTC);
+
+    private static final long MAX_TOP_LEVEL_ROWS = duckdb_vector_size();
 
     private final DuckDBConnection conn;
 
     private final String catalog;
     private final String schema;
     private final String table;
-
-    private final long maxRows;
 
     private ByteBuffer appenderRef;
     private final Lock appenderRefLock = new ReentrantLock();
@@ -100,8 +103,6 @@ public class DuckDBAppender implements AutoCloseable {
         this.catalog = catalog;
         this.schema = schema;
         this.table = table;
-
-        this.maxRows = duckdb_vector_size();
 
         ByteBuffer appenderRef = null;
         ByteBuffer[] colTypes = null;
@@ -163,7 +164,7 @@ public class DuckDBAppender implements AutoCloseable {
         rowIdx++;
         Column prev = prevColumn;
         this.prevColumn = null;
-        if (rowIdx >= maxRows) {
+        if (rowIdx >= MAX_TOP_LEVEL_ROWS) {
             try {
                 flush();
             } catch (SQLException e) {
@@ -566,7 +567,7 @@ public class DuckDBAppender implements AutoCloseable {
     }
 
     public DuckDBAppender append(byte[] values) throws SQLException {
-        Column col = currentColumn(DUCKDB_TYPE_BLOB);
+        Column col = currentColumn(varlenTypes);
         if (values == null) {
             return appendNull();
         }
@@ -742,13 +743,24 @@ public class DuckDBAppender implements AutoCloseable {
     // append objects
 
     public DuckDBAppender append(String value) throws SQLException {
-        Column col = currentColumn(DUCKDB_TYPE_VARCHAR);
+        Column col = currentColumn(varcharOrEnumTypes);
         if (value == null) {
             return appendNull();
         }
 
-        byte[] bytes = value.getBytes(UTF_8);
-        putStringOrBlob(col, rowIdx, bytes);
+        switch (col.colType) {
+        case DUCKDB_TYPE_VARCHAR: {
+            byte[] bytes = value.getBytes(UTF_8);
+            putStringOrBlob(col, rowIdx, bytes);
+            break;
+        }
+        case DUCKDB_TYPE_ENUM: {
+            putEnum(col, rowIdx, value);
+            break;
+        }
+        default:
+            throw new SQLException(createErrMsg("Invalid type: " + col.colType));
+        }
 
         moveToNextColumn();
         return this;
@@ -1844,6 +1856,16 @@ public class DuckDBAppender implements AutoCloseable {
             putStringOrBlob(col, vectorIdx, bytes);
             break;
         }
+        case DUCKDB_TYPE_ENUM: {
+            String st = (String) value;
+            putEnum(col, vectorIdx, st);
+            break;
+        }
+        case DUCKDB_TYPE_BLOB: {
+            byte[] bytes = (byte[]) (value);
+            putStringOrBlob(col, vectorIdx, bytes);
+            break;
+        }
         case DUCKDB_TYPE_UUID: {
             UUID uid = (UUID) value;
             long mostSigBits = uid.getMostSignificantBits();
@@ -2060,6 +2082,31 @@ public class DuckDBAppender implements AutoCloseable {
         return col.children.get(fieldWithTag);
     }
 
+    private void putEnum(Column col, long vectorIdx, String value) throws SQLException {
+        Integer numValueNullable = col.enumDict.get(value);
+        if (null == numValueNullable) {
+            throw new SQLException(createErrMsg("invalid ENUM value specified: '" + value +
+                                                "', expected one of: " + col.enumDict.keySet()));
+        }
+
+        int pos = (int) (vectorIdx * col.enumInternalType.widthBytes);
+        col.data.position(pos);
+
+        switch (col.enumInternalType) {
+        case DUCKDB_TYPE_UTINYINT:
+            col.data.put(numValueNullable.byteValue());
+            return;
+        case DUCKDB_TYPE_USMALLINT:
+            col.data.putShort(numValueNullable.shortValue());
+            return;
+        case DUCKDB_TYPE_UINTEGER:
+            col.data.putInt(numValueNullable.intValue());
+            return;
+        default:
+            throw new SQLException(createErrMsg("invalid ENUM internal type: " + col.enumInternalType));
+        }
+    }
+
     // state invariants
 
     private boolean rowBegunInvariant() {
@@ -2256,6 +2303,17 @@ public class DuckDBAppender implements AutoCloseable {
         return columns;
     }
 
+    private static Map<String, Integer> readEnumDict(ByteBuffer colTypeRef) {
+        Map<String, Integer> dict = new LinkedHashMap<>();
+        long size = duckdb_enum_dictionary_size(colTypeRef);
+        for (long i = 0; i < size; i++) {
+            byte[] nameUtf8 = duckdb_enum_dictionary_value(colTypeRef, i);
+            String name = strFromUTF8(nameUtf8);
+            dict.put(name, (int) i);
+        }
+        return dict;
+    }
+
     private static class Column {
         private final Column parent;
         private final int idx;
@@ -2266,6 +2324,8 @@ public class DuckDBAppender implements AutoCloseable {
         private final int decimalScale;
         private final long arraySize;
         private final String structFieldName;
+        private final Map<String, Integer> enumDict;
+        private final CAPIType enumInternalType;
 
         private final ByteBuffer vectorRef;
         private final List<Column> children = new ArrayList<>();
@@ -2325,8 +2385,19 @@ public class DuckDBAppender implements AutoCloseable {
                 this.arraySize = duckdb_array_type_array_size(parent.colTypeRef);
             }
 
-            if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL) {
-                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
+            if (colType == DUCKDB_TYPE_ENUM) {
+                this.enumDict = readEnumDict(this.colTypeRef);
+                int enumInternalTypeId = duckdb_enum_internal_type(this.colTypeRef);
+                this.enumInternalType = capiTypeFromTypeId(enumInternalTypeId);
+            } else {
+                this.enumDict = null;
+                this.enumInternalType = null;
+            }
+
+            long maxElems = maxElementsCount();
+            if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL || colType == DUCKDB_TYPE_ENUM) {
+                long vectorSizeBytes = maxElems * widthBytes();
+                this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
                     throw new SQLException("cannot initialize data chunk vector data");
                 }
@@ -2335,7 +2406,7 @@ public class DuckDBAppender implements AutoCloseable {
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
-            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
                 throw new SQLException("cannot initialize data chunk vector validity");
             }
@@ -2353,15 +2424,18 @@ public class DuckDBAppender implements AutoCloseable {
         }
 
         void reset() throws SQLException {
+            long maxElems = maxElementsCount();
+
             if (null != this.data) {
-                this.data = duckdb_vector_get_data(vectorRef, vectorSize());
+                long vectorSizeBytes = maxElems * widthBytes();
+                this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
                     throw new SQLException("cannot reset data chunk vector data");
                 }
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
-            this.validity = duckdb_vector_get_validity(vectorRef, arraySize * parentArraySize());
+            this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
                 throw new SQLException("cannot reset data chunk vector validity");
             }
@@ -2420,6 +2494,8 @@ public class DuckDBAppender implements AutoCloseable {
         long widthBytes() {
             if (colType == DUCKDB_TYPE_DECIMAL) {
                 return decimalInternalType.widthBytes;
+            } else if (colType == DUCKDB_TYPE_ENUM) {
+                return enumInternalType.widthBytes;
             } else {
                 return colType.widthBytes;
             }
@@ -2432,12 +2508,17 @@ public class DuckDBAppender implements AutoCloseable {
             return parent.arraySize;
         }
 
-        long vectorSize() {
-            if (null != parent && (parent.colType == DUCKDB_TYPE_LIST || parent.colType == DUCKDB_TYPE_MAP)) {
-                return listSize * widthBytes();
-            } else {
-                return duckdb_vector_size() * widthBytes() * arraySize * parentArraySize();
+        long maxElementsCount() {
+            Column ancestor = this;
+            while (null != ancestor) {
+                if (null != ancestor.parent &&
+                    (ancestor.parent.colType == DUCKDB_TYPE_LIST || ancestor.parent.colType == DUCKDB_TYPE_MAP)) {
+                    break;
+                }
+                ancestor = ancestor.parent;
             }
+            long maxEntries = null != ancestor ? ancestor.listSize : DuckDBAppender.MAX_TOP_LEVEL_ROWS;
+            return maxEntries * arraySize * parentArraySize();
         }
     }
 }

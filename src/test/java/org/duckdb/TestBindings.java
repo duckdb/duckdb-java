@@ -112,11 +112,11 @@ public class TestBindings {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);
 
-        ByteBuffer emptyValidity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer emptyValidity = duckdb_vector_get_validity(vec, duckdb_vector_size());
         assertNull(emptyValidity);
 
         duckdb_vector_ensure_validity_writable(vec);
-        ByteBuffer validity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, duckdb_vector_size());
         assertNotNull(validity);
         assertEquals(validity.capacity(), (int) duckdb_vector_size() / 8);
 
@@ -198,7 +198,7 @@ public class TestBindings {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);
         duckdb_vector_ensure_validity_writable(vec);
-        ByteBuffer validity = duckdb_vector_get_validity(vec, 1);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, duckdb_vector_size());
 
         long row = 7;
         assertTrue(duckdb_validity_row_is_valid(validity, row));
@@ -232,9 +232,9 @@ public class TestBindings {
         checkVectorInsertString(vec);
 
         duckdb_vector_ensure_validity_writable(vec);
-        assertNotNull(duckdb_vector_get_validity(vec, 1));
+        assertNotNull(duckdb_vector_get_validity(vec, duckdb_vector_size()));
         duckdb_data_chunk_reset(chunk);
-        assertNull(duckdb_vector_get_validity(vec, 1));
+        assertNull(duckdb_vector_get_validity(vec, duckdb_vector_size()));
 
         duckdb_destroy_data_chunk(chunk);
         duckdb_destroy_logical_type(varcharType);
@@ -340,6 +340,32 @@ public class TestBindings {
             duckdb_destroy_logical_type(dec2Type);
             assertEquals(duckdb_appender_close(appender), 0);
             assertEquals(duckdb_appender_destroy(appender), 0);
+        }
+    }
+
+    public static void test_bindings_enum_type() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 mood)");
+
+            ByteBuffer[] out = new ByteBuffer[1];
+            int state =
+                duckdb_appender_create_ext(conn.connRef, "memory".getBytes(UTF_8), null, "tab1".getBytes(UTF_8), out);
+            assertEquals(state, 0);
+            ByteBuffer appender = out[0];
+            assertNotNull(appender);
+
+            ByteBuffer enumType = duckdb_appender_column_type(appender, 0);
+            assertEquals(duckdb_enum_internal_type(enumType), DUCKDB_TYPE_UTINYINT.typeId);
+            assertEquals(duckdb_enum_dictionary_size(enumType), 3L);
+            assertEquals(duckdb_enum_dictionary_value(enumType, 0), "sad".getBytes(UTF_8));
+            assertEquals(duckdb_enum_dictionary_value(enumType, 1), "ok".getBytes(UTF_8));
+            assertEquals(duckdb_enum_dictionary_value(enumType, 2), "happy".getBytes(UTF_8));
+
+            assertThrows(() -> { duckdb_enum_dictionary_value(enumType, 3); }, SQLException.class);
+            assertThrows(() -> { duckdb_enum_dictionary_value(enumType, -1); }, SQLException.class);
         }
     }
 }

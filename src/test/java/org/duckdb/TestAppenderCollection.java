@@ -1,11 +1,13 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 import static org.duckdb.test.Assertions.assertFalse;
 import static org.duckdb.test.Helpers.createMap;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.time.*;
 import java.util.*;
@@ -1410,59 +1412,127 @@ public class TestAppenderCollection {
         }
     }
 
-    private static void assertMapsEqual(Object obj1, Map<?, ?> map2) throws Exception {
-        Map<?, ?> map1 = (Map<?, ?>) obj1;
-        assertEquals(map1.size(), map2.size());
-        List<Map.Entry<?, ?>> list2 = new ArrayList<>(map2.entrySet());
-        int i = 0;
-        for (Map.Entry<?, ?> en : map1.entrySet()) {
-            assertEquals(en.getKey(), list2.get(i).getKey());
-            assertEquals(en.getValue(), list2.get(i).getValue());
-            i += 1;
-        }
-    }
+    public static void test_appender_list_bigint() throws Exception {
+        int count = 1 << 12;        // auto flush twice
+        int tail = 7;               // flushed on close
+        int listLen = (1 << 6) + 7; // increase this for stress tests
 
-    public static void test_appender_map_basic() throws Exception {
-        Map<Integer, String> map1 = createMap(41, "foo", 42, "bar");
-        Map<Integer, String> map2 = createMap(41, "foo", 42, null, 43, "baz");
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 MAP(INTEGER, VARCHAR))");
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 BIGINT[])");
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
-                appender.beginRow()
-                    .append(41)
-                    .append(map1)
-                    .endRow()
-                    .beginRow()
-                    .append(42)
-                    .append(map2)
-                    .endRow()
-                    .flush();
+                for (int i = 0; i < count + tail; i++) {
+                    List<Long> list = new ArrayList<>();
+                    for (long j = 0; j < Math.min(i, listLen); j++) {
+                        if (0 == (i + j) % 13) {
+                            list.add(null);
+                        } else {
+                            list.add(i + j);
+                        }
+                    }
+                    appender.beginRow().append(i).append(list).endRow();
+                }
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT col2 FROM tab1 ORDER BY col1")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
                 assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map1);
-                assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map2);
+                assertEquals(rs.getInt(1), count + tail);
                 assertFalse(rs.next());
             }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) FROM (SELECT unnest(col2) FROM tab1 WHERE col1 = " + (listLen - 7) + ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), listLen - 7);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    for (long j = 0; j < Math.min(i, listLen); j++) {
+                        assertTrue(rs.next());
+                        assertEquals(rs.getInt(1), i);
+                        if (0 == (i + j) % 13) {
+                            assertNull(rs.getObject(2));
+                            assertTrue(rs.wasNull());
+                        } else {
+                            assertEquals(rs.getLong(2), i + j);
+                        }
+                    }
+                }
+            }
         }
     }
 
-    public static void test_appender_list_basic_map() throws Exception {
-        Map<Integer, String> map1 = createMap(41, "foo1", 42, "bar1", 43, "baz1");
-        Map<Integer, String> map2 = createMap(44, null, 45, "bar2");
-        Map<Integer, String> map3 = new LinkedHashMap<>();
-        Map<Integer, String> map4 = createMap(46, "foo3");
+    public static void test_appender_list_enum() throws Exception {
+        int count = 1 << 12;        // auto flush twice
+        int tail = 7;               // flushed on close
+        int listLen = (1 << 6) + 7; // increase this for stress tests
+
+        List<String> enumKeys = asList("sad", "ok", "happy");
+
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TABLE tab1(col1 INT, col2 MAP(INTEGER, VARCHAR)[])");
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
+            stmt.execute("CREATE TABLE tab1(col1 INTEGER, col2 mood[])");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    List<String> list = new ArrayList<>();
+                    for (int j = 0; j < Math.min(i, listLen); j++) {
+                        if (0 == (i + j) % 13) {
+                            list.add(null);
+                        } else {
+                            String key = enumKeys.get((i + j) % enumKeys.size());
+                            list.add(key);
+                        }
+                    }
+                    appender.beginRow().append(i).append(list).endRow();
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), count + tail);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) FROM (SELECT unnest(col2) FROM tab1 WHERE col1 = " + (listLen - 7) + ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), listLen - 7);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col1, unnest(col2) FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < count + tail; i++) {
+                    for (int j = 0; j < Math.min(i, listLen); j++) {
+                        assertTrue(rs.next());
+                        assertEquals(rs.getInt(1), i);
+                        if (0 == (i + j) % 13) {
+                            assertNull(rs.getObject(2));
+                            assertTrue(rs.wasNull());
+                        } else {
+                            String expected = enumKeys.get((i + j) % enumKeys.size());
+                            assertEquals(rs.getString(2), expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void test_appender_list_basic_blob() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TABLE tab1(col1 INT, col2 BLOB[])");
+
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow()
                     .append(42)
-                    .append(asList(map1, map2, map3))
+                    .append(asList("foo".getBytes(UTF_8), "barbazboo0123456789".getBytes(UTF_8), "bar".getBytes(UTF_8)))
                     .endRow()
                     .beginRow()
                     .append(43)
@@ -1470,18 +1540,18 @@ public class TestAppenderCollection {
                     .endRow()
                     .beginRow()
                     .append(44)
-                    .append(asList(null, map4))
+                    .append(asList(null, "boo".getBytes(UTF_8)))
                     .endRow()
                     .flush();
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT unnest(col2) from tab1 WHERE col1 = 42")) {
                 assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map1);
+                assertEquals(rs.getBytes(1), "foo".getBytes(UTF_8));
                 assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map2);
+                assertEquals(rs.getBytes(1), "barbazboo0123456789".getBytes(UTF_8));
                 assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map3);
+                assertEquals(rs.getBytes(1), "bar".getBytes(UTF_8));
                 assertFalse(rs.next());
             }
             try (ResultSet rs = stmt.executeQuery("SELECT col2 from tab1 WHERE col1 = 43")) {
@@ -1495,7 +1565,7 @@ public class TestAppenderCollection {
                 assertNull(rs.getObject(1));
                 assertTrue(rs.wasNull());
                 assertTrue(rs.next());
-                assertMapsEqual(rs.getObject(1), map4);
+                assertEquals(rs.getBytes(1), "boo".getBytes(UTF_8));
                 assertFalse(rs.next());
             }
         }
