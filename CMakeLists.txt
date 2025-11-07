@@ -560,10 +560,10 @@ file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g -Xlint:all)
 
-add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
+add_jar(duckdb_jdbc_nolib ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
         MANIFEST META-INF/MANIFEST.MF
         GENERATE_NATIVE_HEADERS duckdb-native)
-add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
+add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 
 
 # main shared lib compilation
@@ -654,7 +654,10 @@ set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
-  DEPENDS duckdb_java duckdb_jdbc duckdb_jdbc_tests
+  DEPENDS duckdb_java duckdb_jdbc_nolib duckdb_jdbc_tests
+  COMMAND ${CMAKE_COMMAND} -E copy
+          duckdb_jdbc_nolib.jar
+          duckdb_jdbc.jar
   COMMAND ${Java_JAR_EXECUTABLE} uf duckdb_jdbc.jar -C
           $<TARGET_FILE_DIR:duckdb_java> $<TARGET_FILE_NAME:duckdb_java>)
 

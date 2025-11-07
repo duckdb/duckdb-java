@@ -1,66 +1,134 @@
 package org.duckdb;
 
-import java.io.File;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
 import java.sql.SQLException;
 import java.util.Properties;
 
 final class DuckDBNative {
+
+    private static final String ARCH_X86_64 = "amd64";
+    private static final String ARCH_AARCH64 = "arm64";
+    private static final String ARCH_UNIVERSAL = "universal";
+
+    private static final String OS_WINDOWS = "windows";
+    private static final String OS_MACOS = "osx";
+    private static final String OS_LINUX = "linux";
+
     static {
         try {
-            String os_name = "";
-            String os_arch;
-            String os_name_detect = System.getProperty("os.name").toLowerCase().trim();
-            String os_arch_detect = System.getProperty("os.arch").toLowerCase().trim();
-            switch (os_arch_detect) {
-            case "x86_64":
-            case "amd64":
-                os_arch = "amd64";
-                break;
-            case "aarch64":
-            case "arm64":
-                os_arch = "arm64";
-                break;
-            case "i386":
-                os_arch = "i386";
-                break;
-            default:
-                throw new IllegalStateException("Unsupported system architecture");
-            }
-            if (os_name_detect.startsWith("windows")) {
-                os_name = "windows";
-            } else if (os_name_detect.startsWith("mac")) {
-                os_name = "osx";
-                os_arch = "universal";
-            } else if (os_name_detect.startsWith("linux")) {
-                os_name = "linux";
-            }
-            String lib_res_name = "/libduckdb_java.so"
-                                  + "_" + os_name + "_" + os_arch;
-
-            Path lib_file = Files.createTempFile("libduckdb_java", ".so");
-            URL lib_res = DuckDBNative.class.getResource(lib_res_name);
-            if (lib_res == null) {
-                System.load(Paths.get("build/debug", lib_res_name).normalize().toAbsolutePath().toString());
-            } else {
-                try (final InputStream lib_res_input_stream = lib_res.openStream()) {
-                    Files.copy(lib_res_input_stream, lib_file, StandardCopyOption.REPLACE_EXISTING);
-                }
-                new File(lib_file.toString()).deleteOnExit();
-                System.load(lib_file.toAbsolutePath().toString());
-            }
-        } catch (IOException e) {
+            loadNativeLibrary();
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
+
+    private static void loadNativeLibrary() throws Exception {
+        String libName = nativeLibName();
+        URL libRes = DuckDBNative.class.getResource("/" + libName);
+
+        // The current JAR has a native library bundled, in this case we unpack and load it.
+        // There is no fallback if the unpacking or loading fails. We expect that only
+        // the '-nolib' JAR can be used with an external native lib
+        if (null != libRes) {
+            unpackAndLoad(libRes);
+            return;
+        }
+
+        // There is no native library inside the JAR file, so we try to load it by name
+        try {
+            System.loadLibrary("duckdb_java");
+        } catch (UnsatisfiedLinkError e) {
+            // Native library cannot be loaded by name using ordinary JVM mechanisms, we try to load it directly
+            // from FS - from the same directory where the current JAR resides
+            try {
+                loadFromCurrentJarDir(libName);
+            } catch (Throwable t) {
+                e.printStackTrace();
+                throw new IllegalStateException(t);
+            }
+        }
+    }
+
+    private static String cpuArch() {
+        String prop = System.getProperty("os.arch").toLowerCase().trim();
+        switch (prop) {
+        case "x86_64":
+        case "amd64":
+            return ARCH_X86_64;
+        case "aarch64":
+        case "arm64":
+            return ARCH_AARCH64;
+        default:
+            throw new IllegalStateException("Unsupported system architecture: '" + prop + "'");
+        }
+    }
+
+    static String osName() {
+        String prop = System.getProperty("os.name").toLowerCase().trim();
+        if (prop.startsWith("windows")) {
+            return OS_WINDOWS;
+        } else if (prop.startsWith("mac")) {
+            return OS_MACOS;
+        } else if (prop.startsWith("linux")) {
+            return OS_LINUX;
+        } else {
+            throw new IllegalStateException("Unsupported OS: '" + prop + "'");
+        }
+    }
+
+    static String nativeLibName() {
+        String os = osName();
+        final String arch;
+        if (OS_MACOS.equals(os)) {
+            arch = ARCH_UNIVERSAL;
+        } else {
+            arch = cpuArch();
+        }
+        return "libduckdb_java.so_" + os + "_" + arch;
+    }
+
+    static Path currentJarDir() throws Exception {
+        ProtectionDomain pd = DuckDBNative.class.getProtectionDomain();
+        CodeSource cs = pd.getCodeSource();
+        URL loc = cs.getLocation();
+        URI uri = loc.toURI();
+        Path jarPath = Paths.get(uri);
+        Path dirPath = jarPath.getParent();
+        return dirPath.toRealPath();
+    }
+
+    private static void unpackAndLoad(URL nativeLibRes) throws IOException {
+        Path tmpFile = Files.createTempFile("libduckdb_java", ".so");
+        try (InputStream is = nativeLibRes.openStream()) {
+            Files.copy(is, tmpFile, REPLACE_EXISTING);
+        }
+        tmpFile.toFile().deleteOnExit();
+        System.load(tmpFile.toAbsolutePath().toString());
+    }
+
+    private static void loadFromCurrentJarDir(String libName) throws Exception {
+        Path dir = currentJarDir();
+        Path libPath = dir.resolve(libName);
+        if (Files.exists(libPath)) {
+            System.load(libPath.toAbsolutePath().toString());
+        } else {
+            throw new FileNotFoundException("DuckDB JNI library not found, path: '" + libPath.toAbsolutePath() + "'");
+        }
+    }
+
     // We use zero-length ByteBuffer-s as a hacky but cheap way to pass C++ pointers
     // back and forth
 
