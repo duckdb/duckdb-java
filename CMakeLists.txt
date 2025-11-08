@@ -560,7 +560,9 @@ file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 set(CMAKE_JAVA_COMPILE_FLAGS -encoding utf-8 -g -Xlint:all)
 
-add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
+add_jar(duckdb_jdbc ${JAVA_SRC_FILES}
+        META-INF/services/java.sql.Driver
+        META-INF/native-image/org/duckdb/reachability-metadata.json
         MANIFEST META-INF/MANIFEST.MF
         GENERATE_NATIVE_HEADERS duckdb-native)
 add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
