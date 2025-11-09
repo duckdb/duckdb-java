@@ -77,6 +77,12 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_amd64
 
+      - name: Check Module Name
+        run: |
+          java \
+            --module-path ./build/release/duckdb_jdbc.jar \
+            -d duckdb.jdbc
+
       - name: JDBC Tests EL8
         if: ${{ inputs.skip_tests != 'true' }}
         run: |

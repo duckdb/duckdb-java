@@ -11,3 +11,4 @@ Bundle-ContactAddress: mark@duckdblabs.com
 Bundle-Copyright: Copyright (c) DuckDB Labs
 Export-Package: org.duckdb, org.duckdb.io, org.duckdb.user
 Import-Package: javax.sql, org.osgi.framework;resolution:=optional
+Automatic-Module-Name: duckdb.jdbc
