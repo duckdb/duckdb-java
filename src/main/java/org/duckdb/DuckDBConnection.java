@@ -96,13 +96,13 @@ public final class DuckDBConnection implements java.sql.Connection {
         return createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
     }
 
-    public Connection duplicate() throws SQLException {
+    public DuckDBConnection duplicate() throws SQLException {
         checkOpen();
         connRefLock.lock();
         try {
             checkOpen();
-            return new DuckDBConnection(DuckDBNative.duckdb_jdbc_connect(connRef), url, readOnly, sessionInitSQL,
-                                        autoCommit);
+            ByteBuffer dupRef = DuckDBNative.duckdb_jdbc_connect(connRef);
+            return new DuckDBConnection(dupRef, url, readOnly, sessionInitSQL, autoCommit);
         } finally {
             connRefLock.unlock();
         }
