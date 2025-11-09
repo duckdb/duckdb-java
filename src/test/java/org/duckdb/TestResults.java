@@ -57,7 +57,7 @@ public class TestResults {
                 assertFalse(rs.next());
             }
             // test duplication
-            try (Connection conn2 = conn.unwrap(DuckDBConnection.class).duplicate();
+            try (DuckDBConnection conn2 = conn.unwrap(DuckDBConnection.class).duplicate();
                  Statement stmt2 = conn2.createStatement(); ResultSet rs_conn2 = stmt2.executeQuery("SELECT 42")) {
                 rs_conn2.next();
                 assertEquals(42, rs_conn2.getInt(1));
