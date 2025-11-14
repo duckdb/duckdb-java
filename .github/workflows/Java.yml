@@ -396,6 +396,7 @@ jobs:
         shell: cmd
         run: |
           call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          dumpbin.exe /imports build\release\Release\libduckdb_java.so_windows_amd64
           dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_amd64
 
       - name: Java Tests
@@ -439,6 +440,7 @@ jobs:
         shell: cmd
         run: |
           call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
+          dumpbin.exe /imports build\release\Release\libduckdb_java.so_windows_arm64
           dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_arm64
 
       # Test runs are failing because windows_arm64 extensions are missing
