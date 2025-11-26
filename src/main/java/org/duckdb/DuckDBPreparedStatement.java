@@ -101,7 +101,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             this.conn.transactionRunning = true;
             // Start transaction via Statement
             try (Statement s = conn.createStatement()) {
-                s.execute("BEGIN TRANSACTION;");
+                s.execute("BEGIN TRANSACTION");
                 return true;
             }
         } catch (NullPointerException e) {
@@ -138,6 +138,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             conn.connRefLock.lock();
             try {
                 conn.checkOpen();
+
+                if (!isConnAutoCommit()) {
+                    startTransaction();
+                }
+
                 stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, sql.getBytes(UTF_8));
                 // Track prepared statement inside the parent connection
                 conn.preparedStatements.add(this);
@@ -156,10 +161,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean execute() throws SQLException {
-        return execute(true);
-    }
-
-    private boolean execute(boolean startTransaction) throws SQLException {
         checkOpen();
         checkPrepared();
 
@@ -180,7 +181,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             }
             selectResult = null;
 
-            if (startTransaction && !isConnAutoCommit()) {
+            if (!isConnAutoCommit()) {
                 startTransaction();
             }
 
@@ -657,7 +658,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             long[] updateCounts = new long[this.batchedParams.size()];
             for (int i = 0; i < this.batchedParams.size(); i++) {
                 params = this.batchedParams.get(i);
-                execute(false);
+                execute();
                 updateCounts[i] = getUpdateCountInternal();
             }
             clearBatch();
@@ -690,7 +691,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             long[] updateCounts = new long[this.batchedStatements.size()];
             for (int i = 0; i < this.batchedStatements.size(); i++) {
                 prepare(this.batchedStatements.get(i));
-                execute(false);
+                execute();
                 updateCounts[i] = getUpdateCountInternal();
             }
             clearBatch();
