@@ -35,14 +35,12 @@ public:
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
-	//! Highest active query when the transaction finished, used for cleaning up
-	transaction_t highest_active_query;
 
 	atomic<idx_t> catalog_version;
 
 	//! Transactions undergo Cleanup, after (1) removing them directly in RemoveTransaction,
-	//! or (2) after they exist old_transactions.
-	//! Some (after rollback) enter old_transactions, but do not require Cleanup.
+	//! or (2) after they enter cleanup_queue.
+	//! Some (after rollback) enter cleanup_queue, but do not require Cleanup.
 	bool awaiting_cleanup;
 
 public:
@@ -56,7 +54,8 @@ public:
 	void SetReadWrite() override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
-	ErrorData WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept;
+	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
+	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
@@ -76,7 +75,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries, idx_t row_group_start);
 
 	bool IsDuckTransaction() const override {
 		return true;
@@ -90,6 +89,7 @@ public:
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
+	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
 	void ModifyTable(DataTable &tbl);
 
 private:
