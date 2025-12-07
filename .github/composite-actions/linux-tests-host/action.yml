@@ -1,0 +1,14 @@
+name: 'Linux Tests Host'
+description: 'Linux test run in host OS'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Tests Host
+      shell: bash
+      run: |
+        cat /etc/os-release
+        ${JAVA_HOME_21_X64}/bin/java -version
+        ${JAVA_HOME_21_X64}/bin/java                                                \
+          -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+          org.duckdb.TestDuckDBJDBC
