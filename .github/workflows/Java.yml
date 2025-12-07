@@ -422,28 +422,48 @@ jobs:
 
   java-windows-amd64:
     name: Windows (amd64)
-    if: ${{ false }}
     runs-on: windows-latest
     needs: java-linux-amd64
+    env:
+      CC: 'ccache cl'
+      CXX: 'ccache cl'
+      CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - name: Cache Key
+        id: cache_key
+        shell: bash
+        run: |
+          DUCKDB_VERSION=$(python ./scripts/print_duckdb_version.py)
+          KEY="${{ runner.os }}-${{ runner.arch }}-$DUCKDB_VERSION"
+          echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
         with:
-          python-version: "3.12"
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }}
 
       - name: Build
-        shell: bash
-        run: make release
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          mkdir build
+          cd build
+          mkdir release
+          cd release
+          cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
 
       - name: List Symbols
         shell: cmd
         run: |
-          call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_amd64
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          dumpbin.exe /exports build\release\libduckdb_java.so_windows_amd64
 
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
@@ -464,11 +484,20 @@ jobs:
           path: |
             build/release/duckdb_jdbc.jar
 
+      - name: Save Cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }} 
+
   java-windows-aarch64:
     name: Windows (aarch64)
-    if: ${{ false }}
     runs-on: windows-11-arm
     needs: java-linux-amd64
+    env:
+      CC: 'ccache cl'
+      CXX: 'ccache cl'
+      CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -479,15 +508,43 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build
+      - name: Dependencies
         shell: bash
-        run: make release
+        run: |
+          choco install \
+            ccache \
+            -y --force --no-progress
+
+      - name: Cache Key
+        id: cache_key
+        shell: bash
+        run: |
+          DUCKDB_VERSION=$(python ./scripts/print_duckdb_version.py)
+          KEY="${{ runner.os }}-${{ runner.arch }}-$DUCKDB_VERSION"
+          echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }}
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
+          mkdir build
+          cd build
+          mkdir release
+          cd release
+          cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
 
       - name: List Symbols
         shell: cmd
         run: |
-          call "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
-          dumpbin.exe /exports build\release\Release\libduckdb_java.so_windows_arm64
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsarm64.bat"
+          dumpbin.exe /exports build\release\libduckdb_java.so_windows_arm64
 
       # Test runs are failing because windows_arm64 extensions are missing
       - name: Java Tests
@@ -508,6 +565,12 @@ jobs:
           name: java-windows-aarch64
           path: |
             build/release/duckdb_jdbc.jar
+
+      - name: Save Cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }} 
 
   java-osx-universal:
     name: macOS (Universal)
