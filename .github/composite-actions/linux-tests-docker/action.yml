@@ -1,0 +1,29 @@
+name: 'Linux Tests Docker'
+description: 'Linux test run in Docker'
+inputs:
+  docker_image:
+    description: 'Docker image name'
+    required: true
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Tests Docker
+      shell: bash
+      run: |
+        docker run                   \
+          -v.:/duckdb                \
+          ${{ inputs.docker_image }} \
+          bash -c "
+            set -e
+            cat /etc/os-release
+            dnf install -y \
+              java-1.8.0-openjdk
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java -version
+            cd /duckdb
+            /usr/lib/jvm/jre-1.8.0-openjdk/bin/java                                     \
+              -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+              org.duckdb.TestDuckDBJDBC
+            rm ./test1.db
+          "

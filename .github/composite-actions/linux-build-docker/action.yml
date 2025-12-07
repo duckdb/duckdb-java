@@ -1,0 +1,33 @@
+name: 'Linux Build Docker'
+description: 'Linux build in Docker'
+inputs:
+  docker_image:
+    description: 'Docker image name'
+    required: true
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      run: |
+        docker run                                   \
+        -v.:/duckdb                                  \
+        -e GEN=ninja                                 \
+        -e CC='ccache gcc'                           \
+        -e CXX='ccache g++'                          \
+        -e CCACHE_DIR=/duckdb/ccache                 \
+        -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk \
+        ${{ inputs.docker_image }}                    \
+        bash -c "
+          set -e
+          cat /etc/os-release
+          dnf install -y             \
+            ccache                   \
+            gcc-toolset-12-gcc-c++   \
+            java-1.8.0-openjdk-devel \
+            ninja-build
+          source /opt/rh/gcc-toolset-12/enable
+          make -C /duckdb release
+        "
