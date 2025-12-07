@@ -1,0 +1,29 @@
+name: 'Linux Tests Musl Docker'
+description: 'Linux test run with musl libc in Docker'
+inputs:
+  docker_image:
+    description: 'Docker image name'
+    required: true
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Tests Musl Docker
+      shell: bash
+      run: |
+        docker run                                 \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ inputs.docker_image }}               \
+          sh -c "
+            set -e
+            apk add        \
+              cmake        \
+              g++          \
+              make         \
+              openjdk8-jdk \
+              samurai
+            make -C /duckdb test || true
+          "
