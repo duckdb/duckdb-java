@@ -1,0 +1,33 @@
+name: 'Linux Build Musl Docker'
+description: 'Linux build with musl libc in Docker'
+inputs:
+  docker_image:
+    description: 'Docker image name'
+    required: true
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      run: |
+        docker run                                 \
+          -v.:/duckdb                              \
+          -e GEN=ninja                             \
+          -e CC='ccache gcc'                       \
+          -e CXX='ccache g++'                      \
+          -e CCACHE_DIR=/duckdb/ccache             \
+          -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
+          ${{ inputs.docker_image }}                  \
+          sh -c "
+            set -e
+            apk add        \
+              ccache       \
+              cmake        \
+              g++          \
+              make         \
+              openjdk8-jdk \
+              samurai
+            make -C /duckdb release
+          "
