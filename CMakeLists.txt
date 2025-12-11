@@ -99,12 +99,12 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_catalog_catalog_entry.cpp
   src/duckdb/ub_src_catalog_catalog_entry_dependency.cpp
   src/duckdb/ub_src_catalog_default.cpp
-  src/duckdb/ub_src_common_adbc.cpp
+  src/duckdb/src/common/adbc/adbc.cpp
   src/duckdb/ub_src_common_adbc_nanoarrow.cpp
   src/duckdb/ub_src_common.cpp
   src/duckdb/ub_src_common_arrow_appender.cpp
   src/duckdb/ub_src_common_arrow.cpp
-  src/duckdb/ub_src_common_crypto.cpp
+  src/duckdb/src/common/crypto/md5.cpp
   src/duckdb/ub_src_common_enums.cpp
   src/duckdb/ub_src_common_exception.cpp
   src/duckdb/ub_src_common_multi_file.cpp
@@ -117,7 +117,8 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_common_types.cpp
   src/duckdb/ub_src_common_types_column.cpp
   src/duckdb/ub_src_common_types_row.cpp
-  src/duckdb/ub_src_common_value_operations.cpp
+  src/duckdb/ub_src_common_types_variant.cpp
+  src/duckdb/src/common/value_operations/comparison_operations.cpp
   src/duckdb/src/common/vector_operations/boolean_operators.cpp
   src/duckdb/src/common/vector_operations/comparison_operators.cpp
   src/duckdb/src/common/vector_operations/generators.cpp
@@ -135,13 +136,13 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_execution_nested_loop_join.cpp
   src/duckdb/ub_src_execution_operator_aggregate.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_buffer_manager.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_encode.cpp
+  src/duckdb/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_scanner.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_sniffer.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_state_machine.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_table_function.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_util.cpp
-  src/duckdb/ub_src_execution_operator_filter.cpp
+  src/duckdb/src/execution/operator/filter/physical_filter.cpp
   src/duckdb/ub_src_execution_operator_helper.cpp
   src/duckdb/ub_src_execution_operator_join.cpp
   src/duckdb/ub_src_execution_operator_order.cpp
@@ -153,21 +154,21 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_execution_physical_plan.cpp
   src/duckdb/ub_src_execution_sample.cpp
   src/duckdb/ub_src_function_aggregate_distributive.cpp
-  src/duckdb/ub_src_function_aggregate.cpp
+  src/duckdb/src/function/aggregate/sorted_aggregate_function.cpp
   src/duckdb/ub_src_function.cpp
   src/duckdb/ub_src_function_cast.cpp
-  src/duckdb/ub_src_function_cast_union.cpp
+  src/duckdb/src/function/cast/union/from_struct.cpp
   src/duckdb/ub_src_function_cast_variant.cpp
   src/duckdb/ub_src_function_pragma.cpp
   src/duckdb/ub_src_function_scalar_compressed_materialization.cpp
   src/duckdb/ub_src_function_scalar.cpp
-  src/duckdb/ub_src_function_scalar_date.cpp
+  src/duckdb/src/function/scalar/date/strftime.cpp
   src/duckdb/ub_src_function_scalar_generic.cpp
-  src/duckdb/ub_src_function_scalar_geometry.cpp
+  src/duckdb/src/function/scalar/geometry/geometry_functions.cpp
   src/duckdb/ub_src_function_scalar_list.cpp
-  src/duckdb/ub_src_function_scalar_map.cpp
+  src/duckdb/src/function/scalar/map/map_contains.cpp
   src/duckdb/ub_src_function_scalar_operator.cpp
-  src/duckdb/ub_src_function_scalar_sequence.cpp
+  src/duckdb/src/function/scalar/sequence/nextval.cpp
   src/duckdb/ub_src_function_scalar_string.cpp
   src/duckdb/ub_src_function_scalar_string_regexp.cpp
   src/duckdb/ub_src_function_scalar_struct.cpp
@@ -176,7 +177,8 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_function_table_arrow.cpp
   src/duckdb/ub_src_function_table.cpp
   src/duckdb/ub_src_function_table_system.cpp
-  src/duckdb/ub_src_function_table_version.cpp
+  src/duckdb/src/function/table/version/pragma_version.cpp
+  src/duckdb/src/function/variant/variant_shredding.cpp
   src/duckdb/ub_src_function_window.cpp
   src/duckdb/ub_src_logging.cpp
   src/duckdb/ub_src_main.cpp
@@ -189,14 +191,14 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_install.cpp
   src/duckdb/src/main/extension/extension_load.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
-  src/duckdb/ub_src_main_http.cpp
+  src/duckdb/src/main/http/http_util.cpp
   src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
   src/duckdb/ub_src_main_settings.cpp
   src/duckdb/ub_src_optimizer.cpp
   src/duckdb/ub_src_optimizer_compressed_materialization.cpp
   src/duckdb/ub_src_optimizer_join_order.cpp
-  src/duckdb/ub_src_optimizer_matcher.cpp
+  src/duckdb/src/optimizer/matcher/expression_matcher.cpp
   src/duckdb/ub_src_optimizer_pullup.cpp
   src/duckdb/ub_src_optimizer_pushdown.cpp
   src/duckdb/ub_src_optimizer_rule.cpp
@@ -210,7 +212,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_parser_query_node.cpp
   src/duckdb/ub_src_parser_statement.cpp
   src/duckdb/ub_src_parser_tableref.cpp
-  src/duckdb/ub_src_parser_transform_constraint.cpp
+  src/duckdb/src/parser/transform/constraint/transform_constraint.cpp
   src/duckdb/ub_src_parser_transform_expression.cpp
   src/duckdb/ub_src_parser_transform_helpers.cpp
   src/duckdb/ub_src_parser_transform_statement.cpp
@@ -238,6 +240,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_storage_serialization.cpp
   src/duckdb/ub_src_storage_statistics.cpp
   src/duckdb/ub_src_storage_table.cpp
+  src/duckdb/ub_src_storage_table_variant.cpp
   src/duckdb/ub_src_transaction.cpp
   src/duckdb/src/verification/copied_statement_verifier.cpp
   src/duckdb/src/verification/deserialized_statement_verifier.cpp
@@ -356,12 +359,12 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
   src/duckdb/ub_extension_core_functions_scalar_string.cpp
-  src/duckdb/ub_extension_core_functions_scalar_bit.cpp
-  src/duckdb/ub_extension_core_functions_scalar_operators.cpp
-  src/duckdb/ub_extension_core_functions_scalar_enum.cpp
+  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
+  src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
+  src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
   src/duckdb/ub_extension_core_functions_scalar_map.cpp
   src/duckdb/ub_extension_core_functions_scalar_random.cpp
-  src/duckdb/ub_extension_core_functions_scalar_math.cpp
+  src/duckdb/extension/core_functions/scalar/math/numeric.cpp
   src/duckdb/ub_extension_core_functions_scalar_union.cpp
   src/duckdb/ub_extension_core_functions_scalar_generic.cpp
   src/duckdb/ub_extension_core_functions_scalar_struct.cpp
@@ -383,6 +386,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/column_reader.cpp
   src/duckdb/extension/parquet/parquet_field_id.cpp
   src/duckdb/extension/parquet/parquet_extension.cpp
+  src/duckdb/extension/parquet/parquet_column_schema.cpp
   src/duckdb/extension/parquet/column_writer.cpp
   src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
   src/duckdb/extension/parquet/serialize_parquet.cpp
@@ -456,7 +460,8 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/json/json_common.cpp
   src/duckdb/extension/json/json_deserializer.cpp
   src/duckdb/extension/json/json_serializer.cpp
-  src/duckdb/ub_extension_json_json_functions.cpp)
+  src/duckdb/ub_extension_json_json_functions.cpp
+  src/duckdb/generated_extension_loader_package_build.cpp)
 
 set(JEMALLOC_SRC_FILES 
   src/duckdb/extension/jemalloc/jemalloc_extension.cpp

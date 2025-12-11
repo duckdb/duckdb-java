@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/enums/index_removal_type.hpp"
 
 namespace duckdb {
 
@@ -101,7 +102,8 @@ public:
 	                  optional_ptr<StorageCommitState> commit_state);
 	bool IsPersistent() const;
 
-	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
@@ -130,6 +132,7 @@ public:
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
+	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	unique_ptr<BlockingSample> GetSample();
