@@ -7,6 +7,7 @@ namespace duckdb {
 RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &info)
     : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, LogicalType(LogicalTypeId::BIGINT),
                  ColumnDataType::MAIN_TABLE, nullptr) {
+	stats->statistics.SetHasNoNullFast();
 }
 
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -156,8 +157,8 @@ void RowIdColumnData::UpdateColumn(TransactionData transaction, DataTable &data_
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 
-void RowIdColumnData::CommitDropColumn() {
-	throw InternalException("RowIdColumnData cannot be dropped");
+void RowIdColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	throw InternalException("VisitBlockIds not supported for rowid");
 }
 
 unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const RowGroup &row_group,

@@ -268,9 +268,9 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 
-void ArrayColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
-	child_column->CommitDropColumn();
+void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
+	child_column->VisitBlockIds(visitor);
 }
 
 void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
@@ -319,12 +319,13 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
+		stats.Merge(*validity_state->GetStatistics());
 		ArrayStats::SetChildStats(stats, child_state->GetStatistics());
 		return stats.ToUnique();
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::ARRAY);
+		PersistentColumnData data(original_column.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		data.child_columns.push_back(child_state->ToPersistentData());
 		return data;
@@ -354,7 +355,7 @@ bool ArrayColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData ArrayColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity->Serialize());
 	persistent_data.child_columns.push_back(child_column->Serialize());
 	return persistent_data;
