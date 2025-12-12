@@ -50,11 +50,15 @@
 
 #include "src/main/profiling_info.cpp"
 
+#include "src/main/profiling_utils.cpp"
+
 #include "src/main/relation.cpp"
 
 #include "src/main/query_profiler.cpp"
 
 #include "src/main/query_result.cpp"
+
+#include "src/main/result_set_manager.cpp"
 
 #include "src/main/stream_query_result.cpp"
 

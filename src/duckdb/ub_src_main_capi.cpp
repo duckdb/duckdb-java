@@ -6,7 +6,13 @@
 
 #include "src/main/capi/cast_function-c.cpp"
 
+#include "src/main/capi/catalog-c.cpp"
+
 #include "src/main/capi/config-c.cpp"
+
+#include "src/main/capi/config_options-c.cpp"
+
+#include "src/main/capi/copy_function-c.cpp"
 
 #include "src/main/capi/data_chunk-c.cpp"
 
@@ -25,6 +31,8 @@
 #include "src/main/capi/helper-c.cpp"
 
 #include "src/main/capi/hugeint-c.cpp"
+
+#include "src/main/capi/logging-c.cpp"
 
 #include "src/main/capi/logical_types-c.cpp"
 

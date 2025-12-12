@@ -110,18 +110,25 @@ public:
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
+	bool RequiresTransactionality() const override;
+	unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
+	                                       IndexConstraintType constraint_type) const override;
+
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
 	                        unsafe_vector<ARTKey> &row_id_keys);
 
-	//! Verifies the nodes and optionally returns a string of the ART.
-	string VerifyAndToString(IndexLock &l, const bool only_verify) override;
+	//! Verifies the nodes.
+	void Verify(IndexLock &l) override;
 	//! Verifies that the node allocations match the node counts.
 	void VerifyAllocations(IndexLock &l) override;
 	//! Verifies the index buffers.
 	void VerifyBuffers(IndexLock &l) override;
+
+	//! Returns string representation of the ART.
+	string ToString(IndexLock &l, bool display_ascii = false) override;
 
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
@@ -151,7 +158,8 @@ private:
 	void WritePartialBlocks(QueryContext context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
-	string VerifyAndToStringInternal(const bool only_verify);
+	string ToStringInternal(bool display_ascii);
+	void VerifyInternal();
 	void VerifyAllocationsInternal();
 };
 

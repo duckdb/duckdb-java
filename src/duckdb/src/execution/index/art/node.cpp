@@ -391,44 +391,29 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 // Verification
 //===--------------------------------------------------------------------===//
 
-string Node::VerifyAndToString(ART &art, const bool only_verify) const {
+void Node::Verify(ART &art) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
 	switch (type) {
 	case NType::LEAF_INLINED:
-		return only_verify ? "" : "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]";
+		return;
 	case NType::LEAF:
-		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
+		Leaf::DeprecatedVerify(art, *this);
+		return;
 	case NType::PREFIX: {
-		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
-		if (GetGateStatus() == GateStatus::GATE_SET) {
-			str = "Gate [ " + str + " ]";
-		}
-		return only_verify ? "" : "\n" + str;
+		Prefix::Verify(art, *this);
+		return;
 	}
 	default:
 		break;
 	}
 
-	string str = "Node" + to_string(GetCapacity(type)) + ": [ ";
-	uint8_t byte = 0;
-
-	if (IsLeafNode()) {
-		str = "Leaf " + str;
-		auto has_byte = GetNextByte(art, byte);
-		while (has_byte) {
-			str += to_string(byte) + "-";
-			if (byte == NumericLimits<uint8_t>::Maximum()) {
-				break;
-			}
-			byte++;
-			has_byte = GetNextByte(art, byte);
-		}
-	} else {
+	if (!IsLeafNode()) {
+		uint8_t byte = 0;
 		auto child = GetNextChild(art, byte);
 		while (child) {
-			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			child->Verify(art);
 			if (byte == NumericLimits<uint8_t>::Maximum()) {
 				break;
 			}
@@ -436,11 +421,6 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 			child = GetNextChild(art, byte);
 		}
 	}
-
-	if (GetGateStatus() == GateStatus::GATE_SET) {
-		str = "Gate [ " + str + " ]";
-	}
-	return only_verify ? "" : "\n" + str + "]";
 }
 
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
@@ -480,6 +460,120 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 
 	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art, handler, *this);
 	scanner.Scan(handler);
+}
+
+//===--------------------------------------------------------------------===//
+// Printing
+//===--------------------------------------------------------------------===//
+
+string Node::ToString(ART &art, const ToStringOptions &options) const {
+	auto indent = [](string &str, const idx_t n) {
+		str.append(n, ' ');
+	};
+	// if inside gate, print byte values not ascii.
+	auto format_byte = [&](uint8_t byte) {
+		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
+			return string(1, static_cast<char>(byte));
+		}
+		return to_string(byte);
+	};
+	auto type = GetType();
+	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
+	bool propagate_gate = options.inside_gate || is_gate;
+
+	bool print_full_tree = propagate_gate || !options.key_path || options.depth_remaining == 0;
+
+	switch (type) {
+	case NType::LEAF_INLINED: {
+		string str = "";
+		indent(str, options.indent_level);
+		return str + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
+	}
+	case NType::LEAF: {
+		ToStringOptions leaf_options = options;
+		return Leaf::DeprecatedToString(art, *this, leaf_options);
+	}
+	case NType::PREFIX: {
+		ToStringOptions prefix_options = options;
+		prefix_options.inside_gate = propagate_gate;
+		string str = Prefix::ToString(art, *this, prefix_options);
+		if (is_gate) {
+			string s = "";
+			indent(s, options.indent_level);
+			s += "Gate\n";
+			return s + str;
+		}
+		string s = "";
+		return s + str;
+	}
+	default:
+		break;
+	}
+	string str = "";
+	indent(str, options.indent_level);
+	str = str + "Node" + to_string(GetCapacity(type)) += "\n";
+	uint8_t byte = 0;
+
+	if (IsLeafNode()) {
+		indent(str, options.indent_level);
+		str += "Leaf |";
+		auto has_byte = GetNextByte(art, byte);
+		while (has_byte) {
+			str += format_byte(byte) + "|";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			has_byte = GetNextByte(art, byte);
+		}
+		str += "\n";
+	} else {
+		uint8_t expected_byte = 0;
+		bool has_expected_byte = false;
+		if (options.key_path && !print_full_tree && options.key_depth < options.key_path->len) {
+			expected_byte = (*options.key_path)[options.key_depth];
+			has_expected_byte = true;
+		}
+
+		uint8_t byte = 0;
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			// Determine if this child is on the path to the key_path
+			// If we have an expected byte, only traverse the matching child
+			// If we don't have an expected byte, we're printing the full tree, so all children are on_path.
+			bool on_path = !has_expected_byte || (has_expected_byte && byte == expected_byte);
+			if (on_path) {
+				ToStringOptions child_options = options;
+				child_options.indent_level = options.indent_level + options.indent_amount;
+				child_options.inside_gate = propagate_gate;
+				child_options.key_depth = has_expected_byte ? options.key_depth + 1 : options.key_depth;
+				child_options.depth_remaining = (options.depth_remaining > 0) ? options.depth_remaining - 1 : 0;
+				string c = child->ToString(art, child_options);
+				indent(str, options.indent_level);
+				str = str + format_byte(byte) + ",\n" + c;
+			} else {
+				// If we have an expected byte, but the current byte is not the expected byte.
+				// In this case we check if we are only printing the structure, in which case we skip printing the
+				// child byte.
+				if (!options.structure_only) {
+					indent(str, options.indent_level);
+					str = str + format_byte(byte) + ", [not printed]\n";
+				}
+			}
+			byte++;
+			child = GetNextChild(art, byte);
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+		}
+	}
+
+	if (is_gate) {
+		string s = "";
+		indent(s, options.indent_level + options.indent_amount);
+		str = "Gate\n" + s + str;
+	}
+	return str;
 }
 
 } // namespace duckdb

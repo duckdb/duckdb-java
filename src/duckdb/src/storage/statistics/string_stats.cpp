@@ -170,6 +170,14 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	}
 }
 
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
+}
+
 void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
@@ -193,6 +201,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
+	D_ASSERT(stats.CanHaveNoNull());
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
 		D_ASSERT(!constant_value.IsNull());

@@ -24,6 +24,8 @@
 
 #include "src/storage/table/row_group_collection.cpp"
 
+#include "src/storage/table/row_group_reorderer.cpp"
+
 #include "src/storage/table/row_version_manager.cpp"
 
 #include "src/storage/table/scan_state.cpp"
@@ -35,4 +37,6 @@
 #include "src/storage/table/table_statistics.cpp"
 
 #include "src/storage/table/validity_column_data.cpp"
+
+#include "src/storage/table/variant_column_data.cpp"
 
