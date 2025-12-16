@@ -574,7 +574,7 @@ jobs:
 
   java-osx-universal:
     name: macOS (Universal)
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: java-linux-amd64
     env:
       GEN: ninja
