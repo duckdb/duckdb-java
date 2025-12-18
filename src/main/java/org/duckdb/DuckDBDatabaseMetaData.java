@@ -950,21 +950,158 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         return ps.executeQuery();
     }
 
+    private void appendAndQual(StringBuilder sb, boolean needed) {
+        if (needed) {
+            sb.append("  AND ");
+        } else {
+            sb.append(" ");
+        }
+    }
+
     @Override
     public ResultSet getImportedKeys(String catalog, String schema, String table) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getImportedKeys");
+        return getCrossReference(null, null, null, catalog, schema, table);
     }
 
     @Override
     public ResultSet getExportedKeys(String catalog, String schema, String table) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getExportedKeys");
+        return getCrossReference(catalog, schema, table, null, null, null);
     }
 
     @Override
     public ResultSet getCrossReference(String parentCatalog, String parentSchema, String parentTable,
                                        String foreignCatalog, String foreignSchema, String foreignTable)
         throws SQLException {
-        throw new SQLFeatureNotSupportedException("getCrossReference");
+        StringBuilder sb = new StringBuilder(QUERY_SB_DEFAULT_CAPACITY);
+        sb.append("SELECT").append(lineSeparator());
+        sb.append("  pk_tc.table_catalog AS PKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  pk_tc.table_schema AS PKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  pk_tc.table_name AS PKTABLE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  pk_kcu.column_name AS PKCOLUMN_NAME").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  fk_tc.table_catalog AS FKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  fk_tc.table_schema AS FKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  fk_tc.table_name AS FKTABLE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  fk_kcu.column_name AS FKCOLUMN_NAME").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  fk_kcu.ordinal_position AS KEY_SEQ").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("  CASE rc.update_rule ").append(lineSeparator());
+        sb.append("    WHEN 'CASCADE' THEN 0").append(lineSeparator());
+        sb.append("    WHEN 'RESTRICT' THEN 1").append(lineSeparator());
+        sb.append("    WHEN 'SET NULL' THEN 2").append(lineSeparator());
+        sb.append("    WHEN 'SET DEFAULT' THEN 4").append(lineSeparator());
+        sb.append("    ELSE 3").append(lineSeparator());
+        sb.append("  END AS UPDATE_RULE,").append(lineSeparator());
+        sb.append("  CASE rc.delete_rule").append(lineSeparator());
+        sb.append("    WHEN 'CASCADE' THEN 0").append(lineSeparator());
+        sb.append("    WHEN 'RESTRICT' THEN 1").append(lineSeparator());
+        sb.append("    WHEN 'SET NULL' THEN 2").append(lineSeparator());
+        sb.append("    WHEN 'SET DEFAULT' THEN 4").append(lineSeparator());
+        sb.append("    ELSE 3").append(lineSeparator());
+        sb.append("  END AS DELETE_RULE,").append(lineSeparator());
+        sb.append("  rc.constraint_name AS FK_NAME,").append(lineSeparator());
+        sb.append("  rc.unique_constraint_name AS PK_NAME,").append(lineSeparator());
+        sb.append("  CASE ").append(lineSeparator());
+        sb.append("    WHEN fk_tc.is_deferrable = 'YES' AND fk_tc.initially_deferred = 'YES' THEN 5")
+            .append(lineSeparator());
+        sb.append("    WHEN fk_tc.is_deferrable = 'YES' AND fk_tc.initially_deferred = 'NO' THEN 6")
+            .append(lineSeparator());
+        sb.append("    ELSE 7").append(lineSeparator());
+        sb.append("  END AS DEFERRABILITY").append(lineSeparator());
+        sb.append("FROM information_schema.referential_constraints rc").append(lineSeparator());
+        sb.append("  JOIN information_schema.table_constraints fk_tc").append(lineSeparator());
+        sb.append("    ON fk_tc.constraint_catalog = rc.constraint_catalog").append(lineSeparator());
+        sb.append("    AND fk_tc.constraint_schema = rc.constraint_schema").append(lineSeparator());
+        sb.append("    AND fk_tc.constraint_name = rc.constraint_name").append(lineSeparator());
+        sb.append("  JOIN information_schema.key_column_usage fk_kcu").append(lineSeparator());
+        sb.append("    ON fk_kcu.constraint_catalog = rc.constraint_catalog").append(lineSeparator());
+        sb.append("    AND fk_kcu.constraint_schema = rc.constraint_schema").append(lineSeparator());
+        sb.append("    AND fk_kcu.constraint_name = rc.constraint_name").append(lineSeparator());
+        sb.append("  JOIN information_schema.table_constraints pk_tc").append(lineSeparator());
+        sb.append("    ON pk_tc.constraint_catalog = rc.unique_constraint_catalog").append(lineSeparator());
+        sb.append("    AND pk_tc.constraint_schema = rc.unique_constraint_schema").append(lineSeparator());
+        sb.append("    AND pk_tc.constraint_name = rc.unique_constraint_name").append(lineSeparator());
+        sb.append("  JOIN information_schema.key_column_usage pk_kcu").append(lineSeparator());
+        sb.append("    ON pk_kcu.constraint_catalog = pk_tc.constraint_catalog").append(lineSeparator());
+        sb.append("    AND pk_kcu.constraint_schema = pk_tc.constraint_schema").append(lineSeparator());
+        sb.append("    AND pk_kcu.constraint_name = pk_tc.constraint_name").append(lineSeparator());
+        sb.append("    AND pk_kcu.ordinal_position = fk_kcu.ordinal_position").append(lineSeparator());
+        sb.append("    -- AND pk_kcu.ordinal_position = fk_kcu.position_in_unique_constraint").append(lineSeparator());
+        if (null != parentCatalog || null != parentSchema || null != parentTable || null != foreignCatalog ||
+            null != foreignSchema || null != foreignTable) {
+            sb.append("WHERE");
+        }
+        boolean andQualNeeded = false;
+        if (null != parentCatalog) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("pk_tc.table_catalog = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        if (null != parentSchema) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("pk_tc.table_schema = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        if (null != parentTable) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("pk_tc.table_name = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        if (null != foreignCatalog) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("fk_tc.table_catalog = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        if (null != foreignSchema) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("fk_tc.table_schema = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        if (null != foreignTable) {
+            appendAndQual(sb, andQualNeeded);
+            sb.append("fk_tc.table_name = ?").append(lineSeparator());
+            andQualNeeded = true;
+        }
+        sb.append("ORDER BY ").append(lineSeparator());
+        if (null != foreignTable) { // imported keys
+            sb.append("  PKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  PKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  PKTABLE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  KEY_SEQ").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FKTABLE_NAME");
+        } else { // exported keys or cross-reference
+            sb.append("  FKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FKTABLE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  KEY_SEQ").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  PKTABLE_CAT").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  PKTABLE_SCHEM").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  PKTABLE_NAME");
+        }
+
+        PreparedStatement ps = conn.prepareStatement(sb.toString());
+        int paramIdx = 1;
+        if (null != parentCatalog) {
+            ps.setString(paramIdx++, parentCatalog);
+        }
+        if (null != parentSchema) {
+            ps.setString(paramIdx++, parentSchema);
+        }
+        if (null != parentTable) {
+            ps.setString(paramIdx++, parentTable);
+        }
+        if (null != foreignCatalog) {
+            ps.setString(paramIdx++, foreignCatalog);
+        }
+        if (null != foreignSchema) {
+            ps.setString(paramIdx++, foreignSchema);
+        }
+        if (null != foreignTable) {
+            ps.setString(paramIdx++, foreignTable);
+        }
+
+        ps.closeOnCompletion();
+        return ps.executeQuery();
     }
 
     @Override
