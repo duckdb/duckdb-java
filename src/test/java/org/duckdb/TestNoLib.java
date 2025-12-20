@@ -24,7 +24,7 @@ public class TestNoLib {
                                                "-Djava.library.path=" + currentJarDir.toAbsolutePath(), "-cp",
                                                dir + File.separator + "duckdb_jdbc_tests.jar" + File.pathSeparator +
                                                    dir + File.separator + "duckdb_jdbc_nolib.jar",
-                                               "org.duckdb.TestDuckDBJDBC", "test_spatial_POINT_2D")
+                                               "org.duckdb.TestDuckDBJDBC", "test_extension_excel")
                                 .inheritIO();
         int code = pb.start().waitFor();
         if (0 != code) {
