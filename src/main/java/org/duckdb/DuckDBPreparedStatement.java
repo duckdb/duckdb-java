@@ -38,6 +38,7 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -187,8 +188,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
             if (queryTimeoutSeconds > 0) {
                 cleanupCancelQueryTask();
-                cancelQueryFuture =
-                    DuckDBDriver.scheduler.schedule(new CancelQueryTask(), queryTimeoutSeconds, SECONDS);
+                try {
+                    if (!DuckDBDriver.scheduler.isShutdown()) {
+                        cancelQueryFuture =
+                            DuckDBDriver.scheduler.schedule(new CancelQueryTask(), queryTimeoutSeconds, SECONDS);
+                    }
+                } catch (RejectedExecutionException e) {
+                    // no-op, scheduler was shut down concurrently
+                }
             }
 
             resultRef = DuckDBNative.duckdb_jdbc_execute(stmtRef, params);

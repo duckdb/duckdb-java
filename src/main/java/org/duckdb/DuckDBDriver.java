@@ -54,7 +54,14 @@ public class DuckDBDriver implements java.sql.Driver {
     static {
         try {
             DriverManager.registerDriver(new DuckDBDriver());
-            ThreadFactory tf = r -> new Thread(r, "duckdb-query-cancel-scheduler-thread");
+            ThreadFactory tf = new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread th = new Thread(r, "duckdb-query-cancel-scheduler-thread");
+                    th.setDaemon(true);
+                    return th;
+                }
+            };
             scheduler = new ScheduledThreadPoolExecutor(1, tf);
             scheduler.setRemoveOnCancelPolicy(true);
         } catch (SQLException e) {
@@ -240,6 +247,14 @@ public class DuckDBDriver implements java.sql.Driver {
         } finally {
             pinnedDbRefsLock.unlock();
         }
+    }
+
+    public static boolean shutdownQueryCancelScheduler() {
+        if (scheduler.isShutdown()) {
+            return false;
+        }
+        scheduler.shutdown();
+        return true;
     }
 
     private static DriverPropertyInfo createDriverPropInfo(String name, String value, String description) {

@@ -322,4 +322,22 @@ public class TestClosure {
             assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
         }
     }
+
+    public static void manual_test_set_query_timeout_wo_scheduler() throws Exception {
+        assertTrue(DuckDBDriver.shutdownQueryCancelScheduler());
+        assertFalse(DuckDBDriver.shutdownQueryCancelScheduler());
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(1);
+            stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            long start = System.currentTimeMillis();
+            stmt.executeQuery(
+                "WITH RECURSIVE cte AS ("
+                +
+                "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
+                + "SELECT avg(f) FROM cte");
+            long elapsed = System.currentTimeMillis() - start;
+            assertTrue(elapsed > 1500);
+        }
+    }
 }
