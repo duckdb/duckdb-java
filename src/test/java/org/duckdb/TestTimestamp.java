@@ -544,6 +544,27 @@ public class TestTimestamp {
         }
     }
 
+    public static void test_time_ns() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
+            s.executeUpdate("create table t (i time_ns)");
+            try (ResultSet rs = conn.getMetaData().getColumns(null, "%", "t", "i");) {
+                rs.next();
+
+                assertEquals(rs.getString("TYPE_NAME"), "TIME_NS");
+                assertEquals(rs.getInt("DATA_TYPE"), Types.OTHER);
+            }
+
+            s.execute("INSERT INTO t VALUES ('01:01:00'), ('01:02:03.456789012')");
+            try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1, LocalTime.class), LocalTime.of(1, 1));
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1, LocalTime.class), LocalTime.of(1, 2, 3, 456789012));
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_bug532_timestamp() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
 

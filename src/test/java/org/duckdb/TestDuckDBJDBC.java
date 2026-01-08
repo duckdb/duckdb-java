@@ -1501,6 +1501,7 @@ public class TestDuckDBJDBC {
                 "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
                 null));
         correct_answer_map.put("time", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
+        correct_answer_map.put("time_ns", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
         correct_answer_map.put("float", asList(-3.4028234663852886e+38f, 3.4028234663852886e+38f, null));
         correct_answer_map.put("double", asList(-1.7976931348623157e+308d, 1.7976931348623157e+308d, null));
         correct_answer_map.put("dec_4_1", asList(new BigDecimal("-999.9"), (new BigDecimal("999.9")), null));
@@ -1556,16 +1557,12 @@ public class TestDuckDBJDBC {
                                asList(asList(int_array, null, int_array), asList(int_list, int_array, int_list), null));
         correct_answer_map.put("fixed_nested_varchar_array", asList(asList(varchar_array, null, varchar_array),
                                                                     asList(def, varchar_array, def), null));
-
         correct_answer_map.put("fixed_struct_array",
                                asList(asList(abnull, ducks, abnull), asList(ducks, abnull, ducks), null));
-
         correct_answer_map.put("struct_of_fixed_array",
                                asList(mapOf("a", int_array, "b", varchar_array), mapOf("a", int_list, "b", def), null));
-
         correct_answer_map.put("fixed_array_of_int_list", asList(asList(emptyList(), numbers, emptyList()),
                                                                  asList(numbers, emptyList(), numbers), null));
-
         correct_answer_map.put("list_of_fixed_int_array", asList(asList(int_array, int_list, int_array),
                                                                  asList(int_list, int_array, int_list), null));
         TimeZone.setDefault(defaultTimeZone);
@@ -1578,8 +1575,10 @@ public class TestDuckDBJDBC {
         try {
             Logger logger = Logger.getAnonymousLogger();
             String sql =
-                "select * EXCLUDE(time, time_tz)"
+                "select * EXCLUDE(time, time_ns, time_tz)"
                 + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                +
+                "\n    , CASE WHEN time_ns = '24:00:00'::TIME_NS THEN '23:59:59.999999'::TIME_NS ELSE time_ns END AS time_ns"
                 +
                 "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
                 + "\nfrom test_all_types()";
