@@ -27,10 +27,7 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -411,6 +408,10 @@ public class DuckDBResultSet implements ResultSet {
         return getTime(columnIndex, null);
     }
 
+    public LocalTime getLocalTime(int columnIndex) throws SQLException {
+        return currentChunk[columnIndex - 1].getLocalTime(chunkIdx - 1);
+    }
+
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
         if (checkAndNull(columnIndex)) {
             return null;
@@ -587,6 +588,10 @@ public class DuckDBResultSet implements ResultSet {
 
     public Time getTime(String columnLabel) throws SQLException {
         return getTime(findColumn(columnLabel));
+    }
+
+    public LocalTime getLocalTime(String columnLabel) throws SQLException {
+        return getLocalTime(findColumn(columnLabel));
     }
 
     public Timestamp getTimestamp(String columnLabel) throws SQLException {
@@ -1332,10 +1337,19 @@ public class DuckDBResultSet implements ResultSet {
                 throw new SQLException("Can't convert value to Date, Java type: " + type + ", SQL type: " + sqlType);
             }
         } else if (type == Time.class) {
-            if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
+            if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_NS ||
+                sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
                 return type.cast(getTime(columnIndex));
             } else {
                 throw new SQLException("Can't convert value to Time, Java type: " + type + ", SQL type: " + sqlType);
+            }
+        } else if (type == LocalTime.class) {
+            if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_NS ||
+                sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
+                return type.cast(getLocalTime(columnIndex));
+            } else {
+                throw new SQLException("Can't convert value to LocalTime, Java type: " + type +
+                                       ", SQL type: " + sqlType);
             }
         } else if (type == Timestamp.class) {
             if (isTimestamp(sqlType)) {

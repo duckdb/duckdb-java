@@ -18,6 +18,7 @@ public enum DuckDBColumnType {
     VARCHAR,
     BLOB,
     TIME,
+    TIME_NS,
     DATE,
     TIMESTAMP,
     TIMESTAMP_MS,

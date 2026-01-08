@@ -149,6 +149,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case VARCHAR:
             return Types.VARCHAR;
         case TIME:
+        case TIME_NS:
             return Types.TIME;
         case DATE:
             return Types.DATE;
@@ -212,6 +213,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case DECIMAL:
             return BigDecimal.class.getName();
         case TIME:
+        case TIME_NS:
             return LocalTime.class.getName();
         case TIME_WITH_TIME_ZONE:
             return OffsetTime.class.getName();
@@ -341,6 +343,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case DOUBLE:
             return 17;
         case TIME:
+        case TIME_NS:
             return 15;
         case DATE:
             return 13;

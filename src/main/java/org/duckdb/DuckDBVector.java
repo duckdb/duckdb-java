@@ -93,6 +93,7 @@ class DuckDBVector {
         case DECIMAL:
             return getBigDecimal(idx);
         case TIME:
+        case TIME_NS:
             return getLocalTime(idx);
         case TIME_WITH_TIME_ZONE:
             return getOffsetTime(idx);
@@ -134,6 +135,10 @@ class DuckDBVector {
         case TIME: {
             long microseconds = getLongFromConstlen(idx);
             long nanoseconds = TimeUnit.MICROSECONDS.toNanos(microseconds);
+            return LocalTime.ofNanoOfDay(nanoseconds);
+        }
+        case TIME_NS: {
+            long nanoseconds = getLongFromConstlen(idx);
             return LocalTime.ofNanoOfDay(nanoseconds);
         }
         case TIMESTAMP:
@@ -360,7 +365,8 @@ class DuckDBVector {
         }
 
         switch (duckdb_type) {
-        case TIME: {
+        case TIME:
+        case TIME_NS: {
             LocalTime lt = getLocalTime(idx);
             return lt.atOffset(ZoneOffset.UTC);
         }
@@ -395,7 +401,8 @@ class DuckDBVector {
         }
 
         switch (duckdb_type) {
-        case TIME: {
+        case TIME:
+        case TIME_NS: {
             LocalTime lt = getLocalTime(idx);
             return Time.valueOf(lt);
         }
