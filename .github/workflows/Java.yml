@@ -311,7 +311,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: java-linux-amd64
     env:
-      ALPINE_IMAGE: alpine:3.21
+      ALPINE_IMAGE: alpine:3.22
     steps:
       - uses: actions/checkout@v4
         with:
@@ -368,7 +368,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: java-linux-amd64
     env:
-      ALPINE_IMAGE: alpine:3.21
+      ALPINE_IMAGE: alpine:3.22
     steps:
       - uses: actions/checkout@v4
         with:
