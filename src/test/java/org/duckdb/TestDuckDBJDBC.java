@@ -917,11 +917,11 @@ public class TestDuckDBJDBC {
 
     public static void test_valid_but_local_config_throws_exception() throws Exception {
         Properties info = new Properties();
-        info.put("errors_as_json", "true");
+        info.put("custom_profiling_settings", "{}");
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Could not set option \"errors_as_json\" as a global option"));
+        assertTrue(message.contains("Could not set option \"custom_profiling_settings\" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {
