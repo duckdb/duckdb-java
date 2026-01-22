@@ -110,12 +110,6 @@ public class DuckDBResultSet implements ResultSet {
         }
     }
 
-    @Override
-    @SuppressWarnings("deprecation")
-    protected void finalize() throws Throwable {
-        close();
-    }
-
     public boolean isClosed() throws SQLException {
         return resultRef == null;
     }
