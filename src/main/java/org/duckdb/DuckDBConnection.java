@@ -122,12 +122,6 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
-    @Override
-    @SuppressWarnings("deprecation")
-    protected void finalize() throws Throwable {
-        close();
-    }
-
     public void close() throws SQLException {
         if (isClosed()) {
             return;

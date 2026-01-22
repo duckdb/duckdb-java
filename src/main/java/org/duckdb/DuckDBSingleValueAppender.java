@@ -93,11 +93,6 @@ public class DuckDBSingleValueAppender implements AutoCloseable {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    protected void finalize() throws Throwable {
-        close();
-    }
-
     public synchronized void close() throws SQLException {
         if (appender_ref != null) {
             DuckDBNative.duckdb_jdbc_appender_close(appender_ref);
