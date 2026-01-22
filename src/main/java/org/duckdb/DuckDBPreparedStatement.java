@@ -412,12 +412,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
-    protected void finalize() throws Throwable {
-        close();
-    }
-
-    @Override
     public int getMaxFieldSize() throws SQLException {
         checkOpen();
         return 0;
