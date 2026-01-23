@@ -632,11 +632,24 @@ class DuckDBVector {
         return duckdb_type == columnType;
     }
 
+    private LocalDateTime getLocalDateTimeFromDate(int idx) throws SQLException {
+        LocalDate ld = getLocalDate(idx);
+        if (ld == null) {
+            return null;
+        }
+        return ld.atStartOfDay();
+    }
+
     Timestamp getTimestamp(int idx, Calendar calNullable) throws SQLException {
         if (check_and_null(idx)) {
             return null;
         }
-        LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, calNullable);
+        final LocalDateTime ldt;
+        if (duckdb_type == DuckDBColumnType.DATE) {
+            ldt = getLocalDateTimeFromDate(idx);
+        } else {
+            ldt = getLocalDateTimeFromTimestamp(idx, calNullable);
+        }
         if (ldt != null) {
             return Timestamp.valueOf(ldt);
         }
@@ -648,7 +661,12 @@ class DuckDBVector {
     }
 
     LocalDateTime getLocalDateTime(int idx) throws SQLException {
-        LocalDateTime ldt = getLocalDateTimeFromTimestamp(idx, null);
+        final LocalDateTime ldt;
+        if (duckdb_type == DuckDBColumnType.DATE) {
+            ldt = getLocalDateTimeFromDate(idx);
+        } else {
+            ldt = getLocalDateTimeFromTimestamp(idx, null);
+        }
         if (ldt != null) {
             return ldt;
         }
