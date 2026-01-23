@@ -581,4 +581,36 @@ public class TestTimestamp {
             TimeZone.setDefault(defaultTimeZone);
         }
     }
+
+    public static void test_timestamp_read_ts_from_date() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT '2020-01-02'::DATE")) {
+            assertTrue(rs.next());
+            assertEquals(rs.getTimestamp(1).toLocalDateTime().toLocalDate(), LocalDate.of(2020, 1, 2));
+            assertFalse(rs.next());
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT NULL::DATE")) {
+            assertTrue(rs.next());
+            assertNull(rs.getTimestamp(1));
+            assertTrue(rs.wasNull());
+            assertFalse(rs.next());
+        }
+    }
+
+    public static void test_timestamp_read_ldt_from_date() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT '2020-01-02'::DATE")) {
+            assertTrue(rs.next());
+            assertEquals(rs.getObject(1, LocalDateTime.class).toLocalDate(), LocalDate.of(2020, 1, 2));
+            assertFalse(rs.next());
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT NULL::DATE")) {
+            assertTrue(rs.next());
+            assertNull(rs.getObject(1, LocalDateTime.class));
+            assertTrue(rs.wasNull());
+            assertFalse(rs.next());
+        }
+    }
 }

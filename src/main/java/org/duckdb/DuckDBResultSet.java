@@ -1356,7 +1356,7 @@ public class DuckDBResultSet implements ResultSet {
                                        ", SQL type: " + sqlType);
             }
         } else if (type == LocalDateTime.class) {
-            if (isTimestamp(sqlType)) {
+            if (isTimestamp(sqlType) || sqlType == DuckDBColumnType.DATE) {
                 return type.cast(getLocalDateTime(columnIndex));
             } else {
                 throw new SQLException("Can't convert value to LocalDateTime, Java type: " + type +
