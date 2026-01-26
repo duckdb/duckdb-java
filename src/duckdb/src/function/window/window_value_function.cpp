@@ -1012,9 +1012,6 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 			if (prev_valid == DConstants::INVALID_INDEX) {
 				//	Skip to the next partition
 				i += partition_end[i] - row_idx - 1;
-				if (i >= count) {
-					return;
-				}
 				row_idx = partition_end[i] - 1;
 				continue;
 			}
@@ -1124,9 +1121,6 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		if (prev_valid == DConstants::INVALID_INDEX) {
 			//	Skip to the next partition
 			i += partition_end[i] - row_idx - 1;
-			if (i >= count) {
-				break;
-			}
 			row_idx = partition_end[i] - 1;
 			continue;
 		}
