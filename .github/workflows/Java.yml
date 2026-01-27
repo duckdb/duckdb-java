@@ -723,6 +723,82 @@ jobs:
           path: |
             jdbc-artifacts
 
+  # Publish SNAPSHOT builds to Maven Central Snapshots repository on main branch
+  # SNAPSHOTs don't require GPG signatures or validation
+  # See: https://central.sonatype.org/publish/publish-portal-snapshots/
+  maven-snapshot-deploy:
+    if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    name: Maven SNAPSHOT Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - java-linux-amd64
+      - java-linux-amd64-tck
+      - java-linux-amd64-spark
+      - java-linux-aarch64
+      - java-linux-amd64-musl
+      - java-linux-aarch64-musl
+      - java-windows-amd64
+      - java-windows-aarch64
+      - java-osx-universal
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - shell: bash
+        run: mkdir jdbc-artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-linux-amd64
+          path: jdbc-artifacts/java-linux-amd64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-linux-aarch64
+          path: jdbc-artifacts/java-linux-aarch64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-linux-amd64-musl
+          path: jdbc-artifacts/java-linux-amd64-musl
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-linux-aarch64-musl
+          path: jdbc-artifacts/java-linux-aarch64-musl
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-windows-amd64
+          path: jdbc-artifacts/java-windows-amd64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-windows-aarch64
+          path: jdbc-artifacts/java-windows-aarch64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-osx-universal
+          path: jdbc-artifacts/java-osx-universal
+
+      - name: Deploy SNAPSHOT to Maven Central
+        shell: bash
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        run: |
+          python ./scripts/jdbc_maven_deploy_snapshot.py jdbc-artifacts .
+
   java-merge-vendoring-pr:
     name: Merge vendoring PR 
     if: ${{ github.repository == 'duckdb/duckdb-java' && github.event_name == 'pull_request' && github.head_ref == format('vendoring-{0}', github.base_ref) }}
