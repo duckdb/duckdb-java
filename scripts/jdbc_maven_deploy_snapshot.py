@@ -60,7 +60,7 @@ def exec(cmd, check=True):
 
 
 def get_snapshot_version():
-    """Calculate SNAPSHOT version from the last release tag."""
+    """Calculate SNAPSHOT version from the last release tag and current commit."""
     last_tag = exec('git tag --sort=-committerdate').split('\n')[0]
     version_regex = re.compile(r'^v(\d+)\.(\d+)\.(\d+)\.(\d+)$')
     match = version_regex.search(last_tag)
@@ -69,8 +69,11 @@ def get_snapshot_version():
     major = int(match.group(1))
     minor = int(match.group(2))
     patch = int(match.group(3))
-    # Increment patch version for SNAPSHOT (e.g., v1.4.4.0 -> 1.4.5.0-SNAPSHOT)
-    return f"{major}.{minor}.{patch + 1}.0-SNAPSHOT"
+    # Get short commit hash for traceability
+    commit_hash = exec('git rev-parse --short HEAD')
+    # Increment patch version and include commit hash
+    # e.g., v1.4.4.0 + commit abc1234 -> 1.4.5.0-abc1234-SNAPSHOT
+    return f"{major}.{minor}.{patch + 1}.0-{commit_hash}-SNAPSHOT"
 
 
 def create_settings_xml(settings_path):
