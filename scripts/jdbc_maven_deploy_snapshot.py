@@ -35,18 +35,21 @@ SNAPSHOT_REPO_URL = "https://central.sonatype.com/repository/maven-snapshots/"
 GROUP_ID = "org.duckdb"
 ARTIFACT_ID = "duckdb_jdbc"
 
-# Mapping of build directories to Maven classifiers
+# Mapping of build directories to Maven classifiers.
+# These architecture-specific JARs contain native libraries for a single platform only,
+# useful for reducing deployment size when the target platform is known.
 ARCH_BUILDS = {
     'java-linux-amd64': 'linux_amd64',
     'java-linux-aarch64': 'linux_arm64',
-    'java-linux-amd64-musl': 'linux_amd64_musl',
-    'java-linux-aarch64-musl': 'linux_arm64_musl',
-    'java-osx-universal': 'macos_universal',
+    'java-linux-amd64-musl': 'linux_amd64_musl',    # Alpine Linux
+    'java-linux-aarch64-musl': 'linux_arm64_musl',  # Alpine Linux ARM
+    'java-osx-universal': 'macos_universal',        # Intel + Apple Silicon
     'java-windows-amd64': 'windows_amd64',
     'java-windows-aarch64': 'windows_arm64',
 }
 
-# Builds to combine into the main (fat) JAR
+# Builds to combine into the main (fat) JAR.
+# The main JAR includes natives for all major platforms for convenience.
 COMBINE_BUILDS = ['java-linux-amd64', 'java-osx-universal', 'java-windows-amd64', 'java-linux-aarch64']
 
 
@@ -151,7 +154,16 @@ def create_combined_jar(artifact_dir, staging_dir, version):
 
 
 def create_nolib_jar(artifact_dir, staging_dir, version):
-    """Create a JAR without native libraries."""
+    """
+    Create a JAR without native libraries (nolib classifier).
+
+    This variant contains only Java classes without any bundled native libraries.
+    Useful for:
+    - Custom native library management (loading from system path or custom location)
+    - Platforms not covered by pre-built natives (users compile their own)
+    - Smaller artifact size when natives are managed separately
+    - Container/deployment scenarios where natives are provided at infrastructure level
+    """
     nolib_jar = os.path.join(staging_dir, f'duckdb_jdbc-{version}-nolib.jar')
     base_jar = os.path.join(artifact_dir, 'java-linux-amd64', 'duckdb_jdbc.jar')
 
