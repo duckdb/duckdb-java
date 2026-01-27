@@ -730,6 +730,7 @@ jobs:
     if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
     name: Maven SNAPSHOT Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
