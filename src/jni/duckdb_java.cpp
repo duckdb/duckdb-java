@@ -212,24 +212,54 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 		}
 	}
 
-	auto stmt_ref = new StatementHolder();
+	auto stmt_ref = make_uniq<StatementHolder>();
 	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
 	if (stmt_ref->stmt->HasError()) {
 		string error_msg = string(stmt_ref->stmt->GetError());
 		stmt_ref->stmt = nullptr;
-
-		// No success, so it must be deleted
-		delete stmt_ref;
 		ThrowJNI(env, error_msg.c_str());
-
-		// Just return control flow back to JVM, as an Exception is pending anyway
 		return nullptr;
 	}
-	return env->NewDirectByteBuffer(stmt_ref, 0);
+	return env->NewDirectByteBuffer(stmt_ref.release(), 0);
+}
+
+jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return nullptr;
+	}
+
+	auto query = jbyteArray_to_string(env, query_j);
+
+	auto statements = conn_ref->ExtractStatements(query.c_str());
+	if (statements.empty()) {
+		throw InvalidInputException("No statements to execute.");
+	}
+
+	// if there are multiple statements, we directly execute the statements besides the last one
+	// we only return the result of the last statement to the user, unless one of the previous statements fails
+	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+		auto res = conn_ref->Query(std::move(statements[i]));
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+
+	Value result;
+	bool stream_results =
+	    conn_ref->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
+	QueryParameters query_parameters;
+	query_parameters.output_type =
+	    stream_results ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+
+	auto pending_ref = make_uniq<PendingHolder>();
+	pending_ref->pending = conn_ref->PendingQuery(std::move(statements.back()), query_parameters);
+
+	return env->NewDirectByteBuffer(pending_ref.release(), 0);
 }
 
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
 	if (!stmt_ref) {
 		throw InvalidInputException("Invalid statement");
 	}
@@ -269,13 +299,42 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }
 
+jobject _duckdb_jdbc_execute_pending(JNIEnv *env, jclass, jobject pending_ref_buf) {
+	auto pending_ref = reinterpret_cast<PendingHolder *>(env->GetDirectBufferAddress(pending_ref_buf));
+	if (!pending_ref) {
+		throw InvalidInputException("Invalid pending query");
+	}
+
+	auto res_ref = make_uniq<ResultHolder>();
+	res_ref->res = pending_ref->pending->Execute();
+	if (res_ref->res->HasError()) {
+		std::string error_msg = std::string(res_ref->res->GetError());
+		duckdb::ExceptionType error_type = res_ref->res->GetErrorType();
+		res_ref->res = nullptr;
+		jclass exc_type = duckdb::ExceptionType::INTERRUPT == error_type ? J_SQLTimeoutException : J_SQLException;
+		env->ThrowNew(exc_type, error_msg.c_str());
+		return nullptr;
+	}
+	return env->NewDirectByteBuffer(res_ref.release(), 0);
+}
+
 void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
 	if (nullptr == stmt_ref_buf) {
 		return;
 	}
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
 	if (stmt_ref) {
 		delete stmt_ref;
+	}
+}
+
+void _duckdb_jdbc_release_pending(JNIEnv *env, jclass, jobject pending_ref_buf) {
+	if (nullptr == pending_ref_buf) {
+		return;
+	}
+	auto pending_ref = reinterpret_cast<PendingHolder *>(env->GetDirectBufferAddress(pending_ref_buf));
+	if (pending_ref) {
+		delete pending_ref;
 	}
 }
 
@@ -283,7 +342,7 @@ void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
 	if (nullptr == res_ref_buf) {
 		return;
 	}
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
 	if (res_ref) {
 		delete res_ref;
 	}

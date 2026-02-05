@@ -9,6 +9,7 @@ import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class TestClosure {
 
@@ -27,6 +28,20 @@ public class TestClosure {
         assertTrue(new File(dbName).delete());
     }
 
+    public static void test_unclosed_prepred_statement_does_not_hang() throws Exception {
+        String dbName = "test_issue_101.db";
+        String url = JDBC_URL + dbName;
+        Connection conn = DriverManager.getConnection(url);
+        PreparedStatement ps = conn.prepareStatement("select 42");
+        ps.execute();
+        // statement not closed explicitly
+        conn.close();
+        assertTrue(ps.isClosed());
+        Connection connOther = DriverManager.getConnection(url);
+        connOther.close();
+        assertTrue(new File(dbName).delete());
+    }
+
     public static void test_result_set_auto_closed() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             Statement stmt = conn.createStatement();
@@ -34,6 +49,17 @@ public class TestClosure {
             ResultSet rs2 = stmt.executeQuery("select 43");
             assertTrue(rs1.isClosed());
             stmt.close();
+            assertTrue(rs2.isClosed());
+        }
+    }
+
+    public static void test_result_set_auto_closed_prepared() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            PreparedStatement ps = conn.prepareStatement("select 42");
+            ResultSet rs1 = ps.executeQuery();
+            ResultSet rs2 = ps.executeQuery();
+            assertTrue(rs1.isClosed());
+            ps.close();
             assertTrue(rs2.isClosed());
         }
     }
@@ -73,6 +99,16 @@ public class TestClosure {
         assertTrue(stmt.isClosed());
     }
 
+    public static void test_results_auto_closed_on_conn_close_prepared() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        PreparedStatement ps = conn.prepareStatement("select 42");
+        ResultSet rs = ps.executeQuery();
+        rs.next();
+        conn.close();
+        assertTrue(rs.isClosed());
+        assertTrue(ps.isClosed());
+    }
+
     public static void test_statement_auto_closed_on_completion() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             Statement stmt = conn.createStatement();
@@ -82,6 +118,18 @@ public class TestClosure {
                 rs.next();
             }
             assertTrue(stmt.isClosed());
+        }
+    }
+
+    public static void test_prepared_statement_auto_closed_on_completion() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            PreparedStatement ps = conn.prepareStatement("select 42");
+            ps.closeOnCompletion();
+            assertTrue(ps.isCloseOnCompletion());
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+            }
+            assertTrue(ps.isClosed());
         }
     }
 
@@ -112,6 +160,34 @@ public class TestClosure {
         long elapsed = System.currentTimeMillis() - start;
         assertTrue(elapsed < 2000);
         assertTrue(stmt.isClosed());
+        assertTrue(conn.isClosed());
+    }
+
+    public static void test_long_query_conn_close_prepared() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+        stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+        PreparedStatement ps = conn.prepareStatement(
+            "WITH RECURSIVE cte AS ("
+            + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+            + "SELECT avg(f) FROM cte");
+        long start = System.currentTimeMillis();
+        Thread th = new Thread(() -> {
+            try {
+                Thread.sleep(1000);
+                conn.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+        th.start();
+        assertThrows(ps::executeQuery, SQLException.class);
+        th.join();
+        long elapsed = System.currentTimeMillis() - start;
+        assertTrue(elapsed < 2000);
+        assertTrue(stmt.isClosed());
+        assertTrue(ps.isClosed());
         assertTrue(conn.isClosed());
     }
 
@@ -147,6 +223,37 @@ public class TestClosure {
         }
     }
 
+    public static void test_long_query_prepared_stmt_close() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
+            stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            PreparedStatement ps = conn.prepareStatement(
+                "WITH RECURSIVE cte AS ("
+                +
+                "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                + "SELECT avg(f) FROM cte"
+
+            );
+            long start = System.currentTimeMillis();
+            Thread th = new Thread(() -> {
+                try {
+                    Thread.sleep(1000);
+                    ps.cancel();
+                    ps.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+            th.start();
+            assertThrows(ps::executeQuery, SQLException.class);
+            th.join();
+            long elapsed = System.currentTimeMillis() - start;
+            assertTrue(elapsed < 2000);
+            assertTrue(ps.isClosed());
+            assertFalse(conn.isClosed());
+        }
+    }
+
     public static void test_conn_close_no_crash() throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         for (int i = 0; i < 1 << 7; i++) {
@@ -154,14 +261,52 @@ public class TestClosure {
             Statement stmt = conn.createStatement();
             Future<?> future = executor.submit(() -> {
                 try {
+                    long millis = ThreadLocalRandom.current().nextInt(1, 20);
+                    Thread.sleep(millis);
                     conn.close();
                 } catch (SQLException e) {
                     fail();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException();
                 }
             });
             try {
-                stmt.executeQuery("select 42");
+                long millis = ThreadLocalRandom.current().nextInt(1, 20);
+                Thread.sleep(millis);
+                stmt.executeQuery("SELECT 42");
             } catch (SQLException e) {
+                // suppress
+            } finally {
+                stmt.close();
+            }
+            future.get();
+        }
+    }
+
+    public static void test_conn_close_no_crash_prepared() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        for (int i = 0; i < 1 << 7; i++) {
+            Connection conn = DriverManager.getConnection(JDBC_URL);
+            PreparedStatement ps = conn.prepareStatement("SELECT 42");
+            Future<?> future = executor.submit(() -> {
+                try {
+                    long millis = ThreadLocalRandom.current().nextInt(1, 20);
+                    Thread.sleep(millis);
+                    conn.close();
+                } catch (SQLException e) {
+                    fail();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException();
+                }
+            });
+            try {
+                long millis = ThreadLocalRandom.current().nextInt(1, 20);
+                Thread.sleep(millis);
+                ps.executeQuery();
+            } catch (SQLException e) {
+                // suppress
+            } finally {
+                ps.close();
             }
             future.get();
         }
@@ -181,6 +326,27 @@ public class TestClosure {
                 });
                 try {
                     stmt.executeQuery("select 42");
+                } catch (SQLException e) {
+                }
+                future.get();
+            }
+        }
+    }
+
+    public static void test_prepared_stmt_close_no_crash() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            for (int i = 0; i < 1 << 10; i++) {
+                PreparedStatement ps = conn.prepareStatement("select 42");
+                Future<?> future = executor.submit(() -> {
+                    try {
+                        ps.close();
+                    } catch (SQLException e) {
+                        fail();
+                    }
+                });
+                try {
+                    ps.executeQuery();
                 } catch (SQLException e) {
                 }
                 future.get();
@@ -262,6 +428,38 @@ public class TestClosure {
         }
     }
 
+    @SuppressWarnings("try")
+    public static void test_results_fetch_no_hang_prepared() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Properties config = new Properties();
+        config.put(DuckDBDriver.JDBC_STREAM_RESULTS, true);
+        long rowsCount = 1 << 24;
+        int iterations = 1;
+        for (int i = 0; i < iterations; i++) {
+            try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+                 PreparedStatement ps =
+                     conn.prepareStatement("SELECT i, i::VARCHAR FROM range(0, " + rowsCount + ") AS t(i)");
+                 ResultSet rs = ps.executeQuery()) {
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(100);
+                        conn.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+                long[] resultsCount = new long[1];
+                assertThrows(() -> {
+                    while (rs.next()) {
+                        resultsCount[0]++;
+                    }
+                }, SQLException.class);
+                assertTrue(resultsCount[0] > 0);
+                assertTrue(resultsCount[0] < rowsCount);
+            }
+        }
+    }
+
     public static void test_stmt_can_only_cancel_self() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt1 = conn.createStatement();
              Statement stmt2 = conn.createStatement()) {
@@ -296,6 +494,41 @@ public class TestClosure {
         }
     }
 
+    public static void test_prepared_stmt_can_only_cancel_self() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt1 = conn.createStatement();) {
+            stmt1.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt1.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            try (
+                PreparedStatement ps1 = conn.prepareStatement("SELECT 42");
+                PreparedStatement ps2 = conn.prepareStatement(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
+                    + "SELECT avg(f) FROM cte")) {
+                long start = System.currentTimeMillis();
+                Thread th = new Thread(() -> {
+                    try {
+                        Thread.sleep(200);
+                        ps1.cancel();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+                th.start();
+                try (ResultSet rs = ps2.executeQuery()) {
+                    rs.next();
+                    assertTrue(rs.getDouble(1) > 0);
+                }
+                th.join();
+                long elapsed = System.currentTimeMillis() - start;
+                assertTrue(elapsed > 1000);
+                assertFalse(conn.isClosed());
+                assertFalse(ps1.isClosed());
+                assertFalse(ps2.isClosed());
+            }
+        }
+    }
+
     public static void test_stmt_query_timeout() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.setQueryTimeout(1);
@@ -315,6 +548,33 @@ public class TestClosure {
             assertFalse(conn.isClosed());
             assertTrue(stmt.isClosed());
             assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(1);
+            assertThrows(() -> { stmt.execute("FAIL"); }, SQLException.class);
+            assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
+        }
+    }
+
+    public static void test_prepared_stmt_query_timeout() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
+            stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
+            stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
+            try (
+                PreparedStatement ps = conn.prepareStatement(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                    + "SELECT avg(f) FROM cte")) {
+                ps.setQueryTimeout(1);
+                long start = System.currentTimeMillis();
+                assertThrows(ps::executeQuery, SQLTimeoutException.class);
+                long elapsed = System.currentTimeMillis() - start;
+                assertTrue(elapsed < 1500);
+                assertFalse(conn.isClosed());
+                assertTrue(ps.isClosed());
+                assertEquals(DuckDBDriver.scheduler.getQueue().size(), 0);
+            }
         }
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.setQueryTimeout(1);

@@ -37,6 +37,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     ByteBuffer connRef;
     final ReentrantLock connRefLock = new ReentrantLock();
+    final LinkedHashSet<DuckDBPendingQuery> pendingQueries = new LinkedHashSet<>();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
     final LinkedHashSet<DuckDBAppender> appenders = new LinkedHashSet<>();
     volatile boolean closing;
@@ -144,6 +145,14 @@ public final class DuckDBConnection implements java.sql.Connection {
             } catch (SQLException e) {
                 // suppress
             }
+
+            // Last pending query created is first deleted
+            List<DuckDBPendingQuery> pendingList = new ArrayList<>(pendingQueries);
+            Collections.reverse(pendingList);
+            for (DuckDBPendingQuery pending : pendingList) {
+                pending.close();
+            }
+            pendingQueries.clear();
 
             // Last statement created is first deleted
             List<DuckDBPreparedStatement> psList = new ArrayList<>(preparedStatements);
