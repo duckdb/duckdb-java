@@ -57,9 +57,17 @@ jobject _duckdb_jdbc_prepare(JNIEnv * env, jclass param0, jobject param1, jbyteA
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
 
+jobject _duckdb_jdbc_pending_query(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1pending_1query(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
+
 void _duckdb_jdbc_release(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv * env, jclass param0, jobject param1);
+
+void _duckdb_jdbc_release_pending(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release_1pending(JNIEnv * env, jclass param0, jobject param1);
 
 jobject _duckdb_jdbc_query_result_meta(JNIEnv * env, jclass param0, jobject param1);
 
@@ -72,6 +80,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1s
 jobject _duckdb_jdbc_execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
+
+jobject _duckdb_jdbc_execute_pending(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending(JNIEnv * env, jclass param0, jobject param1);
 
 void _duckdb_jdbc_free_result(JNIEnv * env, jclass param0, jobject param1);
 
