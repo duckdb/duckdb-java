@@ -46,6 +46,10 @@ struct StatementHolder {
 	duckdb::unique_ptr<duckdb::PreparedStatement> stmt;
 };
 
+struct PendingHolder {
+	duckdb::unique_ptr<duckdb::PendingQueryResult> pending;
+};
+
 struct ResultHolder {
 	duckdb::unique_ptr<duckdb::QueryResult> res;
 	duckdb::unique_ptr<duckdb::DataChunk> chunk;
