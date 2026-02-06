@@ -480,6 +480,113 @@ public class TestAppenderComposite {
         }
     }
 
+    public static void test_appender_union_struct() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 ("
+                         + "col1 INTEGER, "
+                         + "col2 UNION("
+                         + "    u1 STRUCT("
+                         + "        s1 INTEGER, "
+                         + "        s2 INTEGER"
+                         + "        ), "
+                         + "    u2 INTEGER"
+                         + "    )"
+                         + ")");
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow()
+                    .append(42)
+                    .beginUnion("u1")
+                    .beginStruct()
+                    .append(43)
+                    .append(44)
+                    .endStruct()
+                    .endUnion()
+                    .endRow()
+
+                    .beginRow()
+                    .append(45)
+                    .beginUnion("u2")
+                    .append(46)
+                    .endUnion()
+                    .endRow()
+
+                    .beginRow()
+                    .append(47)
+                    .beginUnion("u1")
+                    .appendNull()
+                    .endUnion()
+                    .endRow()
+
+                    .beginRow()
+                    .append(48)
+                    .beginUnion("u2")
+                    .appendNull()
+                    .endUnion()
+                    .endRow()
+
+                    .beginRow()
+                    .append(49)
+                    .appendNull()
+                    .endRow()
+
+                    .beginRow()
+                    .append(50)
+                    .beginUnion("u1")
+                    .beginStruct()
+                    .append(51)
+                    .append(52)
+                    .endStruct()
+                    .endUnion()
+                    .endRow();
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
+                {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), 42);
+                    DuckDBStruct struct = (DuckDBStruct) rs.getObject(2);
+                    Map<String, Object> map = struct.getMap();
+                    assertEquals(map.size(), 2);
+                    assertEquals(map.get("s1"), 43);
+                    assertEquals(map.get("s2"), 44);
+                }
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 45);
+                assertEquals(rs.getInt(2), 46);
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 47);
+                assertNull(rs.getObject(2));
+                assertFalse(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 48);
+                assertNull(rs.getObject(2));
+                assertFalse(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 49);
+                assertNull(rs.getObject(2));
+                assertTrue(rs.wasNull());
+
+                {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), 50);
+                    DuckDBStruct struct = (DuckDBStruct) rs.getObject(2);
+                    Map<String, Object> map = struct.getMap();
+                    assertEquals(map.size(), 2);
+                    assertEquals(map.get("s1"), 51);
+                    assertEquals(map.get("s2"), 52);
+                }
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     private static void assertFetchedStructEquals(Object dbs, Collection<Object> struct) throws Exception {
         DuckDBStruct dbStruct = (DuckDBStruct) dbs;
         Map<String, Object> map = dbStruct.getMap();
