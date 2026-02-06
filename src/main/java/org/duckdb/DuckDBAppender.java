@@ -985,7 +985,13 @@ public class DuckDBAppender implements AutoCloseable {
         if (null == curCol.parent) {
             cols = columns;
         } else {
-            cols = curCol.parent.children;
+            if (DUCKDB_TYPE_UNION == curCol.parent.colType) {
+                curCol = curCol.parent;
+                // recurse up the union
+                return nextColumn(curCol);
+            } else {
+                cols = curCol.parent.children;
+            }
         }
         int nextColIdx = curCol.idx + 1;
         if (nextColIdx < cols.size()) {
@@ -1004,11 +1010,7 @@ public class DuckDBAppender implements AutoCloseable {
     private void moveToNextColumn() throws SQLException {
         Column col = currentColumn();
         this.prevColumn = currentColumn;
-        if (unionBegunInvariant()) {
-            this.currentColumn = nextColumn(col.parent);
-        } else {
-            this.currentColumn = nextColumn(col);
-        }
+        this.currentColumn = nextColumn(col);
     }
 
     // checks
@@ -2125,11 +2127,6 @@ public class DuckDBAppender implements AutoCloseable {
     private boolean structCompletedInvariant() {
         return null != prevColumn && null != prevColumn.parent && prevColumn.parent.colType == DUCKDB_TYPE_STRUCT &&
             prevColumn.idx == prevColumn.parent.children.size() - 1;
-    }
-
-    private boolean unionBegunInvariant() {
-        return null != currentColumn && null != currentColumn.parent &&
-            currentColumn.parent.colType == DUCKDB_TYPE_UNION;
     }
 
     private boolean unionCompletedInvariant() {
