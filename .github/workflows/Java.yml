@@ -727,7 +727,7 @@ jobs:
   # SNAPSHOTs don't require GPG signatures or validation
   # See: https://central.sonatype.org/publish/publish-portal-snapshots/
   maven-snapshot-deploy:
-    if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    if: ${{ false && github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
     name: Maven SNAPSHOT Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
