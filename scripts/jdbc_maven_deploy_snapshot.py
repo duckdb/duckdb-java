@@ -110,7 +110,7 @@ def create_settings_xml(settings_path):
     os.chmod(settings_path, 0o600)  # Restrict permissions
 
 
-def deploy_file(settings_path, version, file_path, classifier=None, packaging='jar'):
+def deploy_file(settings_path, version, file_path, classifier=None, packaging='jar', pom_file=None):
     """Deploy a single file to the SNAPSHOT repository."""
     cmd = [
         'mvn', 'deploy:deploy-file',
@@ -122,8 +122,11 @@ def deploy_file(settings_path, version, file_path, classifier=None, packaging='j
         f'-DrepositoryId=central-snapshots',
         f'-Durl={SNAPSHOT_REPO_URL}',
         f'-s', settings_path,
-        '-DgeneratePom=false',  # We provide our own POM
     ]
+    if pom_file:
+        cmd.append(f'-DpomFile={pom_file}')
+    else:
+        cmd.append('-DgeneratePom=false')
     if classifier:
         cmd.append(f'-Dclassifier={classifier}')
 
@@ -274,13 +277,11 @@ def main():
         javadoc_jar = create_javadoc_jar(jdbc_root, staging_dir, version)
         nolib_jar = create_nolib_jar(artifact_dir, staging_dir, version)
 
-        # Deploy POM first (required for other artifacts)
-        print("\n=== Deploying POM ===")
-        deploy_file(settings_path, version, pom_path, packaging='pom')
-
-        # Deploy main JAR
-        print("\n=== Deploying main JAR ===")
-        deploy_file(settings_path, version, combined_jar)
+        # Deploy main JAR together with POM so they share the same build number.
+        # Deploying them separately causes mismatched build numbers in the SNAPSHOT
+        # metadata, which breaks dependency resolution in tools like Coursier/sbt.
+        print("\n=== Deploying main JAR + POM ===")
+        deploy_file(settings_path, version, combined_jar, pom_file=pom_path)
 
         # Deploy sources and javadoc
         print("\n=== Deploying sources JAR ===")
