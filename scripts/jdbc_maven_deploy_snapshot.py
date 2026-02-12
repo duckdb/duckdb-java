@@ -68,9 +68,9 @@ def get_snapshot_version():
     """
     Calculate SNAPSHOT version from the last release tag and current commit.
 
-    DuckDB uses 4-part versioning (e.g., v1.4.4.0). We increment the third
-    component (patch) and reset the fourth to 0 for SNAPSHOTs.
-    Example: v1.4.4.0 + commit abc1234 -> 1.4.5.0-abc1234-SNAPSHOT
+    DuckDB uses 4-part versioning (e.g., v1.4.4.0). We increment the second
+    component (minor) and remove the third and fourth for SNAPSHOTs.
+    Example: v1.4.4.0 + commit abc1234 -> 1.5-abc1234-SNAPSHOT
     """
     last_tag = run_cmd('git tag --sort=-committerdate').split('\n')[0]
     version_regex = re.compile(r'^v(\d+)\.(\d+)\.(\d+)\.(\d+)$')
@@ -84,7 +84,7 @@ def get_snapshot_version():
     # Get short commit hash for traceability
     commit_hash = run_cmd('git rev-parse --short HEAD')
     # Increment patch version and include commit hash
-    return f"{major}.{minor}.{patch + 1}.0-{commit_hash}-SNAPSHOT"
+    return f"{major}.{minor + 1}-{commit_hash}-SNAPSHOT"
 
 
 def create_settings_xml(settings_path):

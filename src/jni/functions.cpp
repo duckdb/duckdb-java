@@ -131,9 +131,30 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	}
 }
 
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1pending_1query(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2) {
+	try {
+		return _duckdb_jdbc_pending_query(env, param0, param1, param2);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+		return nullptr;
+	}
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv * env, jclass param0, jobject param1) {
 	try {
 		return _duckdb_jdbc_release(env, param0, param1);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+	}
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release_1pending(JNIEnv * env, jclass param0, jobject param1) {
+	try {
+		_duckdb_jdbc_release_pending(env, param0, param1);
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
@@ -166,6 +187,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1s
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2) {
 	try {
 		return _duckdb_jdbc_execute(env, param0, param1, param2);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+		return nullptr;
+	}
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending(JNIEnv * env, jclass param0, jobject param1) {
+	try {
+		return _duckdb_jdbc_execute_pending(env, param0, param1);
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());

@@ -47,7 +47,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBConnection conn;
 
     private ByteBuffer stmtRef = null;
-    final ReentrantLock stmtRefLock = new ReentrantLock();
+    private final ReentrantLock stmtRefLock = new ReentrantLock();
+    private String query = null;
     volatile boolean closeOnCompletion = false;
 
     private DuckDBResultSet selectResult = null;
@@ -61,7 +62,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private final List<Object[]> batchedParams = new ArrayList<>();
     private final List<String> batchedStatements = new ArrayList<>();
     private Boolean isBatch = false;
-    private Boolean isPreparedStatement = false;
+    private final Boolean isPreparedStatement;
     private int queryTimeoutSeconds = 0;
     private ScheduledFuture<?> cancelQueryFuture = null;
 
@@ -70,6 +71,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("connection parameter cannot be null");
         }
         this.conn = conn;
+        this.isPreparedStatement = false;
     }
 
     public DuckDBPreparedStatement(DuckDBConnection conn, String sql) throws SQLException {
@@ -116,6 +118,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("sql query parameter cannot be null");
         }
 
+        if (!this.isPreparedStatement) {
+            this.query = sql;
+            return;
+        }
+
         stmtRefLock.lock();
         try {
             checkOpen();
@@ -160,6 +167,33 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
     }
 
+    private DirectQueryResult executeDirect() throws SQLException {
+        DuckDBPendingQuery pending = null;
+
+        // stmtRef lock is being held
+        conn.connRefLock.lock();
+        try {
+            conn.checkOpen();
+            ByteBuffer pendingRef = DuckDBNative.duckdb_jdbc_pending_query(conn.connRef, query.getBytes(UTF_8));
+            pending = new DuckDBPendingQuery(conn, pendingRef);
+            // need to track the statement too to release the results
+            conn.preparedStatements.add(this);
+        } finally {
+            conn.connRefLock.unlock();
+        }
+
+        pending.pendingRefLock.lock();
+        try {
+            if (pending.pendingRef == null) {
+                throw new SQLException("Connection was closed");
+            }
+            ByteBuffer resultRef = DuckDBNative.duckdb_jdbc_execute_pending(pending.pendingRef);
+            return new DirectQueryResult(resultRef, pending);
+        } finally {
+            pending.pendingRefLock.unlock();
+        }
+    }
+
     @Override
     public boolean execute() throws SQLException {
         checkOpen();
@@ -171,6 +205,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         connLock.unlock();
 
         ByteBuffer resultRef = null;
+        DuckDBPendingQuery pendingQuery = null;
+        boolean queryFailed = false;
 
         stmtRefLock.lock();
         try {
@@ -186,19 +222,16 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 startTransaction();
             }
 
-            if (queryTimeoutSeconds > 0) {
-                cleanupCancelQueryTask();
-                try {
-                    if (!DuckDBDriver.scheduler.isShutdown()) {
-                        cancelQueryFuture =
-                            DuckDBDriver.scheduler.schedule(new CancelQueryTask(), queryTimeoutSeconds, SECONDS);
-                    }
-                } catch (RejectedExecutionException e) {
-                    // no-op, scheduler was shut down concurrently
-                }
+            scheduleCancelTask();
+
+            if (isPreparedStatement) {
+                resultRef = DuckDBNative.duckdb_jdbc_execute(stmtRef, params);
+            } else {
+                DirectQueryResult dqr = executeDirect();
+                resultRef = dqr.resultRef;
+                pendingQuery = dqr.pendingQuery;
             }
 
-            resultRef = DuckDBNative.duckdb_jdbc_execute(stmtRef, params);
             cleanupCancelQueryTask();
             DuckDBResultSetMetaData resultMeta = DuckDBNative.duckdb_jdbc_query_result_meta(resultRef);
             selectResult = new DuckDBResultSet(conn, this, resultMeta, resultRef);
@@ -207,18 +240,23 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             returnsNothing = resultMeta.return_type.equals(NOTHING);
 
         } catch (SQLException e) {
-            // Delete result set that might have been allocated
-            if (selectResult != null) {
-                selectResult.close();
-            } else if (resultRef != null) {
-                DuckDBNative.duckdb_jdbc_free_result(resultRef);
-                resultRef = null;
-            }
-            close();
+            queryFailed = true;
             throw e;
 
         } finally {
             stmtRefLock.unlock();
+            this.query = null;
+            if (null != pendingQuery) {
+                pendingQuery.close();
+            }
+            if (queryFailed) {
+                if (null != selectResult) {
+                    selectResult.close();
+                } else if (null != resultRef) {
+                    DuckDBNative.duckdb_jdbc_free_result(resultRef);
+                }
+                close();
+            }
         }
 
         if (returnsChangedRows) {
@@ -370,12 +408,17 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (isClosed()) {
             return;
         }
+
+        DuckDBConnection connLocal = conn;
+
         stmtRefLock.lock();
         try {
             if (isClosed()) {
                 return;
             }
+
             cleanupCancelQueryTask();
+
             if (selectResult != null) {
                 selectResult.close();
                 selectResult = null;
@@ -383,24 +426,24 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             if (stmtRef != null) {
                 // Delete prepared statement
                 DuckDBNative.duckdb_jdbc_release(stmtRef);
-
-                // Untrack prepared statement from parent connection,
-                // if 'closing' flag is set it means that the parent connection itself
-                // is being closed and we don't need to untrack this instance from the statement.
-                if (!conn.closing) {
-                    conn.connRefLock.lock();
-                    try {
-                        conn.preparedStatements.remove(this);
-                    } finally {
-                        conn.connRefLock.unlock();
-                    }
-                }
-
                 stmtRef = null;
             }
+
             conn = null; // we use this as a check for closed-ness
         } finally {
             stmtRefLock.unlock();
+        }
+
+        // Untrack prepared statement from parent connection,
+        // if 'closing' flag is set it means that the parent connection itself
+        // is being closed and we don't need to untrack this instance
+        if (!connLocal.closing) {
+            connLocal.connRefLock.lock();
+            try {
+                connLocal.preparedStatements.remove(this);
+            } finally {
+                connLocal.connRefLock.unlock();
+            }
         }
     }
 
@@ -526,9 +569,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
-        if (stmtRef == null) {
-            throw new SQLException("Prepare something first");
-        }
 
         if (!returnsResultSet) {
             return null;
@@ -544,7 +584,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
-        if (stmtRef == null) {
+        if (selectResult == null) {
             // It is not required by JDBC spec to return anything in this case,
             // but clients can call this method before preparing/executing the query
             return -1;
@@ -1236,8 +1276,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private void checkPrepared() throws SQLException {
-        if (stmtRef == null) {
-            throw new SQLException("Prepare something first");
+        if (isPreparedStatement) {
+            if (stmtRef == null) {
+                throw new SQLException("Prepare something first");
+            }
+        } else if (query == null) {
+            throw new SQLException("Query to execute was not specified");
         }
     }
 
@@ -1289,6 +1333,19 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
     }
 
+    private void scheduleCancelTask() {
+        if (queryTimeoutSeconds <= 0 || DuckDBDriver.scheduler.isShutdown()) {
+            return;
+        }
+        cleanupCancelQueryTask();
+        try {
+            this.cancelQueryFuture =
+                DuckDBDriver.scheduler.schedule(new CancelQueryTask(), queryTimeoutSeconds, SECONDS);
+        } catch (RejectedExecutionException e) {
+            // no-op, scheduler was shut down concurrently
+        }
+    }
+
     private class CancelQueryTask implements Runnable {
         @Override
         public void run() {
@@ -1300,6 +1357,16 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } catch (SQLException e) {
                 // suppress
             }
+        }
+    }
+
+    private static class DirectQueryResult {
+        final ByteBuffer resultRef;
+        final DuckDBPendingQuery pendingQuery;
+
+        private DirectQueryResult(ByteBuffer resultRef, DuckDBPendingQuery pendingQuery) {
+            this.resultRef = resultRef;
+            this.pendingQuery = pendingQuery;
         }
     }
 }
