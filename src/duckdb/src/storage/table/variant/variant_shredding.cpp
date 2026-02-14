@@ -376,7 +376,7 @@ static LogicalType SetShreddedType(const LogicalType &typed_value) {
 
 bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const {
 	idx_t max_count = 0;
-	uint8_t type_index;
+	uint8_t type_index = 0;
 	if (column.type_counts[0] == column.total_count) {
 		//! All NULL, emit INT32
 		out_type = SetShreddedType(LogicalTypeId::INTEGER);
@@ -713,7 +713,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 #ifdef DEBUG
 	Vector roundtrip_result(LogicalType::VARIANT(), count);
-	VariantColumnData::UnshredVariantData(output, roundtrip_result, count);
+	VariantUtils::UnshredVariantData(output, roundtrip_result, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_val = input.GetValue(i);
