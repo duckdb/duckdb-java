@@ -633,5 +633,4 @@ _duckdb_vector_ensure_validity_writable
 _duckdb_vector_get_column_type
 _duckdb_vector_get_data
 _duckdb_vector_get_validity
-_duckdb_vector_safe_assign_string_element
 _duckdb_vector_size
