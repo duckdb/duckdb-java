@@ -87,7 +87,8 @@ public final class DuckDBConnection implements java.sql.Connection {
     public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
                                               int resultSetHoldability) throws SQLException {
         checkOpen();
-        if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
+        if ((resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) ||
+            readOnly) {
             return new DuckDBPreparedStatement(this, sql);
         }
         throw new SQLFeatureNotSupportedException("prepareStatement");

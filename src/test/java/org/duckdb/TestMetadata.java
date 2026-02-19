@@ -23,11 +23,11 @@ public class TestMetadata {
 
             try (ResultSet rs = dm.getTables(null, null, null, null)) {
                 assertTrue(rs.next());
+                assertEquals(rs.getString("TABLE_NAME"), "b");
+                assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a1");
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a2");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "b");
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "c");
                 assertFalse(rs.next());
@@ -35,17 +35,17 @@ public class TestMetadata {
 
             try (ResultSet rs = dm.getTables(null, null, null, new String[] {})) {
                 assertTrue(rs.next());
+                assertEquals(rs.getString("TABLE_NAME"), "b");
+                assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a1");
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a2");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "b");
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "c");
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = dm.getTables(null, null, null, new String[] {"BASE TABLE"})) {
+            try (ResultSet rs = dm.getTables(null, null, null, new String[] {"TABLE"})) {
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a1");
                 assertTrue(rs.next());
@@ -53,7 +53,7 @@ public class TestMetadata {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = dm.getTables(null, null, null, new String[] {"BASE TABLE", "VIEW"})) {
+            try (ResultSet rs = dm.getTables(null, null, null, new String[] {"TABLE", "VIEW"})) {
                 assertTrue(rs.next());
                 assertEquals(rs.getString("TABLE_NAME"), "a1");
                 assertTrue(rs.next());
@@ -511,8 +511,8 @@ public class TestMetadata {
                 assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
                 assertEquals(rs.getString("TABLE_NAME"), "a");
                 assertEquals(rs.getString(3), "a");
-                assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
-                assertEquals(rs.getString(4), "BASE TABLE");
+                assertEquals(rs.getString("TABLE_TYPE"), "TABLE");
+                assertEquals(rs.getString(4), "TABLE");
                 assertEquals(rs.getObject("REMARKS"), "a table");
                 assertEquals(rs.getObject(5), "a table");
                 assertNull(rs.getObject("TYPE_CAT"));
@@ -558,8 +558,8 @@ public class TestMetadata {
                 assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
                 assertEquals(rs.getString("TABLE_NAME"), "a");
                 assertEquals(rs.getString(3), "a");
-                assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
-                assertEquals(rs.getString(4), "BASE TABLE");
+                assertEquals(rs.getString("TABLE_TYPE"), "TABLE");
+                assertEquals(rs.getString(4), "TABLE");
                 assertEquals(rs.getObject("REMARKS"), "a table");
                 assertEquals(rs.getObject(5), "a table");
                 assertNull(rs.getObject("TYPE_CAT"));
@@ -793,7 +793,7 @@ public class TestMetadata {
     }
 
     public static void test_get_table_types() throws Exception {
-        String[] tableTypesArray = new String[] {"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW"};
         List<String> tableTypesList = new ArrayList<>(asList(tableTypesArray));
         tableTypesList.sort(Comparator.naturalOrder());
 

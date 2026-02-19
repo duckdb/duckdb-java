@@ -197,6 +197,23 @@ public class TestPrepare {
         }
     }
 
+    private static void test_prepare_statement_unsupported_types() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY).close();
+            assertThrows(
+                ()
+                    -> conn.prepareStatement("SELECT 42", ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY),
+                SQLException.class);
+            assertThrows(
+                ()
+                    -> conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE),
+                SQLException.class);
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL + ";access_mode=READ_ONLY")) {
+            conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE).close();
+        }
+    }
+
     public static void test_bug4218_prepare_types() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             String query = "SELECT ($1 || $2)";
