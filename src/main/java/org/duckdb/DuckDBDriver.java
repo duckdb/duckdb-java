@@ -21,6 +21,10 @@ import org.duckdb.io.LimitedInputStream;
 public class DuckDBDriver implements java.sql.Driver {
 
     public static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
+    public static final String DUCKDB_ACCESS_MODE_PROPERTY = "access_mode";
+    public static final String DUCKDB_ACCESS_MODE_READ_ONLY = "READ_ONLY";
+    public static final String DUCKDB_ACCESS_MODE_READ_WRITE = "READ_WRITE";
+    public static final String DUCKDB_ACCESS_MODE_AUTOMATIC = "AUTOMATIC";
     public static final String DUCKDB_USER_AGENT_PROPERTY = "custom_user_agent";
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
@@ -94,9 +98,8 @@ public class DuckDBDriver implements java.sql.Driver {
         // Ignore unsupported
         removeUnsupportedOptions(props);
 
-        // Read-only option
-        String readOnlyStr = removeOption(props, DUCKDB_READONLY_PROPERTY);
-        boolean readOnly = isStringTruish(readOnlyStr, false);
+        // Read-only options
+        boolean readOnly = removeReadOnly(props);
 
         // Client name option
         props.put("duckdb_api", "jdbc");
@@ -293,6 +296,22 @@ public class DuckDBDriver implements java.sql.Driver {
         } finally {
             supportedOptionsLock.unlock();
         }
+    }
+
+    private static boolean removeReadOnly(Properties props) throws SQLException {
+        String readOnlyStr = removeOption(props, DUCKDB_READONLY_PROPERTY);
+        boolean readOnly = isStringTruish(readOnlyStr, false);
+        String accessMode = getOption(props, DUCKDB_ACCESS_MODE_PROPERTY);
+        if (null != accessMode) {
+            boolean accessReadOnly = DUCKDB_ACCESS_MODE_READ_ONLY.equalsIgnoreCase(accessMode);
+            if (null != readOnlyStr && readOnly != accessReadOnly) {
+                throw new SQLException(
+                    "Invalid options specified, values of 'access_mode' and 'duckdb.read_only'"
+                    + " properties does not match, use 'access_mode=READ_ONLY' to open connection in read-only mode");
+            }
+            return accessReadOnly;
+        }
+        return readOnly;
     }
 
     private static SessionInitSQLFile readSessionInitSQLFile(ParsedProps pp) throws SQLException {
