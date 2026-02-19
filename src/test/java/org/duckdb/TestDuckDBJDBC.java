@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -48,6 +49,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import org.duckdb.test.TempDirectory;
 
 public class TestDuckDBJDBC {
 
@@ -563,70 +565,91 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_read_only() throws Exception {
-        Path database_file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb");
-        Files.deleteIfExists(database_file);
+        Properties prop1 = new Properties();
+        prop1.put(DuckDBDriver.DUCKDB_READONLY_PROPERTY, "true");
+        Properties prop2 = new Properties();
+        prop2.put(DuckDBDriver.DUCKDB_READONLY_PROPERTY, true);
+        Properties prop3 = new Properties();
+        prop3.put(DuckDBDriver.DUCKDB_ACCESS_MODE_PROPERTY, DuckDBDriver.DUCKDB_ACCESS_MODE_READ_ONLY);
+        Properties prop4 = new Properties();
+        prop3.put(DuckDBDriver.DUCKDB_READONLY_PROPERTY, true);
+        prop4.put(DuckDBDriver.DUCKDB_ACCESS_MODE_PROPERTY, DuckDBDriver.DUCKDB_ACCESS_MODE_READ_ONLY);
+        List<Properties> propList = Arrays.asList(prop1, prop2, prop3, prop4);
 
-        String jdbc_url = JDBC_URL + database_file;
-        Properties ro_prop = new Properties();
-        ro_prop.setProperty("duckdb.read_only", "true");
+        for (Properties config : propList) {
+            try (TempDirectory dir = new TempDirectory()) {
+                Path database_file = dir.path().resolve(Paths.get("duckcb_jdbc_test_read_only.db"));
+                String jdbc_url = JDBC_URL + database_file;
+                Connection conn_rw = DriverManager.getConnection(jdbc_url);
+                assertFalse(conn_rw.isReadOnly());
+                assertFalse(conn_rw.getMetaData().isReadOnly());
+                Statement stmt = conn_rw.createStatement();
+                stmt.execute("CREATE TABLE test (i INTEGER)");
+                stmt.execute("INSERT INTO test VALUES (42)");
+                stmt.close();
 
-        Connection conn_rw = DriverManager.getConnection(jdbc_url);
-        assertFalse(conn_rw.isReadOnly());
-        assertFalse(conn_rw.getMetaData().isReadOnly());
-        Statement stmt = conn_rw.createStatement();
-        stmt.execute("CREATE TABLE test (i INTEGER)");
-        stmt.execute("INSERT INTO test VALUES (42)");
-        stmt.close();
+                // Verify we can open additional write connections
+                // Using the Driver
+                try (Connection conn = DriverManager.getConnection(jdbc_url); Statement stmt1 = conn.createStatement();
+                     ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+                    rs1.next();
+                    assertEquals(rs1.getInt(1), 42);
+                }
+                // Using the direct API
+                try (Connection conn = conn_rw.unwrap(DuckDBConnection.class).duplicate();
+                     Statement stmt1 = conn.createStatement();
+                     ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+                    rs1.next();
+                    assertEquals(rs1.getInt(1), 42);
+                }
 
-        // Verify we can open additional write connections
-        // Using the Driver
-        try (Connection conn = DriverManager.getConnection(jdbc_url); Statement stmt1 = conn.createStatement();
-             ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
-            rs1.next();
-            assertEquals(rs1.getInt(1), 42);
-        }
-        // Using the direct API
-        try (Connection conn = conn_rw.unwrap(DuckDBConnection.class).duplicate();
-             Statement stmt1 = conn.createStatement(); ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
-            rs1.next();
-            assertEquals(rs1.getInt(1), 42);
-        }
+                // At this time, mixing read and write connections on Windows doesn't work
+                // Read-only when we already have a read-write
+                //		try (Connection conn = DriverManager.getConnection(jdbc_url, ro_prop);
+                //				 Statement stmt1 = conn.createStatement();
+                //				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+                //			rs1.next();
+                //			assertEquals(rs1.getInt(1), 42);
+                //		}
 
-        // At this time, mixing read and write connections on Windows doesn't work
-        // Read-only when we already have a read-write
-        //		try (Connection conn = DriverManager.getConnection(jdbc_url, ro_prop);
-        //				 Statement stmt1 = conn.createStatement();
-        //				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
-        //			rs1.next();
-        //			assertEquals(rs1.getInt(1), 42);
-        //		}
+                conn_rw.close();
 
-        conn_rw.close();
+                assertThrows(conn_rw::createStatement, SQLException.class);
+                assertThrows(() -> { conn_rw.unwrap(DuckDBConnection.class).duplicate(); }, SQLException.class);
 
-        assertThrows(conn_rw::createStatement, SQLException.class);
-        assertThrows(() -> { conn_rw.unwrap(DuckDBConnection.class).duplicate(); }, SQLException.class);
+                // // we can create two parallel read only connections and query them, too
+                try (Connection conn_ro1 = DriverManager.getConnection(jdbc_url, config);
+                     Connection conn_ro2 = DriverManager.getConnection(jdbc_url, config)) {
 
-        // // we can create two parallel read only connections and query them, too
-        try (Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
-             Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop)) {
+                    assertTrue(conn_ro1.isReadOnly());
+                    assertTrue(conn_ro1.getMetaData().isReadOnly());
+                    assertTrue(conn_ro2.isReadOnly());
+                    assertTrue(conn_ro2.getMetaData().isReadOnly());
 
-            assertTrue(conn_ro1.isReadOnly());
-            assertTrue(conn_ro1.getMetaData().isReadOnly());
-            assertTrue(conn_ro2.isReadOnly());
-            assertTrue(conn_ro2.getMetaData().isReadOnly());
+                    try (Statement stmt1 = conn_ro1.createStatement();
+                         ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+                        rs1.next();
+                        assertEquals(rs1.getInt(1), 42);
+                    }
 
-            try (Statement stmt1 = conn_ro1.createStatement();
-                 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
-                rs1.next();
-                assertEquals(rs1.getInt(1), 42);
+                    try (Statement stmt2 = conn_ro2.createStatement();
+                         ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test")) {
+                        rs2.next();
+                        assertEquals(rs2.getInt(1), 42);
+                    }
+                }
             }
-
-            try (Statement stmt2 = conn_ro2.createStatement();
-                 ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test")) {
-                rs2.next();
-                assertEquals(rs2.getInt(1), 42);
-            }
         }
+    }
+
+    public static void test_read_only_discrepancy() throws Exception {
+        Properties config = new Properties();
+        config.put(DuckDBDriver.DUCKDB_READONLY_PROPERTY, true);
+        config.put(DuckDBDriver.DUCKDB_ACCESS_MODE_PROPERTY, DuckDBDriver.DUCKDB_ACCESS_MODE_READ_WRITE);
+        assertThrows(() -> DriverManager.getConnection(JDBC_URL, config), SQLException.class);
+        assertThrows(()
+                         -> DriverManager.getConnection(JDBC_URL + ";duckdb.read_only=false;access_mode=READ_ONLY;"),
+                     SQLException.class);
     }
 
     public static void test_temporal_types() throws Exception {

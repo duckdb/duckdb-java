@@ -31,6 +31,14 @@ final class JdbcUtils {
         return defaultVal;
     }
 
+    static String getOption(Properties props, String opt) {
+        Object obj = props.get(opt);
+        if (null != obj) {
+            return obj.toString().trim();
+        }
+        return null;
+    }
+
     static void setDefaultOptionValue(Properties props, String opt, Object value) {
         if (props.containsKey(opt)) {
             return;
