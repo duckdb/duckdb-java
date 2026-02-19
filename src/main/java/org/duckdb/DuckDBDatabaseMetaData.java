@@ -721,7 +721,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public ResultSet getTableTypes() throws SQLException {
-        String[] tableTypesArray = new String[] {"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW"};
         StringBuilder stringBuilder = new StringBuilder(128);
         boolean first = true;
         for (String tableType : tableTypesArray) {
@@ -751,7 +751,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("table_catalog AS 'TABLE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_schema AS 'TABLE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_name AS 'TABLE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("table_type AS 'TABLE_TYPE'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS 'TABLE_TYPE'")
+            .append(TRAILING_COMMA)
+            .append(lineSeparator());
         sb.append("TABLE_COMMENT AS 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'TYPE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'TYPE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
@@ -795,7 +797,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
         if (types != null && types.length > 0) {
             for (int i = 0; i < types.length; i++) {
-                ps.setString(paramIdx + i, types[i]);
+                String param = "TABLE".equals(types[i]) ? "BASE TABLE" : types[i];
+                ps.setString(paramIdx + i, param);
             }
         }
         ps.closeOnCompletion();
