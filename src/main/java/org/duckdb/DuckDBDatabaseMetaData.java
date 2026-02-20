@@ -2,16 +2,9 @@ package org.duckdb;
 
 import static java.lang.System.lineSeparator;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.RowIdLifetime;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.Statement;
-import java.sql.Types;
+import java.sql.*;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -1109,7 +1102,62 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public ResultSet getTypeInfo() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getTypeInfo");
+        List<TypeInfoEntry> entries = Arrays.asList(new TypeInfoEntry("BOOLEAN", Types.BIT, typePredBasic),
+                                                    new TypeInfoEntry("TINYINT", Types.TINYINT, typePredBasic),
+                                                    new TypeInfoEntry("SMALLINT", Types.SMALLINT, typePredBasic),
+                                                    new TypeInfoEntry("INTEGER", Types.INTEGER, typePredBasic),
+                                                    new TypeInfoEntry("BIGINT", Types.BIGINT, typePredBasic),
+                                                    new TypeInfoEntry("BIGINT", Types.BIGINT, typePredBasic),
+                                                    new TypeInfoEntry("FLOAT", Types.FLOAT, typePredBasic),
+                                                    new TypeInfoEntry("REAL", Types.REAL, typePredBasic),
+                                                    new TypeInfoEntry("DOUBLE", Types.DOUBLE, typePredBasic),
+                                                    new TypeInfoEntry("DECIMAL", Types.NUMERIC, typePredBasic, 0, 38),
+                                                    new TypeInfoEntry("DECIMAL", Types.DECIMAL, typePredBasic, 0, 38),
+                                                    new TypeInfoEntry("VARCHAR", Types.CHAR, typePredChar),
+                                                    new TypeInfoEntry("VARCHAR", Types.VARCHAR, typePredChar),
+                                                    new TypeInfoEntry("VARCHAR", Types.LONGVARCHAR, typePredChar),
+                                                    new TypeInfoEntry("DATE", Types.DATE, typePredBasic),
+                                                    new TypeInfoEntry("TIME", Types.TIME, typePredBasic),
+                                                    new TypeInfoEntry("TIMESTAMP", Types.TIMESTAMP, typePredBasic),
+                                                    new TypeInfoEntry("BLOB", Types.BINARY, typePredChar),
+                                                    new TypeInfoEntry("BLOB", Types.VARBINARY, typePredChar),
+                                                    new TypeInfoEntry("BLOB", Types.LONGVARBINARY, typePredChar),
+                                                    new TypeInfoEntry("NULL", Types.LONGVARBINARY, typePredBasic));
+
+        StringBuilder sb = new StringBuilder(QUERY_SB_DEFAULT_CAPACITY);
+        boolean first = true;
+        for (TypeInfoEntry en : entries) {
+            if (first) {
+                sb.append("SELECT").append(lineSeparator());
+                first = false;
+            } else {
+                sb.append("UNION ALL SELECT").append(lineSeparator());
+            }
+            sb.append("  '" + en.name + "'::VARCHAR AS TYPE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  " + en.sqlType + "::INTEGER AS DATA_TYPE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  0::INTEGER AS PRECISION").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  NULL::VARCHAR AS LITERAL_PREFIX").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  NULL::VARCHAR AS LITERAL_SUFFIX").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  NULL::VARCHAR AS CREATE_PARAMS").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  " + typeNullableUnknown + "::SMALLINT AS NULLABLE")
+                .append(TRAILING_COMMA)
+                .append(lineSeparator());
+            sb.append("  TRUE::BOOL AS CASE_SENSITIVE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  " + en.searchable + "::SMALLINT AS SEARCHABLE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FALSE::BOOL AS UNSIGNED_ATTRIBUTE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FALSE::BOOL AS FIXED_PREC_SCALE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  FALSE::BOOL AS AUTO_INCREMENT").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  NULL::VARCHAR AS LOCAL_TYPE_NAME").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  0::SMALLINT AS MINIMUM_SCALE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  0::SMALLINT AS MAXIMUM_SCALE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  0::INTEGER AS SQL_DATA_TYPE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  0::INTEGER AS SQL_DATETIME_SUB").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  10::INTEGER AS NUM_PREC_RADIX").append(TRAILING_COMMA).append(lineSeparator());
+        }
+
+        PreparedStatement ps = conn.prepareStatement(sb.toString());
+        ps.closeOnCompletion();
+        return ps.executeQuery();
     }
 
     @Override
@@ -1491,5 +1539,29 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             return "%";
         }
         return pattern;
+    }
+
+    private static class TypeInfoEntry {
+        final String name;
+        final int sqlType;
+        final int searchable;
+        final int precision;
+        final int scale;
+
+        private TypeInfoEntry(String name, int sqlType, int searchable) {
+            this.name = name;
+            this.sqlType = sqlType;
+            this.searchable = searchable;
+            this.precision = 0;
+            this.scale = 0;
+        }
+
+        public TypeInfoEntry(String name, int sqlType, int searchable, int precision, int scale) {
+            this.name = name;
+            this.sqlType = sqlType;
+            this.searchable = searchable;
+            this.precision = precision;
+            this.scale = scale;
+        }
     }
 }
