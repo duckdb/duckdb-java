@@ -351,52 +351,52 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/zstd/dict/divsufsort.cpp
   src/duckdb/third_party/zstd/dict/fastcover.cpp
   src/duckdb/third_party/zstd/dict/zdict.cpp
-  src/duckdb/extension/core_functions/core_functions_extension.cpp
-  src/duckdb/extension/core_functions/function_list.cpp
   src/duckdb/extension/core_functions/lambda_functions.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
+  src/duckdb/extension/core_functions/function_list.cpp
+  src/duckdb/extension/core_functions/core_functions_extension.cpp
   src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
   src/duckdb/ub_extension_core_functions_aggregate_regression.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
-  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
-  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
   src/duckdb/ub_extension_core_functions_scalar_string.cpp
-  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
-  src/duckdb/ub_extension_core_functions_scalar_map.cpp
-  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
+  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
   src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
-  src/duckdb/ub_extension_core_functions_scalar_union.cpp
-  src/duckdb/ub_extension_core_functions_scalar_array.cpp
-  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
   src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
+  src/duckdb/ub_extension_core_functions_scalar_map.cpp
   src/duckdb/ub_extension_core_functions_scalar_random.cpp
-  src/duckdb/ub_extension_core_functions_scalar_date.cpp
-  src/duckdb/ub_extension_core_functions_scalar_list.cpp
   src/duckdb/extension/core_functions/scalar/math/numeric.cpp
-  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
-  src/duckdb/extension/parquet/parquet_field_id.cpp
+  src/duckdb/ub_extension_core_functions_scalar_union.cpp
+  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
+  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
+  src/duckdb/ub_extension_core_functions_scalar_list.cpp
+  src/duckdb/ub_extension_core_functions_scalar_array.cpp
+  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
+  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
+  src/duckdb/ub_extension_core_functions_scalar_date.cpp
   src/duckdb/extension/parquet/parquet_writer.cpp
-  src/duckdb/extension/parquet/parquet_column_schema.cpp
-  src/duckdb/extension/parquet/parquet_multi_file_info.cpp
-  src/duckdb/extension/parquet/parquet_metadata.cpp
-  src/duckdb/extension/parquet/parquet_crypto.cpp
-  src/duckdb/extension/parquet/parquet_timestamp.cpp
-  src/duckdb/extension/parquet/parquet_extension.cpp
-  src/duckdb/extension/parquet/column_writer.cpp
-  src/duckdb/extension/parquet/serialize_parquet.cpp
-  src/duckdb/extension/parquet/parquet_reader.cpp
-  src/duckdb/extension/parquet/column_reader.cpp
-  src/duckdb/extension/parquet/parquet_float16.cpp
   src/duckdb/extension/parquet/zstd_file_system.cpp
+  src/duckdb/extension/parquet/parquet_crypto.cpp
+  src/duckdb/extension/parquet/parquet_reader.cpp
+  src/duckdb/extension/parquet/parquet_timestamp.cpp
+  src/duckdb/extension/parquet/parquet_float16.cpp
+  src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_shredding.cpp
   src/duckdb/extension/parquet/parquet_geometry.cpp
-  src/duckdb/extension/parquet/parquet_statistics.cpp
-  src/duckdb/ub_extension_parquet_writer.cpp
-  src/duckdb/ub_extension_parquet_writer_variant.cpp
+  src/duckdb/extension/parquet/parquet_multi_file_info.cpp
+  src/duckdb/extension/parquet/column_reader.cpp
+  src/duckdb/extension/parquet/parquet_field_id.cpp
+  src/duckdb/extension/parquet/parquet_extension.cpp
+  src/duckdb/extension/parquet/parquet_column_schema.cpp
+  src/duckdb/extension/parquet/column_writer.cpp
+  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
+  src/duckdb/extension/parquet/serialize_parquet.cpp
+  src/duckdb/extension/parquet/parquet_metadata.cpp
   src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/ub_extension_parquet_reader.cpp
   src/duckdb/ub_extension_parquet_reader_variant.cpp
+  src/duckdb/ub_extension_parquet_writer.cpp
+  src/duckdb/ub_extension_parquet_writer_variant.cpp
   src/duckdb/third_party/parquet/parquet_types.cpp
   src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
   src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
@@ -436,31 +436,31 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/brotli/enc/static_dict.cpp
   src/duckdb/third_party/brotli/enc/utf8_util.cpp
   src/duckdb/extension/icu/./icu_extension.cpp
-  src/duckdb/extension/icu/./icu-table-range.cpp
-  src/duckdb/extension/icu/./icu-list-range.cpp
   src/duckdb/extension/icu/./icu-strptime.cpp
-  src/duckdb/extension/icu/./icu-datetrunc.cpp
+  src/duckdb/extension/icu/./icu-datepart.cpp
+  src/duckdb/extension/icu/./icu-makedate.cpp
+  src/duckdb/extension/icu/./icu-datefunc.cpp
   src/duckdb/extension/icu/./icu-current.cpp
   src/duckdb/extension/icu/./icu-timezone.cpp
-  src/duckdb/extension/icu/./icu-datesub.cpp
-  src/duckdb/extension/icu/./icu-timebucket.cpp
-  src/duckdb/extension/icu/./icu-makedate.cpp
+  src/duckdb/extension/icu/./icu-table-range.cpp
   src/duckdb/extension/icu/./icu-dateadd.cpp
-  src/duckdb/extension/icu/./icu-datepart.cpp
-  src/duckdb/extension/icu/./icu-datefunc.cpp
+  src/duckdb/extension/icu/./icu-timebucket.cpp
+  src/duckdb/extension/icu/./icu-datesub.cpp
+  src/duckdb/extension/icu/./icu-datetrunc.cpp
+  src/duckdb/extension/icu/./icu-list-range.cpp
   src/duckdb/ub_extension_icu_third_party_icu_common.cpp
   src/duckdb/ub_extension_icu_third_party_icu_i18n.cpp
   src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
-  src/duckdb/extension/json/serialize_json.cpp
-  src/duckdb/extension/json/json_scan.cpp
   src/duckdb/extension/json/json_reader.cpp
-  src/duckdb/extension/json/json_multi_file_info.cpp
-  src/duckdb/extension/json/json_common.cpp
-  src/duckdb/extension/json/json_enums.cpp
-  src/duckdb/extension/json/json_serializer.cpp
-  src/duckdb/extension/json/json_extension.cpp
   src/duckdb/extension/json/json_functions.cpp
+  src/duckdb/extension/json/json_extension.cpp
+  src/duckdb/extension/json/json_scan.cpp
+  src/duckdb/extension/json/json_multi_file_info.cpp
+  src/duckdb/extension/json/json_enums.cpp
+  src/duckdb/extension/json/serialize_json.cpp
+  src/duckdb/extension/json/json_common.cpp
   src/duckdb/extension/json/json_deserializer.cpp
+  src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/generated_extension_loader_package_build.cpp)
 
