@@ -110,6 +110,9 @@ public class DuckDBDriver implements java.sql.Driver {
         // to be established.
         props.remove("path");
 
+        // LibreOffice Base adds this option with value 'simple'
+        props.remove("Type");
+
         // DuckLake connection
         if (pp.shortUrl.startsWith(DUCKLAKE_URL_PREFIX)) {
             setDefaultOptionValue(props, JDBC_PIN_DB, true);
