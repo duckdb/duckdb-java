@@ -1015,4 +1015,15 @@ public class TestMetadata {
             }
         }
     }
+
+    public static void test_metadata_type_info() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); ResultSet rs = conn.getMetaData().getTypeInfo()) {
+            // static table, not produced by engine, only checking the count
+            int count = 0;
+            while (rs.next()) {
+                count += 1;
+            }
+            assertEquals(count, 21);
+        }
+    }
 }
