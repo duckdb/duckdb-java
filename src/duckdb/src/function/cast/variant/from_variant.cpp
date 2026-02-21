@@ -74,7 +74,9 @@ struct VariantBooleanConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = type_id == VariantLogicalType::BOOL_TRUE;
@@ -89,7 +91,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = Load<T>(value + byte_offset);
@@ -99,7 +103,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -117,7 +123,9 @@ struct VariantDecimalConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const DecimalConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -203,9 +211,18 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	auto collection_result =
-	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
-	                                    child_data, FlatVector::Validity(result));
+	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
+	//! respect that)
+	auto &result_validity = FlatVector::Validity(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
+	                                                         count, row, offset, child_data, validity);
 	if (!collection_result.success) {
 		conversion_data.error =
 		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
@@ -216,7 +233,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	idx_t max_children = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto &child_data_entry = child_data[i];
-		if (child_data_entry.is_null) {
+		if (!validity.RowIsValid(i)) {
 			continue;
 		}
 		if (child_data_entry.child_count > max_children) {
@@ -239,7 +256,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
-		if (child_data_entry.is_null) {
+		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, offset + i, true);
 			continue;
 		}
@@ -269,9 +286,18 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	auto collection_result =
-	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
-	                                    child_data, FlatVector::Validity(result));
+	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
+	//! respect that)
+	auto &result_validity = FlatVector::Validity(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
+	                                                         count, row, offset, child_data, validity);
 	if (!collection_result.success) {
 		conversion_data.error =
 		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
@@ -282,7 +308,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	const auto array_size = ArrayType::GetSize(result.GetType());
 	for (idx_t i = 0; i < count; i++) {
 		auto &child_data_entry = child_data[i];
-		if (child_data_entry.is_null) {
+		if (!validity.RowIsValid(i)) {
 			continue;
 		}
 		if (child_data_entry.child_count != array_size) {
@@ -302,7 +328,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
-		if (child_data_entry.is_null) {
+		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, offset + i, true);
 			total_offset += array_size;
 			continue;
@@ -327,9 +353,18 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	auto collection_result =
-	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::OBJECT, sel, count, row, offset,
-	                                    child_data, FlatVector::Validity(result));
+	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
+	//! respect that)
+	auto &result_validity = FlatVector::Validity(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::OBJECT, sel,
+	                                                         count, row, offset, child_data, validity);
 	if (!collection_result.success) {
 		conversion_data.error =
 		    StringUtil::Format("Expected to find VARIANT(OBJECT), found VARIANT(%s) instead, can't convert",
@@ -338,7 +373,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	}
 
 	for (idx_t i = 0; i < count; i++) {
-		if (child_data[i].is_null) {
+		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, offset + i, true);
 		}
 	}
@@ -367,7 +402,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
-		                              child_data, count);
+		                              child_data, validity, count);
 		if (!lookup_validity.AllValid()) {
 			optional_idx nested_index;
 			for (idx_t i = 0; i < count; i++) {
