@@ -59,6 +59,14 @@ class DuckDBVector {
         this.nullmask = nullmask;
     }
 
+    private void retainConstlenData() {
+        if (null != constlen_data) {
+            byte[] constlenBytes = new byte[constlen_data.capacity()];
+            constlen_data.get(constlenBytes);
+            this.constlen_data = ByteBuffer.wrap(constlenBytes);
+        }
+    }
+
     Object getObject(int idx) throws SQLException {
         if (check_and_null(idx)) {
             return null;
@@ -121,6 +129,8 @@ class DuckDBVector {
             return getStruct(idx);
         case UNION:
             return getUnion(idx);
+        case VARIANT:
+            return getVariant(idx);
         default:
             return getLazyString(idx);
         }
@@ -720,5 +730,10 @@ class DuckDBVector {
         short tag = (short) attributes[0];
 
         return attributes[1 + tag];
+    }
+
+    Object getVariant(int idx) throws SQLException {
+        DuckDBVector vec = (DuckDBVector) varlen_data[idx];
+        return vec.getObject(0);
     }
 }

@@ -7,6 +7,7 @@ extern "C" {
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -682,6 +683,24 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+		}
+		break;
+	}
+	case LogicalTypeId::VARIANT: {
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(vec, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		varlen_data = env->NewObjectArray(row_count, J_Object, nullptr);
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, row_idx, 0);
+			if (variant_val.IsNull()) {
+				continue;
+			}
+			Vector variant_vec(variant_val);
+			variant_vec.Flatten(1);
+			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
+			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
+			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);
 		}
 		break;
 	}
