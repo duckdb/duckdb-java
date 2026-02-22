@@ -57,6 +57,7 @@ jmethodID J_DuckResultSetMeta_init;
 
 jclass J_DuckVector;
 jmethodID J_DuckVector_init;
+jmethodID J_DuckVector_retainConstlenData;
 jfieldID J_DuckVector_constlen;
 jfieldID J_DuckVector_varlen;
 
@@ -270,6 +271,7 @@ void create_refs(JNIEnv *env) {
 	J_String_getBytes = get_method_id(env, J_String, "getBytes", "(Ljava/nio/charset/Charset;)[B");
 
 	J_DuckVector_init = get_method_id(env, J_DuckVector, "<init>", "(Ljava/lang/String;I[Z)V");
+	J_DuckVector_retainConstlenData = get_method_id(env, J_DuckVector, "retainConstlenData", "()V");
 	J_DuckVector_constlen = get_field_id(env, J_DuckVector, "constlen_data", "Ljava/nio/ByteBuffer;");
 	J_DuckVector_varlen = get_field_id(env, J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
 

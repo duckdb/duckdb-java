@@ -36,5 +36,6 @@ public enum DuckDBColumnType {
     MAP,
     ARRAY,
     UNKNOWN,
-    UNION;
+    UNION,
+    VARIANT;
 }
