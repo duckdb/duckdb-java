@@ -54,6 +54,7 @@ extern jmethodID J_DuckResultSetMeta_init;
 
 extern jclass J_DuckVector;
 extern jmethodID J_DuckVector_init;
+extern jmethodID J_DuckVector_retainConstlenData;
 extern jfieldID J_DuckVector_constlen;
 extern jfieldID J_DuckVector_varlen;
 
