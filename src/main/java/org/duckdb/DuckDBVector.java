@@ -117,6 +117,7 @@ class DuckDBVector {
         case JSON:
             return getJsonObject(idx);
         case BLOB:
+        case GEOMETRY:
             return getBlob(idx);
         case UUID:
             return getUuid(idx);
@@ -315,7 +316,7 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        if (isType(DuckDBColumnType.BLOB)) {
+        if (isType(DuckDBColumnType.BLOB) || isType(DuckDBColumnType.GEOMETRY)) {
             return new DuckDBResultSet.DuckDBBlobResult(ByteBuffer.wrap((byte[]) varlen_data[idx]));
         }
 
@@ -327,7 +328,7 @@ class DuckDBVector {
             return null;
         }
 
-        if (isType(DuckDBColumnType.BLOB)) {
+        if (isType(DuckDBColumnType.BLOB) || isType(DuckDBColumnType.GEOMETRY)) {
             return (byte[]) varlen_data[idx];
         }
 

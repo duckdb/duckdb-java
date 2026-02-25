@@ -211,6 +211,7 @@ public class DuckDBResultSet implements ResultSet {
             DuckDBColumnType sqlType = meta.column_types[columnIndex - 1];
             switch (sqlType) {
             case BLOB:
+            case GEOMETRY:
             case LIST:
             case STRUCT:
             case MAP:

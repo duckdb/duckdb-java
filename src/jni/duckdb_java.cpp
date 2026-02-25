@@ -622,6 +622,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	}
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::GEOMETRY:
 		varlen_data = env->NewObjectArray(row_count, J_ByteArray, nullptr);
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {

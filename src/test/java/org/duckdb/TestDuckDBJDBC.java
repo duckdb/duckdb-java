@@ -2246,9 +2246,9 @@ public class TestDuckDBJDBC {
             statusCode = runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
                                   TestAppenderCollection2D.class, TestAppenderComposite.class,
                                   TestSingleValueAppender.class, TestBatch.class, TestBindings.class, TestClosure.class,
-                                  TestExtensionTypes.class, TestMetadata.class, TestNoLib.class,
-                                  /* TestSpatial.class, */ TestParameterMetadata.class, TestPrepare.class,
-                                  TestResults.class, TestSessionInit.class, TestTimestamp.class, TestVariant.class);
+                                  TestExtensionTypes.class, TestMetadata.class, TestNoLib.class, /* TestSpatial.class,*/
+                                  TestParameterMetadata.class, TestPrepare.class, TestResults.class,
+                                  TestSessionInit.class, TestTimestamp.class, TestVariant.class);
         }
         System.exit(statusCode);
     }
