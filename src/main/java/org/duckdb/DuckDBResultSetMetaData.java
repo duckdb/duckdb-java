@@ -167,6 +167,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case BIT:
             return Types.BIT;
         case BLOB:
+        case GEOMETRY:
             return Types.BLOB;
         default:
             return Types.OTHER;
@@ -356,6 +357,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return 35;
         case VARCHAR:
         case BLOB:
+        case GEOMETRY:
             return Integer.MAX_VALUE;
         default:
             return 0;
