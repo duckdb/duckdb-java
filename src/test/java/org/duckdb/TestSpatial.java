@@ -279,9 +279,8 @@ public class TestSpatial {
             stmt.executeUpdate("INSTALL spatial");
             stmt.executeUpdate("LOAD spatial");
 
-            byte[] geometryBytes =
-                new byte[] {0,   0,   0,   0,   0,   0,    0,  0,  0,    0,    0,    0,    1,    0,  0,  0,
-                            -51, -52, -52, -52, -52, -116, 68, 64, -102, -103, -103, -103, -103, 25, 69, 64};
+            byte[] geometryBytes = new byte[] {1,  1,  0,    0,    0,    -51,  -52,  -52, -52, -52, -116,
+                                               68, 64, -102, -103, -103, -103, -103, 25,  69,  64};
 
             // GEOMETRY literal
             try (ResultSet rs = stmt.executeQuery("SELECT ST_GeomFromText('POINT(41.1 42.2)')")) {
