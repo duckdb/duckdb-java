@@ -2,6 +2,7 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.ZoneOffset.UTC;
+import static java.util.Collections.nCopies;
 import static org.duckdb.DuckDBHugeInt.HUGE_INT_MAX;
 import static org.duckdb.DuckDBHugeInt.HUGE_INT_MIN;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
@@ -13,6 +14,9 @@ import java.security.SecureRandom;
 import java.sql.*;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
 
 public class TestAppender {
 
@@ -917,6 +921,73 @@ public class TestAppender {
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 assertThrows(() -> { appender.beginRow().append(44).append("foobar").endRow(); }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_lots_appender_concurrent_flush() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER[], col2 VARCHAR[])");
+            AtomicBoolean completed = new AtomicBoolean(false);
+            AtomicLong concurrentlyFlushed = new AtomicLong(0);
+
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                AtomicBoolean flushThrown = new AtomicBoolean(false);
+                Thread thFail = new Thread(() -> {
+                    try {
+                        assertThrows(appender::flush, SQLException.class);
+                        flushThrown.set(true);
+                    } catch (Exception e) {
+                        flushThrown.set(false);
+                    }
+                });
+                thFail.start();
+                thFail.join();
+                assertTrue(flushThrown.get());
+
+                Lock appenderLock = appender.unsafeBreakThreadConfinement();
+
+                Thread th = new Thread(() -> {
+                    long count = 0;
+                    while (!completed.get()) {
+                        appenderLock.lock();
+                        try {
+                            count += appender.flush();
+                        } catch (SQLException e) {
+                            // suppress
+                        } finally {
+                            appenderLock.unlock();
+                        }
+                        try {
+                            Thread.sleep(50);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    concurrentlyFlushed.set(count);
+                });
+                th.start();
+
+                for (int i = 0; i < 1 << 18; i++) {
+                    int[] arr1 = new int[i % 128];
+                    List<String> arr2 = new ArrayList<>();
+                    for (int j = 0; j < arr1.length; j++) {
+                        arr1[j] = j;
+                        arr2.add(String.join("", nCopies(j % 32, String.valueOf(i))));
+                    }
+                    appenderLock.lock();
+                    try {
+                        appender.beginRow().append(arr1).append(arr2).endRow();
+                    } finally {
+                        appenderLock.unlock();
+                    }
+                }
+
+                completed.set(true);
+                th.join();
+                assertTrue(concurrentlyFlushed.get() > 0);
             }
         }
     }
