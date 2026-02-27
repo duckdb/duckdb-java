@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.lang.Thread.currentThread;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.ZoneOffset.UTC;
 import static java.time.temporal.ChronoUnit.*;
@@ -97,6 +98,8 @@ public class DuckDBAppender implements AutoCloseable {
     private Column prevColumn = null;
 
     private boolean writeInlinedStrings = true;
+
+    private long ownerThreadId = currentThread().getId();
 
     DuckDBAppender(DuckDBConnection conn, String catalog, String schema, String table) throws SQLException {
         this.conn = conn;
@@ -967,6 +970,11 @@ public class DuckDBAppender implements AutoCloseable {
         return this;
     }
 
+    public Lock unsafeBreakThreadConfinement() {
+        this.ownerThreadId = 0;
+        return this.appenderRefLock;
+    }
+
     private String createErrMsg(String error) {
         return "Appender error"
             + ", catalog: '" + catalog + "'"
@@ -1018,6 +1026,15 @@ public class DuckDBAppender implements AutoCloseable {
     private void checkOpen() throws SQLException {
         if (isClosed()) {
             throw new SQLException(createErrMsg("appender was closed"));
+        }
+        if (ownerThreadId != 0 && ownerThreadId != currentThread().getId()) {
+            throw new SQLException(createErrMsg(
+                "detected the usage of the same Appender instance from multiple threads,"
+                + " owner thread ID: " + ownerThreadId + ", current thread ID: " + currentThread().getId() + ";"
+                + " 'append()' and 'flush()' operations cannot be called concurrently;"
+                + " when it is necessary to use the same Appender instance from multiple threads,"
+                + " call 'appender.unsafeBreakThreadConfinement()' method and use the 'Lock' instance"
+                + " obtained from there to synchronize the calls to the Appender."));
         }
     }
 
