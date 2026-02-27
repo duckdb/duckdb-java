@@ -36,6 +36,8 @@
 
 #include "src/main/extension.cpp"
 
+#include "src/main/extension_callback_manager.cpp"
+
 #include "src/main/extension_install_info.cpp"
 
 #include "src/main/extension_manager.cpp"
@@ -61,6 +63,8 @@
 #include "src/main/result_set_manager.cpp"
 
 #include "src/main/stream_query_result.cpp"
+
+#include "src/main/user_settings.cpp"
 
 #include "src/main/valid_checker.cpp"
 

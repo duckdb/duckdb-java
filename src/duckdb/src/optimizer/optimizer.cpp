@@ -39,6 +39,8 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -47,7 +49,6 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<NotEliminationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
@@ -198,6 +199,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
+	// Pull up projection from joins
+	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
+		ProjectionPullup projection_pullup(*this, *plan);
+		projection_pullup.Optimize(plan);
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -326,7 +333,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	this->plan = std::move(plan_p);
 
-	for (auto &pre_optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
@@ -337,7 +344,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	RunBuiltInOptimizers();
 
-	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {

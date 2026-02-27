@@ -29,16 +29,15 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
                                                                  BaseStatistics statistics,
                                                                  unique_ptr<ColumnSegmentState> segment_state) {
 	auto &config = DBConfig::GetConfig(db);
-	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	function = config.GetCompressionFunction(compression_type, type.InternalType());
+	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
 	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
 	auto segment_size = block_manager.GetBlockSize();
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, count, *function,
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, count, function,
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
@@ -70,7 +69,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
@@ -79,7 +78,7 @@ ColumnSegment::ColumnSegment(ColumnSegment &other)
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -165,7 +164,7 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);
-	D_ASSERT(block && new_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(block && new_size <= GetBlockSize());
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
@@ -236,7 +235,7 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 	// Thus, we set the compression function to constant and reset the block buffer.
 	D_ASSERT(stats.statistics.IsConstant());
 	auto &config = DBConfig::GetConfig(db);
-	function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	block.reset();
 }
 
