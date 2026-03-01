@@ -4,6 +4,7 @@ import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
 import java.sql.*;
+import org.duckdb.user.DuckDBUserArray;
 
 public class TestPrepare {
 
@@ -344,6 +345,23 @@ public class TestPrepare {
             stmt.setLargeMaxRows(42);
             assertEquals(stmt.getMaxRows(), 0);
             assertEquals(stmt.getLargeMaxRows(), 0L);
+        }
+    }
+
+    public static void test_prepared_statement_array_parameter() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement("SELECT ?::INT[]")) {
+            Array arrParam = conn.createArrayOf("INT", new Object[] {41, 42});
+            ps.setObject(1, arrParam, Types.ARRAY);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                Array arrWrapper = rs.getArray(1);
+                Object[] arr = (Object[]) arrWrapper.getArray();
+                assertEquals(arr.length, 2);
+                assertEquals(arr[0], 41);
+                assertEquals(arr[1], 42);
+                assertFalse(rs.next());
+            }
         }
     }
 }
