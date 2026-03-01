@@ -42,6 +42,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import org.duckdb.user.DuckDBUserArray;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBConnection conn;
@@ -1044,6 +1045,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 setObject(parameterIndex, x);
             } else {
                 throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());
+            }
+            break;
+        case Types.ARRAY:
+            if (x instanceof DuckDBUserArray) {
+                setArray(parameterIndex, (Array) x);
+            } else {
+                throw new SQLException("Can't convert value to array " + x.getClass().toString());
             }
             break;
         default:
