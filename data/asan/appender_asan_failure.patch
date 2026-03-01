@@ -1,0 +1,16 @@
+diff --git a/src/jni/bindings_appender.cpp b/src/jni/bindings_appender.cpp
+index be36ab82..f82a7a56 100644
+--- a/src/jni/bindings_appender.cpp
++++ b/src/jni/bindings_appender.cpp
+@@ -60,6 +60,11 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1
+ 	duckdb_appender appender = nullptr;
+ 
+ 	duckdb_state state = duckdb_appender_create_ext(conn, catalog_ptr, schema_ptr, table_ptr, &appender);
++
++	// asan failure snippet
++	int *x = reinterpret_cast<int*>(malloc(10 * sizeof(int*)));
++	free(x);
++	x[5] = 42;
+ 
+ 	if (state == DuckDBSuccess) {
+ 		jobject appender_ref_buf = env->NewDirectByteBuffer(appender, 0);

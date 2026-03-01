@@ -13,6 +13,8 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+option(ENABLE_ADDRESS_SANITIZER "Enable address sanitizer." FALSE)
+
 if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR "No compatible Java/JNI found")
 endif()
@@ -158,7 +160,7 @@ if(NOT MSVC)
     -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
 endif()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(duckdb_java PRIVATE
     -Bsymbolic
     -Bsymbolic-functions
@@ -168,6 +170,18 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
   target_link_options(duckdb_java PRIVATE
     -fvisibility=hidden
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_LIST_DIR}/duckdb_java.exp)
+endif()
+
+if(${ENABLE_ADDRESS_SANITIZER})
+  message(STATUS "Address Sanitizer is enabled, run with LD_PRELOAD=\"/path/to/libasan.so.8 /path/to/libstdc++.so.6\"")
+  target_compile_options(duckdb_java PRIVATE
+    -fsanitize=address
+    -g
+    -fno-omit-frame-pointer)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(duckdb_java PRIVATE
+      -O2)
+  endif()
 endif()
 
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
