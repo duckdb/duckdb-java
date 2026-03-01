@@ -39,6 +39,10 @@ release:
 	mkdir -p build/release
 	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
 
+sanitized:
+	mkdir -p build/sanitized
+	cd build/sanitized && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ADDRESS_SANITIZER=ON $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
+
 format:
 	python3 scripts/format.py
 

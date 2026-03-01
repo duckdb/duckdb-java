@@ -245,6 +245,99 @@ jobs:
           java -version
           java ${{ github.workspace }}/src/test/external/RunSpark.java spark-test.sql
 
+  java-linux-amd64-asan:
+    name: Linux ASan (amd64)
+    runs-on: ubuntu-latest
+    needs: java-linux-amd64
+    env:
+      GEN: ninja
+      CC: 'ccache gcc'
+      CXX: 'ccache g++'
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Dependencies
+        run: |
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+          sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
+          sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
+            ccache \
+            ninja-build
+
+      - name: Cache Key
+        id: cache_key
+        run: |
+          DUCKDB_VERSION=$(python ./scripts/print_duckdb_version.py)
+          KEY="${{ runner.os }}-${{ runner.arch }}-$DUCKDB_VERSION"-asan
+          echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }}
+
+      - name: Build (patched)
+        run: |
+          patch -p1 < ./data/asan/appender_asan_failure.patch
+          git diff HEAD
+          make sanitized
+
+      - name: Save Cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }} 
+
+      - name: ASan (patched)
+        env:
+          LD_PRELOAD: "/usr/lib/x86_64-linux-gnu/libasan.so.8 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
+        run: |
+          java \
+            -cp ./build/sanitized/duckdb_jdbc_nolib.jar:./build/sanitized/duckdb_jdbc_tests.jar \
+            org.duckdb.TestDuckDBJDBC \
+            quick \
+            > asan_patched.log 2>&1 \
+            || true
+          cat asan_patched.log
+          grep heap-use-after-free asan_patched.log
+          grep Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1ext asan_patched.log
+          grep ABORTING asan_patched.log
+
+      - name: Build
+        run: |
+          git checkout src/jni/bindings_appender.cpp
+          git status
+          make sanitized
+
+      - name: ASan
+        env:
+          LD_PRELOAD: "/usr/lib/x86_64-linux-gnu/libasan.so.8 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
+        run: |
+          java \
+            -cp ./build/sanitized/duckdb_jdbc_nolib.jar:./build/sanitized/duckdb_jdbc_tests.jar \
+            org.duckdb.TestDuckDBJDBC \
+            quick \
+            > asan.log 2>&1 \
+            || true
+          grep -qPz "TestDuckDBJDBC#test_write_map success in 0 seconds\nOK" asan.log
+          if grep -q ABORTING asan.log; then
+            exit 1
+          fi
+
+      - name: Upload Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asan.log
+          path: |
+            asan.log
+
   java-linux-aarch64:
     name: Linux (aarch64)
     runs-on: ubuntu-24.04-arm
@@ -660,6 +753,7 @@ jobs:
       - java-linux-amd64
       - java-linux-amd64-tck
       - java-linux-amd64-spark
+      - java-linux-amd64-asan
       - java-linux-aarch64
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
@@ -737,6 +831,7 @@ jobs:
       - java-linux-amd64
       - java-linux-amd64-tck
       - java-linux-amd64-spark
+      - java-linux-amd64-asan
       - java-linux-aarch64
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
