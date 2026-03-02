@@ -331,6 +331,7 @@ _duckdb_destroy_aggregate_function
 _duckdb_destroy_aggregate_function_set
 _duckdb_destroy_arrow
 _duckdb_destroy_arrow_converted_schema
+_duckdb_destroy_arrow_options
 _duckdb_destroy_arrow_stream
 _duckdb_destroy_cast_function
 _duckdb_destroy_catalog
@@ -598,6 +599,7 @@ _duckdb_uhugeint_to_double
 _duckdb_union_type_member_count
 _duckdb_union_type_member_name
 _duckdb_union_type_member_type
+_duckdb_valid_utf8_check
 _duckdb_validity_row_is_valid
 _duckdb_validity_set_row_invalid
 _duckdb_validity_set_row_valid
@@ -634,3 +636,4 @@ _duckdb_vector_get_column_type
 _duckdb_vector_get_data
 _duckdb_vector_get_validity
 _duckdb_vector_size
+_duckdb_unsafe_vector_assign_string_element_len
