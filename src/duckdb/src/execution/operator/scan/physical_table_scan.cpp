@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -30,8 +31,7 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
-		physical_table_scan_execution_strategy =
-		    DBConfig::GetSetting<DebugPhysicalTableScanExecutionStrategySetting>(context);
+		physical_table_scan_execution_strategy = Settings::Get<DebugPhysicalTableScanExecutionStrategySetting>(context);
 
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
@@ -187,8 +187,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			auto guard = g_state.Lock();
-			if (g_state.CanBlock(guard)) {
+			annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+			if (g_state.CanBlock()) {
 				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			}
@@ -216,8 +216,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
 	case OperatorResultType::BLOCKED: {
-		auto guard = g_state.Lock();
-		return g_state.BlockSource(guard, input.interrupt_state);
+		annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+		return g_state.BlockSource(input.interrupt_state);
 	}
 	default:
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
@@ -285,10 +285,26 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 		result += name;
 		return;
 	}
-	auto &child_types = StructType::GetChildTypes(type);
-	for (auto &child_index : index.GetChildIndexes()) {
-		auto &ele = child_types[child_index.GetPrimaryIndex()];
-		AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &child_index : index.GetChildIndexes()) {
+			if (child_index.HasPrimaryIndex()) {
+				auto &ele = child_types[child_index.GetPrimaryIndex()];
+				AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+			} else {
+				auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+				AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+			}
+		}
+	} else if (type.id() == LogicalTypeId::VARIANT) {
+		for (auto &child_index : index.GetChildIndexes()) {
+			D_ASSERT(!child_index.HasPrimaryIndex());
+			auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+			AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+		}
+	} else {
+		throw InternalException("Unexpected type (%s) in AddProjectionNames", type.ToString());
 	}
 }
 

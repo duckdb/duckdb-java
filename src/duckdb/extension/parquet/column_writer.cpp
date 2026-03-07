@@ -288,6 +288,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		//! Construct the column schema
 		auto variant_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+		if (field_id && field_id->set) {
+			variant_column.field_id = field_id->field_id;
+		}
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 
@@ -318,7 +321,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                                      std::move(child_writers));
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
+	    type.id() == LogicalTypeId::AGGREGATE_STATE) {
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
