@@ -1,5 +1,6 @@
 #include "bindings.hpp"
 #include "refs.hpp"
+#include "udf_vector_accessors.hpp"
 #include "util.hpp"
 
 #include <vector>
@@ -292,4 +293,39 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1array_1vector_1
 	duckdb_vector res = duckdb_array_vector_get_child(vec);
 
 	return make_ptr_buf(env, res);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1get_1varchar_1bytes(JNIEnv *env, jclass clazz,
+                                                                                             jobject vector_ref,
+                                                                                             jint row) {
+	return _duckdb_jdbc_udf_get_varchar_bytes(env, clazz, vector_ref, row);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1set_1varchar_1bytes(JNIEnv *env, jclass clazz,
+                                                                                       jobject vector_ref, jint row,
+                                                                                       jbyteArray value) {
+	_duckdb_jdbc_udf_set_varchar_bytes(env, clazz, vector_ref, row, value);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1get_1blob_1bytes(JNIEnv *env, jclass clazz,
+                                                                                          jobject vector_ref,
+                                                                                          jint row) {
+	return _duckdb_jdbc_udf_get_blob_bytes(env, clazz, vector_ref, row);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1set_1blob_1bytes(JNIEnv *env, jclass clazz,
+                                                                                    jobject vector_ref, jint row,
+                                                                                    jbyteArray value) {
+	_duckdb_jdbc_udf_set_blob_bytes(env, clazz, vector_ref, row, value);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1get_1decimal(JNIEnv *env, jclass clazz,
+                                                                                   jobject vector_ref, jint row) {
+	return _duckdb_jdbc_udf_get_decimal(env, clazz, vector_ref, row);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1udf_1set_1decimal(JNIEnv *env, jclass clazz,
+                                                                                jobject vector_ref, jint row,
+                                                                                jobject value) {
+	_duckdb_jdbc_udf_set_decimal(env, clazz, vector_ref, row, value);
 }

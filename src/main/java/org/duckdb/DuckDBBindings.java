@@ -2,6 +2,9 @@ package org.duckdb;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
+import org.duckdb.udf.ScalarUdf;
+import org.duckdb.udf.TableFunction;
+import org.duckdb.udf.UdfLogicalType;
 
 public class DuckDBBindings {
 
@@ -77,6 +80,20 @@ public class DuckDBBindings {
 
     static native ByteBuffer duckdb_array_vector_get_child(ByteBuffer vector);
 
+    // udf vector accessors
+
+    static native byte[] duckdb_udf_get_varchar_bytes(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_varchar_bytes(ByteBuffer vector_ref, int row, byte[] value);
+
+    static native byte[] duckdb_udf_get_blob_bytes(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_blob_bytes(ByteBuffer vector_ref, int row, byte[] value);
+
+    static native java.math.BigDecimal duckdb_udf_get_decimal(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_decimal(ByteBuffer vector_ref, int row, java.math.BigDecimal value);
+
     // validity
 
     static native boolean duckdb_validity_row_is_valid(ByteBuffer validity, long row);
@@ -119,6 +136,88 @@ public class DuckDBBindings {
     static native int duckdb_append_data_chunk(ByteBuffer appender, ByteBuffer chunk);
 
     static native int duckdb_append_default_to_chunk(ByteBuffer appender, ByteBuffer chunk, long col, long row);
+
+    // scalar function
+
+    // The returned object must be released with duckdb_destroy_scalar_function.
+    static native ByteBuffer duckdb_create_scalar_function();
+
+    static native void duckdb_destroy_scalar_function(ByteBuffer scalar_function);
+
+    static native void duckdb_scalar_function_set_name(ByteBuffer scalar_function, byte[] name);
+
+    static native void duckdb_scalar_function_add_parameter(ByteBuffer scalar_function, ByteBuffer logical_type);
+
+    static native void duckdb_scalar_function_set_return_type(ByteBuffer scalar_function, ByteBuffer logical_type);
+
+    static native void duckdb_scalar_function_set_volatile(ByteBuffer scalar_function);
+
+    static native void duckdb_scalar_function_set_special_handling(ByteBuffer scalar_function);
+
+    static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalar_function);
+
+    static native void duckdb_register_scalar_function_java(ByteBuffer connection, byte[] name, ScalarUdf callback,
+                                                            UdfLogicalType[] argumentLogicalTypes,
+                                                            UdfLogicalType returnLogicalType,
+                                                            boolean nullSpecialHandling, boolean returnNullOnException,
+                                                            boolean deterministic, boolean varArgs);
+
+    static native void duckdb_register_scalar_function_java_with_function(
+        ByteBuffer connection, ByteBuffer scalarFunction, ScalarUdf callback, UdfLogicalType[] argumentLogicalTypes,
+        UdfLogicalType returnLogicalType, boolean returnNullOnException, boolean varArgs);
+
+    // table function
+
+    static native ByteBuffer duckdb_create_table_function();
+
+    static native void duckdb_destroy_table_function(ByteBuffer table_function);
+
+    static native void duckdb_table_function_set_name(ByteBuffer table_function, byte[] name);
+
+    static native void duckdb_table_function_add_parameter(ByteBuffer table_function, ByteBuffer logical_type);
+
+    static native void duckdb_table_function_supports_projection_pushdown(ByteBuffer table_function, boolean pushdown);
+
+    static native int duckdb_register_table_function(ByteBuffer connection, ByteBuffer table_function);
+
+    static native void duckdb_register_table_function_java(ByteBuffer connection, byte[] name, TableFunction callback,
+                                                           UdfLogicalType[] parameterLogicalTypes,
+                                                           boolean supportsProjectionPushdown, int maxThreads,
+                                                           boolean threadSafe);
+
+    static native void duckdb_register_table_function_java_with_function(ByteBuffer connection,
+                                                                         ByteBuffer tableFunction,
+                                                                         TableFunction callback,
+                                                                         UdfLogicalType[] parameterLogicalTypes,
+                                                                         int maxThreads, boolean threadSafe);
+
+    static native long duckdb_bind_get_parameter_count(ByteBuffer bind_info);
+
+    static native ByteBuffer duckdb_bind_get_parameter(ByteBuffer bind_info, long index);
+
+    static native void duckdb_bind_add_result_column(ByteBuffer bind_info, byte[] name, ByteBuffer logical_type);
+
+    static native void duckdb_bind_set_bind_data(ByteBuffer bind_info, ByteBuffer bind_data);
+
+    static native void duckdb_bind_set_error(ByteBuffer bind_info, byte[] error);
+
+    static native void duckdb_init_set_init_data(ByteBuffer init_info, ByteBuffer init_data);
+
+    static native long duckdb_init_get_column_count(ByteBuffer init_info);
+
+    static native long duckdb_init_get_column_index(ByteBuffer init_info, long column_index);
+
+    static native void duckdb_init_set_max_threads(ByteBuffer init_info, long max_threads);
+
+    static native void duckdb_init_set_error(ByteBuffer init_info, byte[] error);
+
+    static native ByteBuffer duckdb_function_get_bind_data(ByteBuffer function_info);
+
+    static native ByteBuffer duckdb_function_get_init_data(ByteBuffer function_info);
+
+    static native ByteBuffer duckdb_function_get_local_init_data(ByteBuffer function_info);
+
+    static native void duckdb_function_set_error(ByteBuffer function_info, byte[] error);
 
     enum CAPIType {
         DUCKDB_TYPE_INVALID(0, 0),
@@ -197,7 +296,9 @@ public class DuckDBBindings {
         // enum type, only useful as logical type
         DUCKDB_TYPE_STRING_LITERAL(37),
         // enum type, only useful as logical type
-        DUCKDB_TYPE_INTEGER_LITERAL(38);
+        DUCKDB_TYPE_INTEGER_LITERAL(38),
+        // duckdb_time_ns
+        DUCKDB_TYPE_TIME_NS(39, 8);
 
         final int typeId;
         final long widthBytes;

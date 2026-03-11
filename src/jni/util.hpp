@@ -8,6 +8,7 @@ extern "C" {
 #include <jni.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 using jbyteArray_ptr = std::unique_ptr<char, std::function<void(char *)>>;
 
@@ -17,7 +18,32 @@ inline void varchar_deleter(char *val) {
 	duckdb_free(val);
 }
 
+void ThrowJNI(JNIEnv *env, const char *message);
+
 void check_java_exception_and_rethrow(JNIEnv *env);
+
+JNIEnv *get_callback_env(JavaVM *vm, bool &did_attach);
+
+void cleanup_callback_env(JavaVM *vm, bool did_attach);
+
+void delete_local_ref(JNIEnv *env, jobject ref);
+
+void delete_local_refs(JNIEnv *env, const std::vector<jobject> &refs);
+
+void delete_global_ref(JNIEnv *env, jobject ref);
+
+class CallbackEnvGuard {
+public:
+	explicit CallbackEnvGuard(JavaVM *vm_p);
+	~CallbackEnvGuard();
+
+	JNIEnv *env() const;
+
+private:
+	JavaVM *vm;
+	JNIEnv *jni_env;
+	bool did_attach;
+};
 
 std::string jbyteArray_to_string(JNIEnv *env, jbyteArray ba_j);
 

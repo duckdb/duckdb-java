@@ -591,6 +591,8 @@ add_library(duckdb_java SHARED
   src/jni/bindings_common.cpp
   src/jni/bindings_data_chunk.cpp
   src/jni/bindings_logical_type.cpp
+  src/jni/bindings_scalar_function.cpp
+  src/jni/bindings_table_function.cpp
   src/jni/bindings_validity.cpp
   src/jni/bindings_vector.cpp
   src/jni/config.cpp
@@ -598,6 +600,7 @@ add_library(duckdb_java SHARED
   src/jni/functions.cpp
   src/jni/refs.cpp
   src/jni/types.cpp
+  src/jni/udf_registration.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})
 

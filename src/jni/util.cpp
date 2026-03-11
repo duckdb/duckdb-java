@@ -7,6 +7,59 @@
 #include <limits>
 #include <stdexcept>
 
+JNIEnv *get_callback_env(JavaVM *vm, bool &did_attach) {
+	did_attach = false;
+	JNIEnv *env = nullptr;
+	auto get_env_state = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+	if (get_env_state == JNI_EDETACHED) {
+		if (vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr) != JNI_OK) {
+			return nullptr;
+		}
+		did_attach = true;
+	}
+	return env;
+}
+
+void cleanup_callback_env(JavaVM *vm, bool did_attach) {
+	if (did_attach) {
+		vm->DetachCurrentThread();
+	}
+}
+
+void delete_local_ref(JNIEnv *env, jobject ref) {
+	if (ref) {
+		env->DeleteLocalRef(ref);
+	}
+}
+
+void delete_local_refs(JNIEnv *env, const std::vector<jobject> &refs) {
+	for (auto &ref : refs) {
+		delete_local_ref(env, ref);
+	}
+}
+
+void delete_global_ref(JNIEnv *env, jobject ref) {
+	if (ref) {
+		env->DeleteGlobalRef(ref);
+	}
+}
+
+CallbackEnvGuard::CallbackEnvGuard(JavaVM *vm_p) : vm(vm_p), jni_env(nullptr), did_attach(false) {
+	if (vm) {
+		jni_env = get_callback_env(vm, did_attach);
+	}
+}
+
+CallbackEnvGuard::~CallbackEnvGuard() {
+	if (vm) {
+		cleanup_callback_env(vm, did_attach);
+	}
+}
+
+JNIEnv *CallbackEnvGuard::env() const {
+	return jni_env;
+}
+
 void check_java_exception_and_rethrow(JNIEnv *env) {
 	if (env->ExceptionCheck()) {
 		jthrowable exc = env->ExceptionOccurred();

@@ -30,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoUnit;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,11 +46,18 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
 import org.duckdb.test.TempDirectory;
+import org.duckdb.udf.TableBindResult;
+import org.duckdb.udf.TableFunctionDefinition;
+import org.duckdb.udf.TableFunctionOptions;
+import org.duckdb.udf.TableState;
+import org.duckdb.udf.UdfLogicalType;
+import org.duckdb.udf.UdfOptions;
 
 public class TestDuckDBJDBC {
 
@@ -83,6 +91,119 @@ public class TestDuckDBJDBC {
             statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
+        }
+    }
+
+    private static DuckDBColumnType[] scalarCoreTypes() {
+        return new DuckDBColumnType[] {DuckDBColumnType.BOOLEAN, DuckDBColumnType.TINYINT, DuckDBColumnType.SMALLINT,
+                                       DuckDBColumnType.INTEGER, DuckDBColumnType.BIGINT,  DuckDBColumnType.FLOAT,
+                                       DuckDBColumnType.DOUBLE,  DuckDBColumnType.VARCHAR};
+    }
+
+    private static DuckDBColumnType[] scalarExtendedTypes() {
+        return new DuckDBColumnType[] {
+            DuckDBColumnType.DECIMAL,     DuckDBColumnType.BLOB,         DuckDBColumnType.DATE,
+            DuckDBColumnType.TIME,        DuckDBColumnType.TIME_NS,      DuckDBColumnType.TIMESTAMP,
+            DuckDBColumnType.TIMESTAMP_S, DuckDBColumnType.TIMESTAMP_MS, DuckDBColumnType.TIMESTAMP_NS};
+    }
+
+    private static DuckDBColumnType[] scalarUnsignedAndSpecialTypes() {
+        return new DuckDBColumnType[] {DuckDBColumnType.UTINYINT,
+                                       DuckDBColumnType.USMALLINT,
+                                       DuckDBColumnType.UINTEGER,
+                                       DuckDBColumnType.UBIGINT,
+                                       DuckDBColumnType.HUGEINT,
+                                       DuckDBColumnType.UHUGEINT,
+                                       DuckDBColumnType.TIME_WITH_TIME_ZONE,
+                                       DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
+                                       DuckDBColumnType.UUID};
+    }
+
+    private static String nonNullLiteralForType(DuckDBColumnType type) {
+        switch (type) {
+        case BOOLEAN:
+            return "TRUE::BOOLEAN";
+        case TINYINT:
+            return "7::TINYINT";
+        case SMALLINT:
+            return "32000::SMALLINT";
+        case INTEGER:
+            return "123456::INTEGER";
+        case BIGINT:
+            return "9876543210::BIGINT";
+        case FLOAT:
+            return "1.25::FLOAT";
+        case DOUBLE:
+            return "2.5::DOUBLE";
+        case VARCHAR:
+            return "'duck'::VARCHAR";
+        default:
+            throw new IllegalArgumentException("Unsupported test type: " + type);
+        }
+    }
+
+    private static String sqlTypeNameForLiteral(DuckDBColumnType type) {
+        switch (type) {
+        case TIME_WITH_TIME_ZONE:
+            return "TIME WITH TIME ZONE";
+        case TIMESTAMP_WITH_TIME_ZONE:
+            return "TIMESTAMP WITH TIME ZONE";
+        default:
+            return type.name();
+        }
+    }
+
+    private static String nullLiteralForType(DuckDBColumnType type) {
+        return "NULL::" + sqlTypeNameForLiteral(type);
+    }
+
+    private static String nonNullLiteralForExtendedType(DuckDBColumnType type) {
+        switch (type) {
+        case DECIMAL:
+            return "42.75::DECIMAL(18,2)";
+        case BLOB:
+            return "'blob-extended'::BLOB";
+        case DATE:
+            return "DATE '2024-01-03'";
+        case TIME:
+            return "TIME '01:02:03.123456'";
+        case TIME_NS:
+            return "TIME_NS '01:02:03.123456789'";
+        case TIMESTAMP:
+            return "TIMESTAMP '2024-01-03 04:05:06.123456'";
+        case TIMESTAMP_S:
+            return "TIMESTAMP_S '2024-01-03 04:05:06'";
+        case TIMESTAMP_MS:
+            return "TIMESTAMP_MS '2024-01-03 04:05:06.123'";
+        case TIMESTAMP_NS:
+            return "TIMESTAMP_NS '2024-01-03 04:05:06.123456789'";
+        default:
+            throw new IllegalArgumentException("Unsupported extended test type: " + type);
+        }
+    }
+
+    private static String nonNullLiteralForUnsignedAndSpecialType(DuckDBColumnType type) {
+        switch (type) {
+        case UTINYINT:
+            return "250::UTINYINT";
+        case USMALLINT:
+            return "65000::USMALLINT";
+        case UINTEGER:
+            return "4000000000::UINTEGER";
+        case UBIGINT:
+            return "18446744073709551615::UBIGINT";
+        case HUGEINT:
+            return "170141183460469231731687303715884105727::HUGEINT";
+        case UHUGEINT:
+            return "340282366920938463463374607431768211455::UHUGEINT";
+        case TIME_WITH_TIME_ZONE:
+            return "'01:02:03+05:30'::TIME WITH TIME ZONE";
+        case TIMESTAMP_WITH_TIME_ZONE:
+            return "'2024-01-03 04:05:06+00'::TIMESTAMP WITH TIME ZONE";
+        case UUID:
+            return "'550e8400-e29b-41d4-a716-446655440000'::UUID";
+        default:
+            throw new IllegalArgumentException("Unsupported unsigned/special test type: " + type);
         }
     }
 
@@ -145,6 +266,3141 @@ public class TestDuckDBJDBC {
             ResultSet rs = stmt.executeQuery("SELECT");
             rs.next();
         }, SQLException.class);
+    }
+
+    public static void test_range_java_smoke() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("range_java", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 1024 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM range_java(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_range_java_streaming_large() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("range_java_large", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 256 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*), sum(i) FROM range_java_large(10000)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 10000L);
+                assertEquals(rs.getLong(2), 49995000L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_range_java_output_appender_api() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("range_java_appender", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 128 && current < end; produced++, current++) {
+                        out.beginRow().append(current).endRow();
+                    }
+                    st[0] = current;
+                    return out.getSize();
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM range_java_appender(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_bind_typed_parameters() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            Object[] observedParameters = new Object[3];
+            boolean[] observedNullPath = new boolean[] {false};
+
+            conn.registerTableFunction(
+                "tf_bind_typed",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        if (parameters.length != 3) {
+                            throw new IllegalStateException("Expected 3 bind parameters");
+                        }
+                        observedParameters[0] = parameters[0];
+                        observedParameters[1] = parameters[1];
+                        observedParameters[2] = parameters[2];
+
+                        int start = parameters[0] == null ? 0 : ((Number) parameters[0]).intValue();
+                        if (parameters[0] == null) {
+                            observedNullPath[0] = true;
+                        }
+                        int delta = (int) Math.round(((Number) parameters[1]).doubleValue());
+                        int labelLen = ((String) parameters[2]).length();
+                        int end = start + delta + labelLen;
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER}, end);
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        int end = ((Number) bind.getBindState()).intValue();
+                        return new TableState(new int[] {0, end});
+                    }
+
+                    @Override
+                    public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] st = (int[]) state.getState();
+                        int current = st[0];
+                        int end = st[1];
+                        int produced = 0;
+                        for (; produced < 1024 && current < end; produced++, current++) {
+                            out.setInt(0, produced, current);
+                        }
+                        st[0] = current;
+                        return produced;
+                    }
+                },
+                new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {
+                    DuckDBColumnType.INTEGER, DuckDBColumnType.DOUBLE, DuckDBColumnType.VARCHAR}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*), sum(i) FROM tf_bind_typed(5, 2.0, 'abc')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 10L);
+                assertEquals(rs.getLong(2), 45L);
+                assertFalse(rs.next());
+            }
+
+            assertTrue(observedParameters[0] instanceof Integer);
+            assertTrue(observedParameters[1] instanceof Double);
+            assertTrue(observedParameters[2] instanceof String);
+            assertEquals(observedParameters[0], 5);
+            assertEquals(observedParameters[1], 2.0d);
+            assertEquals(observedParameters[2], "abc");
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tf_bind_typed(NULL::INTEGER, 2.0, 'xy')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 4L);
+                assertFalse(rs.next());
+            }
+            assertTrue(observedNullPath[0]);
+        }
+    }
+
+    public static void test_table_function_bind_typed_parameters_extended_types() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            Object[] observedParameters = new Object[5];
+
+            conn.registerTableFunction(
+                "tf_bind_extended_types",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        if (parameters.length != 5) {
+                            throw new IllegalStateException("Expected 5 bind parameters");
+                        }
+                        System.arraycopy(parameters, 0, observedParameters, 0, parameters.length);
+                        int rows = (int) Math.round(((Number) parameters[0]).doubleValue());
+                        rows = Math.max(rows, 0);
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER}, rows);
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        return new TableState(new int[] {0, ((Number) bind.getBindState()).intValue()});
+                    }
+
+                    @Override
+                    public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] st = (int[]) state.getState();
+                        int current = st[0];
+                        int end = st[1];
+                        int produced = 0;
+                        for (; produced < 64 && current < end; produced++, current++) {
+                            out.setInt(0, produced, current);
+                        }
+                        st[0] = current;
+                        return produced;
+                    }
+                },
+                new TableFunctionDefinition().withParameterTypes(
+                    new DuckDBColumnType[] {DuckDBColumnType.DECIMAL, DuckDBColumnType.BLOB, DuckDBColumnType.DATE,
+                                            DuckDBColumnType.TIME, DuckDBColumnType.TIMESTAMP}));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(*), sum(i) FROM tf_bind_extended_types("
+                                       + "3.0::DECIMAL(18,2), 'blob-extended'::BLOB, DATE '2024-01-03', "
+                                       + "TIME '01:02:03.123456', TIMESTAMP '2024-01-03 04:05:06.123456')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 3L);
+                assertEquals(rs.getLong(2), 3L);
+                assertFalse(rs.next());
+            }
+
+            assertTrue(observedParameters[0] instanceof BigDecimal);
+            assertEquals(((BigDecimal) observedParameters[0]).compareTo(new BigDecimal("3.00")), 0);
+            assertTrue(observedParameters[1] instanceof byte[]);
+            assertEquals((byte[]) observedParameters[1], "blob-extended".getBytes(StandardCharsets.UTF_8));
+            assertTrue(observedParameters[2] instanceof LocalDate);
+            assertTrue(observedParameters[3] instanceof LocalTime);
+            assertTrue(observedParameters[4] instanceof LocalDateTime);
+            assertEquals(observedParameters[2], LocalDate.of(2024, 1, 3));
+            assertEquals(observedParameters[3], LocalTime.parse("01:02:03.123456"));
+            assertEquals(observedParameters[4], LocalDateTime.parse("2024-01-03T04:05:06.123456"));
+        }
+    }
+
+    public static void test_table_function_bind_temporal_and_uuid_objects() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            Object[] observedParameters = new Object[10];
+
+            conn.registerTableFunction(
+                "tf_bind_temporal_uuid_objects",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        if (parameters.length != observedParameters.length) {
+                            throw new IllegalStateException("Expected 10 bind parameters");
+                        }
+                        System.arraycopy(parameters, 0, observedParameters, 0, parameters.length);
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER}, null);
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        return new TableState(new int[] {0});
+                    }
+
+                    @Override
+                    public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] producedRows = (int[]) state.getState();
+                        if (producedRows[0] > 0) {
+                            return 0;
+                        }
+                        out.setInt(0, 0, 1);
+                        producedRows[0] = 1;
+                        return 1;
+                    }
+                },
+                new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {
+                    DuckDBColumnType.DATE, DuckDBColumnType.TIME, DuckDBColumnType.TIME_NS, DuckDBColumnType.TIMESTAMP,
+                    DuckDBColumnType.TIMESTAMP_S, DuckDBColumnType.TIMESTAMP_MS, DuckDBColumnType.TIMESTAMP_NS,
+                    DuckDBColumnType.TIME_WITH_TIME_ZONE, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
+                    DuckDBColumnType.UUID}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(i) FROM tf_bind_temporal_uuid_objects("
+                                                  + "DATE '2024-01-03', "
+                                                  + "TIME '01:02:03.123456', "
+                                                  + "TIME_NS '01:02:03.123456789', "
+                                                  + "TIMESTAMP '2024-01-03 04:05:06.123456', "
+                                                  + "TIMESTAMP_S '2024-01-03 04:05:06', "
+                                                  + "TIMESTAMP_MS '2024-01-03 04:05:06.123', "
+                                                  + "TIMESTAMP_NS '2024-01-03 04:05:06.123456789', "
+                                                  + "'01:02:03+05:30'::TIME WITH TIME ZONE, "
+                                                  + "'2024-01-03 04:05:06+00'::TIMESTAMP WITH TIME ZONE, "
+                                                  + "'550e8400-e29b-41d4-a716-446655440000'::UUID)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+                assertFalse(rs.next());
+            }
+
+            assertTrue(observedParameters[0] instanceof LocalDate);
+            assertTrue(observedParameters[1] instanceof LocalTime);
+            assertTrue(observedParameters[2] instanceof LocalTime);
+            assertTrue(observedParameters[3] instanceof LocalDateTime);
+            assertTrue(observedParameters[4] instanceof LocalDateTime);
+            assertTrue(observedParameters[5] instanceof LocalDateTime);
+            assertTrue(observedParameters[6] instanceof LocalDateTime);
+            assertTrue(observedParameters[7] instanceof OffsetTime);
+            assertTrue(observedParameters[8] instanceof OffsetDateTime);
+            assertTrue(observedParameters[9] instanceof UUID);
+
+            assertEquals(observedParameters[0], LocalDate.of(2024, 1, 3));
+            assertEquals(observedParameters[1], LocalTime.parse("01:02:03.123456"));
+            assertEquals(observedParameters[2], LocalTime.parse("01:02:03.123456789"));
+            assertEquals(observedParameters[3], LocalDateTime.parse("2024-01-03T04:05:06.123456"));
+            assertEquals(observedParameters[4], LocalDateTime.parse("2024-01-03T04:05:06"));
+            assertEquals(observedParameters[5], LocalDateTime.parse("2024-01-03T04:05:06.123"));
+            assertEquals(observedParameters[6], LocalDateTime.parse("2024-01-03T04:05:06.123456789"));
+            assertEquals(observedParameters[7], OffsetTime.parse("01:02:03+05:30"));
+            assertEquals(observedParameters[8], OffsetDateTime.parse("2024-01-03T04:05:06Z"));
+            assertEquals(observedParameters[9], UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT sum(i) FROM tf_bind_temporal_uuid_objects("
+                                       + "NULL::DATE, NULL::TIME, NULL::TIME_NS, NULL::TIMESTAMP, NULL::TIMESTAMP_S, "
+                                       + "NULL::TIMESTAMP_MS, NULL::TIMESTAMP_NS, NULL::TIME WITH TIME ZONE, "
+                                       + "NULL::TIMESTAMP WITH TIME ZONE, NULL::UUID)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+                assertFalse(rs.next());
+            }
+            for (Object observedParameter : observedParameters) {
+                assertEquals(observedParameter, null);
+            }
+        }
+    }
+
+    public static void test_table_function_bind_decimal_parameter_exact_bigdecimal() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            Object[] observedParameters = new Object[1];
+
+            conn.registerTableFunction("tf_bind_decimal_exact", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    if (parameters.length != 1) {
+                        throw new IllegalStateException("Expected 1 bind parameter");
+                    }
+                    observedParameters[0] = parameters[0];
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] produced = (int[]) state.getState();
+                    if (produced[0] > 0) {
+                        return 0;
+                    }
+                    out.setInt(0, 0, 1);
+                    produced[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.DECIMAL}));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT sum(i) FROM tf_bind_decimal_exact(9007199254740.127::DECIMAL(18,3))")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+                assertFalse(rs.next());
+            }
+
+            assertTrue(observedParameters[0] instanceof BigDecimal);
+            assertEquals(((BigDecimal) observedParameters[0]).compareTo(new BigDecimal("9007199254740.127")), 0);
+        }
+    }
+
+    public static void test_table_function_decimal_logical_output_boundaries_and_nulls() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_decimal_logical_boundaries", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"d4_1", "d9_4", "d18_6", "d30_10", "d38_10"},
+                        new UdfLogicalType[] {UdfLogicalType.decimal(4, 1), UdfLogicalType.decimal(9, 4),
+                                              UdfLogicalType.decimal(18, 6), UdfLogicalType.decimal(30, 10),
+                                              UdfLogicalType.decimal(38, 10)},
+                        null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.setBigDecimal(0, 0, new BigDecimal("999.9"));
+                    out.setBigDecimal(1, 0, new BigDecimal("99999.9999"));
+                    out.setBigDecimal(2, 0, new BigDecimal("999999999999.999999"));
+                    out.setBigDecimal(3, 0, new BigDecimal("99999999999999999999.9999999999"));
+                    out.setBigDecimal(4, 0, new BigDecimal("9999999999999999999999999999.9999999999"));
+
+                    out.setBigDecimal(0, 1, new BigDecimal("-999.9"));
+                    out.setBigDecimal(1, 1, new BigDecimal("-99999.9999"));
+                    out.setBigDecimal(2, 1, new BigDecimal("-999999999999.999999"));
+                    out.setBigDecimal(3, 1, new BigDecimal("-99999999999999999999.9999999999"));
+                    out.setBigDecimal(4, 1, new BigDecimal("-9999999999999999999999999999.9999999999"));
+
+                    for (int col = 0; col < 5; col++) {
+                        out.setNull(col, 2);
+                    }
+
+                    producedRows[0] = 3;
+                    return 3;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT CAST(d4_1 AS VARCHAR), CAST(d9_4 AS VARCHAR), CAST(d18_6 AS VARCHAR), "
+                                       + "CAST(d30_10 AS VARCHAR), CAST(d38_10 AS VARCHAR) "
+                                       + "FROM tf_decimal_logical_boundaries() ORDER BY d4_1 DESC NULLS LAST")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "999.9");
+                assertEquals(rs.getString(2), "99999.9999");
+                assertEquals(rs.getString(3), "999999999999.999999");
+                assertEquals(rs.getString(4), "99999999999999999999.9999999999");
+                assertEquals(rs.getString(5), "9999999999999999999999999999.9999999999");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "-999.9");
+                assertEquals(rs.getString(2), "-99999.9999");
+                assertEquals(rs.getString(3), "-999999999999.999999");
+                assertEquals(rs.getString(4), "-99999999999999999999.9999999999");
+                assertEquals(rs.getString(5), "-9999999999999999999999999999.9999999999");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), null);
+                assertEquals(rs.getObject(2), null);
+                assertEquals(rs.getObject(3), null);
+                assertEquals(rs.getObject(4), null);
+                assertEquals(rs.getObject(5), null);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_bind_typed_parameters_complex() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            Object[] observedParameters = new Object[4];
+
+            conn.registerTableFunction(
+                "tf_bind_complex",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        if (parameters.length != 4) {
+                            throw new IllegalStateException("Expected 4 bind parameters");
+                        }
+                        System.arraycopy(parameters, 0, observedParameters, 0, parameters.length);
+
+                        List<?> listParam = (List<?>) parameters[0];
+                        Map<?, ?> mapParam = (Map<?, ?>) parameters[1];
+                        Map<?, ?> structParam = (Map<?, ?>) parameters[2];
+                        String enumParam = (String) parameters[3];
+
+                        int rowCount = listParam.size() + mapParam.size() + ((Number) structParam.get("id")).intValue();
+                        if ("medium".equals(enumParam)) {
+                            rowCount += 1;
+                        }
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER}, rowCount);
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        int end = ((Number) bind.getBindState()).intValue();
+                        return new TableState(new int[] {0, end});
+                    }
+
+                    @Override
+                    public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] st = (int[]) state.getState();
+                        int current = st[0];
+                        int end = st[1];
+                        int produced = 0;
+                        for (; produced < 128 && current < end; produced++, current++) {
+                            out.setInt(0, produced, current);
+                        }
+                        st[0] = current;
+                        return produced;
+                    }
+                },
+                new TableFunctionDefinition().withParameterTypes(new UdfLogicalType[] {
+                    UdfLogicalType.list(UdfLogicalType.of(DuckDBColumnType.INTEGER)),
+                    UdfLogicalType.map(UdfLogicalType.of(DuckDBColumnType.VARCHAR),
+                                       UdfLogicalType.of(DuckDBColumnType.INTEGER)),
+                    UdfLogicalType.struct(new String[] {"id", "txt"},
+                                          new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                                                                UdfLogicalType.of(DuckDBColumnType.VARCHAR)}),
+                    UdfLogicalType.enumeration("small", "medium", "large")}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*), sum(i) FROM tf_bind_complex("
+                                                  + "[10,20,30], map(['k1','k2'], [100,200]), "
+                                                  + "{'id':4, 'txt':'duck'}, "
+                                                  + "'medium'::ENUM('small','medium','large'))")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 10L);
+                assertEquals(rs.getLong(2), 45L);
+                assertFalse(rs.next());
+            }
+
+            assertTrue(observedParameters[0] instanceof List);
+            assertTrue(observedParameters[1] instanceof Map);
+            assertTrue(observedParameters[2] instanceof Map);
+            assertTrue(observedParameters[3] instanceof String);
+
+            List<?> observedList = (List<?>) observedParameters[0];
+            assertEquals(observedList.size(), 3);
+            assertEquals(((Number) observedList.get(0)).intValue(), 10);
+            assertEquals(((Number) observedList.get(1)).intValue(), 20);
+            assertEquals(((Number) observedList.get(2)).intValue(), 30);
+
+            Map<?, ?> observedMap = (Map<?, ?>) observedParameters[1];
+            assertEquals(observedMap.size(), 2);
+            assertEquals(((Number) observedMap.get("k1")).intValue(), 100);
+            assertEquals(((Number) observedMap.get("k2")).intValue(), 200);
+
+            Map<?, ?> observedStruct = (Map<?, ?>) observedParameters[2];
+            assertEquals(((Number) observedStruct.get("id")).intValue(), 4);
+            assertEquals(observedStruct.get("txt"), "duck");
+            assertEquals(observedParameters[3], "medium");
+        }
+    }
+
+    public static void test_table_function_bind_parameter_type_validation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
+            assertThrows(() -> {
+                conn.registerTableFunction(
+                    "tf_bad_param",
+                    new org.duckdb.udf.TableFunction() {
+                        @Override
+                        public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                            return new TableBindResult(new String[] {"i"},
+                                                       new DuckDBColumnType[] {DuckDBColumnType.INTEGER});
+                        }
+
+                        @Override
+                        public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                            return new TableState(new int[] {0, 0});
+                        }
+
+                        @Override
+                        public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                            return 0;
+                        }
+                    },
+                    new TableFunctionDefinition().withParameterTypes(
+                        new DuckDBColumnType[] {DuckDBColumnType.INTERVAL}));
+            }, SQLFeatureNotSupportedException.class);
+
+            assertThrows(() -> {
+                conn.registerTableFunction(
+                    "tf_bad_param_logical",
+                    new org.duckdb.udf.TableFunction() {
+                        @Override
+                        public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                            return new TableBindResult(new String[] {"i"},
+                                                       new DuckDBColumnType[] {DuckDBColumnType.INTEGER});
+                        }
+
+                        @Override
+                        public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                            return new TableState(new int[] {0, 0});
+                        }
+
+                        @Override
+                        public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                            return 0;
+                        }
+                    },
+                    new TableFunctionDefinition().withParameterTypes(
+                        new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTERVAL)}));
+            }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_typed_outputs_core_types() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_core_out", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    int end = ((Number) parameters[0]).intValue();
+                    return new TableBindResult(
+                        new String[] {"b", "t8", "s16", "i32", "i64", "f32", "f64", "txt"},
+                        new DuckDBColumnType[] {DuckDBColumnType.BOOLEAN, DuckDBColumnType.TINYINT,
+                                                DuckDBColumnType.SMALLINT, DuckDBColumnType.INTEGER,
+                                                DuckDBColumnType.BIGINT, DuckDBColumnType.FLOAT,
+                                                DuckDBColumnType.DOUBLE, DuckDBColumnType.VARCHAR},
+                        end);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 128 && current < end; produced++, current++) {
+                        out.setBoolean(0, produced, current % 2 == 0);
+                        out.setInt(1, produced, current - 50);
+                        out.setInt(2, produced, 1000 + current);
+                        out.setInt(3, produced, current * 10);
+                        out.setLong(4, produced, 1_000_000_000_000L + current);
+                        out.setFloat(5, produced, current + 0.5f);
+                        if (current % 2 == 0) {
+                            out.setDouble(6, produced, current + 0.25d);
+                        } else {
+                            out.setNull(6, produced);
+                        }
+                        if (current % 3 == 0) {
+                            out.setNull(7, produced);
+                        } else {
+                            out.setString(7, produced, "v" + current);
+                        }
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM tf_core_out(6) ORDER BY i32")) {
+                for (int i = 0; i < 6; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getBoolean(1), i % 2 == 0);
+                    assertEquals(rs.getInt(2), i - 50);
+                    assertEquals(rs.getInt(3), 1000 + i);
+                    assertEquals(rs.getInt(4), i * 10);
+                    assertEquals(rs.getLong(5), 1_000_000_000_000L + i);
+                    assertEquals(rs.getFloat(6), i + 0.5f, 0.0001f);
+                    if (i % 2 == 0) {
+                        assertEquals(rs.getDouble(7), i + 0.25d, 0.0000001d);
+                    } else {
+                        assertEquals(rs.getObject(7), null);
+                    }
+                    if (i % 3 == 0) {
+                        assertEquals(rs.getString(8), null);
+                    } else {
+                        assertEquals(rs.getString(8), "v" + i);
+                    }
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_typed_outputs_extended_types() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_extended_out", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    int end = ((Number) parameters[0]).intValue();
+                    return new TableBindResult(new String[] {"id", "dec", "blob", "d", "t", "ts"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.DECIMAL, DuckDBColumnType.BLOB,
+                                                                       DuckDBColumnType.DATE, DuckDBColumnType.TIME,
+                                                                       DuckDBColumnType.TIMESTAMP},
+                                               end);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    LocalDate baseDate = LocalDate.of(2024, 1, 3);
+                    LocalTime baseTime = LocalTime.of(1, 1, 1);
+                    LocalDateTime baseTimestamp = LocalDateTime.of(2024, 1, 3, 4, 5, 6);
+                    for (; produced < 64 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                        out.setBigDecimal(1, produced, BigDecimal.valueOf(current).add(BigDecimal.valueOf(0.25d)));
+                        out.setBytes(2, produced, ("b" + current).getBytes(StandardCharsets.UTF_8));
+                        out.setLocalDate(3, produced, baseDate.plusDays(current));
+                        out.setLocalTime(4, produced, baseTime.plusSeconds(current));
+                        out.setLocalDateTime(5, produced, baseTimestamp.plusSeconds(current));
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT id, CAST(dec AS DOUBLE), blob, CAST(d AS VARCHAR), "
+                                                  + "CAST(t AS VARCHAR), CAST(ts AS VARCHAR) "
+                                                  + "FROM tf_extended_out(3) ORDER BY id")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 0);
+                assertEquals(rs.getDouble(2), 0.25d, 0.000001d);
+                assertEquals(rs.getBytes(3), "b0".getBytes(StandardCharsets.UTF_8));
+                assertEquals(rs.getString(4), "2024-01-03");
+                assertEquals(rs.getString(5), "01:01:01");
+                assertEquals(rs.getString(6), "2024-01-03 04:05:06");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+                assertEquals(rs.getDouble(2), 1.25d, 0.000001d);
+                assertEquals(rs.getBytes(3), "b1".getBytes(StandardCharsets.UTF_8));
+                assertEquals(rs.getString(4), "2024-01-04");
+                assertEquals(rs.getString(5), "01:01:02");
+                assertEquals(rs.getString(6), "2024-01-03 04:05:07");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 2);
+                assertEquals(rs.getDouble(2), 2.25d, 0.000001d);
+                assertEquals(rs.getBytes(3), "b2".getBytes(StandardCharsets.UTF_8));
+                assertEquals(rs.getString(4), "2024-01-05");
+                assertEquals(rs.getString(5), "01:01:03");
+                assertEquals(rs.getString(6), "2024-01-03 04:05:08");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_java_object_methods() throws Exception {
+        final UUID expectedUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_java_objects", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    int end = ((Number) parameters[0]).intValue();
+                    return new TableBindResult(
+                        new String[] {"dec", "d", "t", "ts", "t_tz", "ts_tz", "uuid_v"},
+                        new DuckDBColumnType[] {DuckDBColumnType.DECIMAL, DuckDBColumnType.DATE, DuckDBColumnType.TIME,
+                                                DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIME_WITH_TIME_ZONE,
+                                                DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE, DuckDBColumnType.UUID},
+                        end);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    if (st[0] >= st[1]) {
+                        return 0;
+                    }
+                    out.setBigDecimal(0, 0, new BigDecimal("12.345"));
+                    out.setLocalDate(1, 0, LocalDate.of(2024, 1, 3));
+                    out.setLocalTime(2, 0, LocalTime.of(1, 2, 3));
+                    out.setDate(3, 0, new java.util.Date(1_704_254_706_000L)); // 2024-01-03 04:05:06 UTC
+                    out.setOffsetTime(4, 0, OffsetTime.parse("01:02:03+02:00"));
+                    out.setOffsetDateTime(5, 0, OffsetDateTime.parse("2024-01-03T04:05:06+02:00"));
+                    out.setUUID(6, 0, expectedUuid);
+                    st[0]++;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT CAST(dec AS DOUBLE), CAST(d AS VARCHAR), CAST(t AS VARCHAR), "
+                                                  + "CAST(ts AS VARCHAR), CAST(uuid_v AS VARCHAR), "
+                                                  + "t_tz IS NOT NULL, ts_tz IS NOT NULL "
+                                                  + "FROM tf_out_java_objects(1)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getDouble(1), 12.345d, 0.000001d);
+                assertEquals(rs.getString(2), "2024-01-03");
+                assertEquals(rs.getString(3), "01:02:03");
+                assertEquals(rs.getString(4), "2024-01-03 04:05:06");
+                assertEquals(rs.getString(5), expectedUuid.toString());
+                assertEquals(rs.getBoolean(6), true);
+                assertEquals(rs.getBoolean(7), true);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_java_append_overloads() throws Exception {
+        final UUID expectedUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_java_append_overloads", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"dec", "d", "t", "ts", "uuid_v"},
+                        new DuckDBColumnType[] {DuckDBColumnType.DECIMAL, DuckDBColumnType.DATE, DuckDBColumnType.TIME,
+                                                DuckDBColumnType.TIMESTAMP, DuckDBColumnType.UUID},
+                        null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.beginRow()
+                        .append(new BigDecimal("9.875"))
+                        .append(LocalDate.of(2025, 2, 14))
+                        .append(LocalTime.of(12, 34, 56))
+                        .append(LocalDateTime.of(2025, 2, 14, 12, 34, 56))
+                        .append(expectedUuid)
+                        .endRow();
+
+                    out.beginRow().appendNull().appendNull().appendNull().appendNull().appendNull().endRow();
+
+                    producedRows[0] = 2;
+                    return 2;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT CAST(dec AS DOUBLE), CAST(d AS VARCHAR), CAST(t AS VARCHAR), CAST(ts AS VARCHAR), "
+                     + "CAST(uuid_v AS VARCHAR) FROM tf_out_java_append_overloads() ORDER BY d NULLS LAST")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getDouble(1), 9.875d, 0.000001d);
+                assertEquals(rs.getString(2), "2025-02-14");
+                assertEquals(rs.getString(3), "12:34:56");
+                assertEquals(rs.getString(4), "2025-02-14 12:34:56");
+                assertEquals(rs.getString(5), expectedUuid.toString());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), null);
+                assertEquals(rs.getObject(2), null);
+                assertEquals(rs.getObject(3), null);
+                assertEquals(rs.getObject(4), null);
+                assertEquals(rs.getObject(5), null);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_decimal_exact_bigdecimal_paths() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_decimal_exact", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"dec"}, new DuckDBColumnType[] {DuckDBColumnType.DECIMAL},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.beginRow().append(new BigDecimal("9007199254740.127")).endRow();
+                    out.setBigDecimal(0, 1, new BigDecimal("-9007199254740.127"));
+
+                    producedRows[0] = 2;
+                    return 2;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT CAST(dec AS VARCHAR) FROM tf_out_decimal_exact() ORDER BY dec DESC")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "9007199254740.127");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "-9007199254740.127");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_java_object_type_mismatch() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_java_object_type_mismatch", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER});
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(null);
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    out.setLocalDate(0, 0, LocalDate.of(2024, 1, 1));
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            assertThrows(
+                () -> { stmt.executeQuery("SELECT * FROM tf_out_java_object_type_mismatch()"); }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_typed_outputs_unsigned_and_special_roundtrip_and_nulls() throws Exception {
+        final DuckDBColumnType[] types = scalarUnsignedAndSpecialTypes();
+        final String[] columnNames =
+            new String[] {"u8", "u16", "u32", "u64", "i128", "u128", "timetz", "tstz", "uuid_v"};
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_unsigned_special_out", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(columnNames, types, parameters.clone());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new Object[] {bind.getBindState(), Boolean.FALSE});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    Object[] stateValues = (Object[]) state.getState();
+                    if ((Boolean) stateValues[1]) {
+                        return 0;
+                    }
+
+                    Object[] parameters = (Object[]) stateValues[0];
+                    for (int i = 0; i < types.length; i++) {
+                        Object parameter = parameters[i];
+                        if (parameter == null) {
+                            out.setNull(i, 0);
+                            continue;
+                        }
+
+                        switch (types[i]) {
+                        case UTINYINT:
+                        case USMALLINT:
+                            out.setInt(i, 0, ((Number) parameter).intValue());
+                            break;
+                        case UINTEGER:
+                        case UBIGINT:
+                            out.setLong(i, 0, ((Number) parameter).longValue());
+                            break;
+                        case TIME_WITH_TIME_ZONE:
+                            out.setOffsetTime(i, 0, (OffsetTime) parameter);
+                            break;
+                        case TIMESTAMP_WITH_TIME_ZONE:
+                            out.setOffsetDateTime(i, 0, (OffsetDateTime) parameter);
+                            break;
+                        case HUGEINT:
+                        case UHUGEINT:
+                            out.setBytes(i, 0, (byte[]) parameter);
+                            break;
+                        case UUID:
+                            out.setUUID(i, 0, (UUID) parameter);
+                            break;
+                        default:
+                            throw new IllegalStateException("Unexpected unsigned/special table type: " + types[i]);
+                        }
+                    }
+
+                    stateValues[1] = Boolean.TRUE;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(types));
+
+            StringBuilder nonNullArgs = new StringBuilder();
+            StringBuilder nonNullChecks = new StringBuilder();
+            for (int i = 0; i < types.length; i++) {
+                if (i > 0) {
+                    nonNullArgs.append(", ");
+                    nonNullChecks.append(", ");
+                }
+                String literal = nonNullLiteralForUnsignedAndSpecialType(types[i]);
+                nonNullArgs.append(literal);
+                nonNullChecks.append(columnNames[i]).append(" = ").append(literal);
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT " + nonNullChecks + " FROM tf_unsigned_special_out(" +
+                                                  nonNullArgs + ")")) {
+                assertTrue(rs.next());
+                for (int i = 0; i < types.length; i++) {
+                    assertEquals(rs.getBoolean(i + 1), true);
+                }
+                assertFalse(rs.next());
+            }
+
+            StringBuilder nullArgs = new StringBuilder();
+            StringBuilder nullChecks = new StringBuilder();
+            for (int i = 0; i < types.length; i++) {
+                if (i > 0) {
+                    nullArgs.append(", ");
+                    nullChecks.append(", ");
+                }
+                nullArgs.append(nullLiteralForType(types[i]));
+                nullChecks.append(columnNames[i]).append(" IS NULL");
+            }
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT " + nullChecks + " FROM tf_unsigned_special_out(" + nullArgs + ")")) {
+                assertTrue(rs.next());
+                for (int i = 0; i < types.length; i++) {
+                    assertEquals(rs.getBoolean(i + 1), true);
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_nested_and_enum_outputs() throws Exception {
+        final UdfLogicalType listOfInt = UdfLogicalType.list(UdfLogicalType.of(DuckDBColumnType.INTEGER));
+        final UdfLogicalType arrayOfVarchar = UdfLogicalType.array(UdfLogicalType.of(DuckDBColumnType.VARCHAR), 2);
+        final UdfLogicalType mapVarcharInt = UdfLogicalType.map(UdfLogicalType.of(DuckDBColumnType.VARCHAR),
+                                                                UdfLogicalType.of(DuckDBColumnType.INTEGER));
+        final UdfLogicalType structType = UdfLogicalType.struct(
+            new String[] {"id", "txt"}, new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                                                              UdfLogicalType.of(DuckDBColumnType.VARCHAR)});
+        final UdfLogicalType unionType = UdfLogicalType.unionType(
+            new String[] {"num", "txt"}, new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                                                               UdfLogicalType.of(DuckDBColumnType.VARCHAR)});
+        final UdfLogicalType enumType = UdfLogicalType.enumeration("small", "medium", "large");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_nested_out", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    int rowCount = ((Number) parameters[0]).intValue();
+                    return new TableBindResult(new String[] {"lst_i", "arr_txt", "kv", "s", "u", "en"},
+                                               new UdfLogicalType[] {listOfInt, arrayOfVarchar, mapVarcharInt,
+                                                                     structType, unionType, enumType},
+                                               rowCount);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 64 && current < end; produced++, current++) {
+                        Map<String, Integer> mapValue = new HashMap<>();
+                        mapValue.put("k", 10 + current * 10);
+                        if (current % 2 == 0) {
+                            out.beginRow()
+                                .append(Arrays.asList(current + 1, current + 2, current + 3))
+                                .append(new String[] {"a" + current, "b" + current})
+                                .append(mapValue)
+                                .append(Arrays.asList(current, "row" + current))
+                                .append(new AbstractMap.SimpleEntry<String, Object>("num", 100 + current))
+                                .append("medium")
+                                .endRow();
+                        } else {
+                            out.beginRow()
+                                .append(Arrays.asList(current + 1, null, current + 3))
+                                .append(new String[] {"a" + current, "b" + current})
+                                .append(mapValue)
+                                .append(Arrays.asList(current, "row" + current))
+                                .append(new AbstractMap.SimpleEntry<String, Object>("txt", "u" + current))
+                                .append("small")
+                                .endRow();
+                        }
+                    }
+                    st[0] = current;
+                    return out.getSize();
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT list_extract(lst_i, 1), list_extract(lst_i, 2), "
+                                                  + "array_extract(arr_txt, 2), list_extract(map_extract(kv, 'k'), 1), "
+                                                  + "s.id, s.txt, union_tag(u), u.num, u.txt, CAST(en AS VARCHAR) "
+                                                  + "FROM tf_nested_out(2) ORDER BY s.id")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+                assertEquals(rs.getInt(2), 2);
+                assertEquals(rs.getString(3), "b0");
+                assertEquals(rs.getInt(4), 10);
+                assertEquals(rs.getInt(5), 0);
+                assertEquals(rs.getString(6), "row0");
+                assertEquals(rs.getString(7), "num");
+                assertEquals(rs.getInt(8), 100);
+                assertEquals(rs.getObject(9), null);
+                assertEquals(rs.getString(10), "medium");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 2);
+                assertEquals(rs.getObject(2), null);
+                assertEquals(rs.getString(3), "b1");
+                assertEquals(rs.getInt(4), 20);
+                assertEquals(rs.getInt(5), 1);
+                assertEquals(rs.getString(6), "row1");
+                assertEquals(rs.getString(7), "txt");
+                assertEquals(rs.getObject(8), null);
+                assertEquals(rs.getString(9), "u1");
+                assertEquals(rs.getString(10), "small");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_nested_projection_pushdown() throws Exception {
+        final UdfLogicalType structType = UdfLogicalType.struct(
+            new String[] {"id", "txt"}, new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                                                              UdfLogicalType.of(DuckDBColumnType.VARCHAR)});
+        final UdfLogicalType enumType = UdfLogicalType.enumeration("small", "large");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            int[] materializedBySourceColumn = new int[] {0, 0, 0};
+            int[][] observedProjectedColumns = new int[2][];
+
+            conn.registerTableFunction(
+                "tf_nested_projected",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        int end = ((Number) parameters[0]).intValue();
+                        return new TableBindResult(
+                            new String[] {"id", "nested", "en"},
+                            new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER), structType, enumType},
+                            end);
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        int end = ((Number) bind.getBindState()).intValue();
+                        int[] projectedColumns = new int[ctx.getColumnCount()];
+                        for (int i = 0; i < projectedColumns.length; i++) {
+                            projectedColumns[i] = ctx.getColumnIndex(i);
+                        }
+                        if (observedProjectedColumns[0] == null) {
+                            observedProjectedColumns[0] = projectedColumns.clone();
+                        } else {
+                            observedProjectedColumns[1] = projectedColumns.clone();
+                        }
+                        return new TableState(new Object[] {0, end, projectedColumns});
+                    }
+
+                    @Override
+                    public int produce(TableState state, UdfOutputAppender out) {
+                        Object[] st = (Object[]) state.getState();
+                        int current = (int) st[0];
+                        int end = (int) st[1];
+                        int[] projectedColumns = (int[]) st[2];
+                        int produced = 0;
+                        for (; produced < 128 && current < end; produced++, current++) {
+                            out.beginRow();
+                            for (int projectedCol = 0; projectedCol < projectedColumns.length; projectedCol++) {
+                                int sourceColumn = projectedColumns[projectedCol];
+                                materializedBySourceColumn[sourceColumn]++;
+                                if (sourceColumn == 0) {
+                                    out.append(current);
+                                } else if (sourceColumn == 1) {
+                                    out.append(Arrays.asList(current, "p" + current));
+                                } else {
+                                    out.append(current % 2 == 0 ? "small" : "large");
+                                }
+                            }
+                            out.endRow();
+                        }
+                        st[0] = current;
+                        return out.getSize();
+                    }
+                },
+                new TableFunctionDefinition()
+                    .withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER})
+                    .withProjectionPushdown(true));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT en FROM tf_nested_projected(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getString(1), i % 2 == 0 ? "small" : "large");
+                }
+                assertFalse(rs.next());
+            }
+            assertEquals(materializedBySourceColumn[0], 0);
+            assertEquals(materializedBySourceColumn[1], 0);
+            assertEquals(materializedBySourceColumn[2], 5);
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT nested.id, nested.txt FROM tf_nested_projected(3) ORDER BY 1")) {
+                for (int i = 0; i < 3; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                    assertEquals(rs.getString(2), "p" + i);
+                }
+                assertFalse(rs.next());
+            }
+            assertEquals(materializedBySourceColumn[0], 0);
+            assertEquals(materializedBySourceColumn[1], 3);
+            assertEquals(materializedBySourceColumn[2], 5);
+            assertNotNull(observedProjectedColumns[0]);
+            assertNotNull(observedProjectedColumns[1]);
+            assertEquals(observedProjectedColumns[0].length, 1);
+            assertEquals(observedProjectedColumns[1].length, 1);
+            assertEquals(observedProjectedColumns[0][0], 2);
+            assertEquals(observedProjectedColumns[1][0], 1);
+        }
+    }
+
+    public static void test_table_function_typed_outputs_streaming_chunks() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_core_stream", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    int end = ((Number) parameters[0]).intValue();
+                    return new TableBindResult(new String[] {"i", "d", "txt"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.DOUBLE,
+                                                                       DuckDBColumnType.VARCHAR},
+                                               end);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 37 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                        out.setDouble(1, produced, current * 1.5d);
+                        out.setString(2, produced, "x" + current);
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(*), sum(i), sum(d), count(txt) FROM tf_core_stream(5000)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 5000L);
+                assertEquals(rs.getLong(2), 12_497_500L);
+                assertEquals(rs.getDouble(3), 18_746_250d, 0.000001d);
+                assertEquals(rs.getLong(4), 5000L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_range_java_error_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("range_java_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) throws Exception {
+                    throw new Exception("range_java_error");
+                }
+            });
+
+            assertThrows(() -> { stmt.executeQuery("SELECT * FROM range_java_error(1)"); }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_projection_pushdown() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            int[] materializedBySourceColumn = new int[] {0, 0, 0};
+            conn.registerTableFunction("tf_projected", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"col1", "col2", "col3"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    int[] projectedColumns = new int[ctx.getColumnCount()];
+                    for (int i = 0; i < projectedColumns.length; i++) {
+                        projectedColumns[i] = ctx.getColumnIndex(i);
+                    }
+                    return new TableState(new Object[] {0, end, projectedColumns});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    Object[] st = (Object[]) state.getState();
+                    int current = (int) st[0];
+                    int end = (int) st[1];
+                    int[] projectedColumns = (int[]) st[2];
+                    int produced = 0;
+                    for (; produced < 1024 && current < end; produced++, current++) {
+                        for (int projectedCol = 0; projectedCol < projectedColumns.length; projectedCol++) {
+                            int sourceColumn = projectedColumns[projectedCol];
+                            materializedBySourceColumn[sourceColumn]++;
+                            if (sourceColumn == 0) {
+                                out.setInt(projectedCol, produced, current);
+                            } else if (sourceColumn == 1) {
+                                out.setInt(projectedCol, produced, current * 10);
+                            } else {
+                                out.setInt(projectedCol, produced, current * 100);
+                            }
+                        }
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withProjectionPushdown(true));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT col1 FROM tf_projected(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                }
+                assertFalse(rs.next());
+            }
+            assertEquals(materializedBySourceColumn[0], 5);
+            assertEquals(materializedBySourceColumn[1], 0);
+            assertEquals(materializedBySourceColumn[2], 0);
+        }
+    }
+
+    public static void test_table_function_projection_pushdown_mixed_schema() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            int[] materializedBySourceColumn = new int[] {0, 0, 0, 0, 0, 0};
+            int[][] observedProjectedColumns = new int[1][];
+
+            conn.registerTableFunction("tf_projected_mixed", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"col_int", "col_txt", "col_dbl", "col_bool", "col_i64", "col_f32"},
+                        new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.VARCHAR,
+                                                DuckDBColumnType.DOUBLE, DuckDBColumnType.BOOLEAN,
+                                                DuckDBColumnType.BIGINT, DuckDBColumnType.FLOAT},
+                        ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    int[] projectedColumns = new int[ctx.getColumnCount()];
+                    for (int i = 0; i < projectedColumns.length; i++) {
+                        projectedColumns[i] = ctx.getColumnIndex(i);
+                    }
+                    observedProjectedColumns[0] = projectedColumns.clone();
+                    return new TableState(new Object[] {0, end, projectedColumns});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    Object[] st = (Object[]) state.getState();
+                    int current = (int) st[0];
+                    int end = (int) st[1];
+                    int[] projectedColumns = (int[]) st[2];
+                    int produced = 0;
+                    for (; produced < 256 && current < end; produced++, current++) {
+                        for (int projectedCol = 0; projectedCol < projectedColumns.length; projectedCol++) {
+                            int sourceColumn = projectedColumns[projectedCol];
+                            materializedBySourceColumn[sourceColumn]++;
+                            if (sourceColumn == 0) {
+                                out.setInt(projectedCol, produced, current);
+                            } else if (sourceColumn == 1) {
+                                out.setString(projectedCol, produced, "s" + current);
+                            } else if (sourceColumn == 2) {
+                                out.setDouble(projectedCol, produced, current + 0.5d);
+                            } else if (sourceColumn == 3) {
+                                out.setBoolean(projectedCol, produced, current % 2 == 0);
+                            } else if (sourceColumn == 4) {
+                                out.setLong(projectedCol, produced, 1_000_000_000L + current);
+                            } else {
+                                out.setFloat(projectedCol, produced, current + 0.25f);
+                            }
+                        }
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withProjectionPushdown(true));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT col_i64, col_txt FROM tf_projected_mixed(5) ORDER BY col_i64")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), 1_000_000_000L + i);
+                    assertEquals(rs.getString(2), "s" + i);
+                }
+                assertFalse(rs.next());
+            }
+
+            assertNotNull(observedProjectedColumns[0]);
+            assertEquals(observedProjectedColumns[0].length, 2);
+            int[] sortedProjected = observedProjectedColumns[0].clone();
+            Arrays.sort(sortedProjected);
+            assertTrue(Arrays.equals(sortedProjected, new int[] {1, 4}));
+            assertEquals(materializedBySourceColumn[0], 0);
+            assertEquals(materializedBySourceColumn[1], 5);
+            assertEquals(materializedBySourceColumn[2], 0);
+            assertEquals(materializedBySourceColumn[3], 0);
+            assertEquals(materializedBySourceColumn[4], 5);
+            assertEquals(materializedBySourceColumn[5], 0);
+
+            observedProjectedColumns[0] = null;
+            try (ResultSet rs = stmt.executeQuery("SELECT col_bool FROM tf_projected_mixed(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getBoolean(1), i % 2 == 0);
+                }
+                assertFalse(rs.next());
+            }
+
+            assertNotNull(observedProjectedColumns[0]);
+            assertEquals(observedProjectedColumns[0].length, 1);
+            assertEquals(observedProjectedColumns[0][0], 3);
+            assertEquals(materializedBySourceColumn[0], 0);
+            assertEquals(materializedBySourceColumn[1], 5);
+            assertEquals(materializedBySourceColumn[2], 0);
+            assertEquals(materializedBySourceColumn[3], 5);
+            assertEquals(materializedBySourceColumn[4], 5);
+            assertEquals(materializedBySourceColumn[5], 0);
+        }
+    }
+
+    public static void test_table_function_thread_options_smoke() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            try (Statement setup = conn.createStatement()) {
+                setup.execute("PRAGMA threads=4");
+            }
+
+            conn.registerTableFunction(
+                "tf_threadsafe",
+                new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                                   ((Number) parameters[0]).intValue());
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        int end = ((Number) bind.getBindState()).intValue();
+                        return new TableState(new int[] {0, end});
+                    }
+
+                    @Override
+                    public synchronized int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] st = (int[]) state.getState();
+                        int current = st[0];
+                        int end = st[1];
+                        int produced = 0;
+                        for (; produced < 1024 && current < end; produced++, current++) {
+                            out.setInt(0, produced, current);
+                        }
+                        st[0] = current;
+                        return produced;
+                    }
+                },
+                new TableFunctionDefinition().withProjectionPushdown(true),
+                new TableFunctionOptions().threadSafe(true).maxThreads(4));
+
+            conn.registerTableFunction("tf_singlethread", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 1024 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionOptions().threadSafe(false).maxThreads(8));
+
+            for (int i = 0; i < 20; i++) {
+                try (ResultSet rs = stmt.executeQuery("SELECT sum(i) FROM tf_threadsafe(100000)")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), 4999950000L);
+                }
+                try (ResultSet rs = stmt.executeQuery("SELECT sum(i) FROM tf_singlethread(100000)")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), 4999950000L);
+                }
+            }
+        }
+    }
+
+    public static void test_table_function_thread_options_mixed_typed_outputs() throws Exception {
+        final int rowCount = 100000;
+        final long expectedSumInt = ((long) rowCount * (rowCount - 1)) / 2;
+        final double expectedSumDouble = expectedSumInt * 0.5d;
+        final long expectedTrueCount = rowCount / 2;
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            try (Statement setup = conn.createStatement()) {
+                setup.execute("PRAGMA threads=4");
+            }
+
+            conn.registerTableFunction("tf_threadsafe_mixed", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"i", "d", "b", "txt"},
+                        new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.DOUBLE,
+                                                DuckDBColumnType.BOOLEAN, DuckDBColumnType.VARCHAR},
+                        ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public synchronized int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 1024 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                        out.setDouble(1, produced, current * 0.5d);
+                        out.setBoolean(2, produced, current % 2 == 1);
+                        out.setString(3, produced, "x");
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionOptions().threadSafe(true).maxThreads(4));
+
+            conn.registerTableFunction("tf_singlethread_mixed", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"i", "d", "b", "txt"},
+                        new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.DOUBLE,
+                                                DuckDBColumnType.BOOLEAN, DuckDBColumnType.VARCHAR},
+                        ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    int end = st[1];
+                    int produced = 0;
+                    for (; produced < 1024 && current < end; produced++, current++) {
+                        out.setInt(0, produced, current);
+                        out.setDouble(1, produced, current * 0.5d);
+                        out.setBoolean(2, produced, current % 2 == 1);
+                        out.setString(3, produced, "x");
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionOptions().threadSafe(false).maxThreads(8));
+
+            for (int i = 0; i < 20; i++) {
+                try (ResultSet rs =
+                         stmt.executeQuery("SELECT sum(i), sum(d), sum(CASE WHEN b THEN 1 ELSE 0 END), count(txt) "
+                                           + "FROM tf_threadsafe_mixed(" + rowCount + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), expectedSumInt);
+                    assertEquals(rs.getDouble(2), expectedSumDouble, 0.0001d);
+                    assertEquals(rs.getLong(3), expectedTrueCount);
+                    assertEquals(rs.getLong(4), (long) rowCount);
+                    assertFalse(rs.next());
+                }
+                try (ResultSet rs =
+                         stmt.executeQuery("SELECT sum(i), sum(d), sum(CASE WHEN b THEN 1 ELSE 0 END), count(txt) "
+                                           + "FROM tf_singlethread_mixed(" + rowCount + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), expectedSumInt);
+                    assertEquals(rs.getDouble(2), expectedSumDouble, 0.0001d);
+                    assertEquals(rs.getLong(3), expectedTrueCount);
+                    assertEquals(rs.getLong(4), (long) rowCount);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_table_function_mixed_typed_outputs_exception_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_mixed_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"i", "txt"},
+                        new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.VARCHAR},
+                        ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    int end = ((Number) bind.getBindState()).intValue();
+                    return new TableState(new int[] {0, end});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) throws Exception {
+                    int[] st = (int[]) state.getState();
+                    int current = st[0];
+                    if (current >= 10) {
+                        throw new Exception("tf_mixed_error");
+                    }
+                    int produced = 0;
+                    for (; produced < 10 && current < st[1]; produced++, current++) {
+                        out.setInt(0, produced, current);
+                        out.setString(1, produced, "e" + current);
+                    }
+                    st[0] = current;
+                    return produced;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_mixed_error(100)"); }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_init_exception_message_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_init_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) throws Exception {
+                    throw new Exception("tf_init_error");
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    return 0;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            String message =
+                assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_init_error(3)"); }, SQLException.class);
+            assertTrue(message != null && message.contains("tf_init_error"));
+        }
+    }
+
+    public static void test_table_function_main_exception_message_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_main_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0, ((Number) bind.getBindState()).intValue()});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) throws Exception {
+                    throw new Exception("tf_main_error");
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            String message =
+                assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_main_error(3)"); }, SQLException.class);
+            assertTrue(message != null && message.contains("tf_main_error"));
+        }
+    }
+
+    private static long usedHeapBytes() {
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
+    }
+
+    public static void test_udf_lifecycle_hardening_repetition() throws Exception {
+        long baselineUsedHeap = -1;
+        final int iterations = 250;
+        for (int i = 0; i < iterations; i++) {
+            try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+                 Statement stmt = conn.createStatement()) {
+                conn.registerScalarUdf("life_scalar", (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setInt(row, args[0].getInt(row) + 1);
+                    }
+                });
+                conn.registerTableFunction("life_table", new org.duckdb.udf.TableFunction() {
+                    @Override
+                    public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                        return new TableBindResult(new String[] {"i"},
+                                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                                   ((Number) parameters[0]).intValue());
+                    }
+
+                    @Override
+                    public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                        int end = ((Number) bind.getBindState()).intValue();
+                        return new TableState(new int[] {0, end});
+                    }
+
+                    @Override
+                    public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                        int[] st = (int[]) state.getState();
+                        int current = st[0];
+                        int end = st[1];
+                        int produced = 0;
+                        for (; produced < 1024 && current < end; produced++, current++) {
+                            out.setInt(0, produced, current);
+                        }
+                        st[0] = current;
+                        return produced;
+                    }
+                });
+
+                try (ResultSet rs = stmt.executeQuery("SELECT sum(life_scalar(i::INTEGER)) FROM range(1000) t(i)")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), 500500L);
+                }
+                try (ResultSet rs = stmt.executeQuery("SELECT sum(i) FROM life_table(1000)")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), 499500L);
+                }
+            }
+            if (i % 50 == 0) {
+                System.gc();
+            }
+            if (i == 25) {
+                System.gc();
+                Thread.sleep(20);
+                baselineUsedHeap = usedHeapBytes();
+            }
+        }
+
+        System.gc();
+        Thread.sleep(50);
+        long finalUsedHeap = usedHeapBytes();
+        assertTrue(baselineUsedHeap > 0);
+        // Heuristic guardrail: allow the JVM heap to fluctuate, but not grow without bound.
+        assertTrue(finalUsedHeap <= baselineUsedHeap + (64L * 1024L * 1024L));
+    }
+
+    public static void test_java_scalar_udf_add_one() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add_one", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    if (args[0].isNull(row)) {
+                        out.setNull(row);
+                    } else {
+                        out.setInt(row, args[0].getInt(row) + 1);
+                    }
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add_one(i::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 500500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_output_writer_api() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add_one_writer", new org.duckdb.udf.ScalarUdf() {
+                @Override
+                public void apply(org.duckdb.udf.UdfContext ctx, UdfReader[] args, UdfScalarWriter out, int rowCount) {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row)) {
+                            out.setNull(row);
+                        } else {
+                            out.setInt(row, args[0].getInt(row) + 1);
+                        }
+                    }
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add_one_writer(i::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 500500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_output_writer_object_methods() throws Exception {
+        UdfLogicalType decimal18_3 = UdfLogicalType.decimal(18, 3);
+        UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("writer_obj_decimal", new UdfLogicalType[] {decimal18_3}, decimal18_3,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setObject(row, args[0].isNull(row) ? null : args[0].getBigDecimal(row));
+                                       }
+                                   });
+            conn.registerScalarUdf("writer_obj_date", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.DATE)},
+                                   UdfLogicalType.of(DuckDBColumnType.DATE), (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setLocalDate(row,
+                                                            args[0].isNull(row) ? null : args[0].getLocalDate(row));
+                                       }
+                                   });
+            conn.registerScalarUdf("writer_obj_time", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.TIME)},
+                                   UdfLogicalType.of(DuckDBColumnType.TIME), (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setLocalTime(row,
+                                                            args[0].isNull(row) ? null : args[0].getLocalTime(row));
+                                       }
+                                   });
+            conn.registerScalarUdf(
+                "writer_obj_timetz", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.TIME_WITH_TIME_ZONE)},
+                UdfLogicalType.of(DuckDBColumnType.TIME_WITH_TIME_ZONE), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setOffsetTime(row, args[0].isNull(row) ? null : args[0].getOffsetTime(row));
+                    }
+                });
+            conn.registerScalarUdf(
+                "writer_obj_ts", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.TIMESTAMP)},
+                UdfLogicalType.of(DuckDBColumnType.TIMESTAMP), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setLocalDateTime(row, args[0].isNull(row) ? null : args[0].getLocalDateTime(row));
+                    }
+                });
+            conn.registerScalarUdf(
+                "writer_obj_tstz", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)},
+                UdfLogicalType.of(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setOffsetDateTime(row, args[0].isNull(row) ? null : args[0].getOffsetDateTime(row));
+                    }
+                });
+            conn.registerScalarUdf("writer_obj_uuid", new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.UUID)},
+                                   UdfLogicalType.of(DuckDBColumnType.UUID), (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setUUID(row, args[0].isNull(row) ? null : args[0].getUUID(row));
+                                       }
+                                   });
+
+            try (
+                ResultSet rs = stmt.executeQuery(
+                    "SELECT "
+                    + "writer_obj_decimal(123.450::DECIMAL(18,3)) = 123.450::DECIMAL(18,3), "
+                    + "writer_obj_decimal(NULL::DECIMAL(18,3)) IS NULL, "
+                    + "writer_obj_date(DATE '2024-01-03') = DATE '2024-01-03', "
+                    + "writer_obj_time(TIME '01:02:03.123456') = TIME '01:02:03.123456', "
+                    + "writer_obj_timetz(TIME WITH TIME ZONE '01:02:03+05:30') = TIME WITH TIME ZONE '01:02:03+05:30', "
+                    + "writer_obj_ts(TIMESTAMP '2024-01-03 04:05:06.123456') = TIMESTAMP '2024-01-03 04:05:06.123456', "
+                    + "writer_obj_tstz(TIMESTAMP WITH TIME ZONE '2024-01-03 04:05:06+00') = TIMESTAMP WITH TIME ZONE "
+                    + "'2024-01-03 04:05:06+00', "
+                    + "writer_obj_uuid('" + uuid + "'::UUID) = '" + uuid + "'::UUID")) {
+                assertTrue(rs.next());
+                for (int col = 1; col <= 8; col++) {
+                    assertEquals(rs.getBoolean(col), true);
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_reader_api() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add_one_reader", new org.duckdb.udf.ScalarUdf() {
+                @Override
+                public void apply(org.duckdb.udf.UdfContext ctx, UdfReader[] args, UdfScalarWriter out, int rowCount) {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row)) {
+                            out.setNull(row);
+                        } else {
+                            out.setInt(row, args[0].getInt(row) + 1);
+                        }
+                    }
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add_one_reader(i::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 500500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_reader_object_accessors() throws Exception {
+        UdfLogicalType decimal18_3 = UdfLogicalType.decimal(18, 3);
+        UUID expectedUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        LocalDate expectedDate = LocalDate.of(2024, 1, 3);
+        LocalTime expectedTime = LocalTime.of(1, 2, 3, 123456000);
+        OffsetTime expectedOffsetTime = OffsetTime.parse("01:02:03+05:30");
+        LocalDateTime expectedTimestamp = LocalDateTime.of(2024, 1, 3, 4, 5, 6, 123456000);
+        Instant expectedTzTimestampInstant = Instant.parse("2024-01-03T04:05:06Z");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf(
+                "reader_objects_ok",
+                new UdfLogicalType[] {decimal18_3, UdfLogicalType.of(DuckDBColumnType.DATE),
+                                      UdfLogicalType.of(DuckDBColumnType.TIME),
+                                      UdfLogicalType.of(DuckDBColumnType.TIME_WITH_TIME_ZONE),
+                                      UdfLogicalType.of(DuckDBColumnType.TIMESTAMP),
+                                      UdfLogicalType.of(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE),
+                                      UdfLogicalType.of(DuckDBColumnType.UUID)},
+                UdfLogicalType.of(DuckDBColumnType.BOOLEAN), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row) || args[1].isNull(row) || args[2].isNull(row) || args[3].isNull(row) ||
+                            args[4].isNull(row) || args[5].isNull(row) || args[6].isNull(row)) {
+                            out.setNull(row);
+                            continue;
+                        }
+
+                        boolean ok = args[0].getBigDecimal(row).compareTo(new BigDecimal("123.450")) == 0;
+                        ok = ok && expectedDate.equals(args[1].getLocalDate(row));
+                        java.util.Date dateValue = args[1].getDate(row);
+                        ok = ok && dateValue instanceof java.sql.Date &&
+                             expectedDate.equals(((java.sql.Date) dateValue).toLocalDate());
+                        ok = ok && expectedTime.equals(args[2].getLocalTime(row));
+                        ok = ok && expectedOffsetTime.equals(args[3].getOffsetTime(row));
+                        ok = ok && expectedTimestamp.equals(args[4].getLocalDateTime(row));
+                        OffsetDateTime offsetDateTime = args[5].getOffsetDateTime(row);
+                        ok = ok && offsetDateTime != null &&
+                             expectedTzTimestampInstant.equals(offsetDateTime.toInstant());
+                        ok = ok && expectedUuid.equals(args[6].getUUID(row));
+
+                        out.setBoolean(row, ok);
+                    }
+                });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT reader_objects_ok(123.450::DECIMAL(18,3), DATE '2024-01-03', "
+                                                  + "TIME '01:02:03.123456', '01:02:03+05:30'::TIME WITH TIME ZONE, "
+                                                  + "TIMESTAMP '2024-01-03 04:05:06.123456', "
+                                                  + "'2024-01-03 04:05:06+00'::TIMESTAMP WITH TIME ZONE, "
+                                                  + "'550e8400-e29b-41d4-a716-446655440000'::UUID), "
+                                                  + "reader_objects_ok(NULL::DECIMAL(18,3), DATE '2024-01-03', "
+                                                  + "TIME '01:02:03.123456', '01:02:03+05:30'::TIME WITH TIME ZONE, "
+                                                  + "TIMESTAMP '2024-01-03 04:05:06.123456', "
+                                                  + "'2024-01-03 04:05:06+00'::TIMESTAMP WITH TIME ZONE, "
+                                                  + "'550e8400-e29b-41d4-a716-446655440000'::UUID) IS NULL")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getBoolean(1), true);
+                assertEquals(rs.getBoolean(2), true);
+                assertFalse(rs.next());
+            }
+
+            conn.registerScalarUdf("reader_object_type_error", new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                   DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           args[0].getUUID(row);
+                                           out.setInt(row, 0);
+                                       }
+                                   });
+
+            assertThrows(() -> {
+                try (ResultSet rs = stmt.executeQuery("SELECT reader_object_type_error(1)")) {
+                    rs.next();
+                }
+            }, SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_logical_type_registration() throws Exception {
+        UdfLogicalType decimal18_2 = UdfLogicalType.decimal(18, 2);
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add_one_logical",
+                                   new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER)},
+                                   UdfLogicalType.of(DuckDBColumnType.INTEGER), (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setInt(row, args[0].getInt(row) + 1);
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add_one_logical(i::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 500500L);
+                assertFalse(rs.next());
+            }
+
+            conn.registerScalarUdf("dec_identity_logical", new UdfLogicalType[] {decimal18_2}, decimal18_2,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setBigDecimal(row, args[0].getBigDecimal(row));
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT dec_identity_logical(42.75::DECIMAL(18,2)) = 42.75::DECIMAL(18,2)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getBoolean(1), true);
+                assertFalse(rs.next());
+            }
+
+            assertThrows(
+                ()
+                    -> conn.registerScalarUdf(
+                        "bad_logical_arg",
+                        new UdfLogicalType[] {UdfLogicalType.list(UdfLogicalType.of(DuckDBColumnType.INTEGER))},
+                        UdfLogicalType.of(DuckDBColumnType.INTEGER), (ctx, args, out, rowCount) -> {}),
+                SQLFeatureNotSupportedException.class);
+        }
+    }
+
+    public static void test_udf_logical_type_decimal_factory_validation() throws Exception {
+        UdfLogicalType decimal = UdfLogicalType.decimal(18, 2);
+        assertEquals(decimal.getType(), DuckDBColumnType.DECIMAL);
+        assertEquals(decimal.getDecimalWidth(), 18);
+        assertEquals(decimal.getDecimalScale(), 2);
+
+        assertThrows(() -> { UdfLogicalType.decimal(0, 0); }, IllegalArgumentException.class);
+        assertThrows(() -> { UdfLogicalType.decimal(39, 0); }, IllegalArgumentException.class);
+        assertThrows(() -> { UdfLogicalType.decimal(18, -1); }, IllegalArgumentException.class);
+        assertThrows(() -> { UdfLogicalType.decimal(18, 19); }, IllegalArgumentException.class);
+    }
+
+    public static void test_java_scalar_udf_decimal_exact_width_scale_and_overflow() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            int[] widths = new int[] {4, 9, 18, 30};
+            int[] scales = new int[] {1, 4, 6, 10};
+            String[] literals =
+                new String[] {"-99.9", "12345.6789", "123456789012.123456", "12345678901234567890.1234567890"};
+
+            for (int i = 0; i < widths.length; i++) {
+                int width = widths[i];
+                int scale = scales[i];
+                UdfLogicalType decimalType = UdfLogicalType.decimal(width, scale);
+                String fnName = "f_decimal_exact_" + width + "_" + scale;
+                String typedLiteral = literals[i] + "::DECIMAL(" + width + "," + scale + ")";
+
+                conn.registerScalarUdf(fnName, new UdfLogicalType[] {decimalType}, decimalType,
+                                       (ctx, args, out, rowCount) -> {
+                                           for (int row = 0; row < rowCount; row++) {
+                                               if (args[0].isNull(row)) {
+                                                   out.setNull(row);
+                                               } else {
+                                                   out.setBigDecimal(row, args[0].getBigDecimal(row));
+                                               }
+                                           }
+                                       });
+
+                try (ResultSet rs = stmt.executeQuery("SELECT CAST(" + fnName + "(" + typedLiteral + ") AS VARCHAR), "
+                                                      + "CAST(" + typedLiteral + " AS VARCHAR), " + fnName +
+                                                      "(NULL::DECIMAL(" + width + "," + scale + ")) IS NULL")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getString(1), rs.getString(2));
+                    assertEquals(rs.getBoolean(3), true);
+                    assertFalse(rs.next());
+                }
+            }
+
+            UdfLogicalType decimal4_1 = UdfLogicalType.decimal(4, 1);
+            conn.registerScalarUdf("f_decimal_overflow_4_1", new UdfLogicalType[] {decimal4_1}, decimal4_1,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setBigDecimal(row, new BigDecimal("1000.0"));
+                                           }
+                                       }
+                                   });
+
+            assertThrows(() -> {
+                try (ResultSet rs = stmt.executeQuery("SELECT f_decimal_overflow_4_1(1.0::DECIMAL(4,1))")) {
+                    rs.next();
+                }
+            }, SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_decimal_boundary_values_per_width_scale() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            int[] widths = new int[] {4, 9, 18, 30, 38};
+            int[] scales = new int[] {1, 4, 6, 10, 10};
+            String[] maxValues =
+                new String[] {"999.9", "99999.9999", "999999999999.999999", "99999999999999999999.9999999999",
+                              "9999999999999999999999999999.9999999999"};
+            String[] minValues =
+                new String[] {"-999.9", "-99999.9999", "-999999999999.999999", "-99999999999999999999.9999999999",
+                              "-9999999999999999999999999999.9999999999"};
+
+            for (int i = 0; i < widths.length; i++) {
+                int width = widths[i];
+                int scale = scales[i];
+                UdfLogicalType decimalType = UdfLogicalType.decimal(width, scale);
+                String fnName = "f_decimal_boundaries_" + width + "_" + scale;
+                String maxTyped = maxValues[i] + "::DECIMAL(" + width + "," + scale + ")";
+                String minTyped = minValues[i] + "::DECIMAL(" + width + "," + scale + ")";
+
+                conn.registerScalarUdf(fnName, new UdfLogicalType[] {decimalType}, decimalType,
+                                       (ctx, args, out, rowCount) -> {
+                                           for (int row = 0; row < rowCount; row++) {
+                                               if (args[0].isNull(row)) {
+                                                   out.setNull(row);
+                                               } else {
+                                                   out.setBigDecimal(row, args[0].getBigDecimal(row));
+                                               }
+                                           }
+                                       });
+
+                try (ResultSet rs = stmt.executeQuery("SELECT CAST(" + fnName + "(" + maxTyped + ") AS VARCHAR), "
+                                                      + "CAST(" + maxTyped + " AS VARCHAR), CAST(" + fnName + "(" +
+                                                      minTyped + ") AS VARCHAR), CAST(" + minTyped + " AS VARCHAR)")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getString(1), rs.getString(2));
+                    assertEquals(rs.getString(3), rs.getString(4));
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_reader_object_accessors_null_special_handling() throws Exception {
+        UdfLogicalType decimal18_3 = UdfLogicalType.decimal(18, 3);
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("reader_objects_nulls",
+                                   new UdfLogicalType[] {decimal18_3, UdfLogicalType.of(DuckDBColumnType.DATE),
+                                                         UdfLogicalType.of(DuckDBColumnType.TIME),
+                                                         UdfLogicalType.of(DuckDBColumnType.TIME_WITH_TIME_ZONE),
+                                                         UdfLogicalType.of(DuckDBColumnType.TIMESTAMP),
+                                                         UdfLogicalType.of(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE),
+                                                         UdfLogicalType.of(DuckDBColumnType.UUID)},
+                                   UdfLogicalType.of(DuckDBColumnType.BOOLEAN), (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           boolean ok = args[0].getBigDecimal(row) == null;
+                                           ok = ok && args[1].getDate(row) == null;
+                                           ok = ok && args[1].getLocalDate(row) == null;
+                                           ok = ok && args[2].getLocalTime(row) == null;
+                                           ok = ok && args[3].getOffsetTime(row) == null;
+                                           ok = ok && args[4].getLocalDateTime(row) == null;
+                                           ok = ok && args[5].getOffsetDateTime(row) == null;
+                                           ok = ok && args[6].getUUID(row) == null;
+                                           out.setBoolean(row, ok);
+                                       }
+                                   }, new UdfOptions().nullSpecialHandling(true));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT reader_objects_nulls(NULL::DECIMAL(18,3), NULL::DATE, "
+                                                  + "NULL::TIME, NULL::TIME WITH TIME ZONE, NULL::TIMESTAMP, "
+                                                  + "NULL::TIMESTAMP WITH TIME ZONE, NULL::UUID)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getBoolean(1), true);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_null_default_handling() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_default_null", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, 5);
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT f_default_null(NULL::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), null);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_null_special_handling() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_special_null", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    if (!args[0].isNull(row)) {
+                        throw new IllegalStateException("Expected NULL input row");
+                    }
+                    out.setInt(row, 5);
+                }
+            }, new UdfOptions().nullSpecialHandling(true));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT f_special_null(NULL::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 5);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_exception_abort() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_throw_abort",
+                                   (ctx, args, out, rowCount) -> { throw new RuntimeException("kaboom"); });
+
+            assertThrows(() -> {
+                stmt.executeQuery("SELECT f_throw_abort(i::INTEGER) FROM range(3) t(i)");
+            }, SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_exception_return_null() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_throw_null", (ctx, args, out, rowCount) -> {
+                throw new RuntimeException("kaboom");
+            }, new UdfOptions().returnNullOnException(true));
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) total, count(f_throw_null(i::INTEGER)) non_null FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 1000L);
+                assertEquals(rs.getLong(2), 0L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_deterministic_caches_constant_input() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_rand_det", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, ThreadLocalRandom.current().nextInt());
+                }
+            });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(DISTINCT f_rand_det(1::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 1L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_volatile_varies_per_row() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("f_rand_vol", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, ThreadLocalRandom.current().nextInt());
+                }
+            }, new UdfOptions().deterministic(false));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(DISTINCT f_rand_vol(1::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertTrue(rs.getLong(1) > 1L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_add2() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add2", new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER},
+                                   DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row) || args[1].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setInt(row, args[0].getInt(row) + args[1].getInt(row));
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add2(i::INTEGER, 10::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 509500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_mul3() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf(
+                "mul3",
+                new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER},
+                DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row) || args[1].isNull(row) || args[2].isNull(row)) {
+                            out.setNull(row);
+                        } else {
+                            out.setInt(row, args[0].getInt(row) * args[1].getInt(row) * args[2].getInt(row));
+                        }
+                    }
+                });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT sum(mul3(i::INTEGER, 2::INTEGER, 3::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 2997000L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_registration_overloads_column_types() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("plus1_overload", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + 1);
+                                       }
+                                   });
+
+            conn.registerScalarUdf("sum2_overload", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                   DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + args[1].getInt(row));
+                                       }
+                                   });
+
+            conn.registerScalarUdf("sum3_overload", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                   DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row,
+                                                      args[0].getInt(row) + args[1].getInt(row) + args[2].getInt(row));
+                                       }
+                                   });
+
+            conn.registerScalarUdf("sum4_overload", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                   DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + args[1].getInt(row) +
+                                                               args[2].getInt(row) + args[3].getInt(row));
+                                       }
+                                   });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT plus1_overload(41::INTEGER), sum2_overload(1::INTEGER,2::INTEGER), "
+                                       + "sum3_overload(1::INTEGER,2::INTEGER,3::INTEGER), "
+                                       + "sum4_overload(1::INTEGER,2::INTEGER,3::INTEGER,4::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertEquals(rs.getInt(2), 3);
+                assertEquals(rs.getInt(3), 6);
+                assertEquals(rs.getInt(4), 10);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_registration_overloads_logical_types() throws Exception {
+        UdfLogicalType integerType = UdfLogicalType.of(DuckDBColumnType.INTEGER);
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("logical_sum2_overload", integerType, integerType, integerType,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + args[1].getInt(row));
+                                       }
+                                   });
+
+            conn.registerScalarUdf("logical_sum3_overload", integerType, integerType, integerType, integerType,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row,
+                                                      args[0].getInt(row) + args[1].getInt(row) + args[2].getInt(row));
+                                       }
+                                   });
+
+            conn.registerScalarUdf("logical_sum4_overload", integerType, integerType, integerType, integerType,
+                                   integerType, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + args[1].getInt(row) +
+                                                               args[2].getInt(row) + args[3].getInt(row));
+                                       }
+                                   });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT logical_sum2_overload(1::INTEGER,2::INTEGER), "
+                                       + "logical_sum3_overload(1::INTEGER,2::INTEGER,3::INTEGER), "
+                                       + "logical_sum4_overload(1::INTEGER,2::INTEGER,3::INTEGER,4::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 3);
+                assertEquals(rs.getInt(2), 6);
+                assertEquals(rs.getInt(3), 10);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_arity_validation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add2_arity_check",
+                                   new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER},
+                                   DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setInt(row, args[0].getInt(row) + args[1].getInt(row));
+                                       }
+                                   });
+
+            assertThrows(() -> { stmt.executeQuery("SELECT add2_arity_check(1::INTEGER)"); }, SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_zero_arguments_registration() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("zero_const", DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                assertEquals(args.length, 0);
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, 42);
+                }
+            });
+
+            conn.registerScalarUdf("zero_throw_null",
+                                   UdfLogicalType.of(DuckDBColumnType.INTEGER), (ctx, args, out, rowCount) -> {
+                                       throw new RuntimeException("kaboom");
+                                   }, new UdfOptions().returnNullOnException(true));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(zero_const()) FROM range(100)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 4200L);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(*) total, count(zero_throw_null()) non_null FROM range(100)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 100L);
+                assertEquals(rs.getLong(2), 0L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_varargs_registration() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdfVarArgs("sum_varargs", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                          (ctx, args, out, rowCount) -> {
+                                              for (int row = 0; row < rowCount; row++) {
+                                                  int sum = 0;
+                                                  boolean anyNull = false;
+                                                  for (UdfReader arg : args) {
+                                                      if (arg.isNull(row)) {
+                                                          anyNull = true;
+                                                          break;
+                                                      }
+                                                      sum += arg.getInt(row);
+                                                  }
+                                                  if (anyNull) {
+                                                      out.setNull(row);
+                                                  } else {
+                                                      out.setInt(row, sum);
+                                                  }
+                                              }
+                                          });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(sum_varargs()) FROM range(100)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 0L);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(sum_varargs(i::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 499500L);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT sum(sum_varargs(i::INTEGER, 1::INTEGER, 2::INTEGER)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 502500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_varargs_registration_validation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
+            assertThrows(()
+                             -> conn.registerScalarUdf(
+                                 "bad_varargs",
+                                 new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER},
+                                 DuckDBColumnType.INTEGER,
+                                 (ctx, args, out, rowCount)
+                                     -> {
+                                     for (int row = 0; row < rowCount; row++) {
+                                         out.setInt(row, 0);
+                                     }
+                                 },
+                                 new UdfOptions().varArgs(true)),
+                         SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_java_class_type_mapper_registration() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("class_plus1", Integer.class, Integer.class, (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, args[0].getInt(row) + 1);
+                }
+            });
+
+            conn.registerScalarUdf("class_concat", new Class<?>[] {String.class, String.class}, String.class,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           out.setString(row, args[0].getString(row) + args[1].getString(row));
+                                       }
+                                   });
+
+            conn.registerScalarUdf("class_zero", Integer.class, (ctx, args, out, rowCount) -> {
+                assertEquals(args.length, 0);
+                for (int row = 0; row < rowCount; row++) {
+                    out.setInt(row, 7);
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT class_plus1(41::INTEGER), class_concat('a','b'), sum(class_zero()) FROM range(10)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertEquals(rs.getString(2), "ab");
+                assertEquals(rs.getLong(3), 70L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_java_class_type_mapper_decimal_requires_explicit_logical_type()
+        throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
+            assertThrows(()
+                             -> conn.registerScalarUdf("class_decimal_forbidden", BigDecimal.class, BigDecimal.class,
+                                                       (ctx, args, out, rowCount) -> {
+                                                           for (int row = 0; row < rowCount; row++) {
+                                                               out.setBigDecimal(row, BigDecimal.ONE);
+                                                           }
+                                                       }),
+                         SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_ergonomic_registration_preserves_options_semantics() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("class_null_special_opt", Integer.class,
+                                   Integer.class, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setInt(row, 99);
+                                           } else {
+                                               out.setInt(row, args[0].getInt(row));
+                                           }
+                                       }
+                                   }, new UdfOptions().nullSpecialHandling(true));
+
+            conn.registerScalarUdfVarArgs("varargs_throw_opt", DuckDBColumnType.INTEGER,
+                                          DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                                              throw new RuntimeException("kaboom");
+                                          }, new UdfOptions().returnNullOnException(true).deterministic(false));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT class_null_special_opt(NULL::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 99);
+                assertFalse(rs.next());
+            }
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT count(*) total, count(varargs_throw_opt(i::INTEGER)) non_null FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 1000L);
+                assertEquals(rs.getLong(2), 0L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_arity_above_four() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf(
+                "sum5",
+                new DuckDBColumnType[] {DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                        DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER},
+                DuckDBColumnType.INTEGER, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row) || args[1].isNull(row) || args[2].isNull(row) || args[3].isNull(row) ||
+                            args[4].isNull(row)) {
+                            out.setNull(row);
+                        } else {
+                            out.setInt(row, args[0].getInt(row) + args[1].getInt(row) + args[2].getInt(row) +
+                                                args[3].getInt(row) + args[4].getInt(row));
+                        }
+                    }
+                });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(sum5(i::INTEGER, 1, 2, 3, 4)) FROM range(1000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 509500L);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_core_type_registration_surface() throws Exception {
+        DuckDBColumnType[] unsupportedTypes = new DuckDBColumnType[] {
+            DuckDBColumnType.INTERVAL, DuckDBColumnType.LIST,  DuckDBColumnType.ARRAY, DuckDBColumnType.STRUCT,
+            DuckDBColumnType.MAP,      DuckDBColumnType.UNION, DuckDBColumnType.ENUM};
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType supportedType : scalarCoreTypes()) {
+                String fnName = "f_supported_" + supportedType.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {supportedType}, supportedType,
+                                       (ctx, args, out, rowCount) -> {
+                                           for (int row = 0; row < rowCount; row++) {
+                                               out.setNull(row);
+                                           }
+                                       });
+                try (ResultSet rs =
+                         stmt.executeQuery("SELECT " + fnName + "(" + nonNullLiteralForType(supportedType) + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1), null);
+                    assertFalse(rs.next());
+                }
+            }
+
+            for (DuckDBColumnType unsupportedType : unsupportedTypes) {
+                String fnName = "f_unsupported_" + unsupportedType.name().toLowerCase();
+                assertThrows(() -> {
+                    conn.registerScalarUdf(fnName, new DuckDBColumnType[] {unsupportedType}, unsupportedType,
+                                           (ctx, args, out, rowCount) -> {});
+                }, SQLFeatureNotSupportedException.class);
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_extended_type_registration_surface() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType supportedType : scalarExtendedTypes()) {
+                String fnName = "f_supported_ext_" + supportedType.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {supportedType}, supportedType,
+                                       (ctx, args, out, rowCount) -> {
+                                           for (int row = 0; row < rowCount; row++) {
+                                               out.setNull(row);
+                                           }
+                                       });
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" +
+                                                      nonNullLiteralForExtendedType(supportedType) + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1), null);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_unsigned_and_special_type_registration_surface() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType supportedType : scalarUnsignedAndSpecialTypes()) {
+                String fnName = "f_supported_unsigned_special_" + supportedType.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {supportedType}, supportedType,
+                                       (ctx, args, out, rowCount) -> {
+                                           for (int row = 0; row < rowCount; row++) {
+                                               out.setNull(row);
+                                           }
+                                       });
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" +
+                                                      nonNullLiteralForUnsignedAndSpecialType(supportedType) + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1), null);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_extended_roundtrip_and_nulls() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarExtendedTypes()) {
+                String fnName = "f_identity_ext_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row)) {
+                            out.setNull(row);
+                            continue;
+                        }
+                        switch (type) {
+                        case DECIMAL:
+                            out.setBigDecimal(row, args[0].getBigDecimal(row));
+                            break;
+                        case BLOB:
+                            out.setBytes(row, args[0].getBytes(row));
+                            break;
+                        case DATE:
+                            out.setInt(row, args[0].getInt(row));
+                            break;
+                        case TIME:
+                        case TIME_NS:
+                        case TIMESTAMP:
+                        case TIMESTAMP_S:
+                        case TIMESTAMP_MS:
+                        case TIMESTAMP_NS:
+                            out.setLong(row, args[0].getLong(row));
+                            break;
+                        default:
+                            throw new IllegalStateException("Unexpected extended type: " + type);
+                        }
+                    }
+                });
+
+                String literal = nonNullLiteralForExtendedType(type);
+                String nullLiteral = nullLiteralForType(type);
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" + literal + ") = " + literal + ", " +
+                                                      fnName + "(" + nullLiteral + ") IS NULL")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getBoolean(1), true);
+                    assertEquals(rs.getBoolean(2), true);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_unsigned_and_special_roundtrip_and_nulls() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarUnsignedAndSpecialTypes()) {
+                String fnName = "f_identity_unsigned_special_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row)) {
+                            out.setNull(row);
+                            continue;
+                        }
+                        switch (type) {
+                        case UTINYINT:
+                        case USMALLINT:
+                            out.setInt(row, args[0].getInt(row));
+                            break;
+                        case UINTEGER:
+                        case UBIGINT:
+                        case TIME_WITH_TIME_ZONE:
+                        case TIMESTAMP_WITH_TIME_ZONE:
+                            out.setLong(row, args[0].getLong(row));
+                            break;
+                        case HUGEINT:
+                        case UHUGEINT:
+                        case UUID:
+                            out.setBytes(row, args[0].getBytes(row));
+                            break;
+                        default:
+                            throw new IllegalStateException("Unexpected unsigned/special type: " + type);
+                        }
+                    }
+                });
+
+                String literal = nonNullLiteralForUnsignedAndSpecialType(type);
+                String nullLiteral = nullLiteralForType(type);
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" + literal + ") = " + literal + ", " +
+                                                      fnName + "(" + nullLiteral + ") IS NULL")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getBoolean(1), true);
+                    assertEquals(rs.getBoolean(2), true);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_core_roundtrip_and_nulls() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarCoreTypes()) {
+                String fnName = "f_identity_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (args[0].isNull(row)) {
+                            out.setNull(row);
+                            continue;
+                        }
+                        switch (type) {
+                        case BOOLEAN:
+                            out.setBoolean(row, args[0].getBoolean(row));
+                            break;
+                        case TINYINT:
+                        case SMALLINT:
+                        case INTEGER:
+                            out.setInt(row, args[0].getInt(row));
+                            break;
+                        case BIGINT:
+                            out.setLong(row, args[0].getLong(row));
+                            break;
+                        case FLOAT:
+                            out.setFloat(row, args[0].getFloat(row));
+                            break;
+                        case DOUBLE:
+                            out.setDouble(row, args[0].getDouble(row));
+                            break;
+                        case VARCHAR:
+                            out.setString(row, args[0].getString(row));
+                            break;
+                        default:
+                            throw new IllegalStateException("Unexpected core type: " + type);
+                        }
+                    }
+                });
+
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" + nonNullLiteralForType(type) + "), " +
+                                                      fnName + "(" + nullLiteralForType(type) + ")")) {
+                    assertTrue(rs.next());
+                    switch (type) {
+                    case BOOLEAN:
+                        assertEquals(rs.getBoolean(1), true);
+                        break;
+                    case TINYINT:
+                        assertEquals(rs.getInt(1), 7);
+                        break;
+                    case SMALLINT:
+                        assertEquals(rs.getInt(1), 32000);
+                        break;
+                    case INTEGER:
+                        assertEquals(rs.getInt(1), 123456);
+                        break;
+                    case BIGINT:
+                        assertEquals(rs.getLong(1), 9876543210L);
+                        break;
+                    case FLOAT:
+                        assertEquals(rs.getFloat(1), 1.25f, 0.0001f);
+                        break;
+                    case DOUBLE:
+                        assertEquals(rs.getDouble(1), 2.5d, 0.0000001d);
+                        break;
+                    case VARCHAR:
+                        assertEquals(rs.getString(1), "duck");
+                        break;
+                    default:
+                        throw new IllegalStateException("Unexpected core type: " + type);
+                    }
+                    assertEquals(rs.getObject(2), null);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_core_null_special_handling() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarCoreTypes()) {
+                String fnName = "f_special_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type, (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        if (!args[0].isNull(row)) {
+                            throw new IllegalStateException("Expected NULL input row");
+                        }
+                        switch (type) {
+                        case BOOLEAN:
+                            out.setBoolean(row, true);
+                            break;
+                        case TINYINT:
+                            out.setInt(row, 12);
+                            break;
+                        case SMALLINT:
+                            out.setInt(row, 1234);
+                            break;
+                        case INTEGER:
+                            out.setInt(row, 123456);
+                            break;
+                        case BIGINT:
+                            out.setLong(row, 123456789L);
+                            break;
+                        case FLOAT:
+                            out.setFloat(row, 9.25f);
+                            break;
+                        case DOUBLE:
+                            out.setDouble(row, 19.5d);
+                            break;
+                        case VARCHAR:
+                            out.setString(row, "null-special");
+                            break;
+                        default:
+                            throw new IllegalStateException("Unexpected core type: " + type);
+                        }
+                    }
+                }, new UdfOptions().nullSpecialHandling(true));
+
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" + nullLiteralForType(type) + ")")) {
+                    assertTrue(rs.next());
+                    switch (type) {
+                    case BOOLEAN:
+                        assertEquals(rs.getBoolean(1), true);
+                        break;
+                    case TINYINT:
+                        assertEquals(rs.getInt(1), 12);
+                        break;
+                    case SMALLINT:
+                        assertEquals(rs.getInt(1), 1234);
+                        break;
+                    case INTEGER:
+                        assertEquals(rs.getInt(1), 123456);
+                        break;
+                    case BIGINT:
+                        assertEquals(rs.getLong(1), 123456789L);
+                        break;
+                    case FLOAT:
+                        assertEquals(rs.getFloat(1), 9.25f, 0.0001f);
+                        break;
+                    case DOUBLE:
+                        assertEquals(rs.getDouble(1), 19.5d, 0.0000001d);
+                        break;
+                    case VARCHAR:
+                        assertEquals(rs.getString(1), "null-special");
+                        break;
+                    default:
+                        throw new IllegalStateException("Unexpected core type: " + type);
+                    }
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_core_exception_return_null() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarCoreTypes()) {
+                String fnName = "f_throw_null_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type, (ctx, args, out, rowCount) -> {
+                    throw new RuntimeException("kaboom");
+                }, new UdfOptions().returnNullOnException(true));
+
+                try (ResultSet rs = stmt.executeQuery("SELECT " + fnName + "(" + nonNullLiteralForType(type) + ")")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1), null);
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_core_exception_abort() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            for (DuckDBColumnType type : scalarCoreTypes()) {
+                String fnName = "f_throw_abort_" + type.name().toLowerCase();
+                conn.registerScalarUdf(fnName, new DuckDBColumnType[] {type}, type,
+                                       (ctx, args, out, rowCount) -> { throw new RuntimeException("kaboom"); });
+                assertThrows(() -> {
+                    stmt.executeQuery("SELECT " + fnName + "(" + nonNullLiteralForType(type) + ")");
+                }, SQLException.class);
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_reverse_varchar() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("reverse_java", new DuckDBColumnType[] {DuckDBColumnType.VARCHAR},
+                                   DuckDBColumnType.VARCHAR, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setString(
+                                                   row, new StringBuilder(args[0].getString(row)).reverse().toString());
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT reverse_java('abcd'), reverse_java('cafe'), reverse_java('hello')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "dcba");
+                assertEquals(rs.getString(2), "efac");
+                assertEquals(rs.getString(3), "olleh");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_concat_varchar() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("concat_java",
+                                   new DuckDBColumnType[] {DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR},
+                                   DuckDBColumnType.VARCHAR, (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row) || args[1].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setString(row, args[0].getString(row) + args[1].getString(row));
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT concat_java('Hello ', 'world')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "Hello world");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_java_scalar_udf_add_one_10m_benchmark() throws Exception {
+        if (!Boolean.getBoolean("duckdb.udf.benchmark")) {
+            return;
+        }
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("add_one", (ctx, args, out, rowCount) -> {
+                for (int row = 0; row < rowCount; row++) {
+                    if (args[0].isNull(row)) {
+                        out.setNull(row);
+                    } else {
+                        out.setInt(row, args[0].getInt(row) + 1);
+                    }
+                }
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT sum(add_one(i::INTEGER)) FROM range(10000000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 50000005000000L);
+                assertFalse(rs.next());
+            }
+        }
     }
 
     public static void test_autocommit_off() throws Exception {
@@ -251,60 +3507,60 @@ public class TestDuckDBJDBC {
             "CREATE TYPE enum_long AS ENUM ('enum0' ,'enum1' ,'enum2' ,'enum3' ,'enum4' ,'enum5' ,'enum6'"
             +
             ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'"
-            +
-            ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'"
-            +
-            ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'"
-            +
-            ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'"
-            +
-            ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'"
-            +
-            ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'"
-            +
-            ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'"
-            +
-            ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'"
+            + ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' "
+            + ",'enum28'"
+            + ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' "
+            + ",'enum39'"
+            + ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' "
+            + ",'enum50'"
+            + ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' "
+            + ",'enum61'"
+            + ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' "
+            + ",'enum72'"
+            + ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' "
+            + ",'enum83'"
+            + ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' "
+            + ",'enum94'"
             +
             ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
-            +
-            ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'"
-            +
-            ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'"
-            +
-            ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'"
-            +
-            ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'"
-            +
-            ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'"
-            +
-            ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'"
-            +
-            ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'"
-            +
-            ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'"
-            +
-            ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'"
-            +
-            ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'"
-            +
-            ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'"
-            +
-            ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'"
-            +
-            ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'"
-            +
-            ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'"
-            +
-            ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'"
-            +
-            ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'"
-            +
-            ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'"
-            +
-            ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'"
-            +
-            ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'"
+            + ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' "
+            + ",'enum114'"
+            + ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' "
+            + ",'enum124'"
+            + ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' "
+            + ",'enum134'"
+            + ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' "
+            + ",'enum144'"
+            + ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' "
+            + ",'enum154'"
+            + ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' "
+            + ",'enum164'"
+            + ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' "
+            + ",'enum174'"
+            + ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' "
+            + ",'enum184'"
+            + ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' "
+            + ",'enum194'"
+            + ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' "
+            + ",'enum204'"
+            + ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' "
+            + ",'enum214'"
+            + ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' "
+            + ",'enum224'"
+            + ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' "
+            + ",'enum234'"
+            + ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' "
+            + ",'enum244'"
+            + ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' "
+            + ",'enum254'"
+            + ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' "
+            + ",'enum264'"
+            + ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' "
+            + ",'enum274'"
+            + ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' "
+            + ",'enum284'"
+            + ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' "
+            + ",'enum294'"
             + ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
 
         stmt.execute("CREATE TABLE t2 (id INT, e1 enum_long);");
@@ -631,7 +3887,6 @@ public class TestDuckDBJDBC {
                         rs1.next();
                         assertEquals(rs1.getInt(1), 42);
                     }
-
                     try (Statement stmt2 = conn_ro2.createStatement();
                          ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test")) {
                         rs2.next();
@@ -656,8 +3911,8 @@ public class TestDuckDBJDBC {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
 
-        ResultSet rs = stmt.executeQuery(
-            "SELECT '2019-11-26 21:11:00'::timestamp ts, '2019-11-26'::date dt, interval '5 days' iv, '21:11:00'::time te");
+        ResultSet rs = stmt.executeQuery("SELECT '2019-11-26 21:11:00'::timestamp ts, '2019-11-26'::date dt, "
+                                         + "interval '5 days' iv, '21:11:00'::time te");
         assertTrue(rs.next());
         assertEquals(rs.getObject("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
         assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
@@ -1518,11 +4773,15 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("uint", asList(0L, 4294967295L, null));
         correct_answer_map.put("ubigint", asList(BigInteger.ZERO, new BigInteger("18446744073709551615"), null));
         correct_answer_map.put(
-            "bignum",
-            asList(
-                "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
-                "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
-                null));
+            "bignum", asList("-17976931348623157081452742373170435679807056752584499659891747680315726078002"
+                                 + "853876058955863276687817154045895351438246423432132688946418276846754670353751"
+                                 + "698604991057655128207624549009038932894407586850845513394230458323690322294816"
+                                 + "5808559332123348274797826204144723168738177180919299881250404026184124858368",
+                             "179769313486231570814527423731704356798070567525844996598917476803157260780028"
+                                 + "538760589558632766878171540458953514382464234321326889464182768467546703537516"
+                                 + "986049910576551282076245490090389328944075868508455133942304583236903222948165"
+                                 + "808559332123348274797826204144723168738177180919299881250404026184124858368",
+                             null));
         correct_answer_map.put("time", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
         correct_answer_map.put("time_ns", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
         correct_answer_map.put("float", asList(-3.4028234663852886e+38f, 3.4028234663852886e+38f, null));
@@ -1597,14 +4856,14 @@ public class TestDuckDBJDBC {
         TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
         try {
             Logger logger = Logger.getAnonymousLogger();
-            String sql =
-                "select * EXCLUDE(time, time_ns, time_tz)"
-                + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
-                +
-                "\n    , CASE WHEN time_ns = '24:00:00'::TIME_NS THEN '23:59:59.999999'::TIME_NS ELSE time_ns END AS time_ns"
-                +
-                "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
-                + "\nfrom test_all_types()";
+            String sql = "select * EXCLUDE(time, time_ns, time_tz)"
+                         +
+                         "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                         + "\n    , CASE WHEN time_ns = '24:00:00'::TIME_NS THEN '23:59:59.999999'::TIME_NS ELSE "
+                         + "time_ns END AS time_ns"
+                         + "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN "
+                         + "'23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
+                         + "\nfrom test_all_types()";
 
             try (Connection conn = DriverManager.getConnection(JDBC_URL);
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -2026,14 +5285,12 @@ public class TestDuckDBJDBC {
                     return null;
                 }
             });
-            assertThrows(
-                ()
-                    -> stmt.executeQuery(
-                        "WITH RECURSIVE cte AS NOT MATERIALIZED ("
-                        +
-                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 200000) "
-                        + "SELECT avg(f) FROM cte"),
-                SQLException.class);
+            assertThrows(()
+                             -> stmt.executeQuery("WITH RECURSIVE cte AS NOT MATERIALIZED ("
+                                                  + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, "
+                                                  + "cte.p + cte.f from cte WHERE cte.i < 200000) "
+                                                  + "SELECT avg(f) FROM cte"),
+                         SQLException.class);
 
             QueryProgress qpRunning = future.get();
             assertNotNull(qpRunning);

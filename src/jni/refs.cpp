@@ -25,8 +25,15 @@ jclass J_Byte;
 jclass J_Short;
 jclass J_Int;
 jclass J_Long;
+jmethodID J_Bool_init;
+jmethodID J_Byte_init;
+jmethodID J_Short_init;
+jmethodID J_Int_init;
+jmethodID J_Long_init;
 jclass J_Float;
 jclass J_Double;
+jmethodID J_Float_init;
+jmethodID J_Double_init;
 jclass J_String;
 jclass J_Timestamp;
 jmethodID J_Timestamp_valueOf;
@@ -49,6 +56,7 @@ jmethodID J_BigDecimal_scale;
 jmethodID J_BigDecimal_scaleByPowTen;
 jmethodID J_BigDecimal_toPlainString;
 jmethodID J_BigDecimal_longValue;
+jmethodID J_BigDecimal_initString;
 jfieldID J_HugeInt_lower;
 jfieldID J_HugeInt_upper;
 
@@ -85,8 +93,14 @@ jmethodID J_DuckMap_getSQLTypeName;
 
 jclass J_List;
 jmethodID J_List_iterator;
+jclass J_ArrayList;
+jmethodID J_ArrayList_init;
+jmethodID J_ArrayList_add;
 jclass J_Map;
 jmethodID J_Map_entrySet;
+jclass J_LinkedHashMap;
+jmethodID J_LinkedHashMap_init;
+jmethodID J_LinkedHashMap_put;
 jclass J_Set;
 jmethodID J_Set_iterator;
 jclass J_Iterator;
@@ -97,14 +111,31 @@ jmethodID J_Entry_getKey;
 jmethodID J_Entry_getValue;
 
 jclass J_UUID;
+jmethodID J_UUID_init;
 jmethodID J_UUID_getMostSignificantBits;
 jmethodID J_UUID_getLeastSignificantBits;
+
+jclass J_LocalDate;
+jmethodID J_LocalDate_ofEpochDay;
+jclass J_LocalTime;
+jmethodID J_LocalTime_ofNanoOfDay;
+jclass J_LocalDateTime;
+jmethodID J_LocalDateTime_ofEpochSecond;
+jmethodID J_LocalDateTime_atOffset;
+jclass J_OffsetTime;
+jmethodID J_OffsetTime_of;
+jclass J_ZoneOffset;
+jobject J_ZoneOffset_UTC;
+jmethodID J_ZoneOffset_ofTotalSeconds;
 
 jclass J_DuckDBDate;
 jmethodID J_DuckDBDate_getDaysSinceEpoch;
 
 jclass J_Object;
 jmethodID J_Object_toString;
+jclass J_StringArray;
+jclass J_Enum;
+jmethodID J_Enum_name;
 
 jclass J_DuckDBTime;
 
@@ -118,6 +149,40 @@ jobject J_ProfilerPrintFormat_GRAPHVIZ;
 
 jclass J_QueryProgress;
 jmethodID J_QueryProgress_init;
+
+jclass J_ScalarUdf;
+jmethodID J_ScalarUdf_apply;
+jclass J_UdfReader;
+jclass J_UdfNativeReader;
+jmethodID J_UdfNativeReader_init;
+jclass J_UdfScalarWriter;
+jmethodID J_UdfScalarWriter_init;
+jclass J_TableFunction;
+jmethodID J_TableFunction_bind;
+jmethodID J_TableFunction_init;
+jmethodID J_TableFunction_produce;
+jclass J_TableBindResult;
+jmethodID J_TableBindResult_getColumnNames;
+jmethodID J_TableBindResult_getColumnTypes;
+jmethodID J_TableBindResult_getColumnLogicalTypes;
+jclass J_TableState;
+jclass J_TableInitContext;
+jmethodID J_TableInitContext_init;
+jclass J_UdfOutputAppender;
+jmethodID J_UdfOutputAppender_init;
+jmethodID J_UdfOutputAppender_close;
+jclass J_DuckDBColumnType;
+jclass J_UdfLogicalType;
+jmethodID J_UdfLogicalType_getType;
+jmethodID J_UdfLogicalType_getChildType;
+jmethodID J_UdfLogicalType_getArraySize;
+jmethodID J_UdfLogicalType_getKeyType;
+jmethodID J_UdfLogicalType_getValueType;
+jmethodID J_UdfLogicalType_getFieldNames;
+jmethodID J_UdfLogicalType_getFieldTypes;
+jmethodID J_UdfLogicalType_getEnumValues;
+jmethodID J_UdfLogicalType_getDecimalWidth;
+jmethodID J_UdfLogicalType_getDecimalScale;
 
 static std::vector<jobject> global_refs;
 
@@ -190,8 +255,15 @@ void create_refs(JNIEnv *env) {
 	J_Short = make_class_ref(env, "java/lang/Short");
 	J_Int = make_class_ref(env, "java/lang/Integer");
 	J_Long = make_class_ref(env, "java/lang/Long");
+	J_Bool_init = get_method_id(env, J_Bool, "<init>", "(Z)V");
+	J_Byte_init = get_method_id(env, J_Byte, "<init>", "(B)V");
+	J_Short_init = get_method_id(env, J_Short, "<init>", "(S)V");
+	J_Int_init = get_method_id(env, J_Int, "<init>", "(I)V");
+	J_Long_init = get_method_id(env, J_Long, "<init>", "(J)V");
 	J_Float = make_class_ref(env, "java/lang/Float");
 	J_Double = make_class_ref(env, "java/lang/Double");
+	J_Float_init = get_method_id(env, J_Float, "<init>", "(F)V");
+	J_Double_init = get_method_id(env, J_Double, "<init>", "(D)V");
 	J_String = make_class_ref(env, "java/lang/String");
 	J_BigDecimal = make_class_ref(env, "java/math/BigDecimal");
 	J_HugeInt = make_class_ref(env, "org/duckdb/DuckDBHugeInt");
@@ -210,8 +282,15 @@ void create_refs(JNIEnv *env) {
 
 	J_List = make_class_ref(env, "java/util/List");
 	J_List_iterator = get_method_id(env, J_List, "iterator", "()Ljava/util/Iterator;");
+	J_ArrayList = make_class_ref(env, "java/util/ArrayList");
+	J_ArrayList_init = get_method_id(env, J_ArrayList, "<init>", "()V");
+	J_ArrayList_add = get_method_id(env, J_ArrayList, "add", "(Ljava/lang/Object;)Z");
 	J_Map = make_class_ref(env, "java/util/Map");
 	J_Map_entrySet = get_method_id(env, J_Map, "entrySet", "()Ljava/util/Set;");
+	J_LinkedHashMap = make_class_ref(env, "java/util/LinkedHashMap");
+	J_LinkedHashMap_init = get_method_id(env, J_LinkedHashMap, "<init>", "()V");
+	J_LinkedHashMap_put =
+	    get_method_id(env, J_LinkedHashMap, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
 	J_Set = make_class_ref(env, "java/util/Set");
 	J_Set_iterator = get_method_id(env, J_Set, "iterator", "()Ljava/util/Iterator;");
 	J_Iterator = make_class_ref(env, "java/util/Iterator");
@@ -219,8 +298,25 @@ void create_refs(JNIEnv *env) {
 	J_Iterator_next = get_method_id(env, J_Iterator, "next", "()Ljava/lang/Object;");
 
 	J_UUID = make_class_ref(env, "java/util/UUID");
+	J_UUID_init = get_method_id(env, J_UUID, "<init>", "(JJ)V");
 	J_UUID_getMostSignificantBits = get_method_id(env, J_UUID, "getMostSignificantBits", "()J");
 	J_UUID_getLeastSignificantBits = get_method_id(env, J_UUID, "getLeastSignificantBits", "()J");
+	J_LocalDate = make_class_ref(env, "java/time/LocalDate");
+	J_LocalDate_ofEpochDay = get_static_method_id(env, J_LocalDate, "ofEpochDay", "(J)Ljava/time/LocalDate;");
+	J_LocalTime = make_class_ref(env, "java/time/LocalTime");
+	J_LocalTime_ofNanoOfDay = get_static_method_id(env, J_LocalTime, "ofNanoOfDay", "(J)Ljava/time/LocalTime;");
+	J_LocalDateTime = make_class_ref(env, "java/time/LocalDateTime");
+	J_LocalDateTime_ofEpochSecond = get_static_method_id(env, J_LocalDateTime, "ofEpochSecond",
+	                                                     "(JILjava/time/ZoneOffset;)Ljava/time/LocalDateTime;");
+	J_LocalDateTime_atOffset =
+	    get_method_id(env, J_LocalDateTime, "atOffset", "(Ljava/time/ZoneOffset;)Ljava/time/OffsetDateTime;");
+	J_OffsetTime = make_class_ref(env, "java/time/OffsetTime");
+	J_OffsetTime_of = get_static_method_id(env, J_OffsetTime, "of",
+	                                       "(Ljava/time/LocalTime;Ljava/time/ZoneOffset;)Ljava/time/OffsetTime;");
+	J_ZoneOffset = make_class_ref(env, "java/time/ZoneOffset");
+	J_ZoneOffset_UTC = make_static_object_field_ref(env, J_ZoneOffset, "UTC", "Ljava/time/ZoneOffset;");
+	J_ZoneOffset_ofTotalSeconds =
+	    get_static_method_id(env, J_ZoneOffset, "ofTotalSeconds", "(I)Ljava/time/ZoneOffset;");
 
 	J_DuckArray = make_class_ref(env, "org/duckdb/DuckDBArray");
 	J_DuckArray_init = get_method_id(env, J_DuckArray, "<init>", "(Lorg/duckdb/DuckDBVector;II)V");
@@ -239,6 +335,9 @@ void create_refs(JNIEnv *env) {
 
 	J_Object = make_class_ref(env, "java/lang/Object");
 	J_Object_toString = get_method_id(env, J_Object, "toString", "()Ljava/lang/String;");
+	J_StringArray = make_class_ref(env, "[Ljava/lang/String;");
+	J_Enum = make_class_ref(env, "java/lang/Enum");
+	J_Enum_name = get_method_id(env, J_Enum, "name", "()Ljava/lang/String;");
 
 	J_Entry = make_class_ref(env, "java/util/Map$Entry");
 	J_Entry_getKey = get_method_id(env, J_Entry, "getKey", "()Ljava/lang/Object;");
@@ -258,6 +357,7 @@ void create_refs(JNIEnv *env) {
 	J_BigDecimal_scaleByPowTen = get_method_id(env, J_BigDecimal, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;");
 	J_BigDecimal_toPlainString = get_method_id(env, J_BigDecimal, "toPlainString", "()Ljava/lang/String;");
 	J_BigDecimal_longValue = get_method_id(env, J_BigDecimal, "longValue", "()J");
+	J_BigDecimal_initString = get_method_id(env, J_BigDecimal, "<init>", "(Ljava/lang/String;)V");
 	J_HugeInt_lower = get_field_id(env, J_HugeInt, "lower", "J");
 	J_HugeInt_upper = get_field_id(env, J_HugeInt, "upper", "J");
 
@@ -296,6 +396,55 @@ void create_refs(JNIEnv *env) {
 
 	J_QueryProgress = make_class_ref(env, "org/duckdb/QueryProgress");
 	J_QueryProgress_init = get_method_id(env, J_QueryProgress, "<init>", "(DJJ)V");
+
+	J_ScalarUdf = make_class_ref(env, "org/duckdb/udf/ScalarUdf");
+	J_ScalarUdf_apply = get_method_id(env, J_ScalarUdf, "apply",
+	                                  "(Lorg/duckdb/udf/UdfContext;[Lorg/duckdb/UdfReader;"
+	                                  "Lorg/duckdb/UdfScalarWriter;I)V");
+	J_UdfReader = make_class_ref(env, "org/duckdb/UdfReader");
+	J_UdfNativeReader = make_class_ref(env, "org/duckdb/UdfNativeReader");
+	J_UdfNativeReader_init = get_method_id(env, J_UdfNativeReader, "<init>",
+	                                       "(ILjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;I)V");
+	J_UdfScalarWriter = make_class_ref(env, "org/duckdb/UdfScalarWriter");
+	J_UdfScalarWriter_init = get_method_id(env, J_UdfScalarWriter, "<init>",
+	                                       "(ILjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;I)V");
+	J_TableFunction = make_class_ref(env, "org/duckdb/udf/TableFunction");
+	J_TableFunction_bind = get_method_id(env, J_TableFunction, "bind",
+	                                     "(Lorg/duckdb/udf/BindContext;[Ljava/lang/Object;)Lorg/duckdb/udf/"
+	                                     "TableBindResult;");
+	J_TableFunction_init =
+	    get_method_id(env, J_TableFunction, "init",
+	                  "(Lorg/duckdb/udf/InitContext;Lorg/duckdb/udf/TableBindResult;)Lorg/duckdb/udf/TableState;");
+	J_TableFunction_produce =
+	    get_method_id(env, J_TableFunction, "produce", "(Lorg/duckdb/udf/TableState;Lorg/duckdb/UdfOutputAppender;)I");
+	J_TableBindResult = make_class_ref(env, "org/duckdb/udf/TableBindResult");
+	J_TableBindResult_getColumnNames = get_method_id(env, J_TableBindResult, "getColumnNames", "()[Ljava/lang/String;");
+	J_TableBindResult_getColumnTypes =
+	    get_method_id(env, J_TableBindResult, "getColumnTypes", "()[Lorg/duckdb/DuckDBColumnType;");
+	J_TableBindResult_getColumnLogicalTypes =
+	    get_method_id(env, J_TableBindResult, "getColumnLogicalTypes", "()[Lorg/duckdb/udf/UdfLogicalType;");
+	J_TableState = make_class_ref(env, "org/duckdb/udf/TableState");
+	J_TableInitContext = make_class_ref(env, "org/duckdb/udf/TableInitContext");
+	J_TableInitContext_init = get_method_id(env, J_TableInitContext, "<init>", "([I)V");
+	J_UdfOutputAppender = make_class_ref(env, "org/duckdb/UdfOutputAppender");
+	J_UdfOutputAppender_init = get_method_id(env, J_UdfOutputAppender, "<init>", "(Ljava/nio/ByteBuffer;)V");
+	J_UdfOutputAppender_close = get_method_id(env, J_UdfOutputAppender, "close", "()V");
+	J_DuckDBColumnType = make_class_ref(env, "org/duckdb/DuckDBColumnType");
+	J_UdfLogicalType = make_class_ref(env, "org/duckdb/udf/UdfLogicalType");
+	J_UdfLogicalType_getType = get_method_id(env, J_UdfLogicalType, "getType", "()Lorg/duckdb/DuckDBColumnType;");
+	J_UdfLogicalType_getChildType =
+	    get_method_id(env, J_UdfLogicalType, "getChildType", "()Lorg/duckdb/udf/UdfLogicalType;");
+	J_UdfLogicalType_getArraySize = get_method_id(env, J_UdfLogicalType, "getArraySize", "()J");
+	J_UdfLogicalType_getKeyType =
+	    get_method_id(env, J_UdfLogicalType, "getKeyType", "()Lorg/duckdb/udf/UdfLogicalType;");
+	J_UdfLogicalType_getValueType =
+	    get_method_id(env, J_UdfLogicalType, "getValueType", "()Lorg/duckdb/udf/UdfLogicalType;");
+	J_UdfLogicalType_getFieldNames = get_method_id(env, J_UdfLogicalType, "getFieldNames", "()[Ljava/lang/String;");
+	J_UdfLogicalType_getFieldTypes =
+	    get_method_id(env, J_UdfLogicalType, "getFieldTypes", "()[Lorg/duckdb/udf/UdfLogicalType;");
+	J_UdfLogicalType_getEnumValues = get_method_id(env, J_UdfLogicalType, "getEnumValues", "()[Ljava/lang/String;");
+	J_UdfLogicalType_getDecimalWidth = get_method_id(env, J_UdfLogicalType, "getDecimalWidth", "()I");
+	J_UdfLogicalType_getDecimalScale = get_method_id(env, J_UdfLogicalType, "getDecimalScale", "()I");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {
