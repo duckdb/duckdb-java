@@ -7,6 +7,13 @@
 #include <limits>
 #include <stdexcept>
 
+void ThrowJNI(JNIEnv *env, const char *message) {
+	if (!J_SQLException) {
+		return;
+	}
+	env->ThrowNew(J_SQLException, message);
+}
+
 JNIEnv *get_callback_env(JavaVM *vm, bool &did_attach) {
 	did_attach = false;
 	JNIEnv *env = nullptr;

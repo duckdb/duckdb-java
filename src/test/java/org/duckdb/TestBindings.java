@@ -7,11 +7,15 @@ import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.EnumSet;
+import org.duckdb.udf.UdfLogicalType;
 
 public class TestBindings {
 
@@ -398,6 +402,11 @@ public class TestBindings {
         assertThrows(() -> { UdfTypeCatalog.fromCapiTypeId(-1); }, SQLFeatureNotSupportedException.class);
     }
 
+    public static void test_bindings_udf_java_type_mapper_biginteger_maps_to_hugeint() throws Exception {
+        UdfLogicalType mapped = UdfJavaTypeMapper.toLogicalType(BigInteger.class);
+        assertEquals(mapped.getType(), DuckDBColumnType.HUGEINT);
+    }
+
     public static void test_bindings_udf_type_catalog_accessor_matrix_all_supported_types() throws Exception {
         assertAccessors(DuckDBColumnType.BOOLEAN,
                         EnumSet.of(UdfTypeCatalog.Accessor.GET_BOOLEAN, UdfTypeCatalog.Accessor.SET_BOOLEAN));
@@ -581,6 +590,11 @@ public class TestBindings {
             DUCKDB_TYPE_BIGINT.typeId, ByteBuffer.allocateDirect(rowCount * Long.BYTES), null, validity, rowCount);
         longVector.setLong(0, 9_000_000_000L);
         assertEquals(longVector.getLong(0), 9_000_000_000L);
+        longVector.setObject(1, new BigDecimal("9223372036854775807"));
+        assertEquals(longVector.getLong(1), Long.MAX_VALUE);
+        assertThrows(() -> { longVector.setObject(2, new BigDecimal("1.5")); }, IllegalArgumentException.class);
+        assertThrows(
+            () -> { longVector.setObject(3, new BigInteger("9223372036854775808")); }, IllegalArgumentException.class);
         assertThrows(() -> { longVector.setInt(0, 1); }, UnsupportedOperationException.class);
 
         UdfScalarWriter unsignedIntVector = new UdfScalarWriter(
@@ -593,6 +607,12 @@ public class TestBindings {
             DUCKDB_TYPE_UBIGINT.typeId, ByteBuffer.allocateDirect(rowCount * Long.BYTES), null, validity, rowCount);
         unsignedBigVector.setLong(0, -1L);
         assertEquals(unsignedBigVector.getLong(0), -1L);
+        unsignedBigVector.setObject(1, new BigInteger("18446744073709551615"));
+        assertEquals(unsignedBigVector.getLong(1), -1L);
+        assertThrows(() -> { unsignedBigVector.setObject(2, new BigDecimal("1.5")); }, IllegalArgumentException.class);
+        assertThrows(() -> {
+            unsignedBigVector.setObject(3, new BigInteger("18446744073709551616"));
+        }, IllegalArgumentException.class);
 
         UdfScalarWriter hugeVector = new UdfScalarWriter(
             DUCKDB_TYPE_HUGEINT.typeId, ByteBuffer.allocateDirect(rowCount * 16), null, validity, rowCount);
@@ -601,6 +621,21 @@ public class TestBindings {
         hugeValue[15] = 7;
         hugeVector.setBytes(0, hugeValue);
         assertEquals(hugeVector.getBytes(0), hugeValue);
+        BigInteger hugeBi = new BigInteger("170141183460469231731687303715884105727");
+        hugeVector.setObject(1, hugeBi);
+        assertEquals(hugeVector.getBigInteger(1), hugeBi);
+        BigInteger hugeNegOne = BigInteger.valueOf(-1);
+        hugeVector.setObject(2, hugeNegOne);
+        assertEquals(hugeVector.getBigInteger(2), hugeNegOne);
+        BigInteger hugeMin = new BigInteger("-170141183460469231731687303715884105728");
+        hugeVector.setObject(3, hugeMin);
+        assertEquals(hugeVector.getBigInteger(3), hugeMin);
+        BigInteger hugeMinPlusOne = hugeMin.add(BigInteger.ONE);
+        hugeVector.setObject(4, hugeMinPlusOne);
+        assertEquals(hugeVector.getBigInteger(4), hugeMinPlusOne);
+        assertThrows(() -> {
+            hugeVector.setObject(5, new BigInteger("170141183460469231731687303715884105728"));
+        }, IllegalArgumentException.class);
 
         UdfScalarWriter uhugeVector = new UdfScalarWriter(
             DUCKDB_TYPE_UHUGEINT.typeId, ByteBuffer.allocateDirect(rowCount * 16), null, validity, rowCount);
@@ -609,6 +644,10 @@ public class TestBindings {
         uhugeValue[8] = 11;
         uhugeVector.setBytes(0, uhugeValue);
         assertEquals(uhugeVector.getBytes(0), uhugeValue);
+        BigInteger uhugeBi = new BigInteger("340282366920938463463374607431768211455");
+        uhugeVector.setObject(1, uhugeBi);
+        assertEquals(uhugeVector.getBigInteger(1), uhugeBi);
+        assertThrows(() -> { uhugeVector.setObject(2, BigInteger.valueOf(-1)); }, IllegalArgumentException.class);
 
         UdfScalarWriter uuidVector = new UdfScalarWriter(
             DUCKDB_TYPE_UUID.typeId, ByteBuffer.allocateDirect(rowCount * 16), null, validity, rowCount);
@@ -624,6 +663,10 @@ public class TestBindings {
             DUCKDB_TYPE_TIME_TZ.typeId, ByteBuffer.allocateDirect(rowCount * Long.BYTES), null, validity, rowCount);
         timetzVector.setLong(0, 123456789L);
         assertEquals(timetzVector.getLong(0), 123456789L);
+        timetzVector.setObject(1, OffsetTime.of(1, 2, 3, 0, ZoneOffset.ofHoursMinutesSeconds(15, 59, 59)));
+        assertThrows(() -> {
+            timetzVector.setObject(2, OffsetTime.of(1, 2, 3, 0, ZoneOffset.ofHours(16)));
+        }, IllegalArgumentException.class);
 
         UdfScalarWriter timestamptzVector =
             new UdfScalarWriter(DUCKDB_TYPE_TIMESTAMP_TZ.typeId, ByteBuffer.allocateDirect(rowCount * Long.BYTES), null,

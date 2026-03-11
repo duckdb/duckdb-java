@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.SQLException;
@@ -22,6 +23,13 @@ public final class UdfScalarWriter {
     private static final long UNSIGNED_INT_MAX = 0xFFFF_FFFFL;
     private static final LocalDateTime EPOCH_DATE_TIME = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC);
     private static final int MAX_TZ_SECONDS = 16 * 60 * 60 - 1;
+    private static final BigInteger U64_MIN = BigInteger.ZERO;
+    private static final BigInteger U64_MAX = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+    private static final BigInteger U64_MODULUS = BigInteger.ONE.shiftLeft(64);
+    private static final BigInteger HUGEINT_MIN = BigInteger.ONE.shiftLeft(127).negate();
+    private static final BigInteger HUGEINT_MAX = BigInteger.ONE.shiftLeft(127).subtract(BigInteger.ONE);
+    private static final BigInteger UHUGEINT_MIN = BigInteger.ZERO;
+    private static final BigInteger UHUGEINT_MAX = BigInteger.ONE.shiftLeft(128).subtract(BigInteger.ONE);
 
     private final DuckDBColumnType type;
     private final ByteBuffer data;
@@ -212,6 +220,25 @@ public final class UdfScalarWriter {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public BigInteger getBigInteger(int row) {
+        checkIndex(row);
+        if (isNull(row)) {
+            return null;
+        }
+        if (type != DuckDBColumnType.HUGEINT && type != DuckDBColumnType.UHUGEINT) {
+            throw new UnsupportedOperationException("getBigInteger is not supported for " + type + " vectors");
+        }
+
+        byte[] bytes = readFixedWidthBytes(row);
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder());
+        long lower = buffer.getLong();
+        long upper = buffer.getLong();
+        if (type == DuckDBColumnType.HUGEINT) {
+            return BigInteger.valueOf(upper).shiftLeft(64).add(toUnsignedBigInteger(lower));
+        }
+        return toUnsignedBigInteger(upper).shiftLeft(64).add(toUnsignedBigInteger(lower));
     }
 
     public Date getDate(int row) {
@@ -609,7 +636,11 @@ public final class UdfScalarWriter {
             return;
         case HUGEINT:
         case UHUGEINT:
-            setBytes(row, requireFixedWidthBytes(value, 16, type.toString()));
+            if (value instanceof BigInteger) {
+                setBigInteger(row, (BigInteger) value);
+            } else {
+                setBytes(row, requireFixedWidthBytes(value, 16, type.toString()));
+            }
             return;
         case UUID:
             if (value instanceof UUID) {
@@ -651,18 +682,23 @@ public final class UdfScalarWriter {
         setObject(row, value);
     }
 
+    public void setBigInteger(int row, BigInteger value) {
+        checkIndex(row);
+        if (type != DuckDBColumnType.HUGEINT && type != DuckDBColumnType.UHUGEINT) {
+            throw new UnsupportedOperationException("setBigInteger is not supported for " + type + " vectors");
+        }
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        setBytes(row, toInt128Bytes(value, type));
+    }
+
     private static boolean requireBoolean(Object value) {
         if (!(value instanceof Boolean)) {
             throw new IllegalArgumentException("Expected Boolean value but got " + value.getClass().getName());
         }
         return (Boolean) value;
-    }
-
-    private static long requireLong(Object value) {
-        if (!(value instanceof Number)) {
-            throw new IllegalArgumentException("Expected numeric value but got " + value.getClass().getName());
-        }
-        return ((Number) value).longValue();
     }
 
     private static double requireDouble(Object value) {
@@ -700,13 +736,34 @@ public final class UdfScalarWriter {
             return (BigDecimal) value;
         }
         if (value instanceof Number) {
-            return BigDecimal.valueOf(((Number) value).doubleValue());
+            return toBigDecimal((Number) value);
         }
         throw new IllegalArgumentException("Expected BigDecimal/Number value but got " + value.getClass().getName());
     }
 
+    private static BigDecimal toBigDecimal(Number value) {
+        if (value instanceof BigInteger) {
+            return new BigDecimal((BigInteger) value);
+        }
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            return BigDecimal.valueOf(value.longValue());
+        }
+        if (value instanceof Float || value instanceof Double) {
+            try {
+                return BigDecimal.valueOf(value.doubleValue());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Expected finite floating-point value for DECIMAL conversion", e);
+            }
+        }
+        try {
+            return new BigDecimal(value.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Failed to coerce numeric value to BigDecimal", e);
+        }
+    }
+
     private static long requireSignedLongInRange(Object value, long min, long max, String typeName) {
-        long num = requireLong(value);
+        long num = requireIntegralLong(value, typeName);
         if (num < min || num > max) {
             throw new IllegalArgumentException("Value out of range for " + typeName + ": " + num);
         }
@@ -734,7 +791,10 @@ public final class UdfScalarWriter {
 
     private static long requireLongOrTemporal(Object value, DuckDBColumnType colType) {
         if (value instanceof Number) {
-            return ((Number) value).longValue();
+            if (colType == DuckDBColumnType.UBIGINT) {
+                return requireUnsignedLongBits(value, "UBIGINT");
+            }
+            return requireIntegralLong(value, colType.toString());
         }
         switch (colType) {
         case TIME:
@@ -781,6 +841,65 @@ public final class UdfScalarWriter {
                                            value.getClass().getName());
     }
 
+    private static long requireIntegralLong(Object value, String typeName) {
+        BigInteger integerValue = requireIntegralBigInteger(value, typeName);
+        try {
+            return integerValue.longValueExact();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Value out of range for " + typeName + ": " + integerValue, e);
+        }
+    }
+
+    private static long requireUnsignedLongBits(Object value, String typeName) {
+        BigInteger integerValue = requireIntegralBigInteger(value, typeName);
+        if (integerValue.compareTo(U64_MIN) < 0 || integerValue.compareTo(U64_MAX) > 0) {
+            throw new IllegalArgumentException("Value out of range for " + typeName + ": " + integerValue);
+        }
+        if (integerValue.signum() >= 0 && integerValue.bitLength() <= 63) {
+            return integerValue.longValue();
+        }
+        return integerValue.subtract(U64_MODULUS).longValue();
+    }
+
+    private static BigInteger requireIntegralBigInteger(Object value, String typeName) {
+        if (!(value instanceof Number)) {
+            throw new IllegalArgumentException("Expected numeric value for " + typeName + " but got " +
+                                               value.getClass().getName());
+        }
+
+        Number number = (Number) value;
+        if (number instanceof BigInteger) {
+            return (BigInteger) number;
+        }
+        if (number instanceof BigDecimal) {
+            try {
+                return ((BigDecimal) number).toBigIntegerExact();
+            } catch (ArithmeticException e) {
+                throw new IllegalArgumentException("Expected integral value for " + typeName + ": " + number, e);
+            }
+        }
+        if (number instanceof Byte || number instanceof Short || number instanceof Integer || number instanceof Long) {
+            return BigInteger.valueOf(number.longValue());
+        }
+        if (number instanceof Float || number instanceof Double) {
+            double d = number.doubleValue();
+            if (!Double.isFinite(d)) {
+                throw new IllegalArgumentException("Expected finite value for " + typeName + " but got " + d);
+            }
+            try {
+                return BigDecimal.valueOf(d).toBigIntegerExact();
+            } catch (ArithmeticException e) {
+                throw new IllegalArgumentException("Expected integral value for " + typeName + ": " + number, e);
+            }
+        }
+
+        try {
+            return new BigDecimal(number.toString()).toBigIntegerExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            throw new IllegalArgumentException("Expected integral value for " + typeName + ": " + number, e);
+        }
+    }
+
     private static long localDateTimeToMoment(LocalDateTime value, DuckDBColumnType colType) {
         switch (colType) {
         case TIMESTAMP_S:
@@ -813,8 +932,44 @@ public final class UdfScalarWriter {
     }
 
     private static long packTimeTzMicros(long micros, int offsetSeconds) {
+        if (offsetSeconds < -MAX_TZ_SECONDS || offsetSeconds > MAX_TZ_SECONDS) {
+            throw new IllegalArgumentException("TIME WITH TIME ZONE offset out of range: " + offsetSeconds +
+                                               " seconds (allowed range: -" + MAX_TZ_SECONDS + ".." + MAX_TZ_SECONDS +
+                                               ")");
+        }
         long normalizedOffset = MAX_TZ_SECONDS - offsetSeconds;
         return ((micros & 0xFFFFFFFFFFL) << 24) | (normalizedOffset & 0xFFFFFFL);
+    }
+
+    private static BigInteger toUnsignedBigInteger(long value) {
+        if (value >= 0) {
+            return BigInteger.valueOf(value);
+        }
+        return BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63);
+    }
+
+    private static byte[] toInt128Bytes(BigInteger value, DuckDBColumnType targetType) {
+        if (value == null) {
+            throw new IllegalArgumentException("BigInteger value must not be null");
+        }
+        if (targetType == DuckDBColumnType.HUGEINT) {
+            if (value.compareTo(HUGEINT_MIN) < 0 || value.compareTo(HUGEINT_MAX) > 0) {
+                throw new IllegalArgumentException("Value out of range for HUGEINT: " + value);
+            }
+        } else if (targetType == DuckDBColumnType.UHUGEINT) {
+            if (value.compareTo(UHUGEINT_MIN) < 0 || value.compareTo(UHUGEINT_MAX) > 0) {
+                throw new IllegalArgumentException("Value out of range for UHUGEINT: " + value);
+            }
+        } else {
+            throw new IllegalArgumentException("Int128 conversion is only supported for HUGEINT/UHUGEINT");
+        }
+
+        long lower = value.longValue();
+        long upper = value.shiftRight(64).longValue();
+        ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.nativeOrder());
+        buffer.putLong(lower);
+        buffer.putLong(upper);
+        return buffer.array();
     }
 
     private static byte[] uuidToBytes(UUID value) {

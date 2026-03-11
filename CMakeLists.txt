@@ -600,7 +600,12 @@ add_library(duckdb_java SHARED
   src/jni/functions.cpp
   src/jni/refs.cpp
   src/jni/types.cpp
+  src/jni/udf_callbacks.cpp
   src/jni/udf_registration.cpp
+  src/jni/udf_registration_impl.cpp
+  src/jni/udf_table_bind_conversion.cpp
+  src/jni/udf_types.cpp
+  src/jni/udf_vector_accessors.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})
 

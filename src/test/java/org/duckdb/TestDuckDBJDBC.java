@@ -1191,6 +1191,343 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_table_function_output_appender_decimal_number_coercion_exact() throws Exception {
+        final BigInteger hugeIntValue = new BigInteger("12345678901234567890123456789012345678");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_decimal_number_exact", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i", "dec"},
+                                               new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                                                                     UdfLogicalType.decimal(38, 0)},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.beginRow().append(0).append(Long.valueOf(9007199254740993L)).endRow();
+                    out.beginRow().append(1).append(hugeIntValue).endRow();
+
+                    producedRows[0] = 2;
+                    return 2;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT CAST(dec AS VARCHAR) FROM tf_out_decimal_number_exact() ORDER BY i")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "9007199254740993");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), hugeIntValue.toString());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_int128_biginteger_roundtrip_boundaries() throws Exception {
+        final BigInteger hugeintMin = new BigInteger("-170141183460469231731687303715884105728");
+        final BigInteger hugeintMax = new BigInteger("170141183460469231731687303715884105727");
+        final BigInteger uhugeintMax = new BigInteger("340282366920938463463374607431768211455");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_int128_bigint_boundaries", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"id", "h", "uh"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.HUGEINT,
+                                                                       DuckDBColumnType.UHUGEINT},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.beginRow().append(0).append(hugeintMin).append(BigInteger.ZERO).endRow();
+
+                    out.setInt(0, 1, 1);
+                    out.setObject(1, 1, hugeintMax);
+                    out.setObject(2, 1, uhugeintMax);
+
+                    producedRows[0] = 2;
+                    return 2;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (
+                ResultSet rs = stmt.executeQuery(
+                    "SELECT CAST(h AS VARCHAR), CAST(uh AS VARCHAR) FROM tf_out_int128_bigint_boundaries() ORDER BY id")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), hugeintMin.toString());
+                assertEquals(rs.getString(2), "0");
+
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), hugeintMax.toString());
+                assertEquals(rs.getString(2), uhugeintMax.toString());
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_int128_biginteger_out_of_range() throws Exception {
+        final BigInteger hugeintOverflow = new BigInteger("170141183460469231731687303715884105728");
+        final BigInteger uhugeintNegative = BigInteger.valueOf(-1);
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_int128_bigint_huge_oob", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"id", "h", "uh"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.HUGEINT,
+                                                                       DuckDBColumnType.UHUGEINT},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.beginRow().append(0).append(hugeintOverflow).append(BigInteger.ZERO).endRow();
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            assertThrows(
+                () -> { stmt.executeQuery("SELECT * FROM tf_out_int128_bigint_huge_oob()"); }, SQLException.class);
+
+            conn.registerTableFunction("tf_out_int128_bigint_uhuge_oob", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"id", "h", "uh"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER,
+                                                                       DuckDBColumnType.HUGEINT,
+                                                                       DuckDBColumnType.UHUGEINT},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.setInt(0, 0, 0);
+                    out.setObject(1, 0, BigInteger.ZERO);
+                    out.setObject(2, 0, uhugeintNegative);
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            assertThrows(
+                () -> { stmt.executeQuery("SELECT * FROM tf_out_int128_bigint_uhuge_oob()"); }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_output_appender_exact_integer_object_coercion() throws Exception {
+        final BigInteger ubigintMax = new BigInteger("18446744073709551615");
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_exact_integer_objects", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(
+                        new String[] {"i", "u"},
+                        new DuckDBColumnType[] {DuckDBColumnType.BIGINT, DuckDBColumnType.UBIGINT}, null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+
+                    out.setObject(0, 0, new BigDecimal("9223372036854775807"));
+                    out.setObject(1, 0, ubigintMax);
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT CAST(i AS VARCHAR), CAST(u AS VARCHAR) FROM tf_out_exact_integer_objects()")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "9223372036854775807");
+                assertEquals(rs.getString(2), ubigintMax.toString());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_exact_integer_object_coercion_rejects_invalid()
+        throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_exact_integer_bad_bigint", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.BIGINT},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+                    out.setObject(0, 0, new BigDecimal("1.5"));
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+            assertThrows(
+                () -> { stmt.executeQuery("SELECT * FROM tf_out_exact_integer_bad_bigint()"); }, SQLException.class);
+
+            conn.registerTableFunction("tf_out_exact_integer_bad_ubigint", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"u"}, new DuckDBColumnType[] {DuckDBColumnType.UBIGINT},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+                    out.setObject(0, 0, new BigInteger("18446744073709551616"));
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+            assertThrows(
+                () -> { stmt.executeQuery("SELECT * FROM tf_out_exact_integer_bad_ubigint()"); }, SQLException.class);
+        }
+    }
+
+    public static void test_table_function_output_appender_date_setdate_with_java_util_date() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_date_setdate_java_util", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"d"}, new DuckDBColumnType[] {DuckDBColumnType.DATE},
+                                               null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+                    out.setDate(0, 0, new java.util.Date(1_704_254_706_000L));
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            try (ResultSet rs = stmt.executeQuery("SELECT CAST(d AS VARCHAR) FROM tf_out_date_setdate_java_util()")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "2024-01-03");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_output_appender_timetz_offset_range_validation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_out_timetz_oob", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"t_tz"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.TIME_WITH_TIME_ZONE}, null);
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    int[] producedRows = (int[]) state.getState();
+                    if (producedRows[0] > 0) {
+                        return 0;
+                    }
+                    out.beginRow().append(OffsetTime.of(1, 2, 3, 0, ZoneOffset.ofHours(16))).endRow();
+                    producedRows[0] = 1;
+                    return 1;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[0]));
+
+            assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_out_timetz_oob()"); }, SQLException.class);
+        }
+    }
+
     public static void test_table_function_output_appender_java_object_type_mismatch() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
@@ -2225,6 +2562,37 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_java_scalar_udf_output_writer_decimal_number_coercion_exact() throws Exception {
+        final UdfLogicalType decimal38_0 = UdfLogicalType.decimal(38, 0);
+        final BigInteger hugeIntValue = new BigInteger("12345678901234567890123456789012345678");
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("writer_obj_decimal_num_exact",
+                                   new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER)}, decimal38_0,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           int selector = args[0].getInt(row);
+                                           if (selector == 0) {
+                                               out.setObject(row, Long.valueOf(9007199254740993L));
+                                           } else {
+                                               out.setObject(row, hugeIntValue);
+                                           }
+                                       }
+                                   });
+
+            try (
+                ResultSet rs = stmt.executeQuery(
+                    "SELECT CAST(writer_obj_decimal_num_exact(i::INTEGER) AS VARCHAR) FROM range(2) t(i) ORDER BY i")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "9007199254740993");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), hugeIntValue.toString());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_java_scalar_udf_reader_api() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
@@ -2911,6 +3279,31 @@ public class TestDuckDBJDBC {
                                                            }
                                                        }),
                          SQLException.class);
+        }
+    }
+
+    public static void test_java_scalar_udf_java_class_type_mapper_biginteger_roundtrip() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarUdf("class_biginteger_add1", BigInteger.class, BigInteger.class,
+                                   (ctx, args, out, rowCount) -> {
+                                       for (int row = 0; row < rowCount; row++) {
+                                           if (args[0].isNull(row)) {
+                                               out.setNull(row);
+                                           } else {
+                                               out.setObject(row, args[0].getBigInteger(row).add(BigInteger.ONE));
+                                           }
+                                       }
+                                   });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT CAST(class_biginteger_add1("
+                                                  + "170141183460469231731687303715884105726::HUGEINT) AS VARCHAR), "
+                                                  + "class_biginteger_add1(NULL::HUGEINT) IS NULL")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "170141183460469231731687303715884105727");
+                assertEquals(rs.getBoolean(2), true);
+                assertFalse(rs.next());
+            }
         }
     }
 

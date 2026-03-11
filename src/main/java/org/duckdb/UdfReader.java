@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -23,6 +24,10 @@ public interface UdfReader {
     double getDouble(int row);
 
     BigDecimal getBigDecimal(int row);
+
+    default BigInteger getBigInteger(int row) {
+        throw new UnsupportedOperationException("getBigInteger is not supported for this reader implementation");
+    }
 
     Date getDate(int row);
 

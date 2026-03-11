@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -50,6 +51,11 @@ final class UdfNativeReader implements UdfReader {
     @Override
     public BigDecimal getBigDecimal(int row) {
         return vector.getBigDecimal(row);
+    }
+
+    @Override
+    public BigInteger getBigInteger(int row) {
+        return vector.getBigInteger(row);
     }
 
     @Override
