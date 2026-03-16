@@ -78,7 +78,7 @@ jmethodID J_DuckStruct_init;
 jclass J_ByteBuffer;
 jmethodID J_ByteBuffer_order;
 jclass J_ByteOrder;
-jobject J_ByteOrder_LITTLE_ENDIAN;
+jobject J_ByteOrder_NATIVE;
 
 jclass J_DuckMap;
 jmethodID J_DuckMap_getSQLTypeName;
@@ -154,6 +154,18 @@ static jfieldID get_field_id(JNIEnv *env, jclass clazz, const std::string &name,
 	jfieldID field_id = env->GetFieldID(clazz, name.c_str(), sig.c_str());
 	check_not_null(field_id, "Field not found, name: [" + name + "], signature: [" + sig + "]");
 	return field_id;
+}
+
+static jobject make_static_method_call_ref(JNIEnv *env, jclass clazz, const std::string &name, const std::string &sig) {
+	jmethodID method_id = get_static_method_id(env, clazz, name, sig);
+	jobject local_ref = env->CallStaticObjectMethod(clazz, method_id);
+	check_not_null(local_ref, "Static method returned null, name: [" + name + "], signature: [" + sig + "]");
+	jobject global_ref = env->NewGlobalRef(local_ref);
+	check_not_null(global_ref,
+	               "Cannot create global ref for static method result, name: [" + name + "], signature: [" + sig + "]");
+	env->DeleteLocalRef(local_ref);
+	global_refs.emplace_back(global_ref);
+	return global_ref;
 }
 
 static jobject make_static_object_field_ref(JNIEnv *env, jclass clazz, const std::string &name,
@@ -278,7 +290,7 @@ void create_refs(JNIEnv *env) {
 	J_ByteBuffer = make_class_ref(env, "java/nio/ByteBuffer");
 	J_ByteBuffer_order = get_method_id(env, J_ByteBuffer, "order", "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
 	J_ByteOrder = make_class_ref(env, "java/nio/ByteOrder");
-	J_ByteOrder_LITTLE_ENDIAN = make_static_object_field_ref(env, J_ByteOrder, "LITTLE_ENDIAN", "Ljava/nio/ByteOrder;");
+	J_ByteOrder_NATIVE = make_static_method_call_ref(env, J_ByteOrder, "nativeOrder", "()Ljava/nio/ByteOrder;");
 
 	J_ProfilerPrintFormat = make_class_ref(env, "org/duckdb/ProfilerPrintFormat");
 	J_ProfilerPrintFormat_QUERY_TREE =
