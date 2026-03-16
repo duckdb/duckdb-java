@@ -465,7 +465,7 @@ public class DuckDBResultSet implements ResultSet {
 
         public DuckDBBlobResult(ByteBuffer buffer_p) {
             buffer_p.position(0);
-            buffer_p.order(ByteOrder.LITTLE_ENDIAN);
+            buffer_p.order(ByteOrder.nativeOrder());
             this.buffer = buffer_p;
         }
 
