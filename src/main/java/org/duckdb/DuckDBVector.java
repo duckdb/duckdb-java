@@ -457,7 +457,7 @@ class DuckDBVector {
 
     protected ByteBuffer getbuf(int idx, int typeWidth) {
         ByteBuffer buf = constlen_data;
-        buf.order(ByteOrder.LITTLE_ENDIAN);
+        buf.order(ByteOrder.nativeOrder());
         buf.position(idx * typeWidth);
         return buf;
     }
@@ -505,9 +505,7 @@ class DuckDBVector {
             return 0;
         }
         if (isType(DuckDBColumnType.UTINYINT)) {
-            ByteBuffer buf = ByteBuffer.allocate(2);
-            getbuf(idx, 1).get(buf.array(), 1, 1);
-            return buf.getShort();
+            return (short) Byte.toUnsignedInt(getbuf(idx, 1).get());
         }
         throw new SQLFeatureNotSupportedException("getUint8");
     }
@@ -517,10 +515,7 @@ class DuckDBVector {
             return 0;
         }
         if (isType(DuckDBColumnType.UINTEGER)) {
-            ByteBuffer buf = ByteBuffer.allocate(8);
-            buf.order(ByteOrder.LITTLE_ENDIAN);
-            getbuf(idx, 4).get(buf.array(), 0, 4);
-            return buf.getLong();
+            return Integer.toUnsignedLong(getbuf(idx, 4).getInt());
         }
         throw new SQLFeatureNotSupportedException("getUint32");
     }
@@ -530,10 +525,7 @@ class DuckDBVector {
             return 0;
         }
         if (isType(DuckDBColumnType.USMALLINT)) {
-            ByteBuffer buf = ByteBuffer.allocate(4);
-            buf.order(ByteOrder.LITTLE_ENDIAN);
-            getbuf(idx, 2).get(buf.array(), 0, 2);
-            return buf.getInt();
+            return Short.toUnsignedInt(getbuf(idx, 2).getShort());
         }
         throw new SQLFeatureNotSupportedException("getUint16");
     }
@@ -543,13 +535,10 @@ class DuckDBVector {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.UBIGINT)) {
-            byte[] buf_res = new byte[16];
-            byte[] buf = new byte[8];
-            getbuf(idx, 8).get(buf);
-            for (int i = 0; i < 8; i++) {
-                buf_res[i + 8] = buf[7 - i];
-            }
-            return new BigInteger(buf_res);
+            byte[] buf_res = new byte[8];
+            long value = getbuf(idx, 8).getLong();
+            ByteBuffer.wrap(buf_res).putLong(value);
+            return new BigInteger(1, buf_res);
         }
         throw new SQLFeatureNotSupportedException("getUint64");
     }
@@ -601,14 +590,12 @@ class DuckDBVector {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.HUGEINT)) {
-            byte[] buf = new byte[16];
-            getbuf(idx, 16).get(buf);
-            for (int i = 0; i < 8; i++) {
-                byte keep = buf[i];
-                buf[i] = buf[15 - i];
-                buf[15 - i] = keep;
-            }
-            return new BigInteger(buf);
+            byte[] buf_res = new byte[16];
+            ByteBuffer buf = getbuf(idx, 16);
+            long lower = buf.getLong();
+            long upper = buf.getLong();
+            ByteBuffer.wrap(buf_res).putLong(upper).putLong(lower);
+            return new BigInteger(buf_res);
         }
         Object o = getObject(idx);
         return new BigInteger(o.toString());
@@ -619,14 +606,12 @@ class DuckDBVector {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.UHUGEINT)) {
-            byte[] buf = new byte[16];
-            getbuf(idx, 16).get(buf);
-            for (int i = 0; i < 8; i++) {
-                byte keep = buf[i];
-                buf[i] = buf[15 - i];
-                buf[15 - i] = keep;
-            }
-            return new BigInteger(1, buf);
+            byte[] buf_res = new byte[16];
+            ByteBuffer buf = getbuf(idx, 16);
+            long lower = buf.getLong();
+            long upper = buf.getLong();
+            ByteBuffer.wrap(buf_res).putLong(upper).putLong(lower);
+            return new BigInteger(1, buf_res);
         }
         Object o = getObject(idx);
         return new BigInteger(o.toString());

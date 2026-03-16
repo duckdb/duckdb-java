@@ -144,7 +144,7 @@ jobject make_ptr_buf(JNIEnv *env, void *ptr) {
 jobject make_data_buf(JNIEnv *env, void *data, idx_t len) {
 	if (data != nullptr) {
 		jobject buf = env->NewDirectByteBuffer(data, uint64_to_jlong(len));
-		env->CallObjectMethod(buf, J_ByteBuffer_order, J_ByteOrder_LITTLE_ENDIAN);
+		env->CallObjectMethod(buf, J_ByteBuffer_order, J_ByteOrder_NATIVE);
 		return buf;
 	}
 
