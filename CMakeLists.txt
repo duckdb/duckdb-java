@@ -560,6 +560,10 @@ if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
 endif()
 
+if(OVERRIDE_JDBC_OS_NAME)
+  set(OS_NAME ${OVERRIDE_JDBC_OS_NAME})
+endif()
+
 if(OVERRIDE_JDBC_OS_ARCH)
   set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
 endif()

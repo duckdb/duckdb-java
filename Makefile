@@ -12,9 +12,14 @@ else
 	JARS=build/release
 endif
 
-ARCH_OVERRIDE=
+OS_NAME_OVERRIDE=
+ifneq ($(OVERRIDE_JDBC_OS_NAME),)
+	OS_NAME_OVERRIDE=-DOVERRIDE_JDBC_OS_NAME=$(OVERRIDE_JDBC_OS_NAME)
+endif
+
+OS_ARCH_OVERRIDE=
 ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
-	ARCH_OVERRIDE=-DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
+	OS_ARCH_OVERRIDE=-DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
 endif
 
 
@@ -33,15 +38,15 @@ test:
 
 debug:
 	mkdir -p build/debug
-	cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Debug
+	cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Debug
 
 release:
 	mkdir -p build/release
-	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
+	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Release
 
 sanitized:
 	mkdir -p build/sanitized
-	cd build/sanitized && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ADDRESS_SANITIZER=ON $(GENERATOR) $(ARCH_OVERRIDE) ../.. && cmake --build . --config Release
+	cd build/sanitized && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ADDRESS_SANITIZER=ON $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Release
 
 format:
 	python3 scripts/format.py

@@ -72,7 +72,7 @@ final class DuckDBNative {
         case "arm64":
             return ARCH_AARCH64;
         default:
-            throw new IllegalStateException("Unsupported system architecture: '" + prop + "'");
+            return prop.replaceAll("[^a-z0-9_\\-.]", "");
         }
     }
 
@@ -85,7 +85,7 @@ final class DuckDBNative {
         } else if (prop.startsWith("linux")) {
             return OS_LINUX;
         } else {
-            throw new IllegalStateException("Unsupported OS: '" + prop + "'");
+            return prop.replaceAll("[^a-z0-9_\\-.]", "");
         }
     }
 
