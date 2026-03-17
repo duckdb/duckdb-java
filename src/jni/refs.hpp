@@ -22,8 +22,15 @@ extern jclass J_Byte;
 extern jclass J_Short;
 extern jclass J_Int;
 extern jclass J_Long;
+extern jmethodID J_Bool_init;
+extern jmethodID J_Byte_init;
+extern jmethodID J_Short_init;
+extern jmethodID J_Int_init;
+extern jmethodID J_Long_init;
 extern jclass J_Float;
 extern jclass J_Double;
+extern jmethodID J_Float_init;
+extern jmethodID J_Double_init;
 extern jclass J_String;
 extern jclass J_Timestamp;
 extern jmethodID J_Timestamp_valueOf;
@@ -46,6 +53,7 @@ extern jmethodID J_BigDecimal_scale;
 extern jmethodID J_BigDecimal_scaleByPowTen;
 extern jmethodID J_BigDecimal_toPlainString;
 extern jmethodID J_BigDecimal_longValue;
+extern jmethodID J_BigDecimal_initString;
 extern jfieldID J_HugeInt_lower;
 extern jfieldID J_HugeInt_upper;
 
@@ -82,8 +90,14 @@ extern jmethodID J_DuckMap_getSQLTypeName;
 
 extern jclass J_List;
 extern jmethodID J_List_iterator;
+extern jclass J_ArrayList;
+extern jmethodID J_ArrayList_init;
+extern jmethodID J_ArrayList_add;
 extern jclass J_Map;
 extern jmethodID J_Map_entrySet;
+extern jclass J_LinkedHashMap;
+extern jmethodID J_LinkedHashMap_init;
+extern jmethodID J_LinkedHashMap_put;
 extern jclass J_Set;
 extern jmethodID J_Set_iterator;
 extern jclass J_Iterator;
@@ -94,14 +108,31 @@ extern jmethodID J_Entry_getKey;
 extern jmethodID J_Entry_getValue;
 
 extern jclass J_UUID;
+extern jmethodID J_UUID_init;
 extern jmethodID J_UUID_getMostSignificantBits;
 extern jmethodID J_UUID_getLeastSignificantBits;
+
+extern jclass J_LocalDate;
+extern jmethodID J_LocalDate_ofEpochDay;
+extern jclass J_LocalTime;
+extern jmethodID J_LocalTime_ofNanoOfDay;
+extern jclass J_LocalDateTime;
+extern jmethodID J_LocalDateTime_ofEpochSecond;
+extern jmethodID J_LocalDateTime_atOffset;
+extern jclass J_OffsetTime;
+extern jmethodID J_OffsetTime_of;
+extern jclass J_ZoneOffset;
+extern jobject J_ZoneOffset_UTC;
+extern jmethodID J_ZoneOffset_ofTotalSeconds;
 
 extern jclass J_DuckDBDate;
 extern jmethodID J_DuckDBDate_getDaysSinceEpoch;
 
 extern jclass J_Object;
 extern jmethodID J_Object_toString;
+extern jclass J_StringArray;
+extern jclass J_Enum;
+extern jmethodID J_Enum_name;
 
 extern jclass J_DuckDBTime;
 
@@ -115,6 +146,40 @@ extern jobject J_ProfilerPrintFormat_GRAPHVIZ;
 
 extern jclass J_QueryProgress;
 extern jmethodID J_QueryProgress_init;
+
+extern jclass J_ScalarUdf;
+extern jmethodID J_ScalarUdf_apply;
+extern jclass J_UdfReader;
+extern jclass J_UdfNativeReader;
+extern jmethodID J_UdfNativeReader_init;
+extern jclass J_UdfScalarWriter;
+extern jmethodID J_UdfScalarWriter_init;
+extern jclass J_TableFunction;
+extern jmethodID J_TableFunction_bind;
+extern jmethodID J_TableFunction_init;
+extern jmethodID J_TableFunction_produce;
+extern jclass J_TableBindResult;
+extern jmethodID J_TableBindResult_getColumnNames;
+extern jmethodID J_TableBindResult_getColumnTypes;
+extern jmethodID J_TableBindResult_getColumnLogicalTypes;
+extern jclass J_TableState;
+extern jclass J_TableInitContext;
+extern jmethodID J_TableInitContext_init;
+extern jclass J_UdfOutputAppender;
+extern jmethodID J_UdfOutputAppender_init;
+extern jmethodID J_UdfOutputAppender_close;
+extern jclass J_DuckDBColumnType;
+extern jclass J_UdfLogicalType;
+extern jmethodID J_UdfLogicalType_getType;
+extern jmethodID J_UdfLogicalType_getChildType;
+extern jmethodID J_UdfLogicalType_getArraySize;
+extern jmethodID J_UdfLogicalType_getKeyType;
+extern jmethodID J_UdfLogicalType_getValueType;
+extern jmethodID J_UdfLogicalType_getFieldNames;
+extern jmethodID J_UdfLogicalType_getFieldTypes;
+extern jmethodID J_UdfLogicalType_getEnumValues;
+extern jmethodID J_UdfLogicalType_getDecimalWidth;
+extern jmethodID J_UdfLogicalType_getDecimalScale;
 
 void create_refs(JNIEnv *env);
 

@@ -23,17 +23,13 @@ extern "C" {
 #include "util.hpp"
 
 #include <cstdint>
+#include <cstring>
 #include <limits>
 
 using namespace duckdb;
 using namespace std;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
-
-void ThrowJNI(JNIEnv *env, const char *message) {
-	D_ASSERT(J_SQLException);
-	env->ThrowNew(J_SQLException, message);
-}
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	JNIEnv *env;

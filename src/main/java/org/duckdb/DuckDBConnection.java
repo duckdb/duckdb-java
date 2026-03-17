@@ -26,6 +26,12 @@ import java.sql.Struct;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantLock;
+import org.duckdb.udf.ScalarUdf;
+import org.duckdb.udf.TableFunction;
+import org.duckdb.udf.TableFunctionDefinition;
+import org.duckdb.udf.TableFunctionOptions;
+import org.duckdb.udf.UdfLogicalType;
+import org.duckdb.udf.UdfOptions;
 import org.duckdb.user.DuckDBMap;
 import org.duckdb.user.DuckDBUserArray;
 import org.duckdb.user.DuckDBUserStruct;
@@ -265,6 +271,388 @@ public final class DuckDBConnection implements java.sql.Connection {
         } finally {
             connRefLock.unlock();
         }
+    }
+
+    public void registerScalarUdf(String name, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER)},
+                          UdfLogicalType.of(DuckDBColumnType.INTEGER), callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {UdfLogicalType.of(DuckDBColumnType.INTEGER)},
+                          UdfLogicalType.of(DuckDBColumnType.INTEGER), callback, options);
+    }
+
+    public void registerTableFunction(String name, TableFunction callback) throws SQLException {
+        registerTableFunction(name, callback, new TableFunctionDefinition(), new TableFunctionOptions());
+    }
+
+    public void registerTableFunction(String name, TableFunction callback, TableFunctionOptions options)
+        throws SQLException {
+        registerTableFunction(name, callback, new TableFunctionDefinition(), options);
+    }
+
+    public void registerTableFunction(String name, TableFunction callback, TableFunctionDefinition definition)
+        throws SQLException {
+        registerTableFunction(name, callback, definition, new TableFunctionOptions());
+    }
+
+    public void registerTableFunction(String name, TableFunction callback, TableFunctionDefinition definition,
+                                      TableFunctionOptions options) throws SQLException {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(options, "options");
+        if (options.maxThreads < 1) {
+            throw new SQLException("TableFunctionOptions.maxThreads must be >= 1");
+        }
+        UdfLogicalType[] parameterTypes = definition.getParameterLogicalTypes();
+        for (UdfLogicalType parameterType : parameterTypes) {
+            Objects.requireNonNull(parameterType, "parameterTypes cannot contain null values");
+            UdfTypeCatalog.validateTableFunctionParameterLogicalType(parameterType);
+        }
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            ByteBuffer tableFunction = DuckDBBindings.duckdb_create_table_function();
+            try {
+                DuckDBBindings.duckdb_table_function_set_name(tableFunction, name.getBytes(UTF_8));
+                if (definition.isProjectionPushdownEnabled()) {
+                    DuckDBBindings.duckdb_table_function_supports_projection_pushdown(tableFunction, true);
+                }
+                DuckDBBindings.duckdb_register_table_function_java_with_function(
+                    connRef, tableFunction, callback, parameterTypes, options.maxThreads, options.threadSafe);
+            } finally {
+                DuckDBBindings.duckdb_destroy_table_function(tableFunction);
+            }
+        } finally {
+            connRefLock.unlock();
+        }
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType[] argumentTypes, DuckDBColumnType returnType,
+                                  ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, argumentTypes, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[0], returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[0], returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType argumentType, DuckDBColumnType returnType,
+                                  ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {argumentType}, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType argumentType, DuckDBColumnType returnType,
+                                  ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {argumentType}, returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType}, returnType, callback,
+                          new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType}, returnType, callback,
+                          options);
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType thirdArgumentType, DuckDBColumnType returnType, ScalarUdf callback)
+        throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType, thirdArgumentType},
+                          returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType thirdArgumentType, DuckDBColumnType returnType, ScalarUdf callback,
+                                  UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType, thirdArgumentType},
+                          returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType thirdArgumentType, DuckDBColumnType fourthArgumentType,
+                                  DuckDBColumnType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(
+            name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+            returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType firstArgumentType, DuckDBColumnType secondArgumentType,
+                                  DuckDBColumnType thirdArgumentType, DuckDBColumnType fourthArgumentType,
+                                  DuckDBColumnType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(
+            name, new DuckDBColumnType[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+            returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, DuckDBColumnType[] argumentTypes, DuckDBColumnType returnType,
+                                  ScalarUdf callback, UdfOptions options) throws SQLException {
+        UdfLogicalType[] argumentLogicalTypes = mapDuckdbTypesToLogicalTypes(argumentTypes);
+        DuckDBColumnType nonNullReturnType = Objects.requireNonNull(returnType, "returnType");
+        UdfTypeCatalog.toCapiTypeIdForScalarRegistration(nonNullReturnType);
+        registerScalarUdfInternal(name, argumentLogicalTypes, UdfLogicalType.of(nonNullReturnType), callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?>[] argumentTypes, Class<?> returnType, ScalarUdf callback)
+        throws SQLException {
+        registerScalarUdf(name, argumentTypes, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?>[] argumentTypes, Class<?> returnType, ScalarUdf callback,
+                                  UdfOptions options) throws SQLException {
+        UdfLogicalType[] argumentLogicalTypes = mapJavaClassesToLogicalTypes(argumentTypes);
+        UdfLogicalType returnLogicalType = mapJavaClassToLogicalType(returnType, "returnType");
+        registerScalarUdfInternal(name, argumentLogicalTypes, returnLogicalType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?> argumentType, Class<?> returnType, ScalarUdf callback)
+        throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {argumentType}, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?> argumentType, Class<?> returnType, ScalarUdf callback,
+                                  UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {argumentType}, returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {firstArgumentType, secondArgumentType}, returnType, callback,
+                          new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> returnType, ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {firstArgumentType, secondArgumentType}, returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> thirdArgumentType, Class<?> returnType, ScalarUdf callback)
+        throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {firstArgumentType, secondArgumentType, thirdArgumentType}, returnType,
+                          callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> thirdArgumentType, Class<?> returnType, ScalarUdf callback,
+                                  UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new Class<?>[] {firstArgumentType, secondArgumentType, thirdArgumentType}, returnType,
+                          callback, options);
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> thirdArgumentType, Class<?> fourthArgumentType, Class<?> returnType,
+                                  ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name,
+                          new Class<?>[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+                          returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, Class<?> firstArgumentType, Class<?> secondArgumentType,
+                                  Class<?> thirdArgumentType, Class<?> fourthArgumentType, Class<?> returnType,
+                                  ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdf(name,
+                          new Class<?>[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+                          returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType[] argumentTypes, UdfLogicalType returnType,
+                                  ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, argumentTypes, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[0], returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[0], returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType argumentType, UdfLogicalType returnType,
+                                  ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {argumentType}, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType argumentType, UdfLogicalType returnType,
+                                  ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {argumentType}, returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {firstArgumentType, secondArgumentType}, returnType, callback,
+                          new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {firstArgumentType, secondArgumentType}, returnType, callback,
+                          options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType thirdArgumentType, UdfLogicalType returnType, ScalarUdf callback)
+        throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {firstArgumentType, secondArgumentType, thirdArgumentType},
+                          returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType thirdArgumentType, UdfLogicalType returnType, ScalarUdf callback,
+                                  UdfOptions options) throws SQLException {
+        registerScalarUdf(name, new UdfLogicalType[] {firstArgumentType, secondArgumentType, thirdArgumentType},
+                          returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType thirdArgumentType, UdfLogicalType fourthArgumentType,
+                                  UdfLogicalType returnType, ScalarUdf callback) throws SQLException {
+        registerScalarUdf(
+            name, new UdfLogicalType[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+            returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType firstArgumentType, UdfLogicalType secondArgumentType,
+                                  UdfLogicalType thirdArgumentType, UdfLogicalType fourthArgumentType,
+                                  UdfLogicalType returnType, ScalarUdf callback, UdfOptions options)
+        throws SQLException {
+        registerScalarUdf(
+            name, new UdfLogicalType[] {firstArgumentType, secondArgumentType, thirdArgumentType, fourthArgumentType},
+            returnType, callback, options);
+    }
+
+    public void registerScalarUdf(String name, UdfLogicalType[] argumentTypes, UdfLogicalType returnType,
+                                  ScalarUdf callback, UdfOptions options) throws SQLException {
+        registerScalarUdfInternal(name, argumentTypes, returnType, callback, options);
+    }
+
+    private void registerScalarUdfInternal(String name, UdfLogicalType[] argumentTypes, UdfLogicalType returnType,
+                                           ScalarUdf callback, UdfOptions options) throws SQLException {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(argumentTypes, "argumentTypes");
+        Objects.requireNonNull(returnType, "returnType");
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(options, "options");
+        if (options.varArgs && argumentTypes.length != 1) {
+            throw new SQLException("Scalar UDF varargs registration expects exactly one argument logical type");
+        }
+        for (int i = 0; i < argumentTypes.length; i++) {
+            Objects.requireNonNull(argumentTypes[i], "argumentTypes cannot contain null values");
+            UdfTypeCatalog.validateScalarLogicalType(argumentTypes[i]);
+        }
+        UdfTypeCatalog.validateScalarLogicalType(returnType);
+        checkOpen();
+        connRefLock.lock();
+        try {
+            checkOpen();
+            ByteBuffer scalarFunction = DuckDBBindings.duckdb_create_scalar_function();
+            try {
+                DuckDBBindings.duckdb_scalar_function_set_name(scalarFunction, name.getBytes(UTF_8));
+                if (options.nullSpecialHandling) {
+                    DuckDBBindings.duckdb_scalar_function_set_special_handling(scalarFunction);
+                }
+                if (!options.deterministic) {
+                    DuckDBBindings.duckdb_scalar_function_set_volatile(scalarFunction);
+                }
+                DuckDBBindings.duckdb_register_scalar_function_java_with_function(
+                    connRef, scalarFunction, callback, argumentTypes, returnType, options.returnNullOnException,
+                    options.varArgs);
+            } finally {
+                DuckDBBindings.duckdb_destroy_scalar_function(scalarFunction);
+            }
+        } finally {
+            connRefLock.unlock();
+        }
+    }
+
+    private static UdfLogicalType[] mapDuckdbTypesToLogicalTypes(DuckDBColumnType[] argumentTypes) throws SQLException {
+        Objects.requireNonNull(argumentTypes, "argumentTypes");
+        UdfLogicalType[] argumentLogicalTypes = new UdfLogicalType[argumentTypes.length];
+        for (int i = 0; i < argumentTypes.length; i++) {
+            DuckDBColumnType argumentType =
+                Objects.requireNonNull(argumentTypes[i], "argumentTypes cannot contain null values");
+            UdfTypeCatalog.toCapiTypeIdForScalarRegistration(argumentType);
+            argumentLogicalTypes[i] = UdfLogicalType.of(argumentType);
+        }
+        return argumentLogicalTypes;
+    }
+
+    private static UdfLogicalType mapJavaClassToLogicalType(Class<?> javaType, String argumentName)
+        throws SQLException {
+        Objects.requireNonNull(javaType, argumentName);
+        try {
+            return UdfJavaTypeMapper.toLogicalType(javaType);
+        } catch (IllegalArgumentException e) {
+            throw new SQLException(e.getMessage(), e);
+        }
+    }
+
+    private static UdfLogicalType[] mapJavaClassesToLogicalTypes(Class<?>[] argumentTypes) throws SQLException {
+        Objects.requireNonNull(argumentTypes, "argumentTypes");
+        UdfLogicalType[] argumentLogicalTypes = new UdfLogicalType[argumentTypes.length];
+        for (int i = 0; i < argumentTypes.length; i++) {
+            argumentLogicalTypes[i] =
+                mapJavaClassToLogicalType(argumentTypes[i], "argumentTypes cannot contain null values");
+        }
+        return argumentLogicalTypes;
+    }
+
+    public void registerScalarUdfVarArgs(String name, DuckDBColumnType argumentType, DuckDBColumnType returnType,
+                                         ScalarUdf callback) throws SQLException {
+        registerScalarUdfVarArgs(name, argumentType, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdfVarArgs(String name, DuckDBColumnType argumentType, DuckDBColumnType returnType,
+                                         ScalarUdf callback, UdfOptions options) throws SQLException {
+        Objects.requireNonNull(options, "options");
+        UdfOptions normalizedOptions = new UdfOptions()
+                                           .deterministic(options.deterministic)
+                                           .nullSpecialHandling(options.nullSpecialHandling)
+                                           .returnNullOnException(options.returnNullOnException)
+                                           .varArgs(true);
+        registerScalarUdf(name, new DuckDBColumnType[] {argumentType}, returnType, callback, normalizedOptions);
+    }
+
+    public void registerScalarUdfVarArgs(String name, UdfLogicalType argumentType, UdfLogicalType returnType,
+                                         ScalarUdf callback) throws SQLException {
+        registerScalarUdfVarArgs(name, argumentType, returnType, callback, new UdfOptions());
+    }
+
+    public void registerScalarUdfVarArgs(String name, UdfLogicalType argumentType, UdfLogicalType returnType,
+                                         ScalarUdf callback, UdfOptions options) throws SQLException {
+        Objects.requireNonNull(options, "options");
+        UdfOptions normalizedOptions = new UdfOptions()
+                                           .deterministic(options.deterministic)
+                                           .nullSpecialHandling(options.nullSpecialHandling)
+                                           .returnNullOnException(options.returnNullOnException)
+                                           .varArgs(true);
+        registerScalarUdf(name, new UdfLogicalType[] {argumentType}, returnType, callback, normalizedOptions);
     }
 
     public String getCatalog() throws SQLException {

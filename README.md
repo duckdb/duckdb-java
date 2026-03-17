@@ -20,3 +20,7 @@ This optionally takes an argument to only run a single test, for example:
 ```
 java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar"  org/duckdb/TestDuckDBJDBC test_valid_but_local_config_throws_exception
 ```
+
+### User-Defined Functions (Java)
+
+All Java UDF documentation and examples are available in [UDF.MD](UDF.MD).
