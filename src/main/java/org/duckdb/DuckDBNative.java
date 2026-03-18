@@ -116,6 +116,8 @@ final class DuckDBNative {
             Files.copy(is, tmpFile, REPLACE_EXISTING);
         }
         tmpFile.toFile().deleteOnExit();
+        // Harmless on the officially supported platforms but required on some other.
+        tmpFile.toFile().setExecutable(true);
         System.load(tmpFile.toAbsolutePath().toString());
     }
 

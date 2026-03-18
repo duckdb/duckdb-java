@@ -583,8 +583,8 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 
 # main shared lib compilation
 
-if(MSVC)
-  list(APPEND DUCKDB_INCLUDE_DIRS src/windows)
+if(MSVC OR ZOS)
+  list(APPEND DUCKDB_INCLUDE_DIRS src/stubs)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
 else()
   list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
@@ -610,7 +610,7 @@ target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH2}
   ${DUCKDB_INCLUDE_DIRS})
 
-if (NOT MSVC)
+if (NOT MSVC AND NOT ZOS)
   target_include_directories(duckdb_java PRIVATE
     ${JEMALLOC_INCLUDE_DIRS})
 endif()
@@ -641,7 +641,7 @@ target_compile_definitions(duckdb_java PRIVATE
   -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT
   -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT)
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT ZOS)
   target_compile_definitions(duckdb_java PRIVATE
     -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
 endif()
