@@ -72,7 +72,7 @@ final class DuckDBNative {
         case "arm64":
             return ARCH_AARCH64;
         default:
-            throw new IllegalStateException("Unsupported system architecture: '" + prop + "'");
+            return prop.replaceAll("[^a-z0-9_\\-.]", "");
         }
     }
 
@@ -85,7 +85,7 @@ final class DuckDBNative {
         } else if (prop.startsWith("linux")) {
             return OS_LINUX;
         } else {
-            throw new IllegalStateException("Unsupported OS: '" + prop + "'");
+            return prop.replaceAll("[^a-z0-9_\\-.]", "");
         }
     }
 
@@ -116,6 +116,8 @@ final class DuckDBNative {
             Files.copy(is, tmpFile, REPLACE_EXISTING);
         }
         tmpFile.toFile().deleteOnExit();
+        // Harmless on the officially supported platforms but required on some other.
+        tmpFile.toFile().setExecutable(true);
         System.load(tmpFile.toAbsolutePath().toString());
     }
 
