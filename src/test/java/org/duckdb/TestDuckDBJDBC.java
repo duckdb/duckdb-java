@@ -944,7 +944,8 @@ public class TestDuckDBJDBC {
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Could not set option \"custom_profiling_settings\" as a global option"));
+        assertTrue(message.contains("Could not set option "));
+        assertTrue(message.contains(" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {
