@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "reader/variant/variant_shredded_conversion.hpp"
@@ -66,7 +68,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
 	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
-	auto &value_intermediate = *group_entries[0];
+	auto &value_intermediate = group_entries[0];
 
 	auto metadata_values =
 	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
@@ -82,7 +84,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
@@ -133,6 +135,75 @@ idx_t VariantColumnReader::GroupRowsAvailable() {
 		return child->GroupRowsAvailable();
 	}
 	throw InternalException("No projected columns in struct?");
+}
+
+bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value, LogicalType &output) {
+	if (!typed_value.IsNested()) {
+		output = typed_value;
+		return true;
+	}
+	auto type_id = typed_value.id();
+	if (type_id == LogicalTypeId::STRUCT) {
+		//! OBJECT (...)
+		auto &object_fields = StructType::GetChildTypes(typed_value);
+		child_list_t<LogicalType> children;
+		for (auto &object_field : object_fields) {
+			auto &name = object_field.first;
+			auto &field = object_field.second;
+			//! <name>: {
+			//! 	value: BLOB,
+			//! 	typed_value: <type>
+			//! }
+			auto &field_children = StructType::GetChildTypes(field);
+			idx_t index = DConstants::INVALID_INDEX;
+			for (idx_t i = 0; i < field_children.size(); i++) {
+				if (field_children[i].first == "typed_value") {
+					index = i;
+					break;
+				}
+			}
+			if (index == DConstants::INVALID_INDEX) {
+				//! FIXME: we might be able to just omit this field from the OBJECT, instead of flat-out failing the
+				//! conversion No 'typed_value' field, so we can't assign a structured type to this field at all
+				return false;
+			}
+			LogicalType child_type;
+			if (!TypedValueLayoutToType(field_children[index].second, child_type)) {
+				return false;
+			}
+			children.emplace_back(name, child_type);
+		}
+		output = LogicalType::STRUCT(std::move(children));
+		return true;
+	}
+	if (type_id == LogicalTypeId::LIST) {
+		//! ARRAY
+		auto &element = ListType::GetChildType(typed_value);
+		//! element: {
+		//! 	value: BLOB,
+		//! 	typed_value: <type>
+		//! }
+		auto &element_children = StructType::GetChildTypes(element);
+		idx_t index = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < element_children.size(); i++) {
+			if (element_children[i].first == "typed_value") {
+				index = i;
+				break;
+			}
+		}
+		if (index == DConstants::INVALID_INDEX) {
+			//! This *might* be allowed by the spec, it's hard to reason about..
+			return false;
+		}
+		LogicalType child_type;
+		if (!TypedValueLayoutToType(element_children[index].second, child_type)) {
+			return false;
+		}
+		output = LogicalType::LIST(child_type);
+		return true;
+	}
+	throw InvalidInputException("VARIANT typed value has to be a primitive/struct/list, not %s",
+	                            typed_value.ToString());
 }
 
 } // namespace duckdb

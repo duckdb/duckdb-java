@@ -6,6 +6,8 @@
 
 #include "src/function/table/system/duckdb_constraints.cpp"
 
+#include "src/function/table/system/duckdb_coordinate_systems.cpp"
+
 #include "src/function/table/system/duckdb_databases.cpp"
 
 #include "src/function/table/system/duckdb_dependencies.cpp"
@@ -25,6 +27,8 @@
 #include "src/function/table/system/duckdb_indexes.cpp"
 
 #include "src/function/table/system/duckdb_memory.cpp"
+
+#include "src/function/table/system/duckdb_eviction_queues.cpp"
 
 #include "src/function/table/system/duckdb_optimizers.cpp"
 

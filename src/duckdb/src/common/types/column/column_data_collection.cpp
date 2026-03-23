@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include "duckdb/common/printer.hpp"
@@ -213,14 +220,23 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
-    const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
+    optional_ptr<const ColumnDataCollection> collection_p, vector<column_t> column_ids_p)
+    : collection(collection_p), scan_chunk(make_uniq<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
 	collection->InitializeScan(scan_state, std::move(column_ids_p));
 	collection->InitializeScanChunk(scan_state, *scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
+}
+
+ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
+    ColumnDataChunkIterator &&other) noexcept
+    : row_index(0) {
+	std::swap(collection, other.collection);
+	std::swap(scan_state, other.scan_state);
+	std::swap(scan_chunk, other.scan_chunk);
+	std::swap(row_index, other.row_index);
 }
 
 void ColumnDataChunkIterationHelper::ColumnDataChunkIterator::Next() {
@@ -812,9 +828,9 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 		UnifiedVectorFormat child_data;
-		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
+		child_vectors[child_idx].ToUnifiedFormat(copy_count, child_data);
 
-		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count);
+		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
 	}
 }
 

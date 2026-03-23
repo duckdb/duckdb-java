@@ -28,6 +28,8 @@
 
 #include "src/optimizer/rule/like_optimizations.cpp"
 
+#include "src/optimizer/rule/list_comprehension_rewrite.cpp"
+
 #include "src/optimizer/rule/move_constants.cpp"
 
 #include "src/optimizer/rule/ordered_aggregate_optimizer.cpp"
@@ -37,6 +39,4 @@
 #include "src/optimizer/rule/timestamp_comparison.cpp"
 
 #include "src/optimizer/rule/constant_order_normalization.cpp"
-
-#include "src/optimizer/rule/not_elimination.cpp"
 
