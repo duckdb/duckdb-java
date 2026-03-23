@@ -611,7 +611,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		auto names = env->NewObjectArray(entries.size(), J_String, nullptr);
 
 		for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-			auto j_vec = ProcessVector(env, conn_ref, *entries[entry_i], row_count);
+			auto j_vec = ProcessVector(env, conn_ref, entries[entry_i], row_count);
 			env->SetObjectArrayElement(columns, entry_i, j_vec);
 			env->SetObjectArrayElement(names, entry_i,
 			                           env->NewStringUTF(StructType::GetChildName(vec.GetType(), entry_i).c_str()));
