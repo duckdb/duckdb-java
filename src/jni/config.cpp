@@ -81,9 +81,6 @@ static duckdb::Value jobj_to_value(JNIEnv *env, const std::string &key, jobject 
 
 std::unique_ptr<duckdb::DBConfig> create_db_config(JNIEnv *env, jboolean read_only, jobject java_config) {
 	auto config = std::unique_ptr<duckdb::DBConfig>(new duckdb::DBConfig());
-	// Required for setting like 'allowed_directories' that use
-	// file separator when checking the property value.
-	config->file_system = duckdb::make_uniq<duckdb::VirtualFileSystem>();
 	config->SetOptionByName("duckdb_api", "java");
 	config->AddExtensionOption(
 	    "jdbc_stream_results",
