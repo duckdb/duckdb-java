@@ -41,6 +41,8 @@ public class DuckDBBindings {
 
     static native ByteBuffer duckdb_create_logical_type(int duckdb_type);
 
+    static native ByteBuffer duckdb_create_decimal_type(int width, int scale);
+
     static native ByteBuffer duckdb_jdbc_parse_logical_type(ByteBuffer connection, byte[] type_name);
 
     static native int duckdb_get_type_id(ByteBuffer logical_type);

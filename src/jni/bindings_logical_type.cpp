@@ -40,6 +40,26 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1logical
 
 /*
  * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_create_decimal_type
+ * Signature: (II)Ljava/nio/ByteBuffer;
+ */
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1decimal_1type(JNIEnv *env, jclass, jint width,
+                                                                                       jint scale) {
+
+	if (width < 1 || width > 38) {
+		env->ThrowNew(J_SQLException, "Invalid decimal width: expected 1..38");
+		return nullptr;
+	}
+	if (scale < 0 || scale > width) {
+		env->ThrowNew(J_SQLException, "Invalid decimal scale: expected 0..width");
+		return nullptr;
+	}
+	duckdb_logical_type lt = duckdb_create_decimal_type(static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+	return make_ptr_buf(env, lt);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_jdbc_parse_logical_type
  * Signature: (Ljava/nio/ByteBuffer;[B)Ljava/nio/ByteBuffer;
  */

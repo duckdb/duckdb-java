@@ -11,8 +11,20 @@ void registerScalarFunction(
 ) throws SQLException
 ```
 
+You can also use the typed overload:
+
+```java
+void registerScalarFunction(
+    String name,
+    DuckDBLogicalType[] parameterTypes,
+    DuckDBLogicalType returnType,
+    DuckDBVectorizedScalarFunction function
+) throws SQLException
+```
+
 Notes:
-- `parameterTypes` and `returnType` are SQL type strings (for example: `INTEGER`, `VARCHAR`, `TIMESTAMP`).
+- The string overload accepts SQL types like `INTEGER`, `VARCHAR`, `TIMESTAMP`, `DECIMAL(18,2)`.
+- The typed overload uses `DuckDBLogicalType` (C API style) and avoids SQL text parsing.
 - The callback is vectorized: process `rowCount` rows from the input chunk and write one value per row into `out`.
 - `DuckDBDataChunkReader` / `DuckDBReadableVector` / `DuckDBWritableVector` are valid only during the callback.
 

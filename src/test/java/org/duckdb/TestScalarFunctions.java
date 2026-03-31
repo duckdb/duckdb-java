@@ -53,6 +53,34 @@ public class TestScalarFunctions {
         test_register_scalar_function_integer();
     }
 
+    public static void test_register_scalar_function_typed_logical_type() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement();
+             DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
+            conn.registerScalarFunction("java_add_int_typed", new DuckDBLogicalType[] {intType}, intType,
+                                        (input, rowCount, out) -> {
+                                            DuckDBReadableVector in = input.vector(0);
+                                            for (int i = 0; i < rowCount; i++) {
+                                                if (in.isNull(i)) {
+                                                    out.setNull(i);
+                                                } else {
+                                                    out.setInt(i, in.getInt(i) + 1);
+                                                }
+                                            }
+                                        });
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT java_add_int_typed(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1, Integer.class), 2);
+                assertTrue(rs.next());
+                assertNullRow(rs);
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1, Integer.class), 42);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_register_scalar_function_parallel() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
@@ -164,6 +192,31 @@ public class TestScalarFunctions {
                                       }
                                   },
                                   "SELECT java_add_int(v) FROM (VALUES (1), (NULL), (41)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Integer.class), 2);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Integer.class), 42);
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_integer_alias_parse_fallback() throws Exception {
+        assertUnaryScalarFunction("java_add_int_alias", "INT4", "INT4",
+                                  (input, rowCount, out)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      for (int i = 0; i < rowCount; i++) {
+                                          if (in.isNull(i)) {
+                                              out.setNull(i);
+                                          } else {
+                                              out.setInt(i, in.getInt(i) + 1);
+                                          }
+                                      }
+                                  },
+                                  "SELECT java_add_int_alias(v) FROM (VALUES (1), (NULL), (41)) t(v)",
                                   rs -> {
                                       assertTrue(rs.next());
                                       assertEquals(rs.getObject(1, Integer.class), 2);

@@ -45,18 +45,30 @@ public class TestBindings {
     }
 
     public static void test_bindings_parse_logical_type() throws Exception {
-        ByteBuffer integerType = duckdb_jdbc_parse_logical_type(null, "INTEGER".getBytes(UTF_8));
+        try (DuckDBLogicalType integerType = DuckDBLogicalType.parse("INTEGER")) {
+            assertNotNull(integerType);
+            assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType.logicalTypeRef()));
+        }
+
+        try (DuckDBLogicalType decimalType = DuckDBLogicalType.parse("DECIMAL(18,3)")) {
+            assertNotNull(decimalType);
+            ByteBuffer decimalRef = decimalType.logicalTypeRef();
+            assertEquals(DUCKDB_TYPE_DECIMAL.typeId, duckdb_get_type_id(decimalRef));
+            assertEquals(18, duckdb_decimal_width(decimalRef));
+            assertEquals(3, duckdb_decimal_scale(decimalRef));
+            assertEquals(DUCKDB_TYPE_BIGINT.typeId, duckdb_decimal_internal_type(decimalRef));
+        }
+
+        assertThrows(() -> { DuckDBLogicalType.parse("MOOD"); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.parse("DECIMAL(999999999999999999999999999,0)"); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.parse(null); }, SQLException.class);
+    }
+
+    public static void test_bindings_parse_logical_type_native_fallback() throws Exception {
+        ByteBuffer integerType = duckdb_jdbc_parse_logical_type(null, "INT4".getBytes(UTF_8));
         assertNotNull(integerType);
         assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType));
         duckdb_destroy_logical_type(integerType);
-
-        ByteBuffer decimalType = duckdb_jdbc_parse_logical_type(null, "DECIMAL(18,3)".getBytes(UTF_8));
-        assertNotNull(decimalType);
-        assertEquals(DUCKDB_TYPE_DECIMAL.typeId, duckdb_get_type_id(decimalType));
-        assertEquals(18, duckdb_decimal_width(decimalType));
-        assertEquals(3, duckdb_decimal_scale(decimalType));
-        assertEquals(DUCKDB_TYPE_BIGINT.typeId, duckdb_decimal_internal_type(decimalType));
-        duckdb_destroy_logical_type(decimalType);
 
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
@@ -443,6 +455,13 @@ public class TestBindings {
             assertEquals(duckdb_appender_close(appender), 0);
             assertEquals(duckdb_appender_destroy(appender), 0);
         }
+    }
+
+    public static void test_bindings_decimal_type_validation() throws Exception {
+        assertThrows(() -> { duckdb_create_decimal_type(0, 0); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(39, 0); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(10, -1); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(10, 11); }, SQLException.class);
     }
 
     public static void test_bindings_enum_type() throws Exception {
