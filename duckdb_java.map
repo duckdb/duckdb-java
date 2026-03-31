@@ -51,7 +51,15 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup;
 
     Java_org_duckdb_DuckDBBindings_duckdb_1vector_1size;
+    Java_org_duckdb_DuckDBBindings_duckdb_1create_1scalar_1function;
+    Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1scalar_1function;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1name;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1add_1parameter;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1return_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function;
+    Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes;
     Java_org_duckdb_DuckDBBindings_duckdb_1create_1logical_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1parse_1logical_1type;
     Java_org_duckdb_DuckDBBindings_duckdb_1get_1type_1id;
     Java_org_duckdb_DuckDBBindings_duckdb_1decimal_1width;
     Java_org_duckdb_DuckDBBindings_duckdb_1decimal_1scale;
@@ -97,6 +105,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1appender_1column_1type;
     Java_org_duckdb_DuckDBBindings_duckdb_1append_1data_1chunk;
     Java_org_duckdb_DuckDBBindings_duckdb_1append_1default_1to_1chunk;
+    Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1scalar_1function_1set_1callback;
 
     duckdb_adbc_init;
     duckdb_add_aggregate_function_to_set;

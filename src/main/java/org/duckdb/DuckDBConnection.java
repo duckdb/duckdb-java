@@ -500,6 +500,69 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    public void registerScalarFunction(String name, String[] parameterTypes, String returnType,
+                                       DuckDBVectorizedScalarFunction function) throws SQLException {
+        checkOpen();
+        connRefLock.lock();
+        ByteBuffer scalarFunction = null;
+        ByteBuffer returnLogicalType = null;
+        ByteBuffer[] parameterLogicalTypes = null;
+        try {
+            checkOpen();
+            if (name == null || name.trim().isEmpty()) {
+                throw new SQLException("Function name cannot be null or empty");
+            }
+            if (parameterTypes == null) {
+                throw new SQLException("Parameter types cannot be null");
+            }
+            for (int i = 0; i < parameterTypes.length; i++) {
+                String parameterType = parameterTypes[i];
+                if (parameterType == null || parameterType.trim().isEmpty()) {
+                    throw new SQLException("Parameter type at index " + i + " cannot be null or empty");
+                }
+            }
+            if (returnType == null || returnType.trim().isEmpty()) {
+                throw new SQLException("Return type cannot be null or empty");
+            }
+            if (function == null) {
+                throw new SQLException("Scalar function callback cannot be null");
+            }
+
+            scalarFunction = DuckDBBindings.duckdb_create_scalar_function();
+            DuckDBBindings.duckdb_scalar_function_set_name(scalarFunction, name.getBytes(UTF_8));
+
+            parameterLogicalTypes = new ByteBuffer[parameterTypes.length];
+            for (int i = 0; i < parameterTypes.length; i++) {
+                parameterLogicalTypes[i] =
+                    DuckDBBindings.duckdb_jdbc_parse_logical_type(connRef, parameterTypes[i].getBytes(UTF_8));
+                DuckDBBindings.duckdb_scalar_function_add_parameter(scalarFunction, parameterLogicalTypes[i]);
+            }
+
+            returnLogicalType = DuckDBBindings.duckdb_jdbc_parse_logical_type(connRef, returnType.getBytes(UTF_8));
+            DuckDBBindings.duckdb_scalar_function_set_return_type(scalarFunction, returnLogicalType);
+            DuckDBBindings.duckdb_jdbc_scalar_function_set_callback(connRef, scalarFunction, function);
+
+            if (DuckDBBindings.duckdb_register_scalar_function(connRef, scalarFunction) != 0) {
+                throw new SQLException("Failed to register scalar function '" + name + "'");
+            }
+        } finally {
+            if (returnLogicalType != null) {
+                DuckDBBindings.duckdb_destroy_logical_type(returnLogicalType);
+            }
+            if (parameterLogicalTypes != null) {
+                for (ByteBuffer parameterLogicalType : parameterLogicalTypes) {
+                    if (parameterLogicalType != null) {
+                        DuckDBBindings.duckdb_destroy_logical_type(parameterLogicalType);
+                    }
+                }
+            }
+            if (scalarFunction != null) {
+                DuckDBBindings.duckdb_destroy_scalar_function(scalarFunction);
+            }
+            connRefLock.unlock();
+        }
+    }
+
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
         checkOpen();
         connRefLock.lock();

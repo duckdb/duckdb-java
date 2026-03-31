@@ -17,9 +17,31 @@ public class DuckDBBindings {
 
     static native long duckdb_vector_size();
 
+    // scalar function
+
+    static native ByteBuffer duckdb_create_scalar_function();
+
+    static native void duckdb_destroy_scalar_function(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_name(ByteBuffer scalarFunction, byte[] name);
+
+    static native void duckdb_scalar_function_add_parameter(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_return_type(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
+
+    static native void duckdb_jdbc_scalar_function_set_callback(ByteBuffer connection, ByteBuffer scalarFunction,
+                                                                DuckDBVectorizedScalarFunction function);
+
+    static native byte[] duckdb_jdbc_varchar_string_bytes(ByteBuffer vectorData, ByteBuffer validity, long rowCount,
+                                                          long row);
+
     // logical type
 
     static native ByteBuffer duckdb_create_logical_type(int duckdb_type);
+
+    static native ByteBuffer duckdb_jdbc_parse_logical_type(ByteBuffer connection, byte[] type_name);
 
     static native int duckdb_get_type_id(ByteBuffer logical_type);
 
