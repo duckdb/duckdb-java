@@ -1,19 +1,19 @@
 # Java Scalar Functions (UDF)
 
-Use `DuckDBConnection.registerScalarFunction` to register a vectorized scalar function in Java.
+Use `DuckDBConnection.registerScalarFunction` to register a scalar function in Java.
 
 ```java
 void registerScalarFunction(
     String name,
     DuckDBLogicalType[] parameterTypes,
     DuckDBLogicalType returnType,
-    DuckDBVectorizedScalarFunction function
+    DuckDBScalarFunction function
 ) throws SQLException
 ```
 
 Notes:
 - The API uses typed logical types (`DuckDBLogicalType`) instead of SQL type strings.
-- The callback is vectorized: process `rowCount` rows from the input chunk and write one value per row into `out`.
+- The callback processes all rows from the current input chunk (`input.rowCount()`) and writes one value per row into `out`.
 - `DuckDBDataChunkReader` / `DuckDBReadableVector` / `DuckDBWritableVector` are valid only during the callback.
 
 ## Simple example
@@ -21,8 +21,9 @@ Notes:
 ```java
 try (DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class)) {
     try (DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
-        conn.registerScalarFunction("java_add_one", new DuckDBLogicalType[] {intType}, intType, (input, rowCount, out) -> {
+        conn.registerScalarFunction("java_add_one", new DuckDBLogicalType[] {intType}, intType, (input, out) -> {
         DuckDBReadableVector in = input.vector(0);
+        int rowCount = input.rowCount();
         for (int i = 0; i < rowCount; i++) {
             if (in.isNull(i)) {
                 out.setNull(i);
@@ -48,10 +49,11 @@ try (DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(
             "java_event_label",
             new DuckDBLogicalType[] {tsType, strType, dblType},
             strType,
-            (input, rowCount, out) -> {
+            (input, out) -> {
                 DuckDBReadableVector ts = input.vector(0);
                 DuckDBReadableVector tag = input.vector(1);
                 DuckDBReadableVector score = input.vector(2);
+                int rowCount = input.rowCount();
 
                 for (int i = 0; i < rowCount; i++) {
                     if (ts.isNull(i) || tag.isNull(i) || score.isNull(i)) {

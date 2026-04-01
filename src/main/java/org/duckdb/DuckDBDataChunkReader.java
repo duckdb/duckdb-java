@@ -11,12 +11,12 @@ public final class DuckDBDataChunkReader {
     private final int columnCount;
     private final DuckDBReadableVector[] vectors;
 
-    DuckDBDataChunkReader(ByteBuffer chunkRef, int rowCount) throws SQLException {
+    DuckDBDataChunkReader(ByteBuffer chunkRef) throws SQLException {
         if (chunkRef == null) {
             throw new SQLException("Invalid data chunk reference");
         }
         this.chunkRef = chunkRef;
-        this.rowCount = rowCount;
+        this.rowCount = (int) duckdb_data_chunk_get_size(chunkRef);
         this.columnCount = (int) duckdb_data_chunk_get_column_count(chunkRef);
         this.vectors = new DuckDBReadableVector[columnCount];
     }

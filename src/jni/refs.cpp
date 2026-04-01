@@ -294,7 +294,7 @@ void create_refs(JNIEnv *env) {
 	J_DuckVector_varlen = get_field_id(env, J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
 
 	J_DuckDataChunkReader = make_class_ref(env, "org/duckdb/DuckDBDataChunkReader");
-	J_DuckDataChunkReader_init = get_method_id(env, J_DuckDataChunkReader, "<init>", "(Ljava/nio/ByteBuffer;I)V");
+	J_DuckDataChunkReader_init = get_method_id(env, J_DuckDataChunkReader, "<init>", "(Ljava/nio/ByteBuffer;)V");
 
 	J_DuckWritableVector = make_class_ref(env, "org/duckdb/DuckDBWritableVector");
 	J_DuckWritableVector_init = get_method_id(env, J_DuckWritableVector, "<init>", "(Ljava/nio/ByteBuffer;I)V");

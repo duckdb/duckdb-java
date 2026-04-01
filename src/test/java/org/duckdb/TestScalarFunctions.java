@@ -58,7 +58,8 @@ public class TestScalarFunctions {
              Statement stmt = conn.createStatement();
              DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
             conn.registerScalarFunction("java_add_int_typed", new DuckDBLogicalType[] {intType}, intType,
-                                        (input, rowCount, out) -> {
+                                        (input, out) -> {
+                                            int rowCount = input.rowCount();
                                             DuckDBReadableVector in = input.vector(0);
                                             for (int i = 0; i < rowCount; i++) {
                                                 if (in.isNull(i)) {
@@ -87,7 +88,8 @@ public class TestScalarFunctions {
              DuckDBLogicalType bigintType = DuckDBLogicalType.of(DuckDBColumnType.BIGINT)) {
             stmt.execute("PRAGMA threads=4");
             conn.registerScalarFunction("java_add_one_bigint", new DuckDBLogicalType[] {bigintType}, bigintType,
-                                        (input, rowCount, out) -> {
+                                        (input, out) -> {
+                                            int rowCount = input.rowCount();
                                             DuckDBReadableVector in = input.vector(0);
                                             for (int i = 0; i < rowCount; i++) {
                                                 out.setLong(i, in.getLong(i) + 1);
@@ -108,7 +110,7 @@ public class TestScalarFunctions {
              Statement stmt = conn.createStatement();
              DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
             conn.registerScalarFunction("java_throws_exception", new DuckDBLogicalType[] {intType}, intType,
-                                        (input, rowCount, out) -> { throw new IllegalStateException("boom"); });
+                                        (input, out) -> { throw new IllegalStateException("boom"); });
             String message =
                 assertThrows(() -> { stmt.executeQuery("SELECT java_throws_exception(1)"); }, SQLException.class);
             assertTrue(message.contains("Java scalar function threw exception"));
@@ -119,8 +121,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_boolean() throws Exception {
         assertUnaryScalarFunction("java_not_bool", DuckDBColumnType.BOOLEAN, DuckDBColumnType.BOOLEAN,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -144,8 +147,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_tinyint() throws Exception {
         assertUnaryScalarFunction("java_add_tinyint", DuckDBColumnType.TINYINT, DuckDBColumnType.TINYINT,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -170,8 +174,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_smallint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_smallint", DuckDBColumnType.SMALLINT, DuckDBColumnType.SMALLINT,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -195,8 +200,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_integer() throws Exception {
         assertUnaryScalarFunction("java_add_int", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -220,8 +226,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_integer_revalidates_after_null() throws Exception {
         assertUnaryScalarFunction("java_revalidate_int", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -245,8 +252,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_bigint() throws Exception {
         assertUnaryScalarFunction("java_add_bigint", DuckDBColumnType.BIGINT, DuckDBColumnType.BIGINT,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -271,8 +279,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_utinyint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_utinyint", DuckDBColumnType.UTINYINT, DuckDBColumnType.UTINYINT,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -297,8 +306,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_usmallint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_usmallint", DuckDBColumnType.USMALLINT, DuckDBColumnType.USMALLINT,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -323,8 +333,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_uinteger() throws Exception {
         assertUnaryScalarFunction(
             "java_add_uinteger", DuckDBColumnType.UINTEGER, DuckDBColumnType.UINTEGER,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -348,8 +359,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_ubigint() throws Exception {
         assertUnaryScalarFunction("java_add_ubigint", DuckDBColumnType.UBIGINT, DuckDBColumnType.UBIGINT,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       BigInteger increment = BigInteger.ONE;
                                       for (int i = 0; i < rowCount; i++) {
@@ -376,8 +388,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_float() throws Exception {
         assertUnaryScalarFunction("java_add_float", DuckDBColumnType.FLOAT, DuckDBColumnType.FLOAT,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -401,8 +414,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_double() throws Exception {
         assertUnaryScalarFunction("java_add_double", DuckDBColumnType.DOUBLE, DuckDBColumnType.DOUBLE,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -427,8 +441,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_decimal() throws Exception {
         try (DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(38, 10)) {
             assertUnaryScalarFunction("java_add_decimal", decimalType, decimalType,
-                                      (input, rowCount, out)
+                                      (input, out)
                                           -> {
+                                          int rowCount = input.rowCount();
                                           DuckDBReadableVector in = input.vector(0);
                                           BigDecimal increment = new BigDecimal("0.0000000001");
                                           for (int i = 0; i < rowCount; i++) {
@@ -461,7 +476,8 @@ public class TestScalarFunctions {
              Statement stmt = conn.createStatement();
              DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(10, 2)) {
             conn.registerScalarFunction("java_decimal_precision_overflow", new DuckDBLogicalType[] {decimalType},
-                                        decimalType, (input, rowCount, out) -> {
+                                        decimalType, (input, out) -> {
+                                            int rowCount = input.rowCount();
                                             for (int i = 0; i < rowCount; i++) {
                                                 out.setBigDecimal(i, new BigDecimal("12345678901.23"));
                                             }
@@ -479,7 +495,8 @@ public class TestScalarFunctions {
              Statement stmt = conn.createStatement();
              DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(10, 2)) {
             conn.registerScalarFunction("java_decimal_scale_overflow", new DuckDBLogicalType[] {decimalType},
-                                        decimalType, (input, rowCount, out) -> {
+                                        decimalType, (input, out) -> {
+                                            int rowCount = input.rowCount();
                                             for (int i = 0; i < rowCount; i++) {
                                                 out.setBigDecimal(i, new BigDecimal("1.234"));
                                             }
@@ -495,8 +512,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_date() throws Exception {
         assertUnaryScalarFunction(
             "java_add_date", DuckDBColumnType.DATE, DuckDBColumnType.DATE,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -521,8 +539,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_date_from_java_util_date() throws Exception {
         assertUnaryScalarFunction("java_date_from_util_date", DuckDBColumnType.DATE, DuckDBColumnType.DATE,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -545,8 +564,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_timestamp() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -577,8 +597,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_s() throws Exception {
         assertUnaryScalarFunction(
             "java_add_timestamp_s", DuckDBColumnType.TIMESTAMP_S, DuckDBColumnType.TIMESTAMP_S,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -601,8 +622,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_s_pre_epoch() throws Exception {
         assertUnaryScalarFunction("java_copy_timestamp_s_pre_epoch", DuckDBColumnType.TIMESTAMP,
                                   DuckDBColumnType.TIMESTAMP_S,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -623,8 +645,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_timestamp_ms() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp_ms", DuckDBColumnType.TIMESTAMP_MS, DuckDBColumnType.TIMESTAMP_MS,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -649,8 +672,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_ms_pre_epoch() throws Exception {
         assertUnaryScalarFunction("java_copy_timestamp_ms_pre_epoch", DuckDBColumnType.TIMESTAMP,
                                   DuckDBColumnType.TIMESTAMP_MS,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -672,8 +696,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_timestamp_ns() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp_ns", DuckDBColumnType.TIMESTAMP_NS, DuckDBColumnType.TIMESTAMP_NS,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -699,8 +724,9 @@ public class TestScalarFunctions {
         assertUnaryScalarFunction(
             "java_add_timestamptz", DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
             DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -726,8 +752,9 @@ public class TestScalarFunctions {
         assertUnaryScalarFunction(
             "java_copy_timestamptz_with_timestamp", DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
             DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -750,8 +777,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_date", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 long oneSecondMillis = 1000L;
                 for (int i = 0; i < rowCount; i++) {
@@ -779,8 +807,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_timestamp() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_ts", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -803,8 +832,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_sql_date", DuckDBColumnType.DATE, DuckDBColumnType.TIMESTAMP,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -826,8 +856,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_time() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_sql_time", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 for (int i = 0; i < rowCount; i++) {
                     java.util.Date value = Time.valueOf("12:34:56");
                     out.setTimestamp(i, value);
@@ -844,8 +875,9 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_local_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_local_date", DuckDBColumnType.DATE, DuckDBColumnType.TIMESTAMP,
-            (input, rowCount, out)
+            (input, out)
                 -> {
+                int rowCount = input.rowCount();
                 DuckDBReadableVector in = input.vector(0);
                 for (int i = 0; i < rowCount; i++) {
                     if (in.isNull(i)) {
@@ -868,8 +900,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_varchar() throws Exception {
         assertUnaryScalarFunction("java_suffix_varchar", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -894,8 +927,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_varchar_get_string_handles_null() throws Exception {
         assertUnaryScalarFunction("java_echo_varchar_nullable", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           out.setString(i, in.getString(i));
@@ -916,8 +950,9 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_varchar_revalidates_after_null() throws Exception {
         assertUnaryScalarFunction("java_revalidate_varchar", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-                                  (input, rowCount, out)
+                                  (input, out)
                                       -> {
+                                      int rowCount = input.rowCount();
                                       DuckDBReadableVector in = input.vector(0);
                                       for (int i = 0; i < rowCount; i++) {
                                           if (in.isNull(i)) {
@@ -940,7 +975,7 @@ public class TestScalarFunctions {
     }
 
     private static void assertUnaryScalarFunction(String functionName, DuckDBColumnType parameterType,
-                                                  DuckDBColumnType returnType, DuckDBVectorizedScalarFunction function,
+                                                  DuckDBColumnType returnType, DuckDBScalarFunction function,
                                                   String query, ResultSetVerifier verifier) throws Exception {
         try (DuckDBLogicalType parameterLogicalType = DuckDBLogicalType.of(parameterType);
              DuckDBLogicalType returnLogicalType = DuckDBLogicalType.of(returnType)) {
@@ -949,7 +984,7 @@ public class TestScalarFunctions {
     }
 
     private static void assertUnaryScalarFunction(String functionName, DuckDBLogicalType parameterType,
-                                                  DuckDBLogicalType returnType, DuckDBVectorizedScalarFunction function,
+                                                  DuckDBLogicalType returnType, DuckDBScalarFunction function,
                                                   String query, ResultSetVerifier verifier) throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {

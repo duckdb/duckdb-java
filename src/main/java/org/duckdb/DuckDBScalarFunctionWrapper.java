@@ -5,17 +5,17 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.nio.ByteBuffer;
 
 final class DuckDBScalarFunctionWrapper {
-    private final DuckDBVectorizedScalarFunction function;
+    private final DuckDBScalarFunction function;
 
-    DuckDBScalarFunctionWrapper(DuckDBVectorizedScalarFunction function) {
+    DuckDBScalarFunctionWrapper(DuckDBScalarFunction function) {
         this.function = function;
     }
 
-    public void execute(ByteBuffer functionInfo, ByteBuffer inputChunk, int rowCount, ByteBuffer outputVector) {
+    public void execute(ByteBuffer functionInfo, ByteBuffer inputChunk, ByteBuffer outputVector) {
         try {
-            DuckDBDataChunkReader inputReader = new DuckDBDataChunkReader(inputChunk, rowCount);
-            DuckDBWritableVector outputWriter = new DuckDBWritableVector(outputVector, rowCount);
-            function.apply(inputReader, rowCount, outputWriter);
+            DuckDBDataChunkReader inputReader = new DuckDBDataChunkReader(inputChunk);
+            DuckDBWritableVector outputWriter = new DuckDBWritableVector(outputVector, inputReader.rowCount());
+            function.apply(inputReader, outputWriter);
         } catch (Throwable throwable) {
             reportError(functionInfo, throwable);
         }

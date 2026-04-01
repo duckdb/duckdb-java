@@ -125,15 +125,12 @@ static void get_or_attach_jni_env(JavaVM *vm, JNIEnv *&env, bool &detach_when_do
 	detach_when_done = true;
 }
 
-static void execute_java_vectorized_scalar_function(JNIEnv *env, JavaScalarFunctionState &state,
-                                                    duckdb_function_info info, duckdb_data_chunk input,
-                                                    duckdb_vector output) {
-	auto row_count = duckdb_data_chunk_get_size(input);
+static void execute_java_scalar_function(JNIEnv *env, JavaScalarFunctionState &state, duckdb_function_info info,
+                                         duckdb_data_chunk input, duckdb_vector output) {
 	jobject function_info_buf = make_ptr_buf(env, info);
 	jobject input_chunk_buf = make_ptr_buf(env, input);
 	jobject output_vector_buf = make_ptr_buf(env, output);
-	env->CallVoidMethod(state.callback, state.apply_method, function_info_buf, input_chunk_buf,
-	                    static_cast<jint>(row_count), output_vector_buf);
+	env->CallVoidMethod(state.callback, state.apply_method, function_info_buf, input_chunk_buf, output_vector_buf);
 	if (function_info_buf) {
 		env->DeleteLocalRef(function_info_buf);
 	}
@@ -192,8 +189,8 @@ void duckdb_jdbc_scalar_function_set_function(JNIEnv *env, jobject conn_ref_buf,
 
 	try {
 		auto apply_method = get_scalar_callback_method(
-		    env, function_j, "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;ILjava/nio/ByteBuffer;)V", "execute",
-		    "Could not find execute(ByteBuffer, ByteBuffer, int, ByteBuffer) on scalar function callback");
+		    env, function_j, "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V", "execute",
+		    "Could not find execute(ByteBuffer, ByteBuffer, ByteBuffer) on scalar function callback");
 		auto state = new JavaScalarFunctionState(vm, callback_ref, apply_method);
 		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
 		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
@@ -257,7 +254,7 @@ static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_
 	}
 
 	try {
-		execute_java_vectorized_scalar_function(local_state->env, *state, info, input, output);
+		execute_java_scalar_function(local_state->env, *state, info, input, output);
 	} catch (const std::exception &e) {
 		duckdb_scalar_function_set_error(info, e.what());
 	}

@@ -78,7 +78,7 @@ final class DuckDBVectorTypeInfo {
                                                 (int) internalType.widthBytes, decimalMeta);
             }
             default:
-                throw new SQLException("Unsupported vectorized scalar function type: " + capiType);
+                throw new SQLException("Unsupported scalar function vector type: " + capiType);
             }
         } finally {
             duckdb_destroy_logical_type(logicalType);

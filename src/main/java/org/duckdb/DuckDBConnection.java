@@ -501,7 +501,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerScalarFunction(String name, DuckDBLogicalType[] parameterTypes, DuckDBLogicalType returnType,
-                                       DuckDBVectorizedScalarFunction function) throws SQLException {
+                                       DuckDBScalarFunction function) throws SQLException {
         checkOpen();
         connRefLock.lock();
         ByteBuffer scalarFunction = null;
