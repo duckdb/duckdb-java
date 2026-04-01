@@ -45,12 +45,12 @@ public class TestBindings {
     }
 
     public static void test_bindings_parse_logical_type() throws Exception {
-        try (DuckDBLogicalType integerType = DuckDBLogicalType.parse("INTEGER")) {
+        try (DuckDBLogicalType integerType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
             assertNotNull(integerType);
             assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType.logicalTypeRef()));
         }
 
-        try (DuckDBLogicalType decimalType = DuckDBLogicalType.parse("DECIMAL(18,3)")) {
+        try (DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(18, 3)) {
             assertNotNull(decimalType);
             ByteBuffer decimalRef = decimalType.logicalTypeRef();
             assertEquals(DUCKDB_TYPE_DECIMAL.typeId, duckdb_get_type_id(decimalRef));
@@ -59,34 +59,9 @@ public class TestBindings {
             assertEquals(DUCKDB_TYPE_BIGINT.typeId, duckdb_decimal_internal_type(decimalRef));
         }
 
-        assertThrows(() -> { DuckDBLogicalType.parse("MOOD"); }, SQLException.class);
-        assertThrows(() -> { DuckDBLogicalType.parse("DECIMAL(999999999999999999999999999,0)"); }, SQLException.class);
-        assertThrows(() -> { DuckDBLogicalType.parse(null); }, SQLException.class);
-    }
-
-    public static void test_bindings_parse_logical_type_native_fallback() throws Exception {
-        ByteBuffer integerType = duckdb_jdbc_parse_logical_type(null, "INT4".getBytes(UTF_8));
-        assertNotNull(integerType);
-        assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType));
-        duckdb_destroy_logical_type(integerType);
-
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
-
-            ByteBuffer enumType = duckdb_jdbc_parse_logical_type(conn.connRef, "mood".getBytes(UTF_8));
-            assertNotNull(enumType);
-            assertEquals(DUCKDB_TYPE_ENUM.typeId, duckdb_get_type_id(enumType));
-            assertEquals(3L, duckdb_enum_dictionary_size(enumType));
-            assertEquals("sad".getBytes(UTF_8), duckdb_enum_dictionary_value(enumType, 0));
-            duckdb_destroy_logical_type(enumType);
-
-            assertThrows(() -> {
-                duckdb_jdbc_parse_logical_type(conn.connRef, "missing_type".getBytes(UTF_8));
-            }, SQLException.class);
-        }
-
-        assertThrows(() -> { duckdb_jdbc_parse_logical_type(null, null); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.of(null); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.decimal(39, 0); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.decimal(10, 11); }, SQLException.class);
     }
 
     public static void test_bindings_vector_create() throws Exception {

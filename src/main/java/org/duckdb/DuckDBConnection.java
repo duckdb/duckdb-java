@@ -500,38 +500,6 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
-    public void registerScalarFunction(String name, String[] parameterTypes, String returnType,
-                                       DuckDBVectorizedScalarFunction function) throws SQLException {
-        checkOpen();
-        if (parameterTypes == null) {
-            throw new SQLException("Parameter types cannot be null");
-        }
-        DuckDBLogicalType[] parsedParameterTypes = new DuckDBLogicalType[parameterTypes.length];
-        DuckDBLogicalType parsedReturnType = null;
-        try {
-            if (name == null || name.trim().isEmpty()) {
-                throw new SQLException("Function name cannot be null or empty");
-            }
-            for (int i = 0; i < parameterTypes.length; i++) {
-                String parameterType = parameterTypes[i];
-                if (parameterType == null || parameterType.trim().isEmpty()) {
-                    throw new SQLException("Parameter type at index " + i + " cannot be null or empty");
-                }
-                parsedParameterTypes[i] = parseStringLogicalType(parameterType);
-            }
-            if (returnType == null || returnType.trim().isEmpty()) {
-                throw new SQLException("Return type cannot be null or empty");
-            }
-            parsedReturnType = parseStringLogicalType(returnType);
-            registerScalarFunction(name, parsedParameterTypes, parsedReturnType, function);
-        } finally {
-            closeLogicalType(parsedReturnType);
-            for (DuckDBLogicalType parameterType : parsedParameterTypes) {
-                closeLogicalType(parameterType);
-            }
-        }
-    }
-
     public void registerScalarFunction(String name, DuckDBLogicalType[] parameterTypes, DuckDBLogicalType returnType,
                                        DuckDBVectorizedScalarFunction function) throws SQLException {
         checkOpen();
@@ -565,7 +533,8 @@ public final class DuckDBConnection implements java.sql.Connection {
             }
 
             DuckDBBindings.duckdb_scalar_function_set_return_type(scalarFunction, returnType.logicalTypeRef());
-            DuckDBBindings.duckdb_jdbc_scalar_function_set_callback(connRef, scalarFunction, function);
+            DuckDBBindings.duckdb_scalar_function_set_function(connRef, scalarFunction,
+                                                               new DuckDBScalarFunctionWrapper(function));
 
             if (DuckDBBindings.duckdb_register_scalar_function(connRef, scalarFunction) != 0) {
                 throw new SQLException("Failed to register scalar function '" + name + "'");
@@ -595,31 +564,6 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public String getSessionInitSQL() throws SQLException {
         return sessionInitSQL;
-    }
-
-    private static void closeLogicalType(DuckDBLogicalType logicalType) {
-        if (logicalType != null) {
-            logicalType.close();
-        }
-    }
-
-    private DuckDBLogicalType parseStringLogicalType(String typeName) throws SQLException {
-        try {
-            return DuckDBLogicalType.parse(typeName);
-        } catch (SQLException javaParseError) {
-            connRefLock.lock();
-            try {
-                checkOpen();
-                ByteBuffer parsedType =
-                    DuckDBBindings.duckdb_jdbc_parse_logical_type(connRef, typeName.getBytes(UTF_8));
-                return DuckDBLogicalType.fromLogicalTypeRef(parsedType);
-            } catch (SQLException nativeParseError) {
-                nativeParseError.addSuppressed(javaParseError);
-                throw nativeParseError;
-            } finally {
-                connRefLock.unlock();
-            }
-        }
     }
 
     void checkOpen() throws SQLException {

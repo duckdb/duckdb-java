@@ -1,6 +1,8 @@
 #include "bindings.hpp"
+#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
+#include "scalar_functions.hpp"
 #include "util.hpp"
 
 static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env, jobject scalar_function_buf) {
@@ -18,6 +20,20 @@ static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env
 	}
 
 	return scalar_function;
+}
+
+static duckdb_function_info function_info_buf_to_function_info(JNIEnv *env, jobject function_info_buf) {
+	if (function_info_buf == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid scalar function info buffer");
+		return nullptr;
+	}
+
+	auto function_info = reinterpret_cast<duckdb_function_info>(env->GetDirectBufferAddress(function_info_buf));
+	if (function_info == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid scalar function info");
+		return nullptr;
+	}
+	return function_info;
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1scalar_1function(JNIEnv *env, jclass) {
@@ -87,4 +103,29 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1
 		return static_cast<jint>(DuckDBError);
 	}
 	return static_cast<jint>(duckdb_register_scalar_function(conn, function));
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1function(
+    JNIEnv *env, jclass, jobject conn_ref_buf, jobject scalar_function_buf, jobject function_j) {
+	try {
+		duckdb_jdbc_scalar_function_set_function(env, conn_ref_buf, scalar_function_buf, function_j);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1error(JNIEnv *env, jclass,
+                                                                                           jobject function_info_buf,
+                                                                                           jbyteArray error) {
+	auto function_info = function_info_buf_to_function_info(env, function_info_buf);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	if (error == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid scalar function error");
+		return;
+	}
+	auto error_message = jbyteArray_to_string(env, error);
+	duckdb_scalar_function_set_error(function_info, error_message.c_str());
 }
