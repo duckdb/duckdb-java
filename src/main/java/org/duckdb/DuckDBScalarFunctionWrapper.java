@@ -5,9 +5,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.nio.ByteBuffer;
 
 final class DuckDBScalarFunctionWrapper {
-    private final DuckDBScalarFunction function;
+    private final DuckDBScalarVectorFunction function;
 
-    DuckDBScalarFunctionWrapper(DuckDBScalarFunction function) {
+    DuckDBScalarFunctionWrapper(DuckDBScalarVectorFunction function) {
         this.function = function;
     }
 

@@ -56,6 +56,9 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1name;
     Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1add_1parameter;
     Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1return_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1varargs;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1volatile;
+    Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1special_1handling;
     Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function;
     Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1error;
     Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes;

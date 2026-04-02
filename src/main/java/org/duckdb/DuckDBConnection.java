@@ -501,49 +501,19 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerScalarFunction(String name, DuckDBLogicalType[] parameterTypes, DuckDBLogicalType returnType,
-                                       DuckDBScalarFunction function) throws SQLException {
-        checkOpen();
-        connRefLock.lock();
-        ByteBuffer scalarFunction = null;
-        try {
-            checkOpen();
-            if (name == null || name.trim().isEmpty()) {
-                throw new SQLException("Function name cannot be null or empty");
-            }
-            if (parameterTypes == null) {
-                throw new SQLException("Parameter types cannot be null");
-            }
+                                       DuckDBScalarVectorFunction function) throws SQLException {
+        if (parameterTypes == null) {
+            throw new SQLException("Parameter types cannot be null");
+        }
+
+        try (DuckDBScalarFunctionBuilder builder = DuckDBFunctions.scalarFunction().withName(name)) {
             for (int i = 0; i < parameterTypes.length; i++) {
                 if (parameterTypes[i] == null) {
                     throw new SQLException("Parameter type at index " + i + " cannot be null");
                 }
+                builder.withParameter(parameterTypes[i]);
             }
-            if (returnType == null) {
-                throw new SQLException("Return type cannot be null");
-            }
-            if (function == null) {
-                throw new SQLException("Scalar function callback cannot be null");
-            }
-
-            scalarFunction = DuckDBBindings.duckdb_create_scalar_function();
-            DuckDBBindings.duckdb_scalar_function_set_name(scalarFunction, name.getBytes(UTF_8));
-
-            for (int i = 0; i < parameterTypes.length; i++) {
-                DuckDBBindings.duckdb_scalar_function_add_parameter(scalarFunction, parameterTypes[i].logicalTypeRef());
-            }
-
-            DuckDBBindings.duckdb_scalar_function_set_return_type(scalarFunction, returnType.logicalTypeRef());
-            DuckDBBindings.duckdb_scalar_function_set_function(connRef, scalarFunction,
-                                                               new DuckDBScalarFunctionWrapper(function));
-
-            if (DuckDBBindings.duckdb_register_scalar_function(connRef, scalarFunction) != 0) {
-                throw new SQLException("Failed to register scalar function '" + name + "'");
-            }
-        } finally {
-            if (scalarFunction != null) {
-                DuckDBBindings.duckdb_destroy_scalar_function(scalarFunction);
-            }
-            connRefLock.unlock();
+            builder.withReturnType(returnType).withVectorFunction(function).register(this);
         }
     }
 

@@ -163,12 +163,7 @@ static jmethodID get_scalar_callback_method(JNIEnv *env, jobject function_j, con
 	return apply_method;
 }
 
-void duckdb_jdbc_scalar_function_set_function(JNIEnv *env, jobject conn_ref_buf, jobject scalar_function_buf,
-                                              jobject function_j) {
-	auto connection = get_connection(env, conn_ref_buf);
-	if (!connection) {
-		throw duckdb::InvalidInputException("Invalid connection");
-	}
+void duckdb_jdbc_scalar_function_set_function(JNIEnv *env, jobject scalar_function_buf, jobject function_j) {
 	auto scalar_function = scalar_function_buf_to_scalar_function(env, scalar_function_buf);
 	if (env->ExceptionCheck()) {
 		return;

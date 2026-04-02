@@ -29,10 +29,15 @@ public class DuckDBBindings {
 
     static native void duckdb_scalar_function_set_return_type(ByteBuffer scalarFunction, ByteBuffer logicalType);
 
+    static native void duckdb_scalar_function_set_varargs(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_volatile(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_special_handling(ByteBuffer scalarFunction);
+
     static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
 
-    static native void duckdb_scalar_function_set_function(ByteBuffer connection, ByteBuffer scalarFunction,
-                                                           Object function);
+    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction, Object function);
 
     static native void duckdb_scalar_function_set_error(ByteBuffer functionInfo, byte[] error);
 
