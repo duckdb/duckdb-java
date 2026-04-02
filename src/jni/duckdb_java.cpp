@@ -24,6 +24,7 @@ extern "C" {
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 using namespace duckdb;
 using namespace std;
@@ -63,6 +64,8 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	}
 	delete_global_refs(env);
 }
+
+jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;

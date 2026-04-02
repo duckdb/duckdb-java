@@ -58,6 +58,12 @@ extern jmethodID J_DuckVector_retainConstlenData;
 extern jfieldID J_DuckVector_constlen;
 extern jfieldID J_DuckVector_varlen;
 
+extern jclass J_DuckDataChunkReader;
+extern jmethodID J_DuckDataChunkReader_init;
+
+extern jclass J_DuckWritableVector;
+extern jmethodID J_DuckWritableVector_init;
+
 extern jclass J_DuckArray;
 extern jmethodID J_DuckArray_init;
 

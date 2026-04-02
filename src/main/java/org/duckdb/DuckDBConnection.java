@@ -500,6 +500,23 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    public void registerScalarFunction(String name, DuckDBLogicalType[] parameterTypes, DuckDBLogicalType returnType,
+                                       DuckDBScalarVectorFunction function) throws SQLException {
+        if (parameterTypes == null) {
+            throw new SQLException("Parameter types cannot be null");
+        }
+
+        try (DuckDBScalarFunctionBuilder builder = DuckDBFunctions.scalarFunction().withName(name)) {
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (parameterTypes[i] == null) {
+                    throw new SQLException("Parameter type at index " + i + " cannot be null");
+                }
+                builder.withParameter(parameterTypes[i]);
+            }
+            builder.withReturnType(returnType).withVectorFunction(function).register(this);
+        }
+    }
+
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
         checkOpen();
         connRefLock.lock();

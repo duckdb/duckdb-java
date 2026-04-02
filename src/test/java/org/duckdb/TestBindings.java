@@ -6,7 +6,9 @@ import static org.duckdb.DuckDBBindings.CAPIType.*;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.Arrays;
@@ -40,6 +42,26 @@ public class TestBindings {
                      DUCKDB_TYPE_INVALID.typeId);
 
         assertThrows(() -> { duckdb_destroy_logical_type(null); }, SQLException.class);
+    }
+
+    public static void test_bindings_parse_logical_type() throws Exception {
+        try (DuckDBLogicalType integerType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
+            assertNotNull(integerType);
+            assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType.logicalTypeRef()));
+        }
+
+        try (DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(18, 3)) {
+            assertNotNull(decimalType);
+            ByteBuffer decimalRef = decimalType.logicalTypeRef();
+            assertEquals(DUCKDB_TYPE_DECIMAL.typeId, duckdb_get_type_id(decimalRef));
+            assertEquals(18, duckdb_decimal_width(decimalRef));
+            assertEquals(3, duckdb_decimal_scale(decimalRef));
+            assertEquals(DUCKDB_TYPE_BIGINT.typeId, duckdb_decimal_internal_type(decimalRef));
+        }
+
+        assertThrows(() -> { DuckDBLogicalType.of(null); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.decimal(39, 0); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.decimal(10, 11); }, SQLException.class);
     }
 
     public static void test_bindings_vector_create() throws Exception {
@@ -103,6 +125,73 @@ public class TestBindings {
         data.position(dataPos);
         data.get(buf);
         assertEquals(new String(buf, UTF_8), str);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_varchar_string_bytes_null_row() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        long rowCount = duckdb_vector_size();
+        ByteBuffer data = duckdb_vector_get_data(vec, rowCount * STRING_T_SIZE_BYTES);
+        duckdb_vector_ensure_validity_writable(vec);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, rowCount);
+
+        duckdb_validity_set_row_validity(validity, 0L, false);
+        assertNull(duckdb_jdbc_varchar_string_bytes(data, validity, rowCount, 0L));
+        assertThrows(
+            () -> { duckdb_jdbc_varchar_string_bytes(data, validity, rowCount, rowCount); }, SQLException.class);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_vector_native_endian_roundtrip() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        int rowCount = (int) duckdb_vector_size();
+        int expected = 0x01020304;
+        DuckDBWritableVector writable = new DuckDBWritableVector(vec, rowCount);
+        writable.setInt(0, expected);
+
+        ByteBuffer rawData = duckdb_vector_get_data(vec, (long) rowCount * Integer.BYTES);
+        assertEquals(rawData.order(ByteOrder.nativeOrder()).getInt(0), expected);
+
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        assertEquals(readable.getInt(0), expected);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_vector_ubigint_native_endian_roundtrip() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        int rowCount = (int) duckdb_vector_size();
+        assertTrue(rowCount >= 4);
+        BigInteger[] values =
+            new BigInteger[] {BigInteger.ZERO, new BigInteger("42"), new BigInteger("9223372036854775808"),
+                              new BigInteger("18446744073709551615")};
+
+        DuckDBWritableVector writable = new DuckDBWritableVector(vec, rowCount);
+        for (int i = 0; i < values.length; i++) {
+            writable.setUint64(i, values[i]);
+        }
+
+        ByteBuffer rawData = duckdb_vector_get_data(vec, (long) rowCount * Long.BYTES);
+        ByteBuffer nativeData = rawData.order(ByteOrder.nativeOrder());
+        for (int i = 0; i < values.length; i++) {
+            assertEquals(nativeData.getLong(i * Long.BYTES), values[i].longValue());
+        }
+
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        for (int i = 0; i < values.length; i++) {
+            assertEquals(readable.getUint64(i), values[i]);
+        }
 
         duckdb_destroy_vector(vec);
         duckdb_destroy_logical_type(lt);
@@ -341,6 +430,13 @@ public class TestBindings {
             assertEquals(duckdb_appender_close(appender), 0);
             assertEquals(duckdb_appender_destroy(appender), 0);
         }
+    }
+
+    public static void test_bindings_decimal_type_validation() throws Exception {
+        assertThrows(() -> { duckdb_create_decimal_type(0, 0); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(39, 0); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(10, -1); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(10, 11); }, SQLException.class);
     }
 
     public static void test_bindings_enum_type() throws Exception {

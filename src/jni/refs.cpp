@@ -61,6 +61,12 @@ jmethodID J_DuckVector_retainConstlenData;
 jfieldID J_DuckVector_constlen;
 jfieldID J_DuckVector_varlen;
 
+jclass J_DuckDataChunkReader;
+jmethodID J_DuckDataChunkReader_init;
+
+jclass J_DuckWritableVector;
+jmethodID J_DuckWritableVector_init;
+
 jclass J_DuckArray;
 jmethodID J_DuckArray_init;
 
@@ -286,6 +292,12 @@ void create_refs(JNIEnv *env) {
 	J_DuckVector_retainConstlenData = get_method_id(env, J_DuckVector, "retainConstlenData", "()V");
 	J_DuckVector_constlen = get_field_id(env, J_DuckVector, "constlen_data", "Ljava/nio/ByteBuffer;");
 	J_DuckVector_varlen = get_field_id(env, J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
+
+	J_DuckDataChunkReader = make_class_ref(env, "org/duckdb/DuckDBDataChunkReader");
+	J_DuckDataChunkReader_init = get_method_id(env, J_DuckDataChunkReader, "<init>", "(Ljava/nio/ByteBuffer;)V");
+
+	J_DuckWritableVector = make_class_ref(env, "org/duckdb/DuckDBWritableVector");
+	J_DuckWritableVector_init = get_method_id(env, J_DuckWritableVector, "<init>", "(Ljava/nio/ByteBuffer;I)V");
 
 	J_ByteBuffer = make_class_ref(env, "java/nio/ByteBuffer");
 	J_ByteBuffer_order = get_method_id(env, J_ByteBuffer, "order", "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
