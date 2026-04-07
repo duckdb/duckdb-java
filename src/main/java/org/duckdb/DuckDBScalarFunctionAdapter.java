@@ -298,7 +298,7 @@ final class DuckDBScalarFunctionAdapter {
         return ctx -> {
             DuckDBWritableVector out = ctx.output();
             long rowCount = ctx.rowCount();
-            int vectorCount = ctx.columnCount();
+            int vectorCount = Math.toIntExact(ctx.columnCount());
             boolean propagateNulls = ctx.propagateNulls();
             DuckDBReadableVector[] vectors = new DuckDBReadableVector[vectorCount];
             TypeCodec[] codecs = new TypeCodec[vectorCount];

@@ -25,11 +25,11 @@ public final class DuckDBScalarContext {
         return input.rowCount();
     }
 
-    public int columnCount() {
+    public long columnCount() {
         return input.columnCount();
     }
 
-    public DuckDBReadableVector input(int columnIndex) throws SQLException {
+    public DuckDBReadableVector input(long columnIndex) throws SQLException {
         return input.vector(columnIndex);
     }
 
@@ -58,7 +58,7 @@ public final class DuckDBScalarContext {
         return new DuckDBScalarRow(this, rowIndex);
     }
 
-    DuckDBReadableVector inputUnchecked(int columnIndex) {
+    DuckDBReadableVector inputUnchecked(long columnIndex) {
         try {
             return input(columnIndex);
         } catch (SQLException exception) {
@@ -73,7 +73,7 @@ public final class DuckDBScalarContext {
     }
 
     private boolean rowHasNoNullInputs(long rowIndex) {
-        for (int columnIndex = 0; columnIndex < columnCount(); columnIndex++) {
+        for (long columnIndex = 0; columnIndex < columnCount(); columnIndex++) {
             if (inputUnchecked(columnIndex).isNull(rowIndex)) {
                 try {
                     output.setNull(rowIndex);

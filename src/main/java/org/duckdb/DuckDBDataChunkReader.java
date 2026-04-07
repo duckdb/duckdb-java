@@ -8,7 +8,7 @@ import java.sql.SQLException;
 public final class DuckDBDataChunkReader {
     private final ByteBuffer chunkRef;
     private final long rowCount;
-    private final int columnCount;
+    private final long columnCount;
     private final DuckDBReadableVector[] vectors;
 
     DuckDBDataChunkReader(ByteBuffer chunkRef) throws SQLException {
@@ -17,27 +17,28 @@ public final class DuckDBDataChunkReader {
         }
         this.chunkRef = chunkRef;
         this.rowCount = duckdb_data_chunk_get_size(chunkRef);
-        this.columnCount = Math.toIntExact(duckdb_data_chunk_get_column_count(chunkRef));
-        this.vectors = new DuckDBReadableVector[columnCount];
+        this.columnCount = duckdb_data_chunk_get_column_count(chunkRef);
+        this.vectors = new DuckDBReadableVector[Math.toIntExact(columnCount)];
     }
 
     public long rowCount() {
         return rowCount;
     }
 
-    public int columnCount() {
+    public long columnCount() {
         return columnCount;
     }
 
-    public DuckDBReadableVector vector(int columnIndex) throws SQLException {
+    public DuckDBReadableVector vector(long columnIndex) throws SQLException {
         if (columnIndex < 0 || columnIndex >= columnCount) {
             throw new IndexOutOfBoundsException("Column index out of bounds: " + columnIndex);
         }
-        DuckDBReadableVector vector = vectors[columnIndex];
+        int arrayIndex = Math.toIntExact(columnIndex);
+        DuckDBReadableVector vector = vectors[arrayIndex];
         if (vector == null) {
             ByteBuffer vectorRef = duckdb_data_chunk_get_vector(chunkRef, columnIndex);
             vector = new DuckDBReadableVectorImpl(vectorRef, rowCount);
-            vectors[columnIndex] = vector;
+            vectors[arrayIndex] = vector;
         }
         return vector;
     }
