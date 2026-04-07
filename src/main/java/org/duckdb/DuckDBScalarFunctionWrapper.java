@@ -6,16 +6,19 @@ import java.nio.ByteBuffer;
 
 final class DuckDBScalarFunctionWrapper {
     private final DuckDBScalarFunction function;
+    private final boolean propagateNulls;
 
-    DuckDBScalarFunctionWrapper(DuckDBScalarFunction function) {
+    DuckDBScalarFunctionWrapper(DuckDBScalarFunction function, boolean propagateNulls) {
         this.function = function;
+        this.propagateNulls = propagateNulls;
     }
 
     public void execute(ByteBuffer functionInfo, ByteBuffer inputChunk, ByteBuffer outputVector) {
         try {
             DuckDBDataChunkReader inputReader = new DuckDBDataChunkReader(inputChunk);
-            DuckDBWritableVector outputWriter = new DuckDBWritableVector(outputVector, inputReader.rowCount());
-            function.apply(inputReader, outputWriter);
+            DuckDBWritableVector outputWriter = new DuckDBWritableVectorImpl(outputVector, inputReader.rowCount());
+            DuckDBScalarContext context = new DuckDBScalarContext(inputReader, outputWriter, propagateNulls);
+            function.apply(context);
         } catch (Throwable throwable) {
             reportError(functionInfo, throwable);
         }

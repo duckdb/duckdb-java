@@ -23,11 +23,12 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 
 /*
  * Class:     org_duckdb_DuckDBBindings
- * Method:    duckdb_jdbc_varchar_string_bytes
- * Signature: (Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;JJ)[B
+ * Method:    duckdb_vector_get_string
+ * Signature: (Ljava/nio/ByteBuffer;J)[B
  */
-JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(
-    JNIEnv *env, jclass, jobject vector_data, jobject validity, jlong row_count, jlong row) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string(JNIEnv *env, jclass,
+                                                                                        jobject vector_data,
+                                                                                        jlong row) {
 
 	if (vector_data == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid vector data buffer");
@@ -38,32 +39,20 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varcha
 		env->ThrowNew(J_SQLException, "Invalid vector data");
 		return nullptr;
 	}
-	idx_t row_count_idx = jlong_to_idx(env, row_count);
-	if (env->ExceptionCheck()) {
-		return nullptr;
-	}
 	idx_t row_idx = jlong_to_idx(env, row);
 	if (env->ExceptionCheck()) {
 		return nullptr;
-	}
-	if (row_idx >= row_count_idx) {
-		env->ThrowNew(J_SQLException, "Row index out of bounds");
-		return nullptr;
-	}
-	if (validity != nullptr) {
-		auto mask = reinterpret_cast<uint64_t *>(env->GetDirectBufferAddress(validity));
-		if (mask == nullptr) {
-			env->ThrowNew(J_SQLException, "Invalid validity buffer");
-			return nullptr;
-		}
-		if ((mask[row_idx / 64] & (1ULL << (row_idx % 64))) == 0) {
-			return nullptr;
-		}
 	}
 	auto &string_value = data[row_idx];
 	auto string_len = duckdb_string_t_length(string_value);
 	auto string_ptr = duckdb_string_t_data(&string_value);
 	return make_jbyteArray(env, string_ptr, string_len);
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string__Ljava_nio_ByteBuffer_2J(JNIEnv *env, jclass clazz,
+                                                                                    jobject vector_data, jlong row) {
+	return Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string(env, clazz, vector_data, row);
 }
 
 /*

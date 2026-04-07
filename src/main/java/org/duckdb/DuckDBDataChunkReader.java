@@ -7,7 +7,7 @@ import java.sql.SQLException;
 
 public final class DuckDBDataChunkReader {
     private final ByteBuffer chunkRef;
-    private final int rowCount;
+    private final long rowCount;
     private final int columnCount;
     private final DuckDBReadableVector[] vectors;
 
@@ -16,12 +16,12 @@ public final class DuckDBDataChunkReader {
             throw new SQLException("Invalid data chunk reference");
         }
         this.chunkRef = chunkRef;
-        this.rowCount = (int) duckdb_data_chunk_get_size(chunkRef);
-        this.columnCount = (int) duckdb_data_chunk_get_column_count(chunkRef);
+        this.rowCount = duckdb_data_chunk_get_size(chunkRef);
+        this.columnCount = Math.toIntExact(duckdb_data_chunk_get_column_count(chunkRef));
         this.vectors = new DuckDBReadableVector[columnCount];
     }
 
-    public int rowCount() {
+    public long rowCount() {
         return rowCount;
     }
 
@@ -36,7 +36,7 @@ public final class DuckDBDataChunkReader {
         DuckDBReadableVector vector = vectors[columnIndex];
         if (vector == null) {
             ByteBuffer vectorRef = duckdb_data_chunk_get_vector(chunkRef, columnIndex);
-            vector = new DuckDBReadableVector(vectorRef, rowCount);
+            vector = new DuckDBReadableVectorImpl(vectorRef, rowCount);
             vectors[columnIndex] = vector;
         }
         return vector;

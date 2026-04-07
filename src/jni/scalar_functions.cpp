@@ -2,11 +2,26 @@ extern "C" {
 #include "duckdb.h"
 }
 
-#include "duckdb/common/exception.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "scalar_functions.hpp"
 #include "util.hpp"
+
+#include <exception>
+#include <string>
+
+class ScalarFunctionException : public std::exception {
+public:
+	explicit ScalarFunctionException(std::string message_p) : message(std::move(message_p)) {
+	}
+
+	const char *what() const noexcept override {
+		return message.c_str();
+	}
+
+private:
+	std::string message;
+};
 
 struct JNIEnvGuard {
 	JavaVM *vm;
@@ -15,18 +30,18 @@ struct JNIEnvGuard {
 
 	explicit JNIEnvGuard(JavaVM *vm_p) : vm(vm_p), env(nullptr), detach_when_done(false) {
 		if (!vm) {
-			throw duckdb::InvalidInputException("JVM is not available");
+			throw ScalarFunctionException("JVM is not available");
 		}
 		auto get_env_status = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
 		if (get_env_status == JNI_OK) {
 			return;
 		}
 		if (get_env_status != JNI_EDETACHED) {
-			throw duckdb::InvalidInputException("Failed to get JNI environment");
+			throw ScalarFunctionException("Failed to get JNI environment");
 		}
 		auto attach_status = vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr);
 		if (attach_status != JNI_OK || !env) {
-			throw duckdb::InvalidInputException("Failed to attach current thread to JVM");
+			throw ScalarFunctionException("Failed to attach current thread to JVM");
 		}
 		detach_when_done = true;
 	}
@@ -106,7 +121,7 @@ static std::string consume_java_exception_message(JNIEnv *env) {
 
 static void get_or_attach_jni_env(JavaVM *vm, JNIEnv *&env, bool &detach_when_done) {
 	if (!vm) {
-		throw duckdb::InvalidInputException("JVM is not available");
+		throw ScalarFunctionException("JVM is not available");
 	}
 
 	detach_when_done = false;
@@ -115,12 +130,12 @@ static void get_or_attach_jni_env(JavaVM *vm, JNIEnv *&env, bool &detach_when_do
 		return;
 	}
 	if (get_env_status != JNI_EDETACHED) {
-		throw duckdb::InvalidInputException("Failed to get JNI environment");
+		throw ScalarFunctionException("Failed to get JNI environment");
 	}
 
 	auto attach_status = vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr);
 	if (attach_status != JNI_OK || !env) {
-		throw duckdb::InvalidInputException("Failed to attach current thread to JVM");
+		throw ScalarFunctionException("Failed to attach current thread to JVM");
 	}
 	detach_when_done = true;
 }
@@ -142,8 +157,8 @@ static void execute_java_scalar_function(JNIEnv *env, JavaScalarFunctionState &s
 	}
 
 	if (env->ExceptionCheck()) {
-		throw duckdb::InvalidInputException("Java scalar function wrapper threw exception: %s",
-		                                    consume_java_exception_message(env));
+		throw ScalarFunctionException("Java scalar function wrapper threw exception: " +
+		                              consume_java_exception_message(env));
 	}
 }
 
@@ -158,33 +173,28 @@ static jmethodID get_scalar_callback_method(JNIEnv *env, jobject function_j, con
 	env->DeleteLocalRef(callback_class);
 	if (!apply_method || env->ExceptionCheck()) {
 		consume_java_exception_message(env);
-		throw duckdb::InvalidInputException("%s", error_message);
+		throw ScalarFunctionException(error_message);
 	}
 	return apply_method;
 }
 
-void duckdb_jdbc_scalar_function_set_function(JNIEnv *env, jobject conn_ref_buf, jobject scalar_function_buf,
-                                              jobject function_j) {
-	auto connection = get_connection(env, conn_ref_buf);
-	if (!connection) {
-		throw duckdb::InvalidInputException("Invalid connection");
-	}
+void scalar_function_set_function(JNIEnv *env, jobject scalar_function_buf, jobject function_j) {
 	auto scalar_function = scalar_function_buf_to_scalar_function(env, scalar_function_buf);
 	if (env->ExceptionCheck()) {
 		return;
 	}
 	if (!function_j) {
-		throw duckdb::InvalidInputException("Invalid scalar function callback");
+		throw ScalarFunctionException("Invalid scalar function callback");
 	}
 
 	JavaVM *vm = nullptr;
 	if (env->GetJavaVM(&vm) != JNI_OK || !vm) {
-		throw duckdb::InvalidInputException("Failed to get JVM reference");
+		throw ScalarFunctionException("Failed to get JVM reference");
 	}
 
 	auto callback_ref = env->NewGlobalRef(function_j);
 	if (!callback_ref) {
-		throw duckdb::InvalidInputException("Could not create global reference for scalar function callback");
+		throw ScalarFunctionException("Could not create global reference for scalar function callback");
 	}
 
 	try {
