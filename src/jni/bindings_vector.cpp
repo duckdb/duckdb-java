@@ -23,6 +23,40 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 
 /*
  * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_vector_get_string
+ * Signature: (Ljava/nio/ByteBuffer;J)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string(JNIEnv *env, jclass,
+                                                                                        jobject vector_data,
+                                                                                        jlong row) {
+
+	if (vector_data == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid vector data buffer");
+		return nullptr;
+	}
+	auto data = reinterpret_cast<duckdb_string_t *>(env->GetDirectBufferAddress(vector_data));
+	if (data == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid vector data");
+		return nullptr;
+	}
+	idx_t row_idx = jlong_to_idx(env, row);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	auto &string_value = data[row_idx];
+	auto string_len = duckdb_string_t_length(string_value);
+	auto string_ptr = duckdb_string_t_data(&string_value);
+	return make_jbyteArray(env, string_ptr, string_len);
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string__Ljava_nio_ByteBuffer_2J(JNIEnv *env, jclass clazz,
+                                                                                    jobject vector_data, jlong row) {
+	return Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1string(env, clazz, vector_data, row);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_create_vector
  * Signature: (Ljava/nio/ByteBuffer;)Ljava/nio/ByteBuffer;
  */
