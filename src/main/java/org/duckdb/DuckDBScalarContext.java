@@ -1,13 +1,18 @@
 package org.duckdb;
 
-import java.sql.SQLException;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
+/**
+ * Per-invocation scalar callback context.
+ *
+ * <p>Runtime type/value failures are surfaced as {@link DuckDBFunctionException}. Invalid row or
+ * column indexes throw {@link IndexOutOfBoundsException}.
+ */
 public final class DuckDBScalarContext {
     private final DuckDBDataChunkReader input;
     private final DuckDBWritableVector output;
-    private final boolean propagateNulls;
+    private boolean propagateNulls;
 
     DuckDBScalarContext(DuckDBDataChunkReader input, DuckDBWritableVector output, boolean propagateNulls) {
         if (input == null) {
@@ -29,7 +34,7 @@ public final class DuckDBScalarContext {
         return input.columnCount();
     }
 
-    public DuckDBReadableVector input(long columnIndex) throws SQLException {
+    public DuckDBReadableVector input(long columnIndex) {
         return input.vector(columnIndex);
     }
 
@@ -37,8 +42,13 @@ public final class DuckDBScalarContext {
         return output;
     }
 
-    public boolean propagateNulls() {
+    public boolean nullsPropagated() {
         return propagateNulls;
+    }
+
+    public DuckDBScalarContext propagateNulls(boolean propagateNulls) {
+        this.propagateNulls = propagateNulls;
+        return this;
     }
 
     DuckDBDataChunkReader inputChunk() {
@@ -59,11 +69,7 @@ public final class DuckDBScalarContext {
     }
 
     DuckDBReadableVector inputUnchecked(long columnIndex) {
-        try {
-            return input(columnIndex);
-        } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to access input column " + columnIndex, exception);
-        }
+        return input(columnIndex);
     }
 
     private void checkRowIndex(long rowIndex) {
@@ -75,11 +81,7 @@ public final class DuckDBScalarContext {
     private boolean rowHasNoNullInputs(long rowIndex) {
         for (long columnIndex = 0; columnIndex < columnCount(); columnIndex++) {
             if (inputUnchecked(columnIndex).isNull(rowIndex)) {
-                try {
-                    output.setNull(rowIndex);
-                } catch (SQLException exception) {
-                    throw new IllegalStateException("Failed to write NULL to output row " + rowIndex, exception);
-                }
+                output.setNull(rowIndex);
                 return false;
             }
         }

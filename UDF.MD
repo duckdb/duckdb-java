@@ -55,12 +55,17 @@ SELECT java_weighted_sum(2.5, 4.0);
 
 Behavior:
 
-- `propagateNulls(true)` is the default.
-- With `propagateNulls(true)`, NULL input propagates to NULL output for `Function`/`BiFunction`.
-- With `propagateNulls(false)`, functional callbacks receive `null` arguments and can decide the output.
-- `withIntFunction(...)`, `withLongFunction(...)`, and `withDoubleFunction(...)` require `propagateNulls(true)`.
+- `Function` and `BiFunction` callbacks receive `null` for NULL inputs; implement null handling in Java callback logic.
+- `withIntFunction(...)`, `withLongFunction(...)`, and `withDoubleFunction(...)` run with null propagation enabled.
+- For `withVectorizedFunction(...)`, use `ctx.propagateNulls(true)` when you want stream-level null skipping and automatic NULL output.
 - For `Supplier`, returning `null` writes NULL output.
 - `Function` and `BiFunction` are fixed arity only (no varargs).
+
+Runtime error model:
+
+- Callback-time reader/writer/context type and value failures throw `DuckDBFunctionException`.
+- Invalid row/column indexes throw `IndexOutOfBoundsException`.
+- `SQLException` remains for registration-time API usage and type declaration/validation.
 
 ## Type declaration and mapping
 
@@ -76,8 +81,14 @@ Common class mappings include:
 - `Long` -> `BIGINT`
 - `String` -> `VARCHAR`
 - `BigDecimal` -> `DECIMAL`
+- `BigInteger` -> `HUGEINT`
 - `LocalDate` and `java.sql.Date` -> `DATE`
 - `LocalDateTime`, `java.sql.Timestamp`, and `java.util.Date` -> `TIMESTAMP`
+
+Notes:
+
+- `UHUGEINT` is supported through explicit `DuckDBColumnType.UHUGEINT`/`DuckDBLogicalType` declarations.
+- Java class auto-mapping for `BigInteger` remains `HUGEINT`.
 
 Use `DuckDBLogicalType.decimal(width, scale)` for explicit DECIMAL precision/scale.
 
@@ -119,6 +130,7 @@ Notes:
 
 - `withName(String)`
 - `withParameter(Class<?> | DuckDBColumnType | DuckDBLogicalType)`
+- `withParameters(Class<?>...)`
 - `withReturnType(Class<?> | DuckDBColumnType | DuckDBLogicalType)`
 - `withFunction(Supplier | Function | BiFunction)`
 - `withIntFunction(IntUnaryOperator | IntBinaryOperator)`
@@ -127,7 +139,6 @@ Notes:
 - `withVarArgs(DuckDBLogicalType)`
 - `withVarArgsFunction(Function<Object[], ?>)`
 - `withVectorizedFunction(DuckDBScalarFunction)`
-- `propagateNulls(boolean)`
 - `withVolatile()`
 - `withSpecialHandling()`
 - `register(java.sql.Connection)`
@@ -167,9 +178,8 @@ try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
         .withParameter(strType)
         .withParameter(dblType)
         .withReturnType(strType)
-        .propagateNulls(true)
         .withVectorizedFunction(ctx -> {
-            ctx.stream().forEachOrdered(row -> {
+            ctx.propagateNulls(true).stream().forEachOrdered(row -> {
                 String value = row.getLocalDateTime(0) + " | "
                     + row.getString(1).trim().toUpperCase()
                     + " | " + row.getDouble(2);
@@ -187,5 +197,6 @@ SELECT java_event_label(TIMESTAMP '2026-04-04 12:00:00', 'launch', 4.5);
 Lifecycle rules:
 
 - `DuckDBScalarContext`, `DuckDBScalarRow`, `DuckDBReadableVector`, and `DuckDBWritableVector` are valid only during callback execution.
+- `DuckDBReadableVector` and `DuckDBWritableVector` are abstract callback runtime types (not interfaces).
 - Write exactly one output value per input row for each callback invocation.
 - With `propagateNulls(true)`, `DuckDBScalarContext.stream()` skips rows that contain NULL in any input column and writes NULL to the output for those rows.

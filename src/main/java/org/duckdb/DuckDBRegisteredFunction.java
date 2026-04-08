@@ -6,7 +6,7 @@ import java.util.List;
 
 public final class DuckDBRegisteredFunction {
     private final String name;
-    private final DuckDBFunctionKind functionKind;
+    private final DuckDBFunctions.DuckDBFunctionKind functionKind;
     private final List<DuckDBLogicalType> parameterTypes;
     private final List<DuckDBColumnType> parameterColumnTypes;
     private final DuckDBLogicalType returnType;
@@ -17,7 +17,7 @@ public final class DuckDBRegisteredFunction {
     private final boolean specialHandlingFlag;
     private final boolean propagateNullsFlag;
 
-    private DuckDBRegisteredFunction(String name, DuckDBFunctionKind functionKind,
+    private DuckDBRegisteredFunction(String name, DuckDBFunctions.DuckDBFunctionKind functionKind,
                                      List<DuckDBLogicalType> parameterTypes,
                                      List<DuckDBColumnType> parameterColumnTypes, DuckDBLogicalType returnType,
                                      DuckDBColumnType returnColumnType, DuckDBScalarFunction function,
@@ -40,7 +40,7 @@ public final class DuckDBRegisteredFunction {
         return name;
     }
 
-    public DuckDBFunctionKind functionKind() {
+    public DuckDBFunctions.DuckDBFunctionKind functionKind() {
         return functionKind;
     }
 
@@ -81,7 +81,7 @@ public final class DuckDBRegisteredFunction {
     }
 
     public boolean isScalar() {
-        return functionKind == DuckDBFunctionKind.SCALAR;
+        return functionKind == DuckDBFunctions.DuckDBFunctionKind.SCALAR;
     }
 
     static DuckDBRegisteredFunction of(String name, List<DuckDBLogicalType> parameterTypes,
@@ -90,7 +90,7 @@ public final class DuckDBRegisteredFunction {
                                        DuckDBLogicalType varArgType, boolean volatileFlag, boolean specialHandlingFlag,
                                        boolean propagateNullsFlag) {
         return new DuckDBRegisteredFunction(
-            name, DuckDBFunctionKind.SCALAR, Collections.unmodifiableList(new ArrayList<>(parameterTypes)),
+            name, DuckDBFunctions.DuckDBFunctionKind.SCALAR, Collections.unmodifiableList(new ArrayList<>(parameterTypes)),
             Collections.unmodifiableList(new ArrayList<>(parameterColumnTypes)), returnType, returnColumnType, function,
             varArgType, volatileFlag, specialHandlingFlag, propagateNullsFlag);
     }

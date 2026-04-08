@@ -2,102 +2,115 @@ package org.duckdb;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
-public interface DuckDBWritableVector {
-    DuckDBColumnType getType();
+/**
+ * Mutable scalar callback view over a DuckDB output vector.
+ *
+ * <p>Implementations throw {@link DuckDBFunctionException} for callback-time type/value write
+ * errors. Invalid row indexes throw {@link IndexOutOfBoundsException}.
+ */
+public abstract class DuckDBWritableVector {
+    public abstract DuckDBColumnType getType();
 
-    long rowCount();
+    public abstract long rowCount();
 
-    void addNull() throws SQLException;
+    public abstract void addNull();
 
-    void setNull(long row) throws SQLException;
+    public abstract void setNull(long row);
 
-    void addBoolean(boolean value) throws SQLException;
+    public abstract void addBoolean(boolean value);
 
-    void setBoolean(long row, boolean value) throws SQLException;
+    public abstract void setBoolean(long row, boolean value);
 
-    void addByte(byte value) throws SQLException;
+    public abstract void addByte(byte value);
 
-    void setByte(long row, byte value) throws SQLException;
+    public abstract void setByte(long row, byte value);
 
-    void addShort(short value) throws SQLException;
+    public abstract void addShort(short value);
 
-    void setShort(long row, short value) throws SQLException;
+    public abstract void setShort(long row, short value);
 
-    void addUint8(int value) throws SQLException;
+    public abstract void addUint8(int value);
 
-    void setUint8(long row, int value) throws SQLException;
+    public abstract void setUint8(long row, int value);
 
-    void addUint16(int value) throws SQLException;
+    public abstract void addUint16(int value);
 
-    void setUint16(long row, int value) throws SQLException;
+    public abstract void setUint16(long row, int value);
 
-    void addInt(int value) throws SQLException;
+    public abstract void addInt(int value);
 
-    void setInt(long row, int value) throws SQLException;
+    public abstract void setInt(long row, int value);
 
-    void addUint32(long value) throws SQLException;
+    public abstract void addUint32(long value);
 
-    void setUint32(long row, long value) throws SQLException;
+    public abstract void setUint32(long row, long value);
 
-    void addLong(long value) throws SQLException;
+    public abstract void addLong(long value);
 
-    void setLong(long row, long value) throws SQLException;
+    public abstract void setLong(long row, long value);
 
-    void addUint64(BigInteger value) throws SQLException;
+    public abstract void addHugeInt(BigInteger value);
 
-    void setUint64(long row, BigInteger value) throws SQLException;
+    public abstract void setHugeInt(long row, BigInteger value);
 
-    void addFloat(float value) throws SQLException;
+    public abstract void addUHugeInt(BigInteger value);
 
-    void setFloat(long row, float value) throws SQLException;
+    public abstract void setUHugeInt(long row, BigInteger value);
 
-    void addDouble(double value) throws SQLException;
+    public abstract void addUint64(BigInteger value);
 
-    void setDouble(long row, double value) throws SQLException;
+    public abstract void setUint64(long row, BigInteger value);
 
-    void addDate(LocalDate value) throws SQLException;
+    public abstract void addFloat(float value);
 
-    void setDate(long row, LocalDate value) throws SQLException;
+    public abstract void setFloat(long row, float value);
 
-    void addDate(java.sql.Date value) throws SQLException;
+    public abstract void addDouble(double value);
 
-    void setDate(long row, java.sql.Date value) throws SQLException;
+    public abstract void setDouble(long row, double value);
 
-    void addDate(java.util.Date value) throws SQLException;
+    public abstract void addDate(LocalDate value);
 
-    void setDate(long row, java.util.Date value) throws SQLException;
+    public abstract void setDate(long row, LocalDate value);
 
-    void addTimestamp(LocalDateTime value) throws SQLException;
+    public abstract void addDate(java.sql.Date value);
 
-    void setTimestamp(long row, LocalDateTime value) throws SQLException;
+    public abstract void setDate(long row, java.sql.Date value);
 
-    void addTimestamp(Timestamp value) throws SQLException;
+    public abstract void addDate(java.util.Date value);
 
-    void setTimestamp(long row, Timestamp value) throws SQLException;
+    public abstract void setDate(long row, java.util.Date value);
 
-    void addTimestamp(java.util.Date value) throws SQLException;
+    public abstract void addTimestamp(LocalDateTime value);
 
-    void setTimestamp(long row, java.util.Date value) throws SQLException;
+    public abstract void setTimestamp(long row, LocalDateTime value);
 
-    void addTimestamp(LocalDate value) throws SQLException;
+    public abstract void addTimestamp(Timestamp value);
 
-    void setTimestamp(long row, LocalDate value) throws SQLException;
+    public abstract void setTimestamp(long row, Timestamp value);
 
-    void addOffsetDateTime(OffsetDateTime value) throws SQLException;
+    public abstract void addTimestamp(java.util.Date value);
 
-    void setOffsetDateTime(long row, OffsetDateTime value) throws SQLException;
+    public abstract void setTimestamp(long row, java.util.Date value);
 
-    void addBigDecimal(BigDecimal value) throws SQLException;
+    public abstract void addTimestamp(LocalDate value);
 
-    void setBigDecimal(long row, BigDecimal value) throws SQLException;
+    public abstract void setTimestamp(long row, LocalDate value);
 
-    void addString(String value) throws SQLException;
+    public abstract void addOffsetDateTime(OffsetDateTime value);
 
-    void setString(long row, String value) throws SQLException;
+    public abstract void setOffsetDateTime(long row, OffsetDateTime value);
+
+    public abstract void addBigDecimal(BigDecimal value);
+
+    public abstract void setBigDecimal(long row, BigDecimal value);
+
+    public abstract void addString(String value);
+
+    public abstract void setString(long row, String value);
 }

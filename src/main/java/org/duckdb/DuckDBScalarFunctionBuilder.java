@@ -32,8 +32,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     private final List<Class<?>> parameterJavaTypes = new ArrayList<>();
     private boolean volatileFlag;
     private boolean specialHandlingFlag;
-    private boolean propagateNullsFlag = true;
-    private boolean callbackRequiresNullPropagation;
+    private boolean propagateNullsFlag;
     private boolean finalized;
 
     DuckDBScalarFunctionBuilder() throws SQLException {
@@ -95,6 +94,17 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         return addMappedParameterType(mappedType, parameterType);
     }
 
+    public DuckDBScalarFunctionBuilder withParameters(Class<?>... parameterTypes) throws SQLException {
+        ensureNotFinalized();
+        if (parameterTypes == null) {
+            throw new SQLException("Parameter types cannot be null");
+        }
+        for (Class<?> parameterType : parameterTypes) {
+            withParameter(parameterType);
+        }
+        return this;
+    }
+
     public DuckDBScalarFunctionBuilder withReturnType(DuckDBColumnType returnType) throws SQLException {
         ensureNotFinalized();
         if (returnType == null) {
@@ -119,24 +129,12 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         return setCallback(function, false);
     }
 
-    public DuckDBScalarFunctionBuilder propagateNulls(boolean propagateNulls) throws SQLException {
-        ensureNotFinalized();
-        if (!propagateNulls && callbackRequiresNullPropagation) {
-            throw new SQLException("Primitive scalar callbacks require propagateNulls(true)");
-        }
-        this.propagateNullsFlag = propagateNulls;
-        if (callback != null) {
-            duckdb_scalar_function_set_function(scalarFunctionRef,
-                                                new DuckDBScalarFunctionWrapper(callback, propagateNullsFlag));
-        }
-        return this;
-    }
-
     public DuckDBScalarFunctionBuilder withIntFunction(IntUnaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withIntFunction");
         ensureUnaryPrimitiveSignature(DuckDBColumnType.INTEGER, "withIntFunction");
         return setCallback(DuckDBScalarFunctionAdapter.intUnary(function), true);
@@ -147,6 +145,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withIntFunction");
         ensureBinaryPrimitiveSignature(DuckDBColumnType.INTEGER, "withIntFunction");
         return setCallback(DuckDBScalarFunctionAdapter.intBinary(function), true);
@@ -157,6 +156,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withDoubleFunction");
         ensureUnaryPrimitiveSignature(DuckDBColumnType.DOUBLE, "withDoubleFunction");
         return setCallback(DuckDBScalarFunctionAdapter.doubleUnary(function), true);
@@ -167,6 +167,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withDoubleFunction");
         ensureBinaryPrimitiveSignature(DuckDBColumnType.DOUBLE, "withDoubleFunction");
         return setCallback(DuckDBScalarFunctionAdapter.doubleBinary(function), true);
@@ -177,6 +178,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withLongFunction");
         ensureUnaryPrimitiveSignature(DuckDBColumnType.BIGINT, "withLongFunction");
         return setCallback(DuckDBScalarFunctionAdapter.longUnary(function), true);
@@ -187,6 +189,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (function == null) {
             throw new SQLException("Scalar function callback cannot be null");
         }
+        enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withLongFunction");
         ensureBinaryPrimitiveSignature(DuckDBColumnType.BIGINT, "withLongFunction");
         return setCallback(DuckDBScalarFunctionAdapter.longBinary(function), true);
@@ -405,19 +408,20 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     private DuckDBScalarFunctionBuilder setCallback(DuckDBScalarFunction function, boolean requiresNullPropagation)
         throws SQLException {
         this.callback = function;
-        this.callbackRequiresNullPropagation = requiresNullPropagation;
+        this.propagateNullsFlag = requiresNullPropagation;
         duckdb_scalar_function_set_function(scalarFunctionRef,
                                             new DuckDBScalarFunctionWrapper(function, propagateNullsFlag));
         return this;
     }
 
     private void ensurePrimitiveCallbackCompatible(String callbackMethodName) throws SQLException {
-        if (!propagateNullsFlag) {
-            throw new SQLException(callbackMethodName + " requires propagateNulls(true)");
-        }
         if (varArgType != null) {
             throw new SQLException(callbackMethodName + " does not support varargs; use withVarArgsFunction instead");
         }
+    }
+
+    private void enablePrimitiveNullPropagation() {
+        propagateNullsFlag = true;
     }
 
     private void ensureUnaryPrimitiveSignature(DuckDBColumnType expectedType, String callbackMethodName)

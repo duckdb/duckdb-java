@@ -61,6 +61,9 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 		return;
 	}
 	auto function_name = jbyteArray_to_string(env, name);
+	if (env->ExceptionCheck()) {
+		return;
+	}
 	duckdb_scalar_function_set_name(function, function_name.c_str());
 }
 
@@ -159,5 +162,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 		return;
 	}
 	auto error_message = jbyteArray_to_string(env, error);
+	if (env->ExceptionCheck()) {
+		return;
+	}
 	duckdb_scalar_function_set_error(function_info, error_message.c_str());
 }

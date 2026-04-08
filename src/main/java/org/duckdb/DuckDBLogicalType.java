@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static org.duckdb.DuckDBBindings.CAPIType.*;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.nio.ByteBuffer;
@@ -21,41 +22,45 @@ public final class DuckDBLogicalType implements AutoCloseable {
         }
         switch (type) {
         case BOOLEAN:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_BOOLEAN);
+            return createPrimitive(DUCKDB_TYPE_BOOLEAN);
         case TINYINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TINYINT);
+            return createPrimitive(DUCKDB_TYPE_TINYINT);
         case SMALLINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_SMALLINT);
+            return createPrimitive(DUCKDB_TYPE_SMALLINT);
         case INTEGER:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_INTEGER);
+            return createPrimitive(DUCKDB_TYPE_INTEGER);
         case BIGINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_BIGINT);
+            return createPrimitive(DUCKDB_TYPE_BIGINT);
+        case HUGEINT:
+            return createPrimitive(DUCKDB_TYPE_HUGEINT);
         case UTINYINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_UTINYINT);
+            return createPrimitive(DUCKDB_TYPE_UTINYINT);
         case USMALLINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_USMALLINT);
+            return createPrimitive(DUCKDB_TYPE_USMALLINT);
         case UINTEGER:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_UINTEGER);
+            return createPrimitive(DUCKDB_TYPE_UINTEGER);
         case UBIGINT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_UBIGINT);
+            return createPrimitive(DUCKDB_TYPE_UBIGINT);
+        case UHUGEINT:
+            return createPrimitive(DUCKDB_TYPE_UHUGEINT);
         case FLOAT:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_FLOAT);
+            return createPrimitive(DUCKDB_TYPE_FLOAT);
         case DOUBLE:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_DOUBLE);
+            return createPrimitive(DUCKDB_TYPE_DOUBLE);
         case VARCHAR:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_VARCHAR);
+            return createPrimitive(DUCKDB_TYPE_VARCHAR);
         case DATE:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_DATE);
+            return createPrimitive(DUCKDB_TYPE_DATE);
         case TIMESTAMP_S:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TIMESTAMP_S);
+            return createPrimitive(DUCKDB_TYPE_TIMESTAMP_S);
         case TIMESTAMP_MS:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TIMESTAMP_MS);
+            return createPrimitive(DUCKDB_TYPE_TIMESTAMP_MS);
         case TIMESTAMP:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TIMESTAMP);
+            return createPrimitive(DUCKDB_TYPE_TIMESTAMP);
         case TIMESTAMP_NS:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TIMESTAMP_NS);
+            return createPrimitive(DUCKDB_TYPE_TIMESTAMP_NS);
         case TIMESTAMP_WITH_TIME_ZONE:
-            return createPrimitive(DuckDBBindings.CAPIType.DUCKDB_TYPE_TIMESTAMP_TZ);
+            return createPrimitive(DUCKDB_TYPE_TIMESTAMP_TZ);
         default:
             throw new SQLException("Unsupported logical type for scalar UDF registration: " + type);
         }

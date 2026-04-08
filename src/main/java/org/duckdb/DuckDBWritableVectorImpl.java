@@ -7,8 +7,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.LongBuffer;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,7 +15,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 
-final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
+final class DuckDBWritableVectorImpl extends DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
     private static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
@@ -28,15 +26,20 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     private ByteBuffer validity;
     private long appendIndex;
 
-    DuckDBWritableVectorImpl(ByteBuffer vectorRef, long rowCount) throws SQLException {
+    DuckDBWritableVectorImpl(ByteBuffer vectorRef, long rowCount) {
         if (vectorRef == null) {
-            throw new SQLException("Invalid vector reference");
+            throw new DuckDBFunctionException("Invalid vector reference");
         }
         this.vectorRef = vectorRef;
         this.rowCount = rowCount;
-        this.typeInfo = DuckDBVectorTypeInfo.fromVector(vectorRef);
-        this.data = duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes));
-        this.validity = duckdb_vector_get_validity(vectorRef, rowCount);
+        try {
+            this.typeInfo = DuckDBVectorTypeInfo.fromVector(vectorRef);
+        } catch (java.sql.SQLException exception) {
+            throw new DuckDBFunctionException("Failed to resolve vector type info", exception);
+        }
+        this.data = duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
+        ByteBuffer validityBuffer = duckdb_vector_get_validity(vectorRef, rowCount);
+        this.validity = validityBuffer == null ? null : validityBuffer.order(NATIVE_ORDER);
     }
 
     @Override
@@ -50,12 +53,12 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     @Override
-    public void addNull() throws SQLException {
+    public void addNull() {
         setNull(nextAppendRow());
     }
 
     @Override
-    public void setNull(long row) throws SQLException {
+    public void setNull(long row) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
@@ -66,247 +69,306 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     @Override
-    public void addBoolean(boolean value) throws SQLException {
+    public void addBoolean(boolean value) {
         setBoolean(nextAppendRow(), value);
     }
 
     @Override
-    public void setBoolean(long row, boolean value) throws SQLException {
+    public void setBoolean(long row, boolean value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.BOOLEAN);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         data.put(checkedRowIndex(row), value ? (byte) 1 : (byte) 0);
         markValid(row);
     }
 
     @Override
-    public void addByte(byte value) throws SQLException {
+    public void addByte(byte value) {
         setByte(nextAppendRow(), value);
     }
 
     @Override
-    public void setByte(long row, byte value) throws SQLException {
+    public void setByte(long row, byte value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.TINYINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         data.put(checkedRowIndex(row), value);
         markValid(row);
     }
 
     @Override
-    public void addShort(short value) throws SQLException {
+    public void addShort(short value) {
         setShort(nextAppendRow(), value);
     }
 
     @Override
-    public void setShort(long row, short value) throws SQLException {
+    public void setShort(long row, short value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.SMALLINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
-        data.order(NATIVE_ORDER).putShort(checkedByteOffset(row, Short.BYTES), value);
+        data.putShort(checkedByteOffset(row, Short.BYTES), value);
         markValid(row);
     }
 
     @Override
-    public void addUint8(int value) throws SQLException {
+    public void addUint8(int value) {
         setUint8(nextAppendRow(), value);
     }
 
     @Override
-    public void setUint8(long row, int value) throws SQLException {
+    public void setUint8(long row, int value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.UTINYINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         String rangeError = unsignedRangeErrorMessage("UTINYINT", value, 0xFFL);
         if (rangeError != null) {
-            throw new SQLException(rangeError);
+            throw new DuckDBFunctionException(rangeError);
         }
         data.put(checkedRowIndex(row), (byte) value);
         markValid(row);
     }
 
     @Override
-    public void addUint16(int value) throws SQLException {
+    public void addUint16(int value) {
         setUint16(nextAppendRow(), value);
     }
 
     @Override
-    public void setUint16(long row, int value) throws SQLException {
+    public void setUint16(long row, int value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.USMALLINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         String rangeError = unsignedRangeErrorMessage("USMALLINT", value, 0xFFFFL);
         if (rangeError != null) {
-            throw new SQLException(rangeError);
+            throw new DuckDBFunctionException(rangeError);
         }
-        data.order(NATIVE_ORDER).putShort(checkedByteOffset(row, Short.BYTES), (short) value);
+        data.putShort(checkedByteOffset(row, Short.BYTES), (short) value);
         markValid(row);
     }
 
     @Override
-    public void addInt(int value) throws SQLException {
+    public void addInt(int value) {
         setInt(nextAppendRow(), value);
     }
 
     @Override
-    public void setInt(long row, int value) throws SQLException {
+    public void setInt(long row, int value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.INTEGER);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
-        data.order(NATIVE_ORDER).putInt(checkedByteOffset(row, Integer.BYTES), value);
+        data.putInt(checkedByteOffset(row, Integer.BYTES), value);
         markValid(row);
     }
 
     @Override
-    public void addUint32(long value) throws SQLException {
+    public void addUint32(long value) {
         setUint32(nextAppendRow(), value);
     }
 
     @Override
-    public void setUint32(long row, long value) throws SQLException {
+    public void setUint32(long row, long value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.UINTEGER);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         String rangeError = unsignedRangeErrorMessage("UINTEGER", value, 0xFFFFFFFFL);
         if (rangeError != null) {
-            throw new SQLException(rangeError);
+            throw new DuckDBFunctionException(rangeError);
         }
-        data.order(NATIVE_ORDER).putInt(checkedByteOffset(row, Integer.BYTES), (int) value);
+        data.putInt(checkedByteOffset(row, Integer.BYTES), (int) value);
         markValid(row);
     }
 
     @Override
-    public void addLong(long value) throws SQLException {
+    public void addLong(long value) {
         setLong(nextAppendRow(), value);
     }
 
     @Override
-    public void setLong(long row, long value) throws SQLException {
+    public void setLong(long row, long value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.BIGINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
-        data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), value);
+        data.putLong(checkedByteOffset(row, Long.BYTES), value);
         markValid(row);
     }
 
     @Override
-    public void addUint64(BigInteger value) throws SQLException {
+    public void addHugeInt(BigInteger value) {
+        setHugeInt(nextAppendRow(), value);
+    }
+
+    @Override
+    public void setHugeInt(long row, BigInteger value) {
+        String rowError = rowIndexErrorMessage(row);
+        if (rowError != null) {
+            throw new IndexOutOfBoundsException(rowError);
+        }
+        String typeError = typeMismatchMessage(DuckDBColumnType.HUGEINT);
+        if (typeError != null) {
+            throw new DuckDBFunctionException(typeError);
+        }
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        DuckDBHugeInt hugeInt;
+        try {
+            hugeInt = new DuckDBHugeInt(value);
+        } catch (java.sql.SQLException exception) {
+            throw new DuckDBFunctionException("Value out of range for HUGEINT: " + value, exception);
+        }
+        int offset = checkedByteOffset(row, typeInfo.widthBytes);
+        data.putLong(offset, hugeInt.lower());
+        data.putLong(offset + Long.BYTES, hugeInt.upper());
+        markValid(row);
+    }
+
+    @Override
+    public void addUHugeInt(BigInteger value) {
+        setUHugeInt(nextAppendRow(), value);
+    }
+
+    @Override
+    public void setUHugeInt(long row, BigInteger value) {
+        String rowError = rowIndexErrorMessage(row);
+        if (rowError != null) {
+            throw new IndexOutOfBoundsException(rowError);
+        }
+        String typeError = typeMismatchMessage(DuckDBColumnType.UHUGEINT);
+        if (typeError != null) {
+            throw new DuckDBFunctionException(typeError);
+        }
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        if (value.signum() < 0 || value.compareTo(DuckDBHugeInt.UHUGE_INT_MAX) > 0) {
+            throw new DuckDBFunctionException("Value out of range for UHUGEINT: " + value);
+        }
+        int offset = checkedByteOffset(row, typeInfo.widthBytes);
+        data.putLong(offset, value.longValue());
+        data.putLong(offset + Long.BYTES, value.shiftRight(Long.SIZE).longValue());
+        markValid(row);
+    }
+
+    @Override
+    public void addUint64(BigInteger value) {
         setUint64(nextAppendRow(), value);
     }
 
     @Override
-    public void setUint64(long row, BigInteger value) throws SQLException {
+    public void setUint64(long row, BigInteger value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.UBIGINT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
             return;
         }
         if (value.signum() < 0 || value.compareTo(UINT64_MAX) > 0) {
-            throw new SQLException("Value out of range for UBIGINT: " + value);
+            throw new DuckDBFunctionException("Value out of range for UBIGINT: " + value);
         }
-        data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), value.longValue());
+        data.putLong(checkedByteOffset(row, Long.BYTES), value.longValue());
         markValid(row);
     }
 
     @Override
-    public void addFloat(float value) throws SQLException {
+    public void addFloat(float value) {
         setFloat(nextAppendRow(), value);
     }
 
     @Override
-    public void setFloat(long row, float value) throws SQLException {
+    public void setFloat(long row, float value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.FLOAT);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
-        data.order(NATIVE_ORDER).putFloat(checkedByteOffset(row, Float.BYTES), value);
+        data.putFloat(checkedByteOffset(row, Float.BYTES), value);
         markValid(row);
     }
 
     @Override
-    public void addDouble(double value) throws SQLException {
+    public void addDouble(double value) {
         setDouble(nextAppendRow(), value);
     }
 
     @Override
-    public void setDouble(long row, double value) throws SQLException {
+    public void setDouble(long row, double value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.DOUBLE);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
-        data.order(NATIVE_ORDER).putDouble(checkedByteOffset(row, Double.BYTES), value);
+        data.putDouble(checkedByteOffset(row, Double.BYTES), value);
         markValid(row);
     }
 
     @Override
-    public void addDate(LocalDate value) throws SQLException {
+    public void addDate(LocalDate value) {
         setDate(nextAppendRow(), value);
     }
 
     @Override
-    public void setDate(long row, LocalDate value) throws SQLException {
+    public void setDate(long row, LocalDate value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.DATE);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
@@ -314,29 +376,29 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         }
         long days = value.toEpochDay();
         if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
-            throw new SQLException("Value out of range for DATE: " + value);
+            throw new DuckDBFunctionException("Value out of range for DATE: " + value);
         }
-        data.order(NATIVE_ORDER).putInt(checkedByteOffset(row, Integer.BYTES), (int) days);
+        data.putInt(checkedByteOffset(row, Integer.BYTES), (int) days);
         markValid(row);
     }
 
     @Override
-    public void addDate(java.sql.Date value) throws SQLException {
+    public void addDate(java.sql.Date value) {
         setDate(nextAppendRow(), value);
     }
 
     @Override
-    public void setDate(long row, java.sql.Date value) throws SQLException {
+    public void setDate(long row, java.sql.Date value) {
         setDate(row, value == null ? null : value.toLocalDate());
     }
 
     @Override
-    public void addDate(java.util.Date value) throws SQLException {
+    public void addDate(java.util.Date value) {
         setDate(nextAppendRow(), value);
     }
 
     @Override
-    public void setDate(long row, java.util.Date value) throws SQLException {
+    public void setDate(long row, java.util.Date value) {
         if (value == null) {
             setNull(row);
             return;
@@ -350,35 +412,35 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     @Override
-    public void addTimestamp(LocalDateTime value) throws SQLException {
+    public void addTimestamp(LocalDateTime value) {
         setTimestamp(nextAppendRow(), value);
     }
 
     @Override
-    public void setTimestamp(long row, LocalDateTime value) throws SQLException {
+    public void setTimestamp(long row, LocalDateTime value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = timestampTypeMismatchMessage(false);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
             return;
         }
-        data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), encodeLocalDateTime(value));
+        data.putLong(checkedByteOffset(row, Long.BYTES), encodeLocalDateTime(value));
         markValid(row);
     }
 
     @Override
-    public void addTimestamp(Timestamp value) throws SQLException {
+    public void addTimestamp(Timestamp value) {
         setTimestamp(nextAppendRow(), value);
     }
 
     @Override
-    public void setTimestamp(long row, Timestamp value) throws SQLException {
+    public void setTimestamp(long row, Timestamp value) {
         if (value == null) {
             setNull(row);
             return;
@@ -388,7 +450,7 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
             if (rowError != null) {
                 throw new IndexOutOfBoundsException(rowError);
             }
-            data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), encodeInstant(value.toInstant()));
+            data.putLong(checkedByteOffset(row, Long.BYTES), encodeInstant(value.toInstant()));
             markValid(row);
             return;
         }
@@ -396,19 +458,19 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     @Override
-    public void addTimestamp(java.util.Date value) throws SQLException {
+    public void addTimestamp(java.util.Date value) {
         setTimestamp(nextAppendRow(), value);
     }
 
     @Override
-    public void setTimestamp(long row, java.util.Date value) throws SQLException {
+    public void setTimestamp(long row, java.util.Date value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = timestampTypeMismatchMessage(false);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
@@ -418,17 +480,17 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
             setTimestamp(row, (Timestamp) value);
             return;
         }
-        data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), encodeJavaUtilDate(value));
+        data.putLong(checkedByteOffset(row, Long.BYTES), encodeJavaUtilDate(value));
         markValid(row);
     }
 
     @Override
-    public void addTimestamp(LocalDate value) throws SQLException {
+    public void addTimestamp(LocalDate value) {
         setTimestamp(nextAppendRow(), value);
     }
 
     @Override
-    public void setTimestamp(long row, LocalDate value) throws SQLException {
+    public void setTimestamp(long row, LocalDate value) {
         if (value == null) {
             setNull(row);
             return;
@@ -439,7 +501,7 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
                 throw new IndexOutOfBoundsException(rowError);
             }
             Instant instant = value.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            data.order(NATIVE_ORDER).putLong(checkedByteOffset(row, Long.BYTES), encodeInstant(instant));
+            data.putLong(checkedByteOffset(row, Long.BYTES), encodeInstant(instant));
             markValid(row);
             return;
         }
@@ -447,45 +509,43 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     @Override
-    public void addOffsetDateTime(OffsetDateTime value) throws SQLException {
+    public void addOffsetDateTime(OffsetDateTime value) {
         setOffsetDateTime(nextAppendRow(), value);
     }
 
     @Override
-    public void setOffsetDateTime(long row, OffsetDateTime value) throws SQLException {
+    public void setOffsetDateTime(long row, OffsetDateTime value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = timestampTypeMismatchMessage(true);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
             return;
         }
-        data.order(NATIVE_ORDER)
-            .putLong(
-                checkedByteOffset(row, Long.BYTES),
-                DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+        data.putLong(checkedByteOffset(row, Long.BYTES),
+                     DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
         markValid(row);
     }
 
     @Override
-    public void addBigDecimal(BigDecimal value) throws SQLException {
+    public void addBigDecimal(BigDecimal value) {
         setBigDecimal(nextAppendRow(), value);
     }
 
     @Override
-    public void setBigDecimal(long row, BigDecimal value) throws SQLException {
+    public void setBigDecimal(long row, BigDecimal value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.DECIMAL);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
@@ -503,56 +563,52 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
             try {
-                data.order(NATIVE_ORDER)
-                    .putShort(checkedByteOffset(row, Short.BYTES), scaled.unscaledValue().shortValueExact());
+                data.putShort(checkedByteOffset(row, Short.BYTES), scaled.unscaledValue().shortValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_INTEGER:
             try {
-                data.order(NATIVE_ORDER)
-                    .putInt(checkedByteOffset(row, Integer.BYTES), scaled.unscaledValue().intValueExact());
+                data.putInt(checkedByteOffset(row, Integer.BYTES), scaled.unscaledValue().intValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_BIGINT:
             try {
-                data.order(NATIVE_ORDER)
-                    .putLong(checkedByteOffset(row, Long.BYTES), scaled.unscaledValue().longValueExact());
+                data.putLong(checkedByteOffset(row, Long.BYTES), scaled.unscaledValue().longValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_HUGEINT: {
             BigInteger unscaled = scaled.unscaledValue();
-            ByteBuffer slice = data.duplicate().order(NATIVE_ORDER);
-            slice.position(checkedByteOffset(row, typeInfo.widthBytes));
-            slice.putLong(unscaled.longValue());
-            slice.putLong(unscaled.shiftRight(Long.SIZE).longValue());
+            int offset = checkedByteOffset(row, typeInfo.widthBytes);
+            data.putLong(offset, unscaled.longValue());
+            data.putLong(offset + Long.BYTES, unscaled.shiftRight(Long.SIZE).longValue());
             break;
         }
         default:
-            throw new SQLException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
+            throw new DuckDBFunctionException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
         }
         markValid(row);
     }
 
     @Override
-    public void addString(String value) throws SQLException {
+    public void addString(String value) {
         setString(nextAppendRow(), value);
     }
 
     @Override
-    public void setString(long row, String value) throws SQLException {
+    public void setString(long row, String value) {
         String rowError = rowIndexErrorMessage(row);
         if (rowError != null) {
             throw new IndexOutOfBoundsException(rowError);
         }
         String typeError = typeMismatchMessage(DuckDBColumnType.VARCHAR);
         if (typeError != null) {
-            throw new SQLException(typeError);
+            throw new DuckDBFunctionException(typeError);
         }
         if (value == null) {
             setNull(row);
@@ -566,15 +622,16 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         return vectorRef;
     }
 
-    private void ensureValidity() throws SQLException {
+    private void ensureValidity() {
         if (validity != null) {
             return;
         }
         duckdb_vector_ensure_validity_writable(vectorRef);
         validity = duckdb_vector_get_validity(vectorRef, rowCount);
         if (validity == null) {
-            throw new SQLException("Cannot initialize vector validity");
+            throw new DuckDBFunctionException("Cannot initialize vector validity");
         }
+        validity = validity.order(NATIVE_ORDER);
     }
 
     private void markValid(long row) {
@@ -587,17 +644,16 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
     }
 
     private void setRowValidity(long row, boolean valid) {
-        LongBuffer entries = validity.asLongBuffer();
-        int entryIndex = Math.toIntExact(row / Long.SIZE);
+        int entryOffset = Math.toIntExact(Math.multiplyExact(row / Long.SIZE, (long) Long.BYTES));
         long bitIndex = row % Long.SIZE;
         long mask = 1L << bitIndex;
-        long entry = entries.get(entryIndex);
+        long entry = validity.getLong(entryOffset);
         if (valid) {
             entry |= mask;
         } else {
             entry &= ~mask;
         }
-        entries.put(entryIndex, entry);
+        validity.putLong(entryOffset, entry);
     }
 
     private String typeMismatchMessage(DuckDBColumnType expected) {
@@ -633,7 +689,7 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         }
     }
 
-    private long encodeLocalDateTime(LocalDateTime value) throws SQLException {
+    private long encodeLocalDateTime(LocalDateTime value) {
         Instant instant;
         if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
             instant = value.atZone(ZoneId.systemDefault()).toInstant();
@@ -643,11 +699,11 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         return encodeInstant(instant);
     }
 
-    private long encodeJavaUtilDate(java.util.Date value) throws SQLException {
+    private long encodeJavaUtilDate(java.util.Date value) {
         return encodeInstant(Instant.ofEpochMilli(value.getTime()));
     }
 
-    private long encodeInstant(Instant instant) throws SQLException {
+    private long encodeInstant(Instant instant) {
         long epochSeconds = instant.getEpochSecond();
         int nano = instant.getNano();
         switch (typeInfo.capiType) {
@@ -661,7 +717,7 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         case DUCKDB_TYPE_TIMESTAMP_NS:
             return Math.addExact(Math.multiplyExact(epochSeconds, 1_000_000_000L), nano);
         default:
-            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+            throw new DuckDBFunctionException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
         }
     }
 
@@ -672,12 +728,12 @@ final class DuckDBWritableVectorImpl implements DuckDBWritableVector {
         return null;
     }
 
-    private SQLException decimalOutOfRange(BigDecimal value) {
-        return new SQLException("Value out of range for " + decimalTypeName() + ": " + value);
+    private DuckDBFunctionException decimalOutOfRange(BigDecimal value) {
+        return new DuckDBFunctionException("Value out of range for " + decimalTypeName() + ": " + value);
     }
 
-    private SQLException decimalOutOfRange(BigDecimal value, ArithmeticException cause) {
-        SQLException exception = decimalOutOfRange(value);
+    private DuckDBFunctionException decimalOutOfRange(BigDecimal value, ArithmeticException cause) {
+        DuckDBFunctionException exception = decimalOutOfRange(value);
         exception.initCause(cause);
         return exception;
     }

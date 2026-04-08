@@ -48,8 +48,12 @@ final class DuckDBVectorTypeInfo {
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.UINTEGER, capiType, capiType, 4, null);
             case DUCKDB_TYPE_BIGINT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.BIGINT, capiType, capiType, 8, null);
+            case DUCKDB_TYPE_HUGEINT:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.HUGEINT, capiType, capiType, 16, null);
             case DUCKDB_TYPE_UBIGINT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.UBIGINT, capiType, capiType, 8, null);
+            case DUCKDB_TYPE_UHUGEINT:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.UHUGEINT, capiType, capiType, 16, null);
             case DUCKDB_TYPE_FLOAT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.FLOAT, capiType, capiType, 4, null);
             case DUCKDB_TYPE_DOUBLE:

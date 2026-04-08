@@ -3,17 +3,21 @@ package org.duckdb;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.nio.ByteBuffer;
-import java.sql.SQLException;
 
+/**
+ * Reader over callback input data chunks.
+ *
+ * <p>Column index violations throw {@link IndexOutOfBoundsException}.
+ */
 public final class DuckDBDataChunkReader {
     private final ByteBuffer chunkRef;
     private final long rowCount;
     private final long columnCount;
     private final DuckDBReadableVector[] vectors;
 
-    DuckDBDataChunkReader(ByteBuffer chunkRef) throws SQLException {
+    DuckDBDataChunkReader(ByteBuffer chunkRef) {
         if (chunkRef == null) {
-            throw new SQLException("Invalid data chunk reference");
+            throw new DuckDBFunctionException("Invalid data chunk reference");
         }
         this.chunkRef = chunkRef;
         this.rowCount = duckdb_data_chunk_get_size(chunkRef);
@@ -29,7 +33,7 @@ public final class DuckDBDataChunkReader {
         return columnCount;
     }
 
-    public DuckDBReadableVector vector(long columnIndex) throws SQLException {
+    public DuckDBReadableVector vector(long columnIndex) {
         if (columnIndex < 0 || columnIndex >= columnCount) {
             throw new IndexOutOfBoundsException("Column index out of bounds: " + columnIndex);
         }

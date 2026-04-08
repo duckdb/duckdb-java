@@ -3,55 +3,84 @@ package org.duckdb;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.stream.LongStream;
 
-public interface DuckDBReadableVector {
-    DuckDBColumnType getType();
+/**
+ * Read-only scalar callback view over a DuckDB vector.
+ *
+ * <p>Implementations throw {@link DuckDBFunctionException} for callback-time type/value errors.
+ * Invalid row indexes throw {@link IndexOutOfBoundsException}.
+ */
+public abstract class DuckDBReadableVector {
+    public abstract DuckDBColumnType getType();
 
-    long rowCount();
+    public abstract long rowCount();
 
-    LongStream rowIndexStream();
+    public abstract LongStream rowIndexStream();
 
-    boolean isNull(long row);
+    public abstract boolean isNull(long row);
 
-    boolean getBoolean(long row) throws SQLException;
+    public abstract boolean getBoolean(long row);
 
-    byte getByte(long row) throws SQLException;
+    public abstract boolean getBoolean(long row, boolean defaultVal);
 
-    short getShort(long row) throws SQLException;
+    public abstract byte getByte(long row);
 
-    short getUint8(long row) throws SQLException;
+    public abstract byte getByte(long row, byte defaultVal);
 
-    int getUint16(long row) throws SQLException;
+    public abstract short getShort(long row);
 
-    int getInt(long row) throws SQLException;
+    public abstract short getShort(long row, short defaultVal);
 
-    long getUint32(long row) throws SQLException;
+    public abstract short getUint8(long row);
 
-    long getLong(long row) throws SQLException;
+    public abstract short getUint8(long row, short defaultVal);
 
-    BigInteger getUint64(long row) throws SQLException;
+    public abstract int getUint16(long row);
 
-    float getFloat(long row) throws SQLException;
+    public abstract int getUint16(long row, int defaultVal);
 
-    double getDouble(long row) throws SQLException;
+    public abstract int getInt(long row);
 
-    LocalDate getLocalDate(long row) throws SQLException;
+    public abstract int getInt(long row, int defaultVal);
 
-    Date getDate(long row) throws SQLException;
+    public abstract long getUint32(long row);
 
-    LocalDateTime getLocalDateTime(long row) throws SQLException;
+    public abstract long getUint32(long row, long defaultVal);
 
-    Timestamp getTimestamp(long row) throws SQLException;
+    public abstract long getLong(long row);
 
-    OffsetDateTime getOffsetDateTime(long row) throws SQLException;
+    public abstract long getLong(long row, long defaultVal);
 
-    BigDecimal getBigDecimal(long row) throws SQLException;
+    public abstract BigInteger getHugeInt(long row);
 
-    String getString(long row) throws SQLException;
+    public abstract BigInteger getUHugeInt(long row);
+
+    public abstract BigInteger getUint64(long row);
+
+    public abstract float getFloat(long row);
+
+    public abstract float getFloat(long row, float defaultVal);
+
+    public abstract double getDouble(long row);
+
+    public abstract double getDouble(long row, double defaultVal);
+
+    public abstract LocalDate getLocalDate(long row);
+
+    public abstract Date getDate(long row);
+
+    public abstract LocalDateTime getLocalDateTime(long row);
+
+    public abstract Timestamp getTimestamp(long row);
+
+    public abstract OffsetDateTime getOffsetDateTime(long row);
+
+    public abstract BigDecimal getBigDecimal(long row);
+
+    public abstract String getString(long row);
 }
