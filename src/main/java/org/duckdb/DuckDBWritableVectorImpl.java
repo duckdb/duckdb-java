@@ -37,7 +37,8 @@ final class DuckDBWritableVectorImpl extends DuckDBWritableVector {
         } catch (java.sql.SQLException exception) {
             throw new DuckDBFunctionException("Failed to resolve vector type info", exception);
         }
-        this.data = duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
+        this.data =
+            duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
         ByteBuffer validityBuffer = duckdb_vector_get_validity(vectorRef, rowCount);
         this.validity = validityBuffer == null ? null : validityBuffer.order(NATIVE_ORDER);
     }
@@ -527,8 +528,9 @@ final class DuckDBWritableVectorImpl extends DuckDBWritableVector {
             setNull(row);
             return;
         }
-        data.putLong(checkedByteOffset(row, Long.BYTES),
-                     DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+        data.putLong(
+            checkedByteOffset(row, Long.BYTES),
+            DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
         markValid(row);
     }
 

@@ -190,8 +190,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setInt(row, function.applyAsInt(in.getInt(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row, exception);
                 }
             }
         };
@@ -214,8 +213,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setInt(row, function.applyAsInt(left.getInt(row), right.getInt(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row, exception);
                 }
             }
         };
@@ -237,8 +235,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setDouble(row, function.applyAsDouble(in.getDouble(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row, exception);
                 }
             }
         };
@@ -261,8 +258,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setDouble(row, function.applyAsDouble(left.getDouble(row), right.getDouble(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row, exception);
                 }
             }
         };
@@ -284,8 +280,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setLong(row, function.applyAsLong(in.getLong(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row, exception);
                 }
             }
         };
@@ -308,8 +303,7 @@ final class DuckDBScalarFunctionAdapter {
                         out.setLong(row, function.applyAsLong(left.getLong(row), right.getLong(row)));
                     }
                 } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row,
-                                                      exception);
+                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row, exception);
                 }
             }
         };

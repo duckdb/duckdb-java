@@ -1,7 +1,7 @@
 package org.duckdb;
 
-import static org.duckdb.DuckDBBindings.CAPIType.*;
 import static org.duckdb.DuckDBBindings.*;
+import static org.duckdb.DuckDBBindings.CAPIType.*;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;

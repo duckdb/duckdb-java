@@ -34,9 +34,7 @@ public class TestBindings {
 
         DuckDBReadableVector readable = new DuckDBReadableVectorImpl(inputVec, 3);
         DuckDBWritableVector output = new DuckDBWritableVectorImpl(outputVec, 3);
-        readable.rowIndexStream().forEachOrdered(row -> {
-            output.setInt(row, readable.getInt(row) + 1);
-        });
+        readable.rowIndexStream().forEachOrdered(row -> { output.setInt(row, readable.getInt(row) + 1); });
 
         DuckDBReadableVector result = new DuckDBReadableVectorImpl(outputVec, 3);
         assertEquals(result.getInt(0), 2);

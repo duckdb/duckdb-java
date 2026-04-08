@@ -38,7 +38,8 @@ final class DuckDBReadableVectorImpl extends DuckDBReadableVector {
         } catch (java.sql.SQLException exception) {
             throw new DuckDBFunctionException("Failed to resolve vector type info", exception);
         }
-        this.data = duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
+        this.data =
+            duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
         ByteBuffer validityBuffer = duckdb_vector_get_validity(vectorRef, rowCount);
         this.validity = validityBuffer == null ? null : validityBuffer.order(NATIVE_ORDER);
     }
@@ -320,14 +321,11 @@ final class DuckDBReadableVectorImpl extends DuckDBReadableVector {
         }
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
-            return BigDecimal.valueOf(data.getShort(checkedByteOffset(row, Short.BYTES)),
-                                      typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.getShort(checkedByteOffset(row, Short.BYTES)), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_INTEGER:
-            return BigDecimal.valueOf(data.getInt(checkedByteOffset(row, Integer.BYTES)),
-                                      typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.getInt(checkedByteOffset(row, Integer.BYTES)), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_BIGINT:
-            return BigDecimal.valueOf(data.getLong(checkedByteOffset(row, Long.BYTES)),
-                                      typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.getLong(checkedByteOffset(row, Long.BYTES)), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_HUGEINT: {
             int offset = checkedByteOffset(row, typeInfo.widthBytes);
             long lower = data.getLong(offset);

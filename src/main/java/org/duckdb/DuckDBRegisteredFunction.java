@@ -89,9 +89,10 @@ public final class DuckDBRegisteredFunction {
                                        DuckDBColumnType returnColumnType, DuckDBScalarFunction function,
                                        DuckDBLogicalType varArgType, boolean volatileFlag, boolean specialHandlingFlag,
                                        boolean propagateNullsFlag) {
-        return new DuckDBRegisteredFunction(
-            name, DuckDBFunctions.DuckDBFunctionKind.SCALAR, Collections.unmodifiableList(new ArrayList<>(parameterTypes)),
-            Collections.unmodifiableList(new ArrayList<>(parameterColumnTypes)), returnType, returnColumnType, function,
-            varArgType, volatileFlag, specialHandlingFlag, propagateNullsFlag);
+        return new DuckDBRegisteredFunction(name, DuckDBFunctions.DuckDBFunctionKind.SCALAR,
+                                            Collections.unmodifiableList(new ArrayList<>(parameterTypes)),
+                                            Collections.unmodifiableList(new ArrayList<>(parameterColumnTypes)),
+                                            returnType, returnColumnType, function, varArgType, volatileFlag,
+                                            specialHandlingFlag, propagateNullsFlag);
     }
 }

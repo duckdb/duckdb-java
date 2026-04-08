@@ -468,5 +468,4 @@ public final class DuckDBScalarRow {
     private DuckDBFunctionException writeFailure(String type, DuckDBFunctionException exception) {
         return new DuckDBFunctionException("Failed to write " + type + " to output row " + rowIndex, exception);
     }
-
 }

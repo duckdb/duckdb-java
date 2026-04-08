@@ -1007,22 +1007,20 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_builder_java_function_hugeint_class_mapping() throws Exception {
-        Function<BigInteger, BigInteger> addHugeInt =
-            value -> null != value ? value.add(BigInteger.ONE) : null;
-        assertUnaryJavaFunction(
-            "java_add_hugeint_function", BigInteger.class, BigInteger.class, addHugeInt,
-            "SELECT java_add_hugeint_function(v) FROM (VALUES (CAST('41' AS HUGEINT)), (NULL), "
-                + "(CAST('170141183460469231731687303715884105726' AS HUGEINT))) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class),
-                             new BigInteger("170141183460469231731687303715884105727"));
-                assertFalse(rs.next());
-            });
+        Function<BigInteger, BigInteger> addHugeInt = value -> null != value ? value.add(BigInteger.ONE) : null;
+        assertUnaryJavaFunction("java_add_hugeint_function", BigInteger.class, BigInteger.class, addHugeInt,
+                                "SELECT java_add_hugeint_function(v) FROM (VALUES (CAST('41' AS HUGEINT)), (NULL), "
+                                    + "(CAST('170141183460469231731687303715884105726' AS HUGEINT))) t(v)",
+                                rs -> {
+                                    assertTrue(rs.next());
+                                    assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
+                                    assertTrue(rs.next());
+                                    assertNullRow(rs);
+                                    assertTrue(rs.next());
+                                    assertEquals(rs.getObject(1, BigInteger.class),
+                                                 new BigInteger("170141183460469231731687303715884105727"));
+                                    assertFalse(rs.next());
+                                });
     }
 
     public static void test_register_scalar_function_builder_java_function_decimal() throws Exception {
@@ -1255,7 +1253,8 @@ public class TestScalarFunctions {
                         try {
                             DuckDBReadableVector booleanVector = ctx.input(0);
                             DuckDBReadableVector intVector = ctx.input(5);
-                            assertThrows(() -> { booleanVector.getBoolean(row.index()); }, DuckDBFunctionException.class);
+                            assertThrows(
+                                () -> { booleanVector.getBoolean(row.index()); }, DuckDBFunctionException.class);
                             assertTrue(booleanVector.getBoolean(row.index(), true));
                             assertThrows(() -> { intVector.getInt(row.index()); }, DuckDBFunctionException.class);
                             assertEquals(intVector.getInt(row.index(), 42), 42);
@@ -1268,8 +1267,7 @@ public class TestScalarFunctions {
                                 assertTrue(exception.getMessage().contains("Failed to read BOOLEAN"));
                                 assertNotNull(exception.getCause());
                                 assertTrue(exception.getCause() instanceof DuckDBFunctionException);
-                                assertTrue(
-                                    exception.getCause().getMessage().contains("Primitive value for BOOLEAN"));
+                                assertTrue(exception.getCause().getMessage().contains("Primitive value for BOOLEAN"));
                             }
                             assertTrue(row.getBoolean(0, true));
                             assertThrows(() -> { row.getByte(1); }, DuckDBFunctionException.class);
@@ -1576,26 +1574,25 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_uhugeint() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_uhugeint", DuckDBColumnType.UHUGEINT, DuckDBColumnType.UHUGEINT,
-            ctx
-            -> {
-                BigInteger increment = BigInteger.ONE;
-                ctx.propagateNulls(true).stream().forEachOrdered(
-                    row -> row.setUHugeInt(row.getUHugeInt(0).add(increment)));
-            },
-            "SELECT java_add_uhugeint(v) FROM (VALUES (CAST('41' AS UHUGEINT)), (NULL), "
-                + "(CAST('340282366920938463463374607431768211454' AS UHUGEINT))) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class),
-                             new BigInteger("340282366920938463463374607431768211455"));
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_uhugeint", DuckDBColumnType.UHUGEINT, DuckDBColumnType.UHUGEINT,
+                                  ctx
+                                  -> {
+                                      BigInteger increment = BigInteger.ONE;
+                                      ctx.propagateNulls(true).stream().forEachOrdered(
+                                          row -> row.setUHugeInt(row.getUHugeInt(0).add(increment)));
+                                  },
+                                  "SELECT java_add_uhugeint(v) FROM (VALUES (CAST('41' AS UHUGEINT)), (NULL), "
+                                      + "(CAST('340282366920938463463374607431768211454' AS UHUGEINT))) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, BigInteger.class),
+                                                   new BigInteger("340282366920938463463374607431768211455"));
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_builder_java_function_uhugeint() throws Exception {
@@ -1605,15 +1602,12 @@ public class TestScalarFunctions {
                 .withName("java_add_uhugeint_function")
                 .withParameter(DuckDBColumnType.UHUGEINT)
                 .withReturnType(DuckDBColumnType.UHUGEINT)
-                .withFunction(
-                    (BigInteger value)
-                    -> null != value ? value.add(BigInteger.ONE) : null)
+                .withFunction((BigInteger value) -> null != value ? value.add(BigInteger.ONE) : null)
                 .register(conn);
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT java_add_uhugeint_function(v) FROM (VALUES (CAST('41' AS UHUGEINT)), (NULL), "
-                    + "(CAST('340282366920938463463374607431768211454' AS UHUGEINT))) t(v)")) {
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT java_add_uhugeint_function(v) FROM (VALUES (CAST('41' AS UHUGEINT)), (NULL), "
+                     + "(CAST('340282366920938463463374607431768211454' AS UHUGEINT))) t(v)")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
                 assertTrue(rs.next());
