@@ -16,6 +16,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
+import org.duckdb.DuckDBFunctions.RegisteredFunction;
 import org.duckdb.io.LimitedInputStream;
 
 public class DuckDBDriver implements java.sql.Driver {
@@ -42,7 +43,7 @@ public class DuckDBDriver implements java.sql.Driver {
     private static boolean pinnedDbRefsShutdownHookRegistered = false;
     private static boolean pinnedDbRefsShutdownHookRun = false;
 
-    private static final ArrayList<DuckDBRegisteredFunction> functionsRegistry = new ArrayList<>();
+    private static final ArrayList<RegisteredFunction> functionsRegistry = new ArrayList<>();
     private static final ReentrantLock functionsRegistryLock = new ReentrantLock();
 
     private static final Set<String> supportedOptions = new LinkedHashSet<>();
@@ -266,7 +267,7 @@ public class DuckDBDriver implements java.sql.Driver {
         return true;
     }
 
-    public static List<DuckDBRegisteredFunction> registeredFunctions() {
+    public static List<RegisteredFunction> registeredFunctions() {
         functionsRegistryLock.lock();
         try {
             return Collections.unmodifiableList(new ArrayList<>(functionsRegistry));
@@ -284,7 +285,7 @@ public class DuckDBDriver implements java.sql.Driver {
         }
     }
 
-    static void registerFunction(DuckDBRegisteredFunction function) {
+    static void registerFunction(RegisteredFunction function) {
         functionsRegistryLock.lock();
         try {
             functionsRegistry.add(function);
