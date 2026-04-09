@@ -690,8 +690,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     public ResultSet getSchemas() throws SQLException {
         Statement statement = conn.createStatement();
         statement.closeOnCompletion();
-        return statement.executeQuery("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM " +
-                                      "information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+        return statement.executeQuery("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM "
+                                      + "information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
     }
 
     @Override
@@ -759,13 +759,13 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("NULL::VARCHAR AS 'TYPE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'SELF_REFERENCING_COL_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'REF_GENERATION'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("FROM (select database_name as table_catalog, schema_name as table_schema, table_name, CASE  WHEN " +
-                  "(\"temporary\") THEN ('LOCAL TEMPORARY')  WHEN (\"internal\") THEN 'SYSTEM TABLE' ELSE 'TABLE' " +
-                  "END AS table_type, comment AS TABLE_COMMENT")
+        sb.append("FROM (select database_name as table_catalog, schema_name as table_schema, table_name, CASE  WHEN "
+                  + "(\"temporary\") THEN ('LOCAL TEMPORARY')  WHEN (\"internal\") THEN 'SYSTEM TABLE' ELSE 'TABLE' "
+                  + "END AS table_type, comment AS TABLE_COMMENT")
             .append(lineSeparator());
         sb.append("from  duckdb_tables() x").append(lineSeparator());
-        sb.append("union all select database_name,schema_name, view_name, CASE  WHEN (\"internal\") then 'SYSTEM " +
-                  "VIEW' ELSE 'VIEW' END, comment from duckdb_views() x   ) x")
+        sb.append("union all select database_name,schema_name, view_name, CASE  WHEN (\"internal\") then 'SYSTEM "
+                  + "VIEW' ELSE 'VIEW' END, comment from duckdb_views() x   ) x")
             .append(lineSeparator());
         sb.append("WHERE table_name LIKE ? ESCAPE '\\'").append(lineSeparator());
         boolean hasCatalogParam = appendEqualsQual(sb, "table_catalog", catalog);
