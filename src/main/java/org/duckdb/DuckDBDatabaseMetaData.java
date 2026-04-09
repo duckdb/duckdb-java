@@ -690,8 +690,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     public ResultSet getSchemas() throws SQLException {
         Statement statement = conn.createStatement();
         statement.closeOnCompletion();
-        return statement.executeQuery(
-            "SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+        return statement.executeQuery("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM " +
+                                      "information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
     }
 
     @Override
@@ -722,7 +722,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public ResultSet getTableTypes() throws SQLException {
-        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW", "SYSTEM VIEW" };
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW", "SYSTEM VIEW"};
         StringBuilder stringBuilder = new StringBuilder(128);
         boolean first = true;
         for (String tableType : tableTypesArray) {
@@ -759,15 +759,14 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("NULL::VARCHAR AS 'TYPE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'SELF_REFERENCING_COL_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'REF_GENERATION'").append(TRAILING_COMMA).append(lineSeparator());
-        sb
-        .append(
-        "FROM (select database_name as table_catalog, schema_name as table_schema, table_name, CASE  WHEN (\"temporary\") THEN ('LOCAL TEMPORARY')  WHEN (\"internal\") THEN 'SYSTEM TABLE' ELSE 'TABLE' END AS table_type, comment AS TABLE_COMMENT")
-        .append(lineSeparator());
+        sb.append("FROM (select database_name as table_catalog, schema_name as table_schema, table_name, CASE  WHEN " +
+                  "(\"temporary\") THEN ('LOCAL TEMPORARY')  WHEN (\"internal\") THEN 'SYSTEM TABLE' ELSE 'TABLE' " +
+                  "END AS table_type, comment AS TABLE_COMMENT")
+            .append(lineSeparator());
         sb.append("from  duckdb_tables() x").append(lineSeparator());
-        sb
-        .append(
-        "union all select database_name,schema_name, view_name, CASE  WHEN (\"internal\") then 'SYSTEM VIEW' ELSE 'VIEW' END, comment from duckdb_views() x   ) x")
-        .append(lineSeparator());
+        sb.append("union all select database_name,schema_name, view_name, CASE  WHEN (\"internal\") then 'SYSTEM " +
+                  "VIEW' ELSE 'VIEW' END, comment from duckdb_views() x   ) x")
+            .append(lineSeparator());
         sb.append("WHERE table_name LIKE ? ESCAPE '\\'").append(lineSeparator());
         boolean hasCatalogParam = appendEqualsQual(sb, "table_catalog", catalog);
         boolean hasSchemaParam = appendLikeQual(sb, "table_schema", schemaPattern);
@@ -820,15 +819,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("schema_name AS 'TABLE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_name AS 'TABLE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("column_name as 'COLUMN_NAME'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append(makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE")).append(TRAILING_COMMA)
-        .append(lineSeparator());
+        sb.append(makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE"))
+            .append(TRAILING_COMMA)
+            .append(lineSeparator());
         sb.append("c.data_type AS 'TYPE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("numeric_precision AS 'COLUMN_SIZE'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'BUFFER_LENGTH'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("numeric_scale AS 'DECIMAL_DIGITS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("10 AS 'NUM_PREC_RADIX'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE'").append(TRAILING_COMMA)
-        .append(lineSeparator());
+        sb.append("CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE'")
+            .append(TRAILING_COMMA)
+            .append(lineSeparator());
         sb.append("comment as 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("column_default AS 'COLUMN_DEF'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SQL_DATA_TYPE'").append(TRAILING_COMMA).append(lineSeparator());

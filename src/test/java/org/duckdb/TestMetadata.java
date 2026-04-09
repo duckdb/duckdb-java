@@ -11,14 +11,11 @@ import java.util.*;
 
 public class TestMetadata {
 
-    private static void assertNonSystemTables(ResultSet rs, String name) throws Exception
-    {
+    private static void assertNonSystemTables(ResultSet rs, String name) throws Exception {
         assertTrue(rs.next());
-        while(true)
-        {
+        while (true) {
             String type = rs.getString("TABLE_TYPE");
-            if(type.equals("SYSTEM VIEW") || type.equals("SYSTEM TABLE"))
-            {
+            if (type.equals("SYSTEM VIEW") || type.equals("SYSTEM TABLE")) {
                 assertTrue(rs.next());
                 continue;
             }
@@ -47,7 +44,7 @@ public class TestMetadata {
             try (ResultSet rs = dm.getTables(null, null, null, new String[] {})) {
                 assertNonSystemTables(rs, "b");
                 assertNonSystemTables(rs, "a1");
-                assertNonSystemTables(rs,"a2");
+                assertNonSystemTables(rs, "a2");
                 assertNonSystemTables(rs, "c");
                 assertFalse(rs.next());
             }
@@ -557,7 +554,8 @@ public class TestMetadata {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", new String[] {"TABLE", "VIEW"})) {
+            try (ResultSet rs =
+                     md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", new String[] {"TABLE", "VIEW"})) {
                 assertTrue(rs.next());
                 assertTrue(rs.getObject("TABLE_CAT") != null);
                 assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
@@ -799,7 +797,7 @@ public class TestMetadata {
     }
 
     public static void test_get_table_types() throws Exception {
-        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW" , "SYSTEM VIEW"};
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW", "SYSTEM VIEW"};
         List<String> tableTypesList = new ArrayList<>(asList(tableTypesArray));
         tableTypesList.sort(Comparator.naturalOrder());
 
@@ -1030,6 +1028,28 @@ public class TestMetadata {
                 count += 1;
             }
             assertEquals(count, 21);
+        }
+    }
+
+    public static void test_metadata_system_views() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             ResultSet rs = conn.getMetaData().getTables(null, "information_schema", "columns", null)) {
+            int count = 0;
+            while (rs.next()) {
+                count += 1;
+            }
+            assertEquals(count, 1);
+        }
+    }
+
+    public static void test_metadata_system_columns() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             ResultSet rs = conn.getMetaData().getColumns("system", "information_schema", "views", null)) {
+            int count = 0;
+            while (rs.next()) {
+                count += 1;
+            }
+            assertTrue(count > 0);
         }
     }
 }
