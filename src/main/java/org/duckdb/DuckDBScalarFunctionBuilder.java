@@ -18,6 +18,7 @@ import java.util.function.IntUnaryOperator;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
+import org.duckdb.DuckDBFunctions.RegisteredFunction;
 
 public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     private ByteBuffer scalarFunctionRef;
@@ -31,7 +32,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     private final List<DuckDBColumnType> parameterColumnTypes = new ArrayList<>();
     private final List<Class<?>> parameterJavaTypes = new ArrayList<>();
     private boolean volatileFlag;
-    private boolean specialHandlingFlag;
+    private boolean nullInNullOutFlag;
     private boolean propagateNullsFlag;
     private boolean finalized;
 
@@ -73,6 +74,17 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         parameterColumnTypes.add(null);
         parameterJavaTypes.add(null);
         duckdb_scalar_function_add_parameter(scalarFunctionRef, parameterType.logicalTypeRef());
+        return this;
+    }
+
+    public DuckDBScalarFunctionBuilder withParameters(DuckDBLogicalType... parameterTypes) throws SQLException {
+        ensureNotFinalized();
+        if (parameterTypes == null) {
+            throw new SQLException("Parameter types cannot be null");
+        }
+        for (DuckDBLogicalType parameterType : parameterTypes) {
+            withParameter(parameterType);
+        }
         return this;
     }
 
@@ -119,6 +131,17 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
             throw new SQLException("Parameter type cannot be null");
         }
         return addMappedParameterType(parameterType, null);
+    }
+
+    public DuckDBScalarFunctionBuilder withParameters(DuckDBColumnType... parameterTypes) throws SQLException {
+        ensureNotFinalized();
+        if (parameterTypes == null) {
+            throw new SQLException("Parameter types cannot be null");
+        }
+        for (DuckDBColumnType parameterType : parameterTypes) {
+            withParameter(parameterType);
+        }
+        return this;
     }
 
     public DuckDBScalarFunctionBuilder withVectorizedFunction(DuckDBScalarFunction function) throws SQLException {
@@ -288,14 +311,13 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         return this;
     }
 
-    public DuckDBScalarFunctionBuilder withSpecialHandling() throws SQLException {
+    public DuckDBScalarFunctionBuilder withNullInNullOut() throws SQLException {
         ensureNotFinalized();
-        this.specialHandlingFlag = true;
-        duckdb_scalar_function_set_special_handling(scalarFunctionRef);
+        this.nullInNullOutFlag = true;
         return this;
     }
 
-    public DuckDBRegisteredFunction register(Connection connection) throws SQLException {
+    public RegisteredFunction register(Connection connection) throws SQLException {
         ensureNotFinalized();
         if (connection == null) {
             throw new SQLException("Connection cannot be null");
@@ -309,6 +331,9 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (callback == null) {
             throw new SQLException("Scalar function callback must be defined");
         }
+        if (!nullInNullOutFlag) {
+            duckdb_scalar_function_set_special_handling(scalarFunctionRef);
+        }
         DuckDBConnection duckConnection = unwrapConnection(connection);
         Lock connectionLock = duckConnection.connRefLock;
         connectionLock.lock();
@@ -318,9 +343,9 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
             if (status != 0) {
                 throw new SQLException("Failed to register scalar function '" + functionName + "'");
             }
-            DuckDBRegisteredFunction registeredFunction = DuckDBRegisteredFunction.of(
+            RegisteredFunction registeredFunction = DuckDBFunctions.createRegisteredFunction(
                 functionName, parameterTypes, parameterColumnTypes, returnType, returnColumnType, callback, varArgType,
-                volatileFlag, specialHandlingFlag, propagateNullsFlag);
+                volatileFlag, nullInNullOutFlag, propagateNullsFlag);
             DuckDBDriver.registerFunction(registeredFunction);
             return registeredFunction;
         } finally {
@@ -409,8 +434,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         this.callback = function;
         this.propagateNullsFlag = requiresNullPropagation;
-        duckdb_scalar_function_set_function(scalarFunctionRef,
-                                            new DuckDBScalarFunctionWrapper(function, propagateNullsFlag));
+        duckdb_scalar_function_set_function(scalarFunctionRef, new DuckDBScalarFunctionWrapper(function));
         return this;
     }
 
@@ -421,6 +445,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     }
 
     private void enablePrimitiveNullPropagation() {
+        nullInNullOutFlag = false;
         propagateNullsFlag = true;
     }
 
