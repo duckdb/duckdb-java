@@ -3,6 +3,8 @@ package org.duckdb;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.nio.ByteBuffer;
+import java.util.stream.LongStream;
+import org.duckdb.DuckDBFunctions.FunctionException;
 
 /**
  * Reader over callback input data chunks.
@@ -17,12 +19,18 @@ public final class DuckDBDataChunkReader {
 
     DuckDBDataChunkReader(ByteBuffer chunkRef) {
         if (chunkRef == null) {
-            throw new DuckDBFunctionException("Invalid data chunk reference");
+            throw new FunctionException("Invalid data chunk reference");
         }
         this.chunkRef = chunkRef;
         this.rowCount = duckdb_data_chunk_get_size(chunkRef);
         this.columnCount = duckdb_data_chunk_get_column_count(chunkRef);
         this.vectors = new DuckDBReadableVector[Math.toIntExact(columnCount)];
+
+        for (long columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+            ByteBuffer vectorRef = duckdb_data_chunk_get_vector(chunkRef, columnIndex);
+            int arrayIndex = Math.toIntExact(columnIndex);
+            vectors[arrayIndex] = new DuckDBReadableVector(vectorRef, rowCount);
+        }
     }
 
     public long rowCount() {
@@ -33,17 +41,15 @@ public final class DuckDBDataChunkReader {
         return columnCount;
     }
 
+    public LongStream stream() {
+        return LongStream.range(0, rowCount);
+    }
+
     public DuckDBReadableVector vector(long columnIndex) {
         if (columnIndex < 0 || columnIndex >= columnCount) {
             throw new IndexOutOfBoundsException("Column index out of bounds: " + columnIndex);
         }
         int arrayIndex = Math.toIntExact(columnIndex);
-        DuckDBReadableVector vector = vectors[arrayIndex];
-        if (vector == null) {
-            ByteBuffer vectorRef = duckdb_data_chunk_get_vector(chunkRef, columnIndex);
-            vector = new DuckDBReadableVectorImpl(vectorRef, rowCount);
-            vectors[arrayIndex] = vector;
-        }
-        return vector;
+        return vectors[arrayIndex];
     }
 }

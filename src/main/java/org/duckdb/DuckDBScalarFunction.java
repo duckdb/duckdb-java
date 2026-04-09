@@ -8,8 +8,9 @@ public interface DuckDBScalarFunction {
      * <p>The context and all wrappers returned from it are valid only for the duration of the callback and must not
      * be retained.
      *
-     * @param ctx scalar function execution context for the current chunk
+     * @param input data chunk with function arguments
+     * @param output vector to write function results into
      * @throws Exception when function execution fails
      */
-    void apply(DuckDBScalarContext ctx) throws Exception;
+    void apply(DuckDBDataChunkReader input, DuckDBWritableVector output) throws Exception;
 }
