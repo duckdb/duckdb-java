@@ -11,6 +11,18 @@ import java.util.*;
 
 public class TestMetadata {
 
+    private static void assertNonSystemTables(ResultSet rs, String name) throws Exception {
+        assertTrue(rs.next());
+        while (true) {
+            String type = rs.getString("TABLE_TYPE");
+            if (type.equals("SYSTEM VIEW") || type.equals("SYSTEM TABLE")) {
+                assertTrue(rs.next());
+                continue;
+            }
+            assertEquals(rs.getString("TABLE_NAME"), name);
+            break;
+        }
+    }
     public static void test_get_table_types_bug1258() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (Statement stmt = conn.createStatement()) {
@@ -22,26 +34,18 @@ public class TestMetadata {
             DatabaseMetaData dm = conn.getMetaData();
 
             try (ResultSet rs = dm.getTables(null, null, null, null)) {
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "b");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "a1");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "a2");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "c");
+                assertNonSystemTables(rs, "b");
+                assertNonSystemTables(rs, "a1");
+                assertNonSystemTables(rs, "a2");
+                assertNonSystemTables(rs, "c");
                 assertFalse(rs.next());
             }
 
             try (ResultSet rs = dm.getTables(null, null, null, new String[] {})) {
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "b");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "a1");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "a2");
-                assertTrue(rs.next());
-                assertEquals(rs.getString("TABLE_NAME"), "c");
+                assertNonSystemTables(rs, "b");
+                assertNonSystemTables(rs, "a1");
+                assertNonSystemTables(rs, "a2");
+                assertNonSystemTables(rs, "c");
                 assertFalse(rs.next());
             }
 
@@ -505,7 +509,7 @@ public class TestMetadata {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = md.getTables(null, null, "%", null)) {
+            try (ResultSet rs = md.getTables(null, null, "%", new String[] {"TABLE", "VIEW"})) {
                 assertTrue(rs.next());
                 assertTrue(rs.getObject("TABLE_CAT") != null);
                 assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
@@ -551,8 +555,8 @@ public class TestMetadata {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", null)) {
-
+            try (ResultSet rs =
+                     md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", new String[] {"TABLE", "VIEW"})) {
                 assertTrue(rs.next());
                 assertTrue(rs.getObject("TABLE_CAT") != null);
                 assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
@@ -579,7 +583,7 @@ public class TestMetadata {
                 assertFalse(rs.next());
             }
 
-            try (ResultSet rs = md.getTables("", "", "%", null)) {
+            try (ResultSet rs = md.getTables("", "", "%", new String[] {"TABLE", "VIEW"})) {
                 assertFalse(rs.next());
             }
 
@@ -747,7 +751,7 @@ public class TestMetadata {
             }
 
             // test if getTables with null catalog returns all tables.
-            try (ResultSet resultSet = databaseMetaData.getTables(null, null, "%", null)) {
+            try (ResultSet resultSet = databaseMetaData.getTables(null, null, "%", new String[] {"TABLE"})) {
 
                 assertTrue(resultSet.next(), "getTables should return 2 tables, got 0");
                 // first table should be ATTACHED_CATALOG.T2
@@ -794,7 +798,7 @@ public class TestMetadata {
     }
 
     public static void test_get_table_types() throws Exception {
-        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW"};
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW", "SYSTEM VIEW"};
         List<String> tableTypesList = new ArrayList<>(asList(tableTypesArray));
         tableTypesList.sort(Comparator.naturalOrder());
 
@@ -1025,6 +1029,28 @@ public class TestMetadata {
                 count += 1;
             }
             assertEquals(count, 21);
+        }
+    }
+
+    public static void test_metadata_system_views() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             ResultSet rs = conn.getMetaData().getTables(null, "information_schema", "columns", null)) {
+            int count = 0;
+            while (rs.next()) {
+                count += 1;
+            }
+            assertEquals(count, 1);
+        }
+    }
+
+    public static void test_metadata_system_columns() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             ResultSet rs = conn.getMetaData().getColumns("system", "information_schema", "views", null)) {
+            int count = 0;
+            while (rs.next()) {
+                count += 1;
+            }
+            assertTrue(count > 0);
         }
     }
 }

@@ -2,7 +2,15 @@ package org.duckdb;
 
 import static java.lang.System.lineSeparator;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.RowIdLifetime;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Statement;
+import java.sql.Types;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -682,8 +690,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     public ResultSet getSchemas() throws SQLException {
         Statement statement = conn.createStatement();
         statement.closeOnCompletion();
-        return statement.executeQuery(
-            "SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+        return statement.executeQuery("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM "
+                                      + "information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
     }
 
     @Override
@@ -714,7 +722,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public ResultSet getTableTypes() throws SQLException {
-        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW"};
+        String[] tableTypesArray = new String[] {"TABLE", "LOCAL TEMPORARY", "VIEW", "SYSTEM VIEW"};
         StringBuilder stringBuilder = new StringBuilder(128);
         boolean first = true;
         for (String tableType : tableTypesArray) {
@@ -744,16 +752,21 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("table_catalog AS 'TABLE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_schema AS 'TABLE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_name AS 'TABLE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS 'TABLE_TYPE'")
-            .append(TRAILING_COMMA)
-            .append(lineSeparator());
+        sb.append("table_type AS 'TABLE_TYPE'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("TABLE_COMMENT AS 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'TYPE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'TYPE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'TYPE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'SELF_REFERENCING_COL_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL::VARCHAR AS 'REF_GENERATION'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("FROM information_schema.tables").append(lineSeparator());
+        sb.append("FROM (select database_name as table_catalog, schema_name as table_schema, table_name, CASE  WHEN "
+                  + "(\"temporary\") THEN ('LOCAL TEMPORARY')  WHEN (\"internal\") THEN 'SYSTEM TABLE' ELSE 'TABLE' "
+                  + "END AS table_type, comment AS TABLE_COMMENT")
+            .append(lineSeparator());
+        sb.append("from  duckdb_tables() x").append(lineSeparator());
+        sb.append("union all select database_name,schema_name, view_name, CASE  WHEN (\"internal\") then 'SYSTEM "
+                  + "VIEW' ELSE 'VIEW' END, comment from duckdb_views() x   ) x")
+            .append(lineSeparator());
         sb.append("WHERE table_name LIKE ? ESCAPE '\\'").append(lineSeparator());
         boolean hasCatalogParam = appendEqualsQual(sb, "table_catalog", catalog);
         boolean hasSchemaParam = appendLikeQual(sb, "table_schema", schemaPattern);
@@ -790,8 +803,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
         if (types != null && types.length > 0) {
             for (int i = 0; i < types.length; i++) {
-                String param = "TABLE".equals(types[i]) ? "BASE TABLE" : types[i];
-                ps.setString(paramIdx + i, param);
+                ps.setString(paramIdx + i, types[i]);
             }
         }
         ps.closeOnCompletion();
@@ -803,8 +815,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         throws SQLException {
         StringBuilder sb = new StringBuilder(QUERY_SB_DEFAULT_CAPACITY);
         sb.append("SELECT").append(lineSeparator());
-        sb.append("table_catalog AS 'TABLE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("table_schema AS 'TABLE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("database_name AS 'TABLE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("schema_name AS 'TABLE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("table_name AS 'TABLE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("column_name as 'COLUMN_NAME'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append(makeDataMap("regexp_replace(c.data_type, '\\(.*\\)', '')", "DATA_TYPE"))
@@ -818,12 +830,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE'")
             .append(TRAILING_COMMA)
             .append(lineSeparator());
-        sb.append("COLUMN_COMMENT as 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("comment as 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("column_default AS 'COLUMN_DEF'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SQL_DATA_TYPE'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SQL_DATETIME_SUB'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'CHAR_OCTET_LENGTH'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("ordinal_position AS 'ORDINAL_POSITION'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("column_index AS 'ORDINAL_POSITION'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("is_nullable AS 'IS_NULLABLE'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SCOPE_CATALOG'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SCOPE_SCHEMA'").append(TRAILING_COMMA).append(lineSeparator());
@@ -831,17 +843,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("NULL AS 'SOURCE_DATA_TYPE'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("'' AS 'IS_AUTOINCREMENT'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("'' AS 'IS_GENERATEDCOLUMN'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("FROM information_schema.columns c").append(lineSeparator());
+        sb.append("FROM duckdb_columns() c").append(lineSeparator());
         sb.append("WHERE TRUE").append(lineSeparator());
-        boolean hasCatalogParam = appendEqualsQual(sb, "table_catalog", catalog);
-        boolean hasSchemaParam = appendLikeQual(sb, "table_schema", schemaPattern);
+        boolean hasCatalogParam = appendEqualsQual(sb, "database_name", catalog);
+        boolean hasSchemaParam = appendLikeQual(sb, "schema_name", schemaPattern);
         sb.append("AND table_name LIKE ? ESCAPE '\\'").append(lineSeparator());
         sb.append("AND column_name LIKE ? ESCAPE '\\'").append(lineSeparator());
         sb.append("ORDER BY").append(lineSeparator());
         sb.append("\"TABLE_CAT\"").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("\"TABLE_SCHEM\"").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("\"TABLE_NAME\"").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("\"ORDINAL_POSITION\"").append(lineSeparator());
+        sb.append("\"column_index\"").append(lineSeparator());
 
         PreparedStatement ps = conn.prepareStatement(sb.toString());
 
