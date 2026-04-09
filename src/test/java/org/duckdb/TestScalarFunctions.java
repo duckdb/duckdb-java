@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.ZoneOffset.UTC;
 import static org.duckdb.DuckDBBindings.*;
 import static org.duckdb.DuckDBBindings.CAPIType.DUCKDB_TYPE_INTEGER;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
@@ -23,25 +24,140 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.duckdb.DuckDBFunctions.RegisteredFunction;
 
 public class TestScalarFunctions {
     private interface ResultSetVerifier {
         void verify(ResultSet rs) throws Exception;
     }
 
-    private static int sumNonNullIntColumns(DuckDBScalarContext ctx, DuckDBScalarRow row) {
+    private static int sumNonNullIntColumns(DuckDBDataChunkReader input, long rowIndex) {
         int sum = 0;
-        for (int columnIndex = 0; columnIndex < ctx.columnCount(); columnIndex++) {
-            if (!row.isNull(columnIndex)) {
-                sum += row.getInt(columnIndex);
+        for (int columnIndex = 0; columnIndex < input.columnCount(); columnIndex++) {
+            if (!input.vector(columnIndex).isNull(rowIndex)) {
+                sum += input.vector(columnIndex).getInt(rowIndex);
             }
         }
         return sum;
+    }
+
+    private static void assertUnaryScalarFunction(String functionName, DuckDBColumnType parameterType,
+                                                  DuckDBColumnType returnType, DuckDBScalarFunction function,
+                                                  String query, ResultSetVerifier verifier) throws Exception {
+        try (DuckDBLogicalType parameterLogicalType = DuckDBLogicalType.of(parameterType);
+             DuckDBLogicalType returnLogicalType = DuckDBLogicalType.of(returnType)) {
+            assertUnaryScalarFunction(functionName, parameterLogicalType, returnLogicalType, function, query, verifier);
+        }
+    }
+
+    private static void assertUnaryScalarFunction(String functionName, DuckDBLogicalType parameterType,
+                                                  DuckDBLogicalType returnType, DuckDBScalarFunction function,
+                                                  String query, ResultSetVerifier verifier) throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withParameter(parameterType)
+                .withReturnType(returnType)
+                .withVectorizedFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertUnaryJavaFunction(String functionName, Class<?> parameterType, Class<?> returnType,
+                                                Function<?, ?> function, String query, ResultSetVerifier verifier)
+        throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withParameter(parameterType)
+                .withReturnType(returnType)
+                .withFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertUnaryJavaFunction(String functionName, DuckDBColumnType parameterType,
+                                                DuckDBColumnType returnType, Function<?, ?> function, String query,
+                                                ResultSetVerifier verifier) throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withParameter(parameterType)
+                .withReturnType(returnType)
+                .withFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertUnaryJavaFunction(String functionName, DuckDBLogicalType parameterType,
+                                                DuckDBLogicalType returnType, Function<?, ?> function, String query,
+                                                ResultSetVerifier verifier) throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withParameter(parameterType)
+                .withReturnType(returnType)
+                .withFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertBinaryJavaFunction(String functionName, Class<?> leftType, Class<?> rightType,
+                                                 Class<?> returnType, BiFunction<?, ?, ?> function, String query,
+                                                 ResultSetVerifier verifier) throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withParameter(leftType)
+                .withParameter(rightType)
+                .withReturnType(returnType)
+                .withFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertNullaryJavaFunction(String functionName, Class<?> returnType, Supplier<?> function,
+                                                  String query, ResultSetVerifier verifier) throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName(functionName)
+                .withReturnType(returnType)
+                .withFunction(function)
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery(query)) {
+                verifier.verify(rs);
+            }
+        }
+    }
+
+    private static void assertNullRow(ResultSet rs) throws Exception {
+        assertEquals(rs.getObject(1), null);
+        assertTrue(rs.wasNull());
     }
 
     public static void test_bindings_scalar_function() throws Exception {
@@ -75,22 +191,28 @@ public class TestScalarFunctions {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement();
              DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
-            DuckDBRegisteredFunction function =
-                DuckDBFunctions.scalarFunction()
-                    .withName("java_add_int_builder")
-                    .withParameter(intType)
-                    .withReturnType(intType)
-                    .withVectorizedFunction(ctx -> {
-                        ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setInt(row.getInt(0) + 1));
-                    })
-                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_int_builder")
+                                              .withParameter(intType)
+                                              .withReturnType(intType)
+                                              .withVectorizedFunction((input, output) -> {
+                                                  DuckDBReadableVector in = input.vector(0);
+                                                  input.stream().forEach(row -> {
+                                                      if (in.isNull(row)) {
+                                                          output.setNull(row);
+                                                      } else {
+                                                          output.setInt(row, in.getInt(row) + 1);
+                                                      }
+                                                  });
+                                              })
+                                              .register(conn);
             assertEquals(function.name(), "java_add_int_builder");
             assertEquals(function.parameterTypes().size(), 1);
             assertEquals(function.parameterTypes().get(0), intType);
             assertEquals(function.returnType(), intType);
             assertEquals(function.varArgType(), null);
             assertEquals(function.isVolatile(), false);
-            assertEquals(function.hasSpecialHandling(), false);
+            assertEquals(function.isNullInNullOut(), false);
             assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs =
@@ -129,7 +251,7 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_builder_returns_detached_metadata() throws Exception {
-        DuckDBRegisteredFunction function;
+        RegisteredFunction function;
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              DuckDBScalarFunctionBuilder builder = DuckDBFunctions.scalarFunction()) {
             function = builder.withName("java_add_int_detached")
@@ -147,7 +269,7 @@ public class TestScalarFunctions {
             assertEquals(function.parameterColumnTypes().get(0), DuckDBColumnType.INTEGER);
             assertEquals(function.returnColumnType(), DuckDBColumnType.INTEGER);
             assertNotNull(function.function());
-            assertEquals(function.functionKind(), DuckDBFunctions.DuckDBFunctionKind.SCALAR);
+            assertEquals(function.functionKind(), DuckDBFunctions.Kind.SCALAR);
             assertTrue(function.isScalar());
             assertEquals(function.propagateNulls(), false);
 
@@ -167,17 +289,17 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_registry_records_registered_functions() throws Exception {
         DuckDBDriver.clearFunctionsRegistry();
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_registry_recorded")
-                                                    .withParameter(Integer.class)
-                                                    .withReturnType(Integer.class)
-                                                    .withFunction((Integer x) -> x + 1)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_registry_recorded")
+                                              .withParameter(Integer.class)
+                                              .withReturnType(Integer.class)
+                                              .withFunction((Integer x) -> x + 1)
+                                              .register(conn);
 
-            List<DuckDBRegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
+            List<RegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
             assertEquals(registeredFunctions.size(), 1);
             assertEquals(registeredFunctions.get(0), function);
-            assertEquals(registeredFunctions.get(0).functionKind(), DuckDBFunctions.DuckDBFunctionKind.SCALAR);
+            assertEquals(registeredFunctions.get(0).functionKind(), DuckDBFunctions.Kind.SCALAR);
             assertTrue(registeredFunctions.get(0).isScalar());
 
             try (ResultSet rs = stmt.executeQuery("SELECT java_registry_recorded(41)")) {
@@ -200,7 +322,7 @@ public class TestScalarFunctions {
                 .withFunction((Integer x) -> x + 1)
                 .register(conn);
 
-            List<DuckDBRegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
+            List<RegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
             assertThrows(() -> { registeredFunctions.add(null); }, UnsupportedOperationException.class);
         } finally {
             DuckDBDriver.clearFunctionsRegistry();
@@ -254,7 +376,7 @@ public class TestScalarFunctions {
                 .withFunction((Integer x) -> x + 2)
                 .register(connB);
 
-            List<DuckDBRegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
+            List<RegisteredFunction> registeredFunctions = DuckDBDriver.registeredFunctions();
             assertEquals(registeredFunctions.size(), 2);
             assertEquals(registeredFunctions.get(0).name(), "java_registry_duplicate_name");
             assertEquals(registeredFunctions.get(1).name(), "java_registry_duplicate_name");
@@ -300,20 +422,20 @@ public class TestScalarFunctions {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement();
              DuckDBLogicalType intType = DuckDBLogicalType.of(DuckDBColumnType.INTEGER)) {
-            DuckDBRegisteredFunction function =
+            RegisteredFunction function =
                 DuckDBFunctions.scalarFunction()
                     .withName("java_sum_varargs_builder")
                     .withParameter(intType)
                     .withVarArgs(intType)
                     .withReturnType(intType)
                     .withVolatile()
-                    .withSpecialHandling()
-                    .withVectorizedFunction(
-                        ctx -> { ctx.stream().forEachOrdered(row -> { row.setInt(sumNonNullIntColumns(ctx, row)); }); })
+                    .withVectorizedFunction((input, output) -> {
+                        input.stream().forEach(row -> output.setInt(row, sumNonNullIntColumns(input, row)));
+                    })
                     .register(conn);
             assertEquals(function.varArgType(), intType);
             assertEquals(function.isVolatile(), true);
-            assertEquals(function.hasSpecialHandling(), true);
+            assertEquals(function.isNullInNullOut(), false);
             assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs =
@@ -329,15 +451,21 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_column_type_overloads() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function =
-                DuckDBFunctions.scalarFunction()
-                    .withName("java_add_int_builder_col_type")
-                    .withParameter(DuckDBColumnType.INTEGER)
-                    .withReturnType(DuckDBColumnType.INTEGER)
-                    .withVectorizedFunction(ctx -> {
-                        ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setInt(row.getInt(0) + 1));
-                    })
-                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_int_builder_col_type")
+                                              .withParameter(DuckDBColumnType.INTEGER)
+                                              .withReturnType(DuckDBColumnType.INTEGER)
+                                              .withVectorizedFunction((input, output) -> {
+                                                  DuckDBReadableVector in = input.vector(0);
+                                                  input.stream().forEach(row -> {
+                                                      if (in.isNull(row)) {
+                                                          output.setNull(row);
+                                                      } else {
+                                                          output.setInt(row, in.getInt(row) + 1);
+                                                      }
+                                                  });
+                                              })
+                                              .register(conn);
             assertEquals(function.parameterColumnTypes().size(), 1);
             assertEquals(function.parameterColumnTypes().get(0), DuckDBColumnType.INTEGER);
             assertEquals(function.parameterTypes().get(0), null);
@@ -406,12 +534,12 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_java_function_propagate_nulls_false() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_int_function_nullable")
-                                                    .withParameter(Integer.class)
-                                                    .withReturnType(Integer.class)
-                                                    .withFunction((Integer x) -> x == null ? 99 : x + 1)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_int_function_nullable")
+                                              .withParameter(Integer.class)
+                                              .withReturnType(Integer.class)
+                                              .withFunction((Integer x) -> x == null ? 99 : x + 1)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs = stmt.executeQuery(
@@ -433,8 +561,7 @@ public class TestScalarFunctions {
              Statement stmt = conn.createStatement()) {
             DuckDBFunctions.scalarFunction()
                 .withName("java_add_int_bifunction")
-                .withParameter(Integer.class)
-                .withParameter(Integer.class)
+                .withParameters(Integer.class, Integer.class)
                 .withReturnType(Integer.class)
                 .withFunction((Integer x, Integer y) -> null != x && null != y ? x + y : null)
                 .register(conn);
@@ -458,11 +585,10 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_java_bifunction_propagate_nulls_false() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function =
+            RegisteredFunction function =
                 DuckDBFunctions.scalarFunction()
                     .withName("java_add_int_bifunction_nullable")
-                    .withParameter(Integer.class)
-                    .withParameter(Integer.class)
+                    .withParameters(Integer.class, Integer.class)
                     .withReturnType(Integer.class)
                     .withFunction(
                         (Integer left, Integer right) -> (left == null ? 0 : left) + (right == null ? 0 : right))
@@ -488,12 +614,12 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_int_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_int_with_int_function")
-                                                    .withParameter(Integer.class)
-                                                    .withReturnType(Integer.class)
-                                                    .withIntFunction(x -> x + 1)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_int_with_int_function")
+                                              .withParameter(Integer.class)
+                                              .withReturnType(Integer.class)
+                                              .withIntFunction(x -> x + 1)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery(
@@ -512,13 +638,13 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_int_binary_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_int_with_int_binary_function")
-                                                    .withParameter(Integer.class)
-                                                    .withParameter(Integer.class)
-                                                    .withReturnType(Integer.class)
-                                                    .withIntFunction((left, right) -> left + right)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_int_with_int_binary_function")
+                                              .withParameter(Integer.class)
+                                              .withParameter(Integer.class)
+                                              .withReturnType(Integer.class)
+                                              .withIntFunction((left, right) -> left + right)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery("SELECT java_add_int_with_int_binary_function(a, b) "
@@ -539,12 +665,12 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_double_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_double_with_double_function")
-                                                    .withParameter(Double.class)
-                                                    .withReturnType(Double.class)
-                                                    .withDoubleFunction(x -> x + 0.5d)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_double_with_double_function")
+                                              .withParameter(Double.class)
+                                              .withReturnType(Double.class)
+                                              .withDoubleFunction(x -> x + 0.5d)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery(
@@ -563,13 +689,13 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_double_binary_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_double_with_double_binary_function")
-                                                    .withParameter(Double.class)
-                                                    .withParameter(Double.class)
-                                                    .withReturnType(Double.class)
-                                                    .withDoubleFunction((left, right) -> left + right)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_double_with_double_binary_function")
+                                              .withParameter(Double.class)
+                                              .withParameter(Double.class)
+                                              .withReturnType(Double.class)
+                                              .withDoubleFunction((left, right) -> left + right)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs =
@@ -591,12 +717,12 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_long_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_long_with_long_function")
-                                                    .withParameter(Long.class)
-                                                    .withReturnType(Long.class)
-                                                    .withLongFunction(x -> x + 3)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_long_with_long_function")
+                                              .withParameter(Long.class)
+                                              .withReturnType(Long.class)
+                                              .withLongFunction(x -> x + 3)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (
@@ -616,13 +742,13 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_builder_with_long_binary_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            DuckDBRegisteredFunction function = DuckDBFunctions.scalarFunction()
-                                                    .withName("java_add_long_with_long_binary_function")
-                                                    .withParameter(Long.class)
-                                                    .withParameter(Long.class)
-                                                    .withReturnType(Long.class)
-                                                    .withLongFunction((left, right) -> left + right)
-                                                    .register(conn);
+            RegisteredFunction function = DuckDBFunctions.scalarFunction()
+                                              .withName("java_add_long_with_long_binary_function")
+                                              .withParameter(Long.class)
+                                              .withParameter(Long.class)
+                                              .withReturnType(Long.class)
+                                              .withLongFunction((left, right) -> left + right)
+                                              .register(conn);
             assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery("SELECT java_add_long_with_long_binary_function(a, b) "
@@ -805,6 +931,7 @@ public class TestScalarFunctions {
                 .withParameter(Integer.class)
                 .withVarArgs(intType)
                 .withReturnType(Integer.class)
+                .withNullInNullOut()
                 .withVarArgsFunction(args -> {
                     int sum = 0;
                     for (Object arg : args) {
@@ -941,7 +1068,7 @@ public class TestScalarFunctions {
             rs -> {
                 assertTrue(rs.next());
                 assertTrue(rs.getObject(1, OffsetDateTime.class)
-                               .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 39, 56, 123456000, ZoneOffset.UTC)));
+                               .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 39, 56, 123456000, UTC)));
                 assertTrue(rs.next());
                 assertNullRow(rs);
                 assertFalse(rs.next());
@@ -1135,8 +1262,16 @@ public class TestScalarFunctions {
                 .withName("java_add_int_typed")
                 .withParameter(intType)
                 .withReturnType(intType)
-                .withVectorizedFunction(
-                    ctx -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setInt(row.getInt(0) + 1)); })
+                .withVectorizedFunction((input, output) -> {
+                    DuckDBReadableVector in = input.vector(0);
+                    input.stream().forEach(row -> {
+                        if (in.isNull(row)) {
+                            output.setNull(row);
+                        } else {
+                            output.setInt(row, in.getInt(row) + 1);
+                        }
+                    });
+                })
                 .register(conn);
             try (ResultSet rs =
                      stmt.executeQuery("SELECT java_add_int_typed(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -1160,13 +1295,9 @@ public class TestScalarFunctions {
                 .withName("java_add_one_bigint")
                 .withParameter(bigintType)
                 .withReturnType(bigintType)
-                .withVectorizedFunction(ctx -> {
-                    DuckDBWritableVector out = ctx.output();
-                    DuckDBReadableVector in = ctx.input(0);
-                    long rowCount = ctx.rowCount();
-                    for (long row = 0; row < rowCount; row++) {
-                        out.setLong(row, in.getLong(row) + 1);
-                    }
+                .withVectorizedFunction((input, output) -> {
+                    DuckDBReadableVector in = input.vector(0);
+                    input.stream().forEach(row -> { output.setLong(row, in.getLong(row) + 1); });
                 })
                 .register(conn);
 
@@ -1187,8 +1318,16 @@ public class TestScalarFunctions {
                 .withName("java_add_int_row_stream")
                 .withParameter(intType)
                 .withReturnType(intType)
-                .withVectorizedFunction(
-                    ctx -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setInt(row.getInt(0) + 1)); })
+                .withVectorizedFunction((input, output) -> {
+                    DuckDBReadableVector in = input.vector(0);
+                    input.stream().forEach(row -> {
+                        if (in.isNull(row)) {
+                            output.setNull(row);
+                        } else {
+                            output.setInt(row, in.getInt(row) + 1);
+                        }
+                    });
+                })
                 .register(conn);
 
             try (ResultSet rs =
@@ -1212,8 +1351,15 @@ public class TestScalarFunctions {
                 .withName("java_add_double_row_stream")
                 .withParameter(doubleType)
                 .withReturnType(doubleType)
-                .withVectorizedFunction(ctx -> {
-                    ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setDouble(row.getDouble(0) + 1.5d));
+                .withVectorizedFunction((input, output) -> {
+                    DuckDBReadableVector in = input.vector(0);
+                    input.stream().forEach(row -> {
+                        if (in.isNull(row)) {
+                            output.setNull(row);
+                        } else {
+                            output.setDouble(row, in.getDouble(row) + 1.5d);
+                        }
+                    });
                 })
                 .register(conn);
 
@@ -1246,52 +1392,62 @@ public class TestScalarFunctions {
                 .withParameter(DuckDBColumnType.FLOAT)
                 .withParameter(DuckDBColumnType.DOUBLE)
                 .withReturnType(DuckDBColumnType.VARCHAR)
-                .withSpecialHandling()
-                .withVectorizedFunction(ctx -> {
-                    assertFalse(ctx.nullsPropagated());
-                    ctx.stream().forEachOrdered(row -> {
+                .withVectorizedFunction((input, output) -> {
+                    input.stream().forEach(rowIndex -> {
                         try {
-                            DuckDBReadableVector booleanVector = ctx.input(0);
-                            DuckDBReadableVector intVector = ctx.input(5);
+                            DuckDBReadableVector booleanVector = input.vector(0);
+                            DuckDBReadableVector intVector = input.vector(5);
                             assertThrows(
-                                () -> { booleanVector.getBoolean(row.index()); }, DuckDBFunctionException.class);
-                            assertTrue(booleanVector.getBoolean(row.index(), true));
-                            assertThrows(() -> { intVector.getInt(row.index()); }, DuckDBFunctionException.class);
-                            assertEquals(intVector.getInt(row.index(), 42), 42);
+                                () -> { booleanVector.getBoolean(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertTrue(booleanVector.getBoolean(rowIndex, true));
+                            assertThrows(
+                                () -> { intVector.getInt(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(intVector.getInt(rowIndex, 42), 42);
 
-                            assertThrows(() -> { row.getBoolean(0); }, DuckDBFunctionException.class);
+                            assertThrows(() -> {
+                                input.vector(0).getBoolean(rowIndex);
+                            }, DuckDBFunctions.FunctionException.class);
                             try {
-                                row.getBoolean(0);
-                                fail("Expected row.getBoolean(0) to fail on NULL");
-                            } catch (DuckDBFunctionException exception) {
-                                assertTrue(exception.getMessage().contains("Failed to read BOOLEAN"));
-                                assertNotNull(exception.getCause());
-                                assertTrue(exception.getCause() instanceof DuckDBFunctionException);
-                                assertTrue(exception.getCause().getMessage().contains("Primitive value for BOOLEAN"));
+                                input.vector(0).getBoolean(rowIndex);
+                                fail("Expected input.vector(0).getBoolean(rowIndex) to fail on NULL");
+                            } catch (DuckDBFunctions.FunctionException exception) {
+                                assertTrue(exception.getMessage().contains("BOOLEAN"));
                             }
-                            assertTrue(row.getBoolean(0, true));
-                            assertThrows(() -> { row.getByte(1); }, DuckDBFunctionException.class);
-                            assertEquals(row.getByte(1, (byte) 42), (byte) 42);
-                            assertThrows(() -> { row.getUint8(2); }, DuckDBFunctionException.class);
-                            assertEquals(row.getUint8(2, (short) 42), (short) 42);
-                            assertThrows(() -> { row.getShort(3); }, DuckDBFunctionException.class);
-                            assertEquals(row.getShort(3, (short) 42), (short) 42);
-                            assertThrows(() -> { row.getUint16(4); }, DuckDBFunctionException.class);
-                            assertEquals(row.getUint16(4, 42), 42);
-                            assertThrows(() -> { row.getInt(5); }, DuckDBFunctionException.class);
-                            assertEquals(row.getInt(5, 42), 42);
-                            assertThrows(() -> { row.getUint32(6); }, DuckDBFunctionException.class);
-                            assertEquals(row.getUint32(6, (long) 42), (long) 42);
-                            assertThrows(() -> { row.getLong(7); }, DuckDBFunctionException.class);
-                            assertEquals(row.getLong(7, (long) 42), (long) 42);
-                            assertThrows(() -> { row.getFloat(8); }, DuckDBFunctionException.class);
-                            assertEquals(row.getFloat(8, (float) 42.1), (float) 42.1);
-                            assertThrows(() -> { row.getDouble(9); }, DuckDBFunctionException.class);
-                            assertEquals(row.getDouble(9, 42.1), 42.1);
+                            assertTrue(input.vector(0).getBoolean(rowIndex, true));
+                            assertThrows(
+                                () -> { input.vector(1).getByte(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(1).getByte(rowIndex, (byte) 42), (byte) 42);
+                            assertThrows(
+                                () -> { input.vector(2).getUint8(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(2).getUint8(rowIndex, (short) 42), (short) 42);
+                            assertThrows(
+                                () -> { input.vector(3).getShort(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(3).getShort(rowIndex, (short) 42), (short) 42);
+                            assertThrows(() -> {
+                                input.vector(4).getUint16(rowIndex);
+                            }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(4).getUint16(rowIndex, 42), 42);
+                            assertThrows(
+                                () -> { input.vector(5).getInt(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(5).getInt(rowIndex, 42), 42);
+                            assertThrows(() -> {
+                                input.vector(6).getUint32(rowIndex);
+                            }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(6).getUint32(rowIndex, (long) 42), (long) 42);
+                            assertThrows(
+                                () -> { input.vector(7).getLong(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(7).getLong(rowIndex, (long) 42), (long) 42);
+                            assertThrows(
+                                () -> { input.vector(8).getFloat(rowIndex); }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(8).getFloat(rowIndex, (float) 42.1), (float) 42.1);
+                            assertThrows(() -> {
+                                input.vector(9).getDouble(rowIndex);
+                            }, DuckDBFunctions.FunctionException.class);
+                            assertEquals(input.vector(9).getDouble(rowIndex, 42.1), 42.1);
                         } catch (Exception e) {
                             throw new RuntimeException(e);
                         }
-                        row.setString("ok");
+                        output.setString(rowIndex, "ok");
                     });
                 })
                 .register(conn);
@@ -1310,11 +1466,11 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_context_row_stream_propagate_nulls_false() throws Exception {
         assertUnaryScalarFunction(
             "java_suffix_varchar_row_stream_nullable", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-            ctx
-            -> {
-                ctx.stream().forEachOrdered(row -> {
-                    String value = row.getString(0);
-                    row.setString(value == null ? "NULL_SEEN" : value + "_ok");
+            (input, output)
+                -> {
+                input.stream().forEach(row -> {
+                    String value = input.vector(0).getString(row);
+                    output.setString(row, value == null ? "NULL_SEEN" : value + "_ok");
                 });
             },
             "SELECT java_suffix_varchar_row_stream_nullable(v) FROM (VALUES ('duck'), (NULL), ('db')) t(v)",
@@ -1384,7 +1540,7 @@ public class TestScalarFunctions {
                 .withName("java_throws_exception")
                 .withParameter(intType)
                 .withReturnType(intType)
-                .withVectorizedFunction(ctx -> { throw new IllegalStateException("boom"); })
+                .withVectorizedFunction((input, output) -> { throw new IllegalStateException("boom"); })
                 .register(conn);
             String message =
                 assertThrows(() -> { stmt.executeQuery("SELECT java_throws_exception(1)"); }, SQLException.class);
@@ -1395,45 +1551,68 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_boolean() throws Exception {
-        assertUnaryScalarFunction(
-            "java_not_bool", DuckDBColumnType.BOOLEAN, DuckDBColumnType.BOOLEAN,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setBoolean(!row.getBoolean(0))); },
-            "SELECT java_not_bool(v) FROM (VALUES (TRUE), (NULL), (FALSE)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Boolean.class), false);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Boolean.class), true);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_not_bool", DuckDBColumnType.BOOLEAN, DuckDBColumnType.BOOLEAN,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setBoolean(row, !in.getBoolean(row));
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_not_bool(v) FROM (VALUES (TRUE), (NULL), (FALSE)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Boolean.class), false);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Boolean.class), true);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_tinyint() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_tinyint", DuckDBColumnType.TINYINT, DuckDBColumnType.TINYINT,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setByte((byte) (row.getByte(0) + 1))); },
-            "SELECT java_add_tinyint(v) FROM (VALUES (41::TINYINT), (NULL), (-2::TINYINT)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Byte.class), (byte) 42);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Byte.class), (byte) -1);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_tinyint", DuckDBColumnType.TINYINT, DuckDBColumnType.TINYINT,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setByte(row, (byte) (in.getByte(row) + 1));
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_tinyint(v) FROM (VALUES (41::TINYINT), (NULL), (-2::TINYINT)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Byte.class), (byte) 42);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Byte.class), (byte) -1);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_smallint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_smallint", DuckDBColumnType.SMALLINT, DuckDBColumnType.SMALLINT,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setShort((short) (row.getShort(0) + 2)));
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setShort(row, (short) (in.getShort(row) + 2));
+                    }
+                });
             },
             "SELECT java_add_smallint(v) FROM (VALUES (40::SMALLINT), (NULL), (-4::SMALLINT)) t(v)",
             rs -> {
@@ -1448,29 +1627,42 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_integer() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_int", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setInt(row.getInt(0) + 1)); },
-            "SELECT java_add_int(v) FROM (VALUES (1), (NULL), (41)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Integer.class), 2);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Integer.class), 42);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_int", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setInt(row, in.getInt(row) + 1);
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_int(v) FROM (VALUES (1), (NULL), (41)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Integer.class), 2);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Integer.class), 42);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_integer_revalidates_after_null() throws Exception {
         assertUnaryScalarFunction("java_revalidate_int", DuckDBColumnType.INTEGER, DuckDBColumnType.INTEGER,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(row -> {
-                                          row.setNull();
-                                          row.setInt(row.getInt(0) + 1);
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setNull(row);
+                                              output.setInt(row, in.getInt(row) + 1);
+                                          }
                                       });
                                   },
                                   "SELECT java_revalidate_int(v) FROM (VALUES (41), (NULL)) t(v)",
@@ -1485,27 +1677,44 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_bigint() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_bigint", DuckDBColumnType.BIGINT, DuckDBColumnType.BIGINT,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setLong(row.getLong(0) + 3)); },
-            "SELECT java_add_bigint(v) FROM (VALUES (39::BIGINT), (NULL), (-5::BIGINT)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Long.class), 42L);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Long.class), -2L);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_bigint", DuckDBColumnType.BIGINT, DuckDBColumnType.BIGINT,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setLong(row, in.getLong(row) + 3);
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_bigint(v) FROM (VALUES (39::BIGINT), (NULL), (-5::BIGINT)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Long.class), 42L);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Long.class), -2L);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_utinyint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_utinyint", DuckDBColumnType.UTINYINT, DuckDBColumnType.UTINYINT,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setUint8(row.getUint8(0) + 1)); },
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setUint8(row, (short) (in.getUint8(row) + 1));
+                    }
+                });
+            },
             "SELECT java_add_utinyint(v) FROM (VALUES (41::UTINYINT), (NULL), (254::UTINYINT)) t(v)",
             rs -> {
                 assertTrue(rs.next());
@@ -1521,8 +1730,17 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_usmallint() throws Exception {
         assertUnaryScalarFunction(
             "java_add_usmallint", DuckDBColumnType.USMALLINT, DuckDBColumnType.USMALLINT,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setUint16(row.getUint16(0) + 2)); },
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setUint16(row, in.getUint16(row) + 2);
+                    }
+                });
+            },
             "SELECT java_add_usmallint(v) FROM (VALUES (40::USMALLINT), (NULL), (65533::USMALLINT)) t(v)",
             rs -> {
                 assertTrue(rs.next());
@@ -1538,8 +1756,17 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_uinteger() throws Exception {
         assertUnaryScalarFunction(
             "java_add_uinteger", DuckDBColumnType.UINTEGER, DuckDBColumnType.UINTEGER,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setUint32(row.getUint32(0) + 3)); },
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setUint32(row, in.getUint32(row) + 3);
+                    }
+                });
+            },
             "SELECT java_add_uinteger(v) FROM (VALUES (39::UINTEGER), (NULL), (4294967292::UINTEGER)) t(v)",
             rs -> {
                 assertTrue(rs.next());
@@ -1553,33 +1780,46 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_ubigint() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_ubigint", DuckDBColumnType.UBIGINT, DuckDBColumnType.UBIGINT,
-            ctx
-            -> {
-                BigInteger increment = BigInteger.ONE;
-                ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setUint64(row.getUint64(0).add(increment)));
-            },
-            "SELECT java_add_ubigint(v) FROM (VALUES (41::UBIGINT), (NULL), "
-                + "(18446744073709551614::UBIGINT)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("18446744073709551615"));
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_ubigint", DuckDBColumnType.UBIGINT, DuckDBColumnType.UBIGINT,
+                                  (input, output)
+                                      -> {
+                                      BigInteger increment = BigInteger.ONE;
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setUint64(row, in.getUint64(row).add(increment));
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_ubigint(v) FROM (VALUES (41::UBIGINT), (NULL), "
+                                      + "(18446744073709551614::UBIGINT)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, BigInteger.class), new BigInteger("42"));
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, BigInteger.class),
+                                                   new BigInteger("18446744073709551615"));
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_uhugeint() throws Exception {
         assertUnaryScalarFunction("java_add_uhugeint", DuckDBColumnType.UHUGEINT, DuckDBColumnType.UHUGEINT,
-                                  ctx
-                                  -> {
+                                  (input, output)
+                                      -> {
                                       BigInteger increment = BigInteger.ONE;
-                                      ctx.propagateNulls(true).stream().forEachOrdered(
-                                          row -> row.setUHugeInt(row.getUHugeInt(0).add(increment)));
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setUHugeInt(row, in.getUHugeInt(row).add(increment));
+                                          }
+                                      });
                                   },
                                   "SELECT java_add_uhugeint(v) FROM (VALUES (CAST('41' AS UHUGEINT)), (NULL), "
                                       + "(CAST('340282366920938463463374607431768211454' AS UHUGEINT))) t(v)",
@@ -1621,47 +1861,69 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_float() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_float", DuckDBColumnType.FLOAT, DuckDBColumnType.FLOAT,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setFloat(row.getFloat(0) + 1.25f)); },
-            "SELECT java_add_float(v) FROM (VALUES (40.75::FLOAT), (NULL), (-2.5::FLOAT)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Float.class), 42.0f);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Float.class), -1.25f);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_float", DuckDBColumnType.FLOAT, DuckDBColumnType.FLOAT,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setFloat(row, in.getFloat(row) + 1.25f);
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_float(v) FROM (VALUES (40.75::FLOAT), (NULL), (-2.5::FLOAT)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Float.class), 42.0f);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Float.class), -1.25f);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_double() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_double", DuckDBColumnType.DOUBLE, DuckDBColumnType.DOUBLE,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setDouble(row.getDouble(0) + 1.5d)); },
-            "SELECT java_add_double(v) FROM (VALUES (40.5::DOUBLE), (NULL), (-3.0::DOUBLE)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Double.class), 42.0d);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Double.class), -1.5d);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_double", DuckDBColumnType.DOUBLE, DuckDBColumnType.DOUBLE,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setDouble(row, in.getDouble(row) + 1.5d);
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_double(v) FROM (VALUES (40.5::DOUBLE), (NULL), (-3.0::DOUBLE)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Double.class), 42.0d);
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Double.class), -1.5d);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_decimal() throws Exception {
         try (DuckDBLogicalType decimalType = DuckDBLogicalType.decimal(38, 10)) {
             assertUnaryScalarFunction("java_add_decimal", decimalType, decimalType,
-                                      ctx
-                                      -> {
+                                      (input, output)
+                                          -> {
                                           BigDecimal increment = new BigDecimal("0.0000000001");
-                                          ctx.propagateNulls(true).stream().forEachOrdered(
-                                              row -> row.setBigDecimal(row.getBigDecimal(0).add(increment)));
+                                          DuckDBReadableVector in = input.vector(0);
+                                          input.stream().forEach(row -> {
+                                              if (in.isNull(row)) {
+                                                  output.setNull(row);
+                                              } else {
+                                                  output.setBigDecimal(row, in.getBigDecimal(row).add(increment));
+                                              }
+                                          });
                                       },
                                       "SELECT java_add_decimal(v) FROM (VALUES "
                                           + "(CAST('12345678901234567890.1234567890' AS DECIMAL(38,10))), "
@@ -1688,12 +1950,8 @@ public class TestScalarFunctions {
                 .withName("java_decimal_precision_overflow")
                 .withParameter(decimalType)
                 .withReturnType(decimalType)
-                .withVectorizedFunction(ctx -> {
-                    DuckDBWritableVector out = ctx.output();
-                    long rowCount = ctx.rowCount();
-                    for (int i = 0; i < rowCount; i++) {
-                        out.setBigDecimal(i, new BigDecimal("12345678901.23"));
-                    }
+                .withVectorizedFunction((input, output) -> {
+                    input.stream().forEach(i -> { output.setBigDecimal(i, new BigDecimal("12345678901.23")); });
                 })
                 .register(conn);
 
@@ -1712,12 +1970,8 @@ public class TestScalarFunctions {
                 .withName("java_decimal_scale_overflow")
                 .withParameter(decimalType)
                 .withReturnType(decimalType)
-                .withVectorizedFunction(ctx -> {
-                    DuckDBWritableVector out = ctx.output();
-                    long rowCount = ctx.rowCount();
-                    for (int i = 0; i < rowCount; i++) {
-                        out.setBigDecimal(i, new BigDecimal("1.234"));
-                    }
+                .withVectorizedFunction((input, output) -> {
+                    input.stream().forEach(i -> { output.setBigDecimal(i, new BigDecimal("1.234")); });
                 })
                 .register(conn);
 
@@ -1731,9 +1985,16 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_date() throws Exception {
         assertUnaryScalarFunction(
             "java_add_date", DuckDBColumnType.DATE, DuckDBColumnType.DATE,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setDate(row.getLocalDate(0).plusDays(2)));
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setDate(row, in.getLocalDate(row).plusDays(2));
+                    }
+                });
             },
             "SELECT java_add_date(v) FROM (VALUES (DATE '2024-07-20'), (NULL), (DATE '1969-12-31')) t(v)",
             rs -> {
@@ -1750,11 +2011,17 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_date_from_java_util_date() throws Exception {
         assertUnaryScalarFunction("java_date_from_util_date", DuckDBColumnType.DATE, DuckDBColumnType.DATE,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(row -> {
-                                          LocalDate value = row.getLocalDate(0).plusDays(1);
-                                          row.setDate(java.util.Date.from(value.atStartOfDay(UTC).toInstant()));
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              LocalDate value = in.getLocalDate(row).plusDays(1);
+                                              output.setDate(row,
+                                                             java.util.Date.from(value.atStartOfDay(UTC).toInstant()));
+                                          }
                                       });
                                   },
                                   "SELECT java_date_from_util_date(v) FROM (VALUES (DATE '2024-07-21'), (NULL)) t(v)",
@@ -1769,10 +2036,16 @@ public class TestScalarFunctions {
 
     public static void test_register_scalar_function_timestamp() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(
-                                          row -> row.setTimestamp(row.getLocalDateTime(0).plusMinutes(30)));
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setTimestamp(row, in.getLocalDateTime(row).plusMinutes(30));
+                                          }
+                                      });
                                   },
                                   "SELECT java_add_timestamp(v) FROM (VALUES "
                                       + "(TIMESTAMP '2024-07-21 12:34:56.123456'), "
@@ -1795,10 +2068,16 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_s() throws Exception {
         assertUnaryScalarFunction(
             "java_add_timestamp_s", DuckDBColumnType.TIMESTAMP_S, DuckDBColumnType.TIMESTAMP_S,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(
-                    row -> row.setTimestamp(row.getLocalDateTime(0).plusSeconds(2)));
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setTimestamp(row, in.getLocalDateTime(row).plusSeconds(2));
+                    }
+                });
             },
             "SELECT java_add_timestamp_s(v) FROM (VALUES (TIMESTAMP_S '2024-07-21 12:34:56'), (NULL)) t(v)",
             rs -> {
@@ -1811,25 +2090,34 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_timestamp_s_pre_epoch() throws Exception {
-        assertUnaryScalarFunction("java_copy_timestamp_s_pre_epoch", DuckDBColumnType.TIMESTAMP,
-                                  DuckDBColumnType.TIMESTAMP_S,
-                                  ctx
-                                  -> { ctx.stream().forEachOrdered(row -> row.setTimestamp(row.getLocalDateTime(0))); },
-                                  "SELECT java_copy_timestamp_s_pre_epoch(v) FROM (VALUES "
-                                      + "(TIMESTAMP '1969-12-31 23:59:59.999')) t(v)",
-                                  rs -> {
-                                      assertTrue(rs.next());
-                                      assertEquals(rs.getTimestamp(1), Timestamp.valueOf("1969-12-31 23:59:59"));
-                                      assertFalse(rs.next());
-                                  });
+        assertUnaryScalarFunction(
+            "java_copy_timestamp_s_pre_epoch", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP_S,
+            (input, output)
+                -> {
+                input.stream().forEach(
+                    rowIndex -> output.setTimestamp(rowIndex, input.vector(0).getLocalDateTime(rowIndex)));
+            },
+            "SELECT java_copy_timestamp_s_pre_epoch(v) FROM (VALUES "
+                + "(TIMESTAMP '1969-12-31 23:59:59.999')) t(v)",
+            rs -> {
+                assertTrue(rs.next());
+                assertEquals(rs.getTimestamp(1), Timestamp.valueOf("1969-12-31 23:59:59"));
+                assertFalse(rs.next());
+            });
     }
 
     public static void test_register_scalar_function_timestamp_ms() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp_ms", DuckDBColumnType.TIMESTAMP_MS, DuckDBColumnType.TIMESTAMP_MS,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(
-                                          row -> row.setTimestamp(row.getLocalDateTime(0).plusNanos(7_000_000)));
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setTimestamp(row, in.getLocalDateTime(row).plusNanos(7_000_000));
+                                          }
+                                      });
                                   },
                                   "SELECT java_add_timestamp_ms(v) FROM (VALUES "
                                       + "(TIMESTAMP_MS '2024-07-21 12:34:56.123'), (NULL)) t(v)",
@@ -1844,26 +2132,35 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_timestamp_ms_pre_epoch() throws Exception {
-        assertUnaryScalarFunction("java_copy_timestamp_ms_pre_epoch", DuckDBColumnType.TIMESTAMP,
-                                  DuckDBColumnType.TIMESTAMP_MS,
-                                  ctx
-                                  -> { ctx.stream().forEachOrdered(row -> row.setTimestamp(row.getLocalDateTime(0))); },
-                                  "SELECT java_copy_timestamp_ms_pre_epoch(v) FROM (VALUES "
-                                      + "(TIMESTAMP '1969-12-31 23:59:59.9995')) t(v)",
-                                  rs -> {
-                                      assertTrue(rs.next());
-                                      assertEquals(rs.getObject(1, LocalDateTime.class),
-                                                   LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999_000_000));
-                                      assertFalse(rs.next());
-                                  });
+        assertUnaryScalarFunction(
+            "java_copy_timestamp_ms_pre_epoch", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP_MS,
+            (input, output)
+                -> {
+                input.stream().forEach(
+                    rowIndex -> output.setTimestamp(rowIndex, input.vector(0).getLocalDateTime(rowIndex)));
+            },
+            "SELECT java_copy_timestamp_ms_pre_epoch(v) FROM (VALUES "
+                + "(TIMESTAMP '1969-12-31 23:59:59.9995')) t(v)",
+            rs -> {
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1, LocalDateTime.class),
+                             LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999_000_000));
+                assertFalse(rs.next());
+            });
     }
 
     public static void test_register_scalar_function_timestamp_ns() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp_ns", DuckDBColumnType.TIMESTAMP_NS, DuckDBColumnType.TIMESTAMP_NS,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(
-                                          row -> row.setTimestamp(row.getLocalDateTime(0).plusNanos(789)));
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setTimestamp(row, in.getLocalDateTime(row).plusNanos(789));
+                                          }
+                                      });
                                   },
                                   "SELECT java_add_timestamp_ns(v) FROM (VALUES "
                                       + "(TIMESTAMP_NS '2024-07-21 12:34:56.123456789'), (NULL)) t(v)",
@@ -1878,38 +2175,47 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_timestamptz() throws Exception {
-        assertUnaryScalarFunction(
-            "java_add_timestamptz", DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
-            DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(
-                    row -> row.setOffsetDateTime(row.getOffsetDateTime(0).plusMinutes(5)));
-            },
-            "SELECT java_add_timestamptz(v) FROM (VALUES "
-                + "(TIMESTAMPTZ '2024-07-21 12:34:56.123456+02:00'), (NULL)) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertTrue(rs.getObject(1, OffsetDateTime.class)
-                               .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 39, 56, 123456000, ZoneOffset.UTC)));
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_add_timestamptz", DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
+                                  DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setOffsetDateTime(row, in.getOffsetDateTime(row).plusMinutes(5));
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_add_timestamptz(v) FROM (VALUES "
+                                      + "(TIMESTAMPTZ '2024-07-21 12:34:56.123456+02:00'), (NULL)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertTrue(
+                                          rs.getObject(1, OffsetDateTime.class)
+                                              .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 39, 56, 123456000, UTC)));
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_timestamptz_set_timestamp() throws Exception {
         assertUnaryScalarFunction(
             "java_copy_timestamptz_with_timestamp", DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
             DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE,
-            ctx
-            -> { ctx.stream().forEachOrdered(row -> row.setTimestamp(row.getTimestamp(0))); },
+            (input, output)
+                -> {
+                input.stream().forEach(
+                    rowIndex -> output.setTimestamp(rowIndex, input.vector(0).getTimestamp(rowIndex)));
+            },
             "SELECT java_copy_timestamptz_with_timestamp(v) FROM (VALUES "
                 + "(TIMESTAMPTZ '2024-07-21 12:34:56.123456+02:00')) t(v)",
             rs -> {
                 assertTrue(rs.next());
                 assertTrue(rs.getObject(1, OffsetDateTime.class)
-                               .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 34, 56, 123456000, ZoneOffset.UTC)));
+                               .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 34, 56, 123456000, UTC)));
                 assertFalse(rs.next());
             });
     }
@@ -1917,11 +2223,17 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_date", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            ctx
-            -> {
+            (input, output)
+                -> {
                 long oneSecondMillis = 1000L;
-                ctx.propagateNulls(true).stream().forEachOrdered(
-                    row -> { row.setTimestamp(new java.util.Date(row.getTimestamp(0).getTime() + oneSecondMillis)); });
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setTimestamp(row, new java.util.Date(in.getTimestamp(row).getTime() + oneSecondMillis));
+                    }
+                });
             },
             "SELECT epoch_ms(java_timestamp_from_util_date(v)) FROM (VALUES "
                 + "(TIMESTAMP '2024-07-21 12:34:56.123456'), "
@@ -1940,11 +2252,16 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_timestamp() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_ts", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(row -> {
-                    java.util.Date value = Timestamp.valueOf(row.getLocalDateTime(0).plusNanos(789000));
-                    row.setTimestamp(value);
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        java.util.Date value = Timestamp.valueOf(in.getLocalDateTime(row).plusNanos(789000));
+                        output.setTimestamp(row, value);
+                    }
                 });
             },
             "SELECT java_timestamp_from_util_ts(v) FROM (VALUES (TIMESTAMP '2024-07-21 12:34:56.123456')) t(v)",
@@ -1959,11 +2276,11 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_sql_date", DuckDBColumnType.DATE, DuckDBColumnType.TIMESTAMP,
-            ctx
-            -> {
-                ctx.stream().forEachOrdered(row -> {
-                    java.util.Date value = Date.valueOf(row.getLocalDate(0));
-                    row.setTimestamp(value);
+            (input, output)
+                -> {
+                input.stream().forEach(rowIndex -> {
+                    java.util.Date value = Date.valueOf(input.vector(0).getLocalDate(rowIndex));
+                    output.setTimestamp(rowIndex, value);
                 });
             },
             "SELECT epoch_ms(java_timestamp_from_util_sql_date(v)) FROM (VALUES (DATE '2024-07-21')) t(v)",
@@ -1977,11 +2294,11 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_time() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_util_sql_time", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            ctx
-            -> {
-                ctx.stream().forEachOrdered(row -> {
+            (input, output)
+                -> {
+                input.stream().forEach(rowIndex -> {
                     java.util.Date value = Time.valueOf("12:34:56");
-                    row.setTimestamp(value);
+                    output.setTimestamp(rowIndex, value);
                 });
             },
             "SELECT epoch_ms(java_timestamp_from_util_sql_time(v)) FROM (VALUES (TIMESTAMP '2024-07-21 00:00:00')) t(v)",
@@ -1995,10 +2312,16 @@ public class TestScalarFunctions {
     public static void test_register_scalar_function_timestamp_from_local_date() throws Exception {
         assertUnaryScalarFunction(
             "java_timestamp_from_local_date", DuckDBColumnType.DATE, DuckDBColumnType.TIMESTAMP,
-            ctx
-            -> {
-                ctx.propagateNulls(true).stream().forEachOrdered(
-                    row -> row.setTimestamp(row.getLocalDate(0).plusDays(1)));
+            (input, output)
+                -> {
+                DuckDBReadableVector in = input.vector(0);
+                input.stream().forEach(row -> {
+                    if (in.isNull(row)) {
+                        output.setNull(row);
+                    } else {
+                        output.setTimestamp(row, in.getLocalDate(row).plusDays(1));
+                    }
+                });
             },
             "SELECT java_timestamp_from_local_date(v) FROM (VALUES (DATE '2024-07-21'), (NULL)) t(v)",
             rs -> {
@@ -2012,48 +2335,69 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_varchar() throws Exception {
-        assertUnaryScalarFunction(
-            "java_suffix_varchar", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setString(row.getString(0) + "_java")); },
-            "SELECT java_suffix_varchar(v) FROM (VALUES ('duck'), (NULL), "
-                + "('abcdefghijklmnop')) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, String.class), "duck_java");
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop_java");
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_suffix_varchar", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setString(row, in.getString(row) + "_java");
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_suffix_varchar(v) FROM (VALUES ('duck'), (NULL), "
+                                      + "('abcdefghijklmnop')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "duck_java");
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop_java");
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_varchar_get_string_handles_null() throws Exception {
-        assertUnaryScalarFunction(
-            "java_echo_varchar_nullable", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-            ctx
-            -> { ctx.propagateNulls(true).stream().forEachOrdered(row -> row.setString(row.getString(0))); },
-            "SELECT java_echo_varchar_nullable(v) FROM (VALUES ('duck'), (NULL), "
-                + "('abcdefghijklmnop')) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, String.class), "duck");
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop");
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_echo_varchar_nullable", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setString(row, in.getString(row));
+                                          }
+                                      });
+                                  },
+                                  "SELECT java_echo_varchar_nullable(v) FROM (VALUES ('duck'), (NULL), "
+                                      + "('abcdefghijklmnop')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "duck");
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop");
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_varchar_revalidates_after_null() throws Exception {
         assertUnaryScalarFunction("java_revalidate_varchar", DuckDBColumnType.VARCHAR, DuckDBColumnType.VARCHAR,
-                                  ctx
-                                  -> {
-                                      ctx.propagateNulls(true).stream().forEachOrdered(row -> {
-                                          row.setNull();
-                                          row.setString(row.getString(0) + "_ok");
+                                  (input, output)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      input.stream().forEach(row -> {
+                                          if (in.isNull(row)) {
+                                              output.setNull(row);
+                                          } else {
+                                              output.setNull(row);
+                                              output.setString(row, in.getString(row) + "_ok");
+                                          }
                                       });
                                   },
                                   "SELECT java_revalidate_varchar(v) FROM (VALUES ('duck'), (NULL)) t(v)",
@@ -2067,120 +2411,117 @@ public class TestScalarFunctions {
                                   });
     }
 
-    private static void assertUnaryScalarFunction(String functionName, DuckDBColumnType parameterType,
-                                                  DuckDBColumnType returnType, DuckDBScalarFunction function,
-                                                  String query, ResultSetVerifier verifier) throws Exception {
-        try (DuckDBLogicalType parameterLogicalType = DuckDBLogicalType.of(parameterType);
-             DuckDBLogicalType returnLogicalType = DuckDBLogicalType.of(returnType)) {
-            assertUnaryScalarFunction(functionName, parameterLogicalType, returnLogicalType, function, query, verifier);
-        }
-    }
-
-    private static void assertUnaryScalarFunction(String functionName, DuckDBLogicalType parameterType,
-                                                  DuckDBLogicalType returnType, DuckDBScalarFunction function,
-                                                  String query, ResultSetVerifier verifier) throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
+    public static void test_scalar_function_primitive_types() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withParameter(parameterType)
-                .withReturnType(returnType)
-                .withVectorizedFunction(function)
+                .withName("java_int_add")
+                .withParameter(Integer.TYPE)
+                .withReturnType(int.class)
+                .withIntFunction(x -> x + 1)
                 .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
+            try (ResultSet rs = stmt.executeQuery("SELECT java_int_add(41::INTEGER)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertFalse(rs.next());
             }
         }
     }
 
-    private static void assertUnaryJavaFunction(String functionName, Class<?> parameterType, Class<?> returnType,
-                                                Function<?, ?> function, String query, ResultSetVerifier verifier)
-        throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
+    public static void test_scalar_functions_null_in_null_out() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withParameter(parameterType)
-                .withReturnType(returnType)
-                .withFunction(function)
+                .withName("java_concat")
+                .withParameters(String.class, String.class)
+                .withReturnType(String.class)
+                .withNullInNullOut()
+                .withFunction((String left, String right) -> {
+                    if (left == null && right == null) {
+                        return "NULL was passed to me";
+                    }
+                    return left + right;
+                })
                 .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
+            try (ResultSet rs = stmt.executeQuery("SELECT java_concat('foo', 'bar')")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "foobar");
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT java_concat(NULL, NULL)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), null);
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT java_concat(a.col1, a.col2) FROM ("
+                                                  + " SELECT 'foo' col1, 'bar' col2"
+                                                  + " UNION ALL"
+                                                  + " SELECT NULL col1, NULL col2"
+                                                  + " UNION ALL"
+                                                  + " SELECT 'boo' col1, 'baz' col2"
+                                                  + ") a")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "foobar");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "NULL was passed to me");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "boobaz");
+                assertFalse(rs.next());
             }
         }
     }
 
-    private static void assertUnaryJavaFunction(String functionName, DuckDBColumnType parameterType,
-                                                DuckDBColumnType returnType, Function<?, ?> function, String query,
-                                                ResultSetVerifier verifier) throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
+    public static void test_scalar_function_vectorized_event_label_example() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             DuckDBLogicalType tsType = DuckDBLogicalType.of(DuckDBColumnType.TIMESTAMP);
+             DuckDBLogicalType strType = DuckDBLogicalType.of(DuckDBColumnType.VARCHAR);
+             DuckDBLogicalType dblType = DuckDBLogicalType.of(DuckDBColumnType.DOUBLE)) {
             DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withParameter(parameterType)
-                .withReturnType(returnType)
-                .withFunction(function)
+                .withName("java_event_label")
+                .withParameters(tsType, strType, dblType)
+                .withReturnType(strType)
+                .withVectorizedFunction((input, output) -> {
+                    input.stream().forEach(row -> {
+                        String value = input.vector(0).getLocalDateTime(row) + " | " +
+                                       String.valueOf(input.vector(1).getString(row)).trim().toUpperCase() + " | " +
+                                       input.vector(2).getDouble(row, 0.0d);
+                        output.setString(row, value);
+                    });
+                })
                 .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
+            try (ResultSet rs = stmt.executeQuery("SELECT java_event_label('2020-12-31 23:58:59', 'foo', 42.2)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "2020-12-31T23:58:59 | FOO | 42.2");
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT java_event_label(NULL, NULL, NULL)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "null | NULL | 0.0");
+                assertFalse(rs.next());
             }
         }
     }
 
-    private static void assertUnaryJavaFunction(String functionName, DuckDBLogicalType parameterType,
-                                                DuckDBLogicalType returnType, Function<?, ?> function, String query,
-                                                ResultSetVerifier verifier) throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
+    public static void test_scalar_function_vectorized_parallel_streams() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
             DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withParameter(parameterType)
-                .withReturnType(returnType)
-                .withFunction(function)
+                .withName("java_add")
+                .withParameters(long.class, long.class)
+                .withReturnType(long.class)
+                .withVectorizedFunction((input, output) -> input.stream().parallel().forEach(row -> {
+                    long left = input.vector(0).getLong(row, 0);
+                    long right = input.vector(1).getLong(row, 0);
+                    output.setLong(row, left + right);
+                }))
                 .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
+            try (ResultSet rs = stmt.executeQuery("SELECT java_add(x, x + 1) FROM range(0, (1<<16) + 3) r(x)")) {
+                for (long i = 0; i < (1 << 16) + 3; i++) {
+                    assertTrue(rs.next());
+                    long expected = i + i + 1;
+                    long actual = rs.getLong(1);
+                    assertEquals(actual, expected);
+                }
+                assertFalse(rs.next());
             }
         }
     }
-
-    private static void assertBinaryJavaFunction(String functionName, Class<?> leftType, Class<?> rightType,
-                                                 Class<?> returnType, BiFunction<?, ?, ?> function, String query,
-                                                 ResultSetVerifier verifier) throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
-            DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withParameter(leftType)
-                .withParameter(rightType)
-                .withReturnType(returnType)
-                .withFunction(function)
-                .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
-            }
-        }
-    }
-
-    private static void assertNullaryJavaFunction(String functionName, Class<?> returnType, Supplier<?> function,
-                                                  String query, ResultSetVerifier verifier) throws Exception {
-        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
-             Statement stmt = conn.createStatement()) {
-            DuckDBFunctions.scalarFunction()
-                .withName(functionName)
-                .withReturnType(returnType)
-                .withFunction(function)
-                .register(conn);
-            try (ResultSet rs = stmt.executeQuery(query)) {
-                verifier.verify(rs);
-            }
-        }
-    }
-
-    private static void assertNullRow(ResultSet rs) throws Exception {
-        assertEquals(rs.getObject(1), null);
-        assertTrue(rs.wasNull());
-    }
-
-    private static final java.time.ZoneOffset UTC = java.time.ZoneOffset.UTC;
 }

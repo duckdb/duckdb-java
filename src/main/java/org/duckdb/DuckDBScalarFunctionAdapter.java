@@ -21,6 +21,7 @@ import java.util.function.IntUnaryOperator;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
+import org.duckdb.DuckDBFunctions.FunctionException;
 
 final class DuckDBScalarFunctionAdapter {
     private static final Map<DuckDBColumnType, TypeCodec> CODECS_BY_DUCKDB_TYPE = new LinkedHashMap<>();
@@ -118,23 +119,16 @@ final class DuckDBScalarFunctionAdapter {
         @SuppressWarnings("unchecked") Function<Object, Object> typedFunction = (Function<Object, Object>) function;
         TypeCodec inCodec = codecFor(parameterType, parameterJavaType);
         TypeCodec outCodec = codecFor(returnType, returnJavaType);
-        return ctx -> {
-            DuckDBReadableVector in = ctx.input(0);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
-            boolean propagateNulls = ctx.nullsPropagated();
+        return (input, output) -> {
+            DuckDBReadableVector in = input.vector(0);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
-                    if (propagateNulls && in.isNull(row)) {
-                        out.setNull(row);
-                        continue;
-                    }
                     Object argument = in.isNull(row) ? null : inCodec.read(in, row);
                     Object result = typedFunction.apply(argument);
-                    outCodec.write(out, row, result);
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute unary scalar function at row " + row,
-                                                      exception);
+                    outCodec.write(output, row, result);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute unary scalar function at row " + row, exception);
                 }
             }
         };
@@ -148,162 +142,129 @@ final class DuckDBScalarFunctionAdapter {
         TypeCodec leftCodec = codecFor(leftType, leftJavaType);
         TypeCodec rightCodec = codecFor(rightType, rightJavaType);
         TypeCodec outCodec = codecFor(returnType, returnJavaType);
-        return ctx -> {
-            DuckDBReadableVector left = ctx.input(0);
-            DuckDBReadableVector right = ctx.input(1);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
-            boolean propagateNulls = ctx.nullsPropagated();
+        return (input, output) -> {
+            DuckDBReadableVector left = input.vector(0);
+            DuckDBReadableVector right = input.vector(1);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
-                    boolean leftIsNull = left.isNull(row);
-                    boolean rightIsNull = right.isNull(row);
-                    if (propagateNulls && (leftIsNull || rightIsNull)) {
-                        out.setNull(row);
-                        continue;
-                    }
-                    Object leftValue = leftIsNull ? null : leftCodec.read(left, row);
-                    Object rightValue = rightIsNull ? null : rightCodec.read(right, row);
+                    Object leftValue = left.isNull(row) ? null : leftCodec.read(left, row);
+                    Object rightValue = right.isNull(row) ? null : rightCodec.read(right, row);
                     Object result = typedFunction.apply(leftValue, rightValue);
-                    outCodec.write(out, row, result);
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute binary scalar function at row " + row,
-                                                      exception);
+                    outCodec.write(output, row, result);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute binary scalar function at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction intUnary(IntUnaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withIntFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector in = ctx.input(0);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector in = input.vector(0);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (in.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setInt(row, function.applyAsInt(in.getInt(row)));
+                        output.setInt(row, function.applyAsInt(in.getInt(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withIntFunction at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction intBinary(IntBinaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withIntFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector left = ctx.input(0);
-            DuckDBReadableVector right = ctx.input(1);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector left = input.vector(0);
+            DuckDBReadableVector right = input.vector(1);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (left.isNull(row) || right.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setInt(row, function.applyAsInt(left.getInt(row), right.getInt(row)));
+                        output.setInt(row, function.applyAsInt(left.getInt(row), right.getInt(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withIntFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withIntFunction at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction doubleUnary(DoubleUnaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withDoubleFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector in = ctx.input(0);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector in = input.vector(0);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (in.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setDouble(row, function.applyAsDouble(in.getDouble(row)));
+                        output.setDouble(row, function.applyAsDouble(in.getDouble(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withDoubleFunction at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction doubleBinary(DoubleBinaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withDoubleFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector left = ctx.input(0);
-            DuckDBReadableVector right = ctx.input(1);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector left = input.vector(0);
+            DuckDBReadableVector right = input.vector(1);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (left.isNull(row) || right.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setDouble(row, function.applyAsDouble(left.getDouble(row), right.getDouble(row)));
+                        output.setDouble(row, function.applyAsDouble(left.getDouble(row), right.getDouble(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withDoubleFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withDoubleFunction at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction longUnary(LongUnaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withLongFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector in = ctx.input(0);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector in = input.vector(0);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (in.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setLong(row, function.applyAsLong(in.getLong(row)));
+                        output.setLong(row, function.applyAsLong(in.getLong(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withLongFunction at row " + row, exception);
                 }
             }
         };
     }
 
     static DuckDBScalarFunction longBinary(LongBinaryOperator function) {
-        return ctx -> {
-            if (!ctx.nullsPropagated()) {
-                throw new DuckDBFunctionException("withLongFunction requires propagateNulls(true)");
-            }
-            DuckDBReadableVector left = ctx.input(0);
-            DuckDBReadableVector right = ctx.input(1);
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            DuckDBReadableVector left = input.vector(0);
+            DuckDBReadableVector right = input.vector(1);
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     if (left.isNull(row) || right.isNull(row)) {
-                        out.setNull(row);
+                        output.setNull(row);
                     } else {
-                        out.setLong(row, function.applyAsLong(left.getLong(row), right.getLong(row)));
+                        output.setLong(row, function.applyAsLong(left.getLong(row), right.getLong(row)));
                     }
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute withLongFunction at row " + row, exception);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute withLongFunction at row " + row, exception);
                 }
             }
         };
@@ -313,16 +274,14 @@ final class DuckDBScalarFunctionAdapter {
         throws SQLException {
         @SuppressWarnings("unchecked") Supplier<Object> typedFunction = (Supplier<Object>) function;
         TypeCodec outCodec = codecFor(returnType, returnJavaType);
-        return ctx -> {
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
+        return (input, output) -> {
+            long rowCount = input.rowCount();
             for (long row = 0; row < rowCount; row++) {
                 try {
                     Object result = typedFunction.get();
-                    outCodec.write(out, row, result);
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute supplier scalar function at row " + row,
-                                                      exception);
+                    outCodec.write(output, row, result);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute supplier scalar function at row " + row, exception);
                 }
             }
         };
@@ -338,42 +297,30 @@ final class DuckDBScalarFunctionAdapter {
         for (int i = 0; i < fixedTypes.length; i++) {
             fixedCodecs[i] = codecFor(fixedTypes[i], fixedJavaTypes[i]);
         }
-        return ctx -> {
-            DuckDBWritableVector out = ctx.output();
-            long rowCount = ctx.rowCount();
-            int vectorCount = Math.toIntExact(ctx.columnCount());
-            boolean propagateNulls = ctx.nullsPropagated();
+        return (input, output) -> {
+            long rowCount = input.rowCount();
+            int vectorCount = Math.toIntExact(input.columnCount());
             DuckDBReadableVector[] vectors = new DuckDBReadableVector[vectorCount];
             TypeCodec[] codecs = new TypeCodec[vectorCount];
             for (int column = 0; column < vectorCount; column++) {
-                vectors[column] = ctx.input(column);
+                vectors[column] = input.vector(column);
                 codecs[column] = column < fixedCodecs.length ? fixedCodecs[column] : varArgCodec;
             }
             Object[] args = new Object[vectorCount];
             for (long row = 0; row < rowCount; row++) {
                 try {
-                    boolean skipRow = false;
                     for (int column = 0; column < vectorCount; column++) {
                         DuckDBReadableVector vector = vectors[column];
                         if (vector.isNull(row)) {
-                            if (propagateNulls) {
-                                out.setNull(row);
-                                skipRow = true;
-                                break;
-                            }
                             args[column] = null;
                         } else {
                             args[column] = codecs[column].read(vector, row);
                         }
                     }
-                    if (skipRow) {
-                        continue;
-                    }
                     Object result = function.apply(args);
-                    outCodec.write(out, row, result);
-                } catch (DuckDBFunctionException exception) {
-                    throw new DuckDBFunctionException("Failed to execute variadic scalar function at row " + row,
-                                                      exception);
+                    outCodec.write(output, row, result);
+                } catch (FunctionException exception) {
+                    throw new FunctionException("Failed to execute variadic scalar function at row " + row, exception);
                 }
             }
         };
