@@ -119,6 +119,7 @@ jobs:
           key: ${{ steps.cache_key.outputs.value }}
 
       - name: Build
+        if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-build-docker
         with:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
@@ -190,23 +191,27 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
+        if: ${{ inputs.skip_tests != 'true' }}
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
 
       - name: Build
+        if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-build-docker
         with:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
 
       - name: Spark Test Resources
+        if: ${{ inputs.skip_tests != 'true' }}
         run: |
           mkdir sparktest
           cd sparktest
           cmake ..
 
       - name: Setup Postgres
+        if: ${{ inputs.skip_tests != 'true' }}
         uses: ikalnytskyi/action-setup-postgres@v7
         with:
           postgres-version: '17'
@@ -217,6 +222,7 @@ jobs:
           ssl: true
 
       - name: Setup Minio
+        if: ${{ inputs.skip_tests != 'true' }}
         working-directory: sparktest
         run: |
           wget -nv https://dl.min.io/server/minio/release/linux-amd64/minio
@@ -229,6 +235,7 @@ jobs:
           java ${{ github.workspace }}/src/test/external/SetupMinio.java
 
       - name: Setup DuckLake
+        if: ${{ inputs.skip_tests != 'true' }}
         working-directory: sparktest
         run: |
           cat ${{ env.SESSION_INIT_SQL_FILE }}
@@ -237,6 +244,7 @@ jobs:
           java -cp ${{ env.DUCKDB_JDBC_JAR }}:postgresql-42.7.7.jar ${{ github.workspace }}/src/test/external/SetupDuckLake.java
 
       - name: Spark Tests
+        if: ${{ inputs.skip_tests != 'true' }}
         working-directory: sparktest
         run: |
           wget -nv https://blobs.duckdb.org/ci/spark-3.5.3-bin-hadoop3.tgz
@@ -283,6 +291,7 @@ jobs:
           key: ${{ steps.cache_key.outputs.value }}
 
       - name: Build (patched)
+        if: ${{ inputs.skip_tests != 'true' }}
         run: |
           patch -p1 < ./data/asan/appender_asan_failure.patch
           git diff HEAD
@@ -295,6 +304,7 @@ jobs:
           key: ${{ steps.cache_key.outputs.value }} 
 
       - name: ASan (patched)
+        if: ${{ inputs.skip_tests != 'true' }}
         env:
           LD_PRELOAD: "/usr/lib/x86_64-linux-gnu/libasan.so.8 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
         run: |
@@ -310,12 +320,14 @@ jobs:
           grep ABORTING asan_patched.log
 
       - name: Build
+        if: ${{ inputs.skip_tests != 'true' }}
         run: |
           git checkout src/jni/bindings_appender.cpp
           git status
           make sanitized
 
       - name: ASan
+        if: ${{ inputs.skip_tests != 'true' }}
         env:
           LD_PRELOAD: "/usr/lib/x86_64-linux-gnu/libasan.so.8 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
         run: |
@@ -828,7 +840,7 @@ jobs:
   # SNAPSHOTs don't require GPG signatures or validation
   # See: https://central.sonatype.org/publish/publish-portal-snapshots/
   maven-snapshot-deploy:
-    if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' }}
     name: Maven SNAPSHOT Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
