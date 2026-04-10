@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -29,7 +35,7 @@ static void TupleDataValueStore(const T &source, data_t *__restrict const &row_l
 template <>
 inline void TupleDataValueStore(const string_t &source, data_t *__restrict const &row_location,
                                 const idx_t &offset_in_row, data_ptr_t &heap_location) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	source.VerifyCharacters();
 #endif
 	if (source.IsInlined()) {
@@ -54,7 +60,7 @@ static void TupleDataWithinListValueStore(const T &source, const data_ptr_t &loc
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
@@ -64,14 +70,14 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 
 template <class T>
 void TupleDataValueVerify(const LogicalType &, const T &) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	// NOP
 #endif
 }
 
 template <>
 inline void TupleDataValueVerify(const LogicalType &type, const string_t &value) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		value.Verify();
 	}
@@ -211,7 +217,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			const auto &struct_source = struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
-			ComputeHeapSizes(heap_sizes_v, *struct_source, struct_format, append_sel, append_count);
+			ComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel, append_count);
 		}
 		break;
 	}
@@ -426,7 +432,7 @@ void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_si
 	// Recurse
 	auto &struct_sources = StructVector::GetEntries(source_v);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 
 		auto &struct_format = source_format.children[struct_col_idx];
 		WithinCollectionComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel, append_count,
@@ -447,7 +453,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		// We have to apply it to the child vectors too
 		auto &struct_sources = StructVector::GetEntries(source_v);
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-			auto &struct_source = *struct_sources[struct_col_idx];
+			auto &struct_source = struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
 #ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(!struct_format.combined_list_data);
@@ -516,7 +522,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	D_ASSERT(source_format.children.size() == 1);
 	auto &child_format = source_format.children[0];
 #ifdef D_ASSERT_IS_ENABLED
-	// In debug mode this should be deleted by ResetCombinedListData
+	// Should be deleted by ResetCombinedListData if assertions are enabled
 	D_ASSERT(!child_format.combined_list_data);
 #endif
 	if (!child_format.combined_list_data) {
@@ -647,7 +653,7 @@ static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
 		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
@@ -686,7 +692,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		}
 	}
 
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	// Verify that the size of the data written to the heap is the same as the size we computed it would be
 	if (!layout.AllConstant()) {
 		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
@@ -905,7 +911,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 		const auto &struct_source_format = source_format.children[struct_col_idx];
 		const auto &struct_scatter_function = child_functions[struct_col_idx];
 		struct_scatter_function.function(struct_source, struct_source_format, append_sel, append_count, struct_layout,
@@ -1126,7 +1132,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	// Recurse through the children
 	auto &struct_sources = StructVector::GetEntries(source);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-		auto &struct_source = *struct_sources[struct_col_idx];
+		auto &struct_source = struct_sources[struct_col_idx];
 		auto &struct_format = source_format.children[struct_col_idx];
 		const auto &struct_scatter_function = child_functions[struct_col_idx];
 		struct_scatter_function.function(struct_source, struct_format, append_sel, append_count, layout, row_locations,
@@ -1515,7 +1521,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		auto &struct_target = *struct_targets[struct_col_idx];
+		auto &struct_target = struct_targets[struct_col_idx];
 		const auto &struct_gather_function = child_functions[struct_col_idx];
 		struct_gather_function.function(struct_layout, struct_row_locations, struct_col_idx, scan_sel, scan_count,
 		                                struct_target, target_sel, dummy_vector,
@@ -1682,7 +1688,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	// Recurse
 	auto &struct_targets = StructVector::GetEntries(target);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_targets.size(); struct_col_idx++) {
-		auto &struct_target = *struct_targets[struct_col_idx];
+		auto &struct_target = struct_targets[struct_col_idx];
 		const auto &struct_gather_function = child_functions[struct_col_idx];
 		struct_gather_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count, struct_target,
 		                                target_sel, list_vector, struct_gather_function.child_functions);

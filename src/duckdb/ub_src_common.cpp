@@ -8,6 +8,8 @@
 
 #include "src/common/cgroups.cpp"
 
+#include "src/common/column_index.cpp"
+
 #include "src/common/csv_writer.cpp"
 
 #include "src/common/complex_json.cpp"
@@ -24,6 +26,8 @@
 
 #include "src/common/encryption_state.cpp"
 
+#include "src/common/encryption_types.cpp"
+
 #include "src/common/exception.cpp"
 
 #include "src/common/exception_format_value.cpp"
@@ -35,6 +39,8 @@
 #include "src/common/file_system.cpp"
 
 #include "src/common/filename_pattern.cpp"
+
+#include "src/common/path.cpp"
 
 #include "src/common/fsst.cpp"
 
@@ -63,6 +69,8 @@
 #include "src/common/string_util.cpp"
 
 #include "src/common/enum_util.cpp"
+
+#include "src/common/serialization_compatibility.cpp"
 
 #include "src/common/render_tree.cpp"
 

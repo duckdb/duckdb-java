@@ -133,6 +133,9 @@ struct ColumnScanState {
 	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
 
 public:
+	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
+
+public:
 	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
 	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
@@ -166,9 +169,10 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
+	ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+	           TableFilter &filter);
 
-	idx_t scan_column_index;
+	ProjectionIndex scan_column_index;
 	StorageIndex table_column_index;
 	TableFilter &filter;
 	bool always_true;

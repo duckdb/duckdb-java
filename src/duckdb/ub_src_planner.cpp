@@ -6,6 +6,8 @@
 
 #include "src/planner/collation_binding.cpp"
 
+#include "src/planner/column_binding.cpp"
+
 #include "src/planner/expression_iterator.cpp"
 
 #include "src/planner/expression.cpp"
@@ -31,6 +33,8 @@
 #include "src/planner/logical_operator_visitor.cpp"
 
 #include "src/planner/table_filter.cpp"
+
+#include "src/planner/table_filter_set.cpp"
 
 #include "src/planner/table_filter_state.cpp"
 

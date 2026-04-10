@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/struct_column_writer.hpp"
 
 namespace duckdb {
@@ -44,7 +46,7 @@ void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// Need to check again. It might be that just one child needs it but the rest not
 		if (child_writers[child_idx]->HasAnalyze()) {
-			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p, *child_vectors[child_idx],
+			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p, child_vectors[child_idx],
 			                                  count);
 		}
 	}
@@ -76,7 +78,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, *child_vectors[child_idx], count,
+		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, child_vectors[child_idx], count,
 		                                  vector_can_span_multiple_pages);
 	}
 }
@@ -92,7 +94,7 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Write(*state.child_states[child_idx], *child_vectors[child_idx], count);
+		child_writers[child_idx]->Write(*state.child_states[child_idx], child_vectors[child_idx], count);
 	}
 }
 
@@ -105,7 +107,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	}
 }
 
-void StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -129,9 +131,11 @@ void StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &s
 	}
 	schemas.push_back(std::move(schema_element));
 
+	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
-		child_writer->FinalizeSchema(schemas);
+		unique_columns += child_writer->FinalizeSchema(schemas);
 	}
+	return unique_columns;
 }
 
 } // namespace duckdb

@@ -1,3 +1,5 @@
+#include "src/optimizer/aggregate_function_rewriter.cpp"
+
 #include "src/optimizer/build_probe_side_optimizer.cpp"
 
 #include "src/optimizer/column_binding_replacer.cpp"
@@ -40,6 +42,8 @@
 
 #include "src/optimizer/optimizer.cpp"
 
+#include "src/optimizer/outer_join_simplification.cpp"
+
 #include "src/optimizer/join_elimination.cpp"
 
 #include "src/optimizer/regex_range_filter.cpp"
@@ -64,5 +68,5 @@
 
 #include "src/optimizer/sampling_pushdown.cpp"
 
-#include "src/optimizer/sum_rewriter.cpp"
+#include "src/optimizer/projection_pullup.cpp"
 
