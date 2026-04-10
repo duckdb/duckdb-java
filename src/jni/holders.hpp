@@ -55,45 +55,44 @@ struct ResultHolder {
 	duckdb::unique_ptr<duckdb::DataChunk> chunk;
 };
 
-inline ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
-	if (!conn_ref_buf) {
-		throw duckdb::ConnectionException("Invalid connection buffer ref");
-	}
-	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
-	if (!conn_holder) {
-		throw duckdb::ConnectionException("Invalid connection buffer");
-	}
-	return conn_holder;
-}
+struct AttachedJNIEnv {
+	JavaVM *vm = nullptr;
+	JNIEnv *env = nullptr;
+	bool need_to_detach = false;
 
-/**
- * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
- */
-inline duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	auto conn_holder = get_connection_ref(env, conn_ref_buf);
-	auto conn_ref = conn_holder->connection.get();
-	if (!conn_ref || !conn_ref->context) {
-		throw duckdb::ConnectionException("Invalid connection");
-	}
+	AttachedJNIEnv();
 
-	return conn_ref;
-}
+	AttachedJNIEnv(JavaVM *vm_in, JNIEnv *env_in, bool need_to_detach_in);
 
-inline duckdb_connection conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
-	if (conn_ref_buf == nullptr) {
-		env->ThrowNew(J_SQLException, "Invalid connection buffer");
-		return nullptr;
-	}
-	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
-	if (conn_holder == nullptr) {
-		env->ThrowNew(J_SQLException, "Invalid connection holder");
-		return nullptr;
-	}
-	auto conn_ref = conn_holder->connection.get();
-	if (conn_ref == nullptr || conn_ref->context == nullptr) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
-		return nullptr;
-	}
+	~AttachedJNIEnv() noexcept;
+};
 
-	return reinterpret_cast<duckdb_connection>(conn_ref);
-}
+struct GlobalRefHolder {
+	JavaVM *vm = nullptr;
+	jobject global_ref = nullptr;
+
+	GlobalRefHolder(JNIEnv *env, jobject local_ref);
+
+	~GlobalRefHolder() noexcept;
+
+	AttachedJNIEnv attach_current_thread();
+
+	void detach_current_thread();
+
+	static void destroy(void *holder_in) noexcept;
+};
+
+struct LocalRefHolder {
+	JNIEnv *env = nullptr;
+	jobject local_ref = nullptr;
+
+	LocalRefHolder(JNIEnv *env_in, jobject local_ref_in);
+
+	~LocalRefHolder() noexcept;
+};
+
+ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf);
+
+duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf);
+
+duckdb_connection conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf);
