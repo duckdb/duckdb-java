@@ -601,8 +601,8 @@ add_library(duckdb_java SHARED
   src/jni/config.cpp
   src/jni/duckdb_java.cpp
   src/jni/functions.cpp
+  src/jni/holders.cpp
   src/jni/refs.cpp
-  src/jni/scalar_functions.cpp
   src/jni/types.cpp
   src/jni/util.cpp
   ${DUCKDB_SRC_FILES})

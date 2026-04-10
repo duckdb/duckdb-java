@@ -37,7 +37,9 @@ public class DuckDBBindings {
 
     static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
 
-    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction, Object function);
+    static native void duckdb_scalar_function_set_extra_info(ByteBuffer scalarFunction, Object callback);
+
+    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction);
 
     static native void duckdb_scalar_function_set_error(ByteBuffer functionInfo, byte[] error);
 
