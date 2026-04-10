@@ -116,6 +116,9 @@ extern jobject J_ProfilerPrintFormat_GRAPHVIZ;
 extern jclass J_QueryProgress;
 extern jmethodID J_QueryProgress_init;
 
+extern jclass J_DuckDBScalarFunctionWrapper;
+extern jmethodID J_DuckDBScalarFunctionWrapper_execute;
+
 void create_refs(JNIEnv *env);
 
 void delete_global_refs(JNIEnv *env) noexcept;

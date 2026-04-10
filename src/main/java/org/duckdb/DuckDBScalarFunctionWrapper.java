@@ -4,7 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.nio.ByteBuffer;
 
-final class DuckDBScalarFunctionWrapper {
+class DuckDBScalarFunctionWrapper {
     private final DuckDBScalarFunction function;
 
     DuckDBScalarFunctionWrapper(DuckDBScalarFunction function) {
@@ -21,6 +21,7 @@ final class DuckDBScalarFunctionWrapper {
         }
     }
 
+    // todo: stacktrace
     private static void reportError(ByteBuffer functionInfo, Throwable throwable) {
         String message = throwable.getMessage();
         String className = throwable.getClass().getName();

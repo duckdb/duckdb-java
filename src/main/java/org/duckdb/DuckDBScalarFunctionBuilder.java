@@ -434,7 +434,9 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         this.callback = function;
         this.propagateNullsFlag = requiresNullPropagation;
-        duckdb_scalar_function_set_function(scalarFunctionRef, new DuckDBScalarFunctionWrapper(function));
+        DuckDBScalarFunctionWrapper wrapper = new DuckDBScalarFunctionWrapper(function);
+        duckdb_scalar_function_set_extra_info(scalarFunctionRef, wrapper);
+        duckdb_scalar_function_set_function(scalarFunctionRef);
         return this;
     }
 

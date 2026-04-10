@@ -119,6 +119,9 @@ jobject J_ProfilerPrintFormat_GRAPHVIZ;
 jclass J_QueryProgress;
 jmethodID J_QueryProgress_init;
 
+jclass J_DuckDBScalarFunctionWrapper;
+jmethodID J_DuckDBScalarFunctionWrapper_execute;
+
 static std::vector<jobject> global_refs;
 
 template <typename T>
@@ -308,6 +311,11 @@ void create_refs(JNIEnv *env) {
 
 	J_QueryProgress = make_class_ref(env, "org/duckdb/QueryProgress");
 	J_QueryProgress_init = get_method_id(env, J_QueryProgress, "<init>", "(DJJ)V");
+
+	J_DuckDBScalarFunctionWrapper = make_class_ref(env, "org/duckdb/DuckDBScalarFunctionWrapper");
+	J_DuckDBScalarFunctionWrapper_execute =
+	    get_method_id(env, J_DuckDBScalarFunctionWrapper, "execute",
+	                  "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {
