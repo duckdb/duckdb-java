@@ -51,6 +51,8 @@ jmethodID J_BigDecimal_toPlainString;
 jmethodID J_BigDecimal_longValue;
 jfieldID J_HugeInt_lower;
 jfieldID J_HugeInt_upper;
+jmethodID J_HugeInt_toBigInteger;
+jmethodID J_HugeInt_toBigDecimal;
 
 jclass J_DuckResultSetMeta;
 jmethodID J_DuckResultSetMeta_init;
@@ -121,6 +123,11 @@ jmethodID J_QueryProgress_init;
 
 jclass J_DuckDBScalarFunctionWrapper;
 jmethodID J_DuckDBScalarFunctionWrapper_execute;
+jclass J_DuckDBTableFunctionWrapper;
+jmethodID J_DuckDBTableFunctionWrapper_executeBind;
+jmethodID J_DuckDBTableFunctionWrapper_executeGlobalInit;
+jmethodID J_DuckDBTableFunctionWrapper_executeLocalInit;
+jmethodID J_DuckDBTableFunctionWrapper_executeFunction;
 
 static std::vector<jobject> global_refs;
 
@@ -275,6 +282,8 @@ void create_refs(JNIEnv *env) {
 	J_BigDecimal_longValue = get_method_id(env, J_BigDecimal, "longValue", "()J");
 	J_HugeInt_lower = get_field_id(env, J_HugeInt, "lower", "J");
 	J_HugeInt_upper = get_field_id(env, J_HugeInt, "upper", "J");
+	J_HugeInt_toBigInteger = get_static_method_id(env, J_HugeInt, "toBigInteger", "(JJ)Ljava/math/BigInteger;");
+	J_HugeInt_toBigDecimal = get_static_method_id(env, J_HugeInt, "toBigDecimal", "(JJI)Ljava/math/BigDecimal;");
 
 	J_DuckResultSetMeta = make_class_ref(env, "org/duckdb/DuckDBResultSetMetaData");
 	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
@@ -316,6 +325,15 @@ void create_refs(JNIEnv *env) {
 	J_DuckDBScalarFunctionWrapper_execute =
 	    get_method_id(env, J_DuckDBScalarFunctionWrapper, "execute",
 	                  "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V");
+	J_DuckDBTableFunctionWrapper = make_class_ref(env, "org/duckdb/DuckDBTableFunctionWrapper");
+	J_DuckDBTableFunctionWrapper_executeBind =
+	    get_method_id(env, J_DuckDBTableFunctionWrapper, "executeBind", "(Ljava/nio/ByteBuffer;)V");
+	J_DuckDBTableFunctionWrapper_executeGlobalInit =
+	    get_method_id(env, J_DuckDBTableFunctionWrapper, "executeGlobalInit", "(Ljava/nio/ByteBuffer;)V");
+	J_DuckDBTableFunctionWrapper_executeLocalInit =
+	    get_method_id(env, J_DuckDBTableFunctionWrapper, "executeLocalInit", "(Ljava/nio/ByteBuffer;)V");
+	J_DuckDBTableFunctionWrapper_executeFunction = get_method_id(env, J_DuckDBTableFunctionWrapper, "executeFunction",
+	                                                             "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {
@@ -324,6 +342,6 @@ void delete_global_refs(JNIEnv *env) noexcept {
 			env->DeleteGlobalRef(rf);
 		}
 	} catch (const std::exception e) {
-		std::cout << "ERROR: delete_global_refs: " << e.what() << std::endl;
+		std::cerr << "ERROR: delete_global_refs: " << e.what() << std::endl;
 	}
 }

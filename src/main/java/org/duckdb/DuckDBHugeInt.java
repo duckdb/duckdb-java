@@ -1,5 +1,8 @@
 package org.duckdb;
 
+import static org.duckdb.DuckDBVector.ULONG_MULTIPLIER;
+
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
@@ -38,6 +41,13 @@ class DuckDBHugeInt {
         byte[] bytes = new byte[Long.BYTES * 2];
         ByteBuffer.wrap(bytes).putLong(upper).putLong(lower);
         return new BigInteger(1, bytes);
+    }
+
+    static BigDecimal toBigDecimal(long lower, long upper, int scale) {
+        return new BigDecimal(upper)
+            .multiply(ULONG_MULTIPLIER)
+            .add(new BigDecimal(Long.toUnsignedString(lower)))
+            .scaleByPowerOfTen(scale * -1);
     }
 
     long lower() {
