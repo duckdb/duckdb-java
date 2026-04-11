@@ -47,6 +47,8 @@ public final class DuckDBLogicalType implements AutoCloseable {
             return createPrimitive(DUCKDB_TYPE_FLOAT);
         case DOUBLE:
             return createPrimitive(DUCKDB_TYPE_DOUBLE);
+        case DECIMAL:
+            return decimal(38, 18);
         case VARCHAR:
             return createPrimitive(DUCKDB_TYPE_VARCHAR);
         case DATE:
@@ -62,7 +64,7 @@ public final class DuckDBLogicalType implements AutoCloseable {
         case TIMESTAMP_WITH_TIME_ZONE:
             return createPrimitive(DUCKDB_TYPE_TIMESTAMP_TZ);
         default:
-            throw new SQLException("Unsupported logical type for scalar UDF registration: " + type);
+            throw new SQLException("Unsupported logical type for UDF registration: " + type);
         }
     }
 

@@ -87,8 +87,9 @@ Common class mappings include:
 
 Notes:
 
-- `UHUGEINT` is supported through explicit `DuckDBColumnType.UHUGEINT`/`DuckDBLogicalType` declarations.
-- Java class auto-mapping for `BigInteger` remains `HUGEINT`.
+- `UHUGEINT` is supported through explicit `DuckDBColumnType.UHUGEINT`/`DuckDBLogicalType` declarations
+- Java class auto-mapping for `BigInteger` remains `HUGEINT`
+- composite types like `STRUCT` or `LIST` are currently not supported, this intended to be added in future versions
 
 Use `DuckDBLogicalType.decimal(width, scale)` for explicit DECIMAL precision/scale.
 
@@ -153,9 +154,6 @@ This registry provides bookkeeping for functions registered through the JDBC API
 
 - `name()`
 - `functionKind()`
-- `isScalar()`
-- parameter and return type metadata
-- callback and flags used at registration time
 
 To inspect Java-side registrations:
 
@@ -207,3 +205,68 @@ try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement st
 ```sql
 SELECT java_event_label(TIMESTAMP '2026-04-04 12:00:00', 'launch', 4.5);
 ```
+
+## Table functions (`DuckDBTableFunction`)
+
+Similar to scalar functions, a table function can be registered using `DuckDBFunctions.tableFunction()`.
+
+Table function callback must implement `DuckDBTableFunction` interface:
+
+ - `bind` - called during `PREPARE` stage, must register output columns; has access to input parameters using `.getParameter()` and `.getNamedParameter()`; can return a "bind data" object
+  that can be used during function execution
+ - `init` - called once before the function execution, has access to bind data, returns an object used to track the state during function execution
+ - `localInit` (optional) - called once for every thread before the function execution, returns an object used to track thread-local state during function execution
+ - `apply` - has access to bind data, global init data and local init date, writes results into output vectors, returns a number of written row, is called by the engine repeatedly until it return zero rows
+
+All callback arguments (including parameter objects) are only valid during the callback execution.
+
+In general, Java table functions interface exposes the [C API table function interface](https://github.com/duckdb/duckdb-java/blob/2f4ed44df2fd1f89594cc7af28f9f8daba5fa582/src/duckdb/src/include/duckdb.h#L4145-L4478)
+as close as possible.
+
+Example:
+
+```java
+try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement()) {
+    DuckDBFunctions.tableFunction()
+        .withName("java_table_basic")
+        .withParameter(int.class)
+        .withNamedParameter("param1", String.class)
+        .withFunction(new DuckDBTableFunction<Integer, AtomicBoolean, Object>() {
+            @Override
+            public Integer bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                info.addResultColumn("col1", Integer.TYPE).addResultColumn("col2", String.class);
+                DuckDBValue param = info.getParameter(0);
+                assertThrows(param::getBoolean, FunctionException.class);
+                DuckDBValue namedParam = info.getNamedParameter("param1");
+                assertEquals(namedParam.getString(), "foobar");
+                return param.getInt();
+            }
+
+            @Override
+            public AtomicBoolean init(DuckDBTableFunctionInitInfo info) throws Exception {
+                return new AtomicBoolean(false);
+            }
+
+            @Override
+            public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                Integer bindData = info.getBindData();
+                AtomicBoolean done = info.getInitData();
+                if (done.get()) {
+                    return 0;
+                }
+                output.vector(0).setInt(0, bindData);
+                output.vector(1).setString(0, "foo");
+                output.vector(0).setNull(1);
+                output.vector(1).setString(1, "bar");
+                done.set(true);
+                return 2;
+            }
+        })
+        .register(conn);
+...
+}
+```
+```sql
+FROM java_table_basic(42, param1='foobar')
+```
+

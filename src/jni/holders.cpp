@@ -1,5 +1,7 @@
 #include "holders.hpp"
 
+#include <iostream>
+
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
 	if (!conn_ref_buf) {
 		throw duckdb::ConnectionException("Invalid connection buffer ref");
@@ -90,12 +92,14 @@ AttachedJNIEnv GlobalRefHolder::attach_current_thread() {
 	JNIEnv *env = nullptr;
 	auto env_status = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
 	if (env_status != JNI_OK && env_status != JNI_EDETACHED) {
+		std::cerr << "ERROR: vm->GetEnv() failure, status: " << env_status << std::endl;
 		return AttachedJNIEnv();
 	}
 	bool need_to_detach = false;
 	if (env_status == JNI_EDETACHED) {
 		auto attach_status = vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr);
 		if (attach_status != JNI_OK || env == nullptr) {
+			std::cerr << "ERROR: vm->AttachCurrentThread() failure, status: " << attach_status << std::endl;
 			return AttachedJNIEnv();
 		}
 		need_to_detach = true;

@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 class DuckDBVector {
     // Constant to construct BigDecimals from hugeint_t
-    private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
+    final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
     private final static DateTimeFormatter ERA_FORMAT =
         new DateTimeFormatterBuilder()
             .appendValue(ChronoField.YEAR_OF_ERA)

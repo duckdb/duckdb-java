@@ -2,6 +2,7 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
+import static org.duckdb.DuckDBTimestamp.localDateTimeFromTimestamp;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -95,19 +96,6 @@ public final class DuckDBReadableVector {
         return isNull(row) ? defaultValue : data.get(checkedRowIndex(row));
     }
 
-    public short getShort(long row) {
-        requireType(DuckDBColumnType.SMALLINT);
-        if (isNull(row)) {
-            throw primitiveNullValue(DuckDBColumnType.SMALLINT, row);
-        }
-        return data.getShort(checkedByteOffset(row, Short.BYTES));
-    }
-
-    public short getShort(long row, short defaultValue) {
-        requireType(DuckDBColumnType.SMALLINT);
-        return isNull(row) ? defaultValue : data.getShort(checkedByteOffset(row, Short.BYTES));
-    }
-
     public short getUint8(long row) {
         requireType(DuckDBColumnType.UTINYINT);
         if (isNull(row)) {
@@ -119,6 +107,19 @@ public final class DuckDBReadableVector {
     public short getUint8(long row, short defaultValue) {
         requireType(DuckDBColumnType.UTINYINT);
         return isNull(row) ? defaultValue : (short) Byte.toUnsignedInt(data.get(checkedRowIndex(row)));
+    }
+
+    public short getShort(long row) {
+        requireType(DuckDBColumnType.SMALLINT);
+        if (isNull(row)) {
+            throw primitiveNullValue(DuckDBColumnType.SMALLINT, row);
+        }
+        return data.getShort(checkedByteOffset(row, Short.BYTES));
+    }
+
+    public short getShort(long row, short defaultValue) {
+        requireType(DuckDBColumnType.SMALLINT);
+        return isNull(row) ? defaultValue : data.getShort(checkedByteOffset(row, Short.BYTES));
     }
 
     public int getUint16(long row) {
@@ -173,6 +174,15 @@ public final class DuckDBReadableVector {
         return isNull(row) ? defaultValue : data.getLong(checkedByteOffset(row, Long.BYTES));
     }
 
+    public BigInteger getUint64(long row) {
+        requireType(DuckDBColumnType.UBIGINT);
+        if (isNull(row)) {
+            return null;
+        }
+        long value = data.getLong(checkedByteOffset(row, Long.BYTES));
+        return unsignedLongToBigInteger(value);
+    }
+
     public BigInteger getHugeInt(long row) {
         requireType(DuckDBColumnType.HUGEINT);
         if (isNull(row)) {
@@ -193,15 +203,6 @@ public final class DuckDBReadableVector {
         long lower = data.getLong(offset);
         long upper = data.getLong(offset + Long.BYTES);
         return DuckDBHugeInt.toUnsignedBigInteger(lower, upper);
-    }
-
-    public BigInteger getUint64(long row) {
-        requireType(DuckDBColumnType.UBIGINT);
-        if (isNull(row)) {
-            return null;
-        }
-        long value = data.getLong(checkedByteOffset(row, Long.BYTES));
-        return unsignedLongToBigInteger(value);
     }
 
     public float getFloat(long row) {
@@ -230,60 +231,6 @@ public final class DuckDBReadableVector {
         return isNull(row) ? defaultValue : data.getDouble(checkedByteOffset(row, Double.BYTES));
     }
 
-    public LocalDate getLocalDate(long row) {
-        requireType(DuckDBColumnType.DATE);
-        if (isNull(row)) {
-            return null;
-        }
-        return LocalDate.ofEpochDay(data.getInt(checkedByteOffset(row, Integer.BYTES)));
-    }
-
-    public Date getDate(long row) {
-        LocalDate value = getLocalDate(row);
-        return value == null ? null : Date.valueOf(value);
-    }
-
-    public LocalDateTime getLocalDateTime(long row) {
-        requireTimestampType();
-        if (isNull(row)) {
-            return null;
-        }
-        long epochValue = data.getLong(checkedByteOffset(row, Long.BYTES));
-        try {
-            switch (typeInfo.capiType) {
-            case DUCKDB_TYPE_TIMESTAMP_S:
-                return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.SECONDS, null);
-            case DUCKDB_TYPE_TIMESTAMP_MS:
-                return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.MILLIS, null);
-            case DUCKDB_TYPE_TIMESTAMP:
-                return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.MICROS, null);
-            case DUCKDB_TYPE_TIMESTAMP_NS:
-                return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.NANOS, null);
-            case DUCKDB_TYPE_TIMESTAMP_TZ:
-                return DuckDBTimestamp.localDateTimeFromTimestampWithTimezone(epochValue, ChronoUnit.MICROS, null);
-            default:
-                throw new FunctionException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
-            }
-        } catch (java.sql.SQLException exception) {
-            throw new FunctionException("Failed to decode timestamp at row " + row, exception);
-        }
-    }
-
-    public Timestamp getTimestamp(long row) {
-        LocalDateTime value = getLocalDateTime(row);
-        return value == null ? null : Timestamp.valueOf(value);
-    }
-
-    public OffsetDateTime getOffsetDateTime(long row) {
-        requireType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
-        if (isNull(row)) {
-            return null;
-        }
-        long micros = data.getLong(checkedByteOffset(row, Long.BYTES));
-        Instant instant = instantFromEpoch(micros, ChronoUnit.MICROS);
-        return instant.atZone(ZoneId.systemDefault()).toOffsetDateTime();
-    }
-
     public BigDecimal getBigDecimal(long row) {
         requireType(DuckDBColumnType.DECIMAL);
         if (isNull(row)) {
@@ -308,6 +255,60 @@ public final class DuckDBReadableVector {
         default:
             throw new FunctionException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
         }
+    }
+
+    public LocalDate getLocalDate(long row) {
+        requireType(DuckDBColumnType.DATE);
+        if (isNull(row)) {
+            return null;
+        }
+        return LocalDate.ofEpochDay(data.getInt(checkedByteOffset(row, Integer.BYTES)));
+    }
+
+    public Date getDate(long row) {
+        LocalDate value = getLocalDate(row);
+        return value == null ? null : Date.valueOf(value);
+    }
+
+    public LocalDateTime getLocalDateTime(long row) {
+        requireTimestampType();
+        if (isNull(row)) {
+            return null;
+        }
+        long epochValue = data.getLong(checkedByteOffset(row, Long.BYTES));
+        try {
+            switch (typeInfo.capiType) {
+            case DUCKDB_TYPE_TIMESTAMP_S:
+                return localDateTimeFromTimestamp(epochValue, ChronoUnit.SECONDS);
+            case DUCKDB_TYPE_TIMESTAMP_MS:
+                return localDateTimeFromTimestamp(epochValue, ChronoUnit.MILLIS);
+            case DUCKDB_TYPE_TIMESTAMP:
+                return localDateTimeFromTimestamp(epochValue, ChronoUnit.MICROS);
+            case DUCKDB_TYPE_TIMESTAMP_NS:
+                return localDateTimeFromTimestamp(epochValue, ChronoUnit.NANOS);
+            case DUCKDB_TYPE_TIMESTAMP_TZ:
+                return DuckDBTimestamp.localDateTimeFromTimestampWithTimezone(epochValue, ChronoUnit.MICROS, null);
+            default:
+                throw new FunctionException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+            }
+        } catch (java.sql.SQLException exception) {
+            throw new FunctionException("Failed to decode timestamp at row " + row, exception);
+        }
+    }
+
+    public Timestamp getTimestamp(long row) {
+        LocalDateTime value = getLocalDateTime(row);
+        return value == null ? null : Timestamp.valueOf(value);
+    }
+
+    public OffsetDateTime getOffsetDateTime(long row) {
+        requireType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
+        if (isNull(row)) {
+            return null;
+        }
+        long micros = data.getLong(checkedByteOffset(row, Long.BYTES));
+        Instant instant = instantFromEpoch(micros, ChronoUnit.MICROS);
+        return instant.atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
 
     public String getString(long row) {
@@ -382,7 +383,7 @@ public final class DuckDBReadableVector {
         }
     }
 
-    private static BigInteger unsignedLongToBigInteger(long value) {
+    static BigInteger unsignedLongToBigInteger(long value) {
         if (value >= 0) {
             return BigInteger.valueOf(value);
         }
