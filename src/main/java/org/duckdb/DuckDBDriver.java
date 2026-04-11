@@ -285,10 +285,12 @@ public class DuckDBDriver implements java.sql.Driver {
         }
     }
 
-    static void registerFunction(RegisteredFunction function) {
+    static RegisteredFunction registerFunction(String name, DuckDBFunctions.Kind kind) {
         functionsRegistryLock.lock();
         try {
-            functionsRegistry.add(function);
+            RegisteredFunction fun = new RegisteredFunction(name, kind);
+            functionsRegistry.add(fun);
+            return fun;
         } finally {
             functionsRegistryLock.unlock();
         }

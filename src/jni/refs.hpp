@@ -48,6 +48,8 @@ extern jmethodID J_BigDecimal_toPlainString;
 extern jmethodID J_BigDecimal_longValue;
 extern jfieldID J_HugeInt_lower;
 extern jfieldID J_HugeInt_upper;
+extern jmethodID J_HugeInt_toBigInteger;
+extern jmethodID J_HugeInt_toBigDecimal;
 
 extern jclass J_DuckResultSetMeta;
 extern jmethodID J_DuckResultSetMeta_init;
@@ -118,6 +120,11 @@ extern jmethodID J_QueryProgress_init;
 
 extern jclass J_DuckDBScalarFunctionWrapper;
 extern jmethodID J_DuckDBScalarFunctionWrapper_execute;
+extern jclass J_DuckDBTableFunctionWrapper;
+extern jmethodID J_DuckDBTableFunctionWrapper_executeBind;
+extern jmethodID J_DuckDBTableFunctionWrapper_executeGlobalInit;
+extern jmethodID J_DuckDBTableFunctionWrapper_executeLocalInit;
+extern jmethodID J_DuckDBTableFunctionWrapper_executeFunction;
 
 void create_refs(JNIEnv *env);
 
