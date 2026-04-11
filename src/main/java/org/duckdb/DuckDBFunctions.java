@@ -1,12 +1,11 @@
 package org.duckdb;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.StringJoiner;
 
 public final class DuckDBFunctions {
-    public enum Kind { SCALAR }
+    public enum Kind { SCALAR, TABLE }
 
     private DuckDBFunctions() {
     }
@@ -15,16 +14,8 @@ public final class DuckDBFunctions {
         return new DuckDBScalarFunctionBuilder();
     }
 
-    static RegisteredFunction createRegisteredFunction(String name, List<DuckDBLogicalType> parameterTypes,
-                                                       List<DuckDBColumnType> parameterColumnTypes,
-                                                       DuckDBLogicalType returnType, DuckDBColumnType returnColumnType,
-                                                       DuckDBScalarFunction function, DuckDBLogicalType varArgType,
-                                                       boolean volatileFlag, boolean specialHandlingFlag,
-                                                       boolean propagateNullsFlag) {
-        return new RegisteredFunction(name, Kind.SCALAR, Collections.unmodifiableList(new ArrayList<>(parameterTypes)),
-                                      Collections.unmodifiableList(new ArrayList<>(parameterColumnTypes)), returnType,
-                                      returnColumnType, function, varArgType, volatileFlag, specialHandlingFlag,
-                                      propagateNullsFlag);
+    public static DuckDBTableFunctionBuilder tableFunction() throws SQLException {
+        return new DuckDBTableFunctionBuilder();
     }
 
     public static class FunctionException extends RuntimeException {
@@ -32,6 +23,10 @@ public final class DuckDBFunctions {
 
         public FunctionException(String message) {
             super(message);
+        }
+
+        public FunctionException(Throwable cause) {
+            super(cause);
         }
 
         public FunctionException(String message, Throwable cause) {
@@ -42,32 +37,12 @@ public final class DuckDBFunctions {
     public static final class RegisteredFunction {
         private final String name;
         private final Kind functionKind;
-        private final List<DuckDBLogicalType> parameterTypes;
-        private final List<DuckDBColumnType> parameterColumnTypes;
-        private final DuckDBLogicalType returnType;
-        private final DuckDBColumnType returnColumnType;
-        private final DuckDBScalarFunction function;
-        private final DuckDBLogicalType varArgType;
-        private final boolean volatileFlag;
-        private final boolean nullInNullOutFlag;
-        private final boolean propagateNullsFlag;
+        private final LocalDateTime registeredAt;
 
-        private RegisteredFunction(String name, Kind functionKind, List<DuckDBLogicalType> parameterTypes,
-                                   List<DuckDBColumnType> parameterColumnTypes, DuckDBLogicalType returnType,
-                                   DuckDBColumnType returnColumnType, DuckDBScalarFunction function,
-                                   DuckDBLogicalType varArgType, boolean volatileFlag, boolean nullInNullOutFlag,
-                                   boolean propagateNullsFlag) {
+        RegisteredFunction(String name, Kind functionKind) {
             this.name = name;
             this.functionKind = functionKind;
-            this.parameterTypes = parameterTypes;
-            this.parameterColumnTypes = parameterColumnTypes;
-            this.returnType = returnType;
-            this.returnColumnType = returnColumnType;
-            this.function = function;
-            this.varArgType = varArgType;
-            this.volatileFlag = volatileFlag;
-            this.nullInNullOutFlag = nullInNullOutFlag;
-            this.propagateNullsFlag = propagateNullsFlag;
+            this.registeredAt = LocalDateTime.now();
         }
 
         public String name() {
@@ -78,44 +53,13 @@ public final class DuckDBFunctions {
             return functionKind;
         }
 
-        public List<DuckDBLogicalType> parameterTypes() {
-            return parameterTypes;
-        }
-
-        public List<DuckDBColumnType> parameterColumnTypes() {
-            return parameterColumnTypes;
-        }
-
-        public DuckDBLogicalType returnType() {
-            return returnType;
-        }
-
-        public DuckDBColumnType returnColumnType() {
-            return returnColumnType;
-        }
-
-        public DuckDBScalarFunction function() {
-            return function;
-        }
-
-        public DuckDBLogicalType varArgType() {
-            return varArgType;
-        }
-
-        public boolean isVolatile() {
-            return volatileFlag;
-        }
-
-        public boolean isNullInNullOut() {
-            return nullInNullOutFlag;
-        }
-
-        public boolean propagateNulls() {
-            return propagateNullsFlag;
-        }
-
-        public boolean isScalar() {
-            return functionKind == Kind.SCALAR;
+        @Override
+        public String toString() {
+            return new StringJoiner(", ", RegisteredFunction.class.getSimpleName() + "[", "]")
+                .add("name='" + name + "'")
+                .add("functionKind=" + functionKind)
+                .add("registeredAt=" + registeredAt)
+                .toString();
         }
     }
 }

@@ -3,6 +3,8 @@ package org.duckdb;
 import static org.duckdb.DuckDBDriver.DUCKDB_URL_PREFIX;
 import static org.duckdb.DuckDBDriver.MEMORY_DB;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.SQLException;
 import java.util.Properties;
 
@@ -104,5 +106,12 @@ final class JdbcUtils {
         } catch (Exception e) {
             // suppress
         }
+    }
+
+    static String collectStackTrace(Throwable throwable) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        throwable.printStackTrace(pw);
+        return sw.toString();
     }
 }
