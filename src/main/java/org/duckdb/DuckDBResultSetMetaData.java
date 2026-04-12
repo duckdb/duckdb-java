@@ -230,6 +230,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case JSON:
             return JsonNode.class.getName();
         case BLOB:
+        case GEOMETRY:
             return DuckDBResultSet.DuckDBBlobResult.class.getName();
         case UUID:
             return UUID.class.getName();
