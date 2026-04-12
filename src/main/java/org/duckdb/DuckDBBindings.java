@@ -17,9 +17,35 @@ public class DuckDBBindings {
 
     static native long duckdb_vector_size();
 
+    // scalar function
+
+    static native ByteBuffer duckdb_create_scalar_function();
+
+    static native void duckdb_destroy_scalar_function(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_name(ByteBuffer scalarFunction, byte[] name);
+
+    static native void duckdb_scalar_function_add_parameter(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_return_type(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_varargs(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_volatile(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_special_handling(ByteBuffer scalarFunction);
+
+    static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction, Object function);
+
+    static native void duckdb_scalar_function_set_error(ByteBuffer functionInfo, byte[] error);
+
     // logical type
 
     static native ByteBuffer duckdb_create_logical_type(int duckdb_type);
+
+    static native ByteBuffer duckdb_create_decimal_type(int width, int scale);
 
     static native int duckdb_get_type_id(ByteBuffer logical_type);
 
@@ -64,6 +90,8 @@ public class DuckDBBindings {
     static native void duckdb_vector_ensure_validity_writable(ByteBuffer vector);
 
     static native void duckdb_vector_assign_string_element_len(ByteBuffer vector, long index, byte[] str);
+
+    static native byte[] duckdb_vector_get_string(ByteBuffer vectorData, long row);
 
     static native ByteBuffer duckdb_list_vector_get_child(ByteBuffer vector);
 
