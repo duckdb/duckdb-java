@@ -343,6 +343,7 @@ public class TestMetadata {
         expectedTypes.put("dec_9_4", JDBCType.DECIMAL);
         expectedTypes.put("dec_18_6", JDBCType.DECIMAL);
         expectedTypes.put("dec38_10", JDBCType.DECIMAL);
+        expectedTypes.put("geometry", JDBCType.BLOB);
 
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (Statement stmt = conn.createStatement()) {
