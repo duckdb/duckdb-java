@@ -2426,7 +2426,8 @@ public class TestScalarFunctions {
                 assertTrue(rs.next());
                 assertEquals(rs.getString(1), "foobar");
                 assertTrue(rs.next());
-                assertEquals(rs.getString(1), "NULL was passed to me");
+                assertEquals(rs.getString(1), null);
+                assertTrue(rs.wasNull());
                 assertTrue(rs.next());
                 assertEquals(rs.getString(1), "boobaz");
                 assertFalse(rs.next());

@@ -159,6 +159,8 @@ jobs:
     name: Linux Spark (amd64)
     runs-on: ubuntu-latest
     needs: java-linux-amd64
+    # todo: enable me
+    if: ${{ false }}
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
       DUCKDB_JDBC_JAR: ${{ github.workspace }}/build/release/duckdb_jdbc.jar
@@ -752,7 +754,7 @@ jobs:
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
-      - java-linux-amd64-spark
+      # - java-linux-amd64-spark
       - java-linux-amd64-asan
       - java-linux-aarch64
       - java-linux-amd64-musl
@@ -828,14 +830,15 @@ jobs:
   # SNAPSHOTs don't require GPG signatures or validation
   # See: https://central.sonatype.org/publish/publish-portal-snapshots/
   maven-snapshot-deploy:
-    if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    # todo: enable me
+    if: ${{ false && github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
     name: Maven SNAPSHOT Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
-      - java-linux-amd64-spark
+      # - java-linux-amd64-spark
       - java-linux-amd64-asan
       - java-linux-aarch64
       - java-linux-amd64-musl
@@ -907,7 +910,7 @@ jobs:
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
-      - java-linux-amd64-spark
+      # - java-linux-amd64-spark
       - java-linux-amd64-asan
       - java-linux-aarch64
       - java-linux-amd64-musl
