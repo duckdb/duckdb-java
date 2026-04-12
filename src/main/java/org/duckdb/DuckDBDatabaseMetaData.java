@@ -1283,7 +1283,61 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     @Override
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern, int[] types)
         throws SQLException {
-        throw new SQLFeatureNotSupportedException("getUDTs");
+        String udtDataTypeExpr =
+            "CASE WHEN logical_type IN ('STRUCT', 'UNION') THEN " + Types.STRUCT + " ELSE " + Types.DISTINCT + " END";
+        String baseTypeExpr = "CASE WHEN logical_type IN ('STRUCT', 'UNION') THEN NULL::SMALLINT "
+                              + "WHEN logical_type = 'ENUM' THEN " + Types.VARCHAR + "::SMALLINT "
+                              + "ELSE CAST(CASE logical_type " + dataMap + " ELSE " + Types.OTHER +
+                              " END AS SMALLINT) END";
+
+        StringBuilder sb = new StringBuilder(QUERY_SB_DEFAULT_CAPACITY);
+        sb.append("SELECT").append(lineSeparator());
+        sb.append("database_name AS 'TYPE_CAT'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("schema_name AS 'TYPE_SCHEM'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("type_name AS 'TYPE_NAME'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("NULL::VARCHAR AS 'CLASS_NAME'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append(udtDataTypeExpr).append(" AS 'DATA_TYPE'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("comment AS 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append(baseTypeExpr).append(" AS 'BASE_TYPE'").append(lineSeparator());
+        sb.append("FROM duckdb_types()").append(lineSeparator());
+        sb.append("WHERE internal = FALSE").append(lineSeparator());
+        boolean hasCatalogParam = appendEqualsQual(sb, "database_name", catalog);
+        boolean hasSchemaParam = appendLikeQual(sb, "schema_name", schemaPattern);
+        sb.append("AND type_name LIKE ? ESCAPE '\\'").append(lineSeparator());
+
+        if (types != null && types.length > 0) {
+            sb.append("AND (").append(udtDataTypeExpr).append(") IN (");
+            for (int i = 0; i < types.length; i++) {
+                if (i > 0) {
+                    sb.append(',');
+                }
+                sb.append('?');
+            }
+            sb.append(')').append(lineSeparator());
+        }
+
+        sb.append("ORDER BY").append(lineSeparator());
+        sb.append("\"DATA_TYPE\"").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("\"TYPE_CAT\"").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("\"TYPE_SCHEM\"").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("\"TYPE_NAME\"").append(lineSeparator());
+
+        PreparedStatement ps = conn.prepareStatement(sb.toString());
+        int paramIdx = 1;
+        if (hasCatalogParam) {
+            ps.setString(paramIdx++, catalog);
+        }
+        if (hasSchemaParam) {
+            ps.setString(paramIdx++, schemaPattern);
+        }
+        ps.setString(paramIdx++, nullPatternToWildcard(typeNamePattern));
+        if (types != null) {
+            for (int type : types) {
+                ps.setInt(paramIdx++, type);
+            }
+        }
+        ps.closeOnCompletion();
+        return ps.executeQuery();
     }
 
     @Override

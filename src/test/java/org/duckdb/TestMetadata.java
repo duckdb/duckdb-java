@@ -1053,4 +1053,68 @@ public class TestMetadata {
             assertTrue(count > 0);
         }
     }
+
+    public static void test_metadata_get_udts() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad','ok','happy')");
+            stmt.execute("CREATE TYPE many_things AS STRUCT(name VARCHAR, age INTEGER)");
+            stmt.execute("CREATE TYPE one_thing AS UNION(a INTEGER, b VARCHAR)");
+            stmt.execute("CREATE TYPE x_index AS INTEGER");
+
+            DatabaseMetaData dbMetaData = conn.getMetaData();
+            Map<String, Integer> dataTypes = new HashMap<>();
+            Map<String, Integer> baseTypes = new HashMap<>();
+            try (ResultSet rs = dbMetaData.getUDTs(null, null, "%", null)) {
+                ResultSetMetaData rsMetaData = rs.getMetaData();
+                assertEquals(rsMetaData.getColumnName(1), "TYPE_CAT");
+                assertEquals(rsMetaData.getColumnName(2), "TYPE_SCHEM");
+                assertEquals(rsMetaData.getColumnName(3), "TYPE_NAME");
+                assertEquals(rsMetaData.getColumnName(4), "CLASS_NAME");
+                assertEquals(rsMetaData.getColumnName(5), "DATA_TYPE");
+                assertEquals(rsMetaData.getColumnName(6), "REMARKS");
+                assertEquals(rsMetaData.getColumnName(7), "BASE_TYPE");
+
+                while (rs.next()) {
+                    dataTypes.put(rs.getString("TYPE_NAME"), rs.getInt("DATA_TYPE"));
+                    int baseType = rs.getInt("BASE_TYPE");
+                    if (rs.wasNull()) {
+                        baseTypes.put(rs.getString("TYPE_NAME"), null);
+                    } else {
+                        baseTypes.put(rs.getString("TYPE_NAME"), baseType);
+                    }
+                }
+            }
+
+            assertEquals(dataTypes.get("mood"), Types.DISTINCT);
+            assertEquals(dataTypes.get("many_things"), Types.STRUCT);
+            assertEquals(dataTypes.get("one_thing"), Types.STRUCT);
+            assertEquals(dataTypes.get("x_index"), Types.DISTINCT);
+
+            assertEquals(baseTypes.get("mood"), Types.VARCHAR);
+            assertNull(baseTypes.get("many_things"));
+            assertNull(baseTypes.get("one_thing"));
+            assertEquals(baseTypes.get("x_index"), Types.INTEGER);
+
+            try (ResultSet rs = dbMetaData.getUDTs(null, null, "m%", new int[] {Types.DISTINCT})) {
+                Set<String> names = new HashSet<>();
+                while (rs.next()) {
+                    names.add(rs.getString("TYPE_NAME"));
+                    assertEquals(rs.getInt("DATA_TYPE"), Types.DISTINCT);
+                }
+                assertTrue(names.contains("mood"));
+                assertEquals(names.size(), 1);
+            }
+
+            try (ResultSet rs = dbMetaData.getUDTs(null, null, "%", new int[] {Types.STRUCT})) {
+                Set<String> names = new HashSet<>();
+                while (rs.next()) {
+                    names.add(rs.getString("TYPE_NAME"));
+                    assertEquals(rs.getInt("DATA_TYPE"), Types.STRUCT);
+                }
+                assertTrue(names.contains("many_things"));
+                assertTrue(names.contains("one_thing"));
+                assertEquals(names.size(), 2);
+            }
+        }
+    }
 }
