@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
 import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
@@ -1421,7 +1422,11 @@ public class TestDuckDBJDBC {
     }
 
     static DuckDBResultSet.DuckDBBlobResult blobOf(String source) {
-        return new DuckDBResultSet.DuckDBBlobResult(ByteBuffer.wrap(source.getBytes()));
+        return blobOf(source.getBytes(UTF_8));
+    }
+
+    static DuckDBResultSet.DuckDBBlobResult blobOf(byte[] bytes) {
+        return new DuckDBResultSet.DuckDBBlobResult(ByteBuffer.wrap(bytes));
     }
 
     private static final DateTimeFormatter FORMAT_DATE = new DateTimeFormatterBuilder()
@@ -1589,6 +1594,40 @@ public class TestDuckDBJDBC {
                                                                  asList(numbers, emptyList(), numbers), null));
         correct_answer_map.put("list_of_fixed_int_array", asList(asList(int_array, int_list, int_array),
                                                                  asList(int_list, int_array, int_list), null));
+        correct_answer_map.put(
+            "geometry",
+            asList(blobOf(new byte[] {1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, 127, 0, 0, 0, 0, 0, 0, -8, 127}),
+                   blobOf(new byte[] {
+                       1,   7,  0,   0,   0,  13, 0,   0,  0,   1,  1,  0,   0,   0,  0,   0,  0,   0,  0, 0,  -16, 63,
+                       0,   0,  0,   0,   0,  0,  0,   64, 1,   1,  0,  0,   0,   0,  0,   0,  0,   0,  0, -8, 127, 0,
+                       0,   0,  0,   0,   0,  -8, 127, 1,  2,   0,  0,  0,   2,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  -16, 63, 0, 0,  0,   0,
+                       0,   0,  -16, 63,  1,  2,  0,   0,  0,   0,  0,  0,   0,   1,  3,   0,  0,   0,  1, 0,  0,   0,
+                       5,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   -16, 63, 0,   0,  0,   0,  0, 0,  -16, 63,
+                       0,   0,  0,   0,   0,  0,  -16, 63, 0,   0,  0,  0,   0,   0,  -16, 63, 0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  1, 3,  0,   0,
+                       0,   0,  0,   0,   0,  1,  4,   0,  0,   0,  2,  0,   0,   0,  1,   1,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   20,  64, 0,  0,   0,  0,   0,  0,  24,  64,  1,  1,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  -8,  127, 0,  0,  0,   0,  0,   0,  -8, 127, 1,   5,  0,   0,  0,   4,  0, 0,  0,   1,
+                       2,   0,  0,   0,   2,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  -16, 63, 0,  0,   0,   0,  0,   0,  -16, 63, 1, 2,  0,   0,
+                       0,   0,  0,   0,   0,  1,  2,   0,  0,   0,  2,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   64,
+                       0,   0,  0,   0,   0,  0,  0,   64, 0,   0,  0,  0,   0,   0,  8,   64, 0,   0,  0, 0,  0,   0,
+                       8,   64, 1,   2,   0,  0,  0,   0,  0,   0,  0,  1,   5,   0,  0,   0,  0,   0,  0, 0,  1,   6,
+                       0,   0,  0,   4,   0,  0,  0,   1,  3,   0,  0,  0,   1,   0,  0,   0,  5,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  -16, 63, 0,   0,  0,  0,   0,   0,  -16, 63, 0,   0,  0, 0,  0,   0,
+                       -16, 63, 0,   0,   0,  0,  0,   0,  -16, 63, 0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   1,   3,  0,   0,  0,   0,  0, 0,  0,   1,
+                       3,   0,  0,   0,   1,  0,  0,   0,  5,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   64,
+                       0,   0,  0,   0,   0,  0,  0,   64, 0,   0,  0,  0,   0,   0,  0,   64, 0,   0,  0, 0,  0,   0,
+                       0,   64, 0,   0,   0,  0,  0,   0,  0,   0,  0,  0,   0,   0,  0,   0,  0,   0,  0, 0,  0,   0,
+                       0,   0,  0,   0,   1,  3,  0,   0,  0,   0,  0,  0,   0,   1,  6,   0,  0,   0,  0, 0,  0,   0,
+                       1,   7,  0,   0,   0,  1,  0,   0,  0,   1,  1,  0,   0,   0,  0,   0,  0,   0,  0, 0,  20,  64,
+                       0,   0,  0,   0,   0,  0,  24,  64, 1,   7,  0,  0,   0,   0,  0,   0,  0}),
+                   null));
         TimeZone.setDefault(defaultTimeZone);
     }
 
@@ -1597,7 +1636,6 @@ public class TestDuckDBJDBC {
         TimeZone defaultTimeZone = TimeZone.getDefault();
         TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
         try {
-            Logger logger = Logger.getAnonymousLogger();
             String sql =
                 "select * EXCLUDE(time, time_ns, time_tz)"
                 + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
