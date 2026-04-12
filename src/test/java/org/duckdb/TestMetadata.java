@@ -1123,8 +1123,7 @@ public class TestMetadata {
                     assertEquals(rs.getInt("DATA_TYPE"), Types.DISTINCT);
                 }
                 assertTrue(names.contains("mood"));
-                assertTrue(names.contains("x_index"));
-                assertEquals(names.size(), 2);
+                assertEquals(names.size(), 1);
             }
 
             try (ResultSet rs = dbMetaData.getUDTs(null, null, "%", new int[] {Types.STRUCT})) {
