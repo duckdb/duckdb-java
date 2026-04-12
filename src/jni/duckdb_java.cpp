@@ -24,6 +24,7 @@ extern "C" {
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 using namespace duckdb;
 using namespace std;

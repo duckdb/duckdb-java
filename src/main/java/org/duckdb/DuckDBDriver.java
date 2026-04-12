@@ -42,6 +42,9 @@ public class DuckDBDriver implements java.sql.Driver {
     private static boolean pinnedDbRefsShutdownHookRegistered = false;
     private static boolean pinnedDbRefsShutdownHookRun = false;
 
+    private static final ArrayList<DuckDBRegisteredFunction> functionsRegistry = new ArrayList<>();
+    private static final ReentrantLock functionsRegistryLock = new ReentrantLock();
+
     private static final Set<String> supportedOptions = new LinkedHashSet<>();
     private static final ReentrantLock supportedOptionsLock = new ReentrantLock();
 
@@ -261,6 +264,33 @@ public class DuckDBDriver implements java.sql.Driver {
         }
         scheduler.shutdown();
         return true;
+    }
+
+    public static List<DuckDBRegisteredFunction> registeredFunctions() {
+        functionsRegistryLock.lock();
+        try {
+            return Collections.unmodifiableList(new ArrayList<>(functionsRegistry));
+        } finally {
+            functionsRegistryLock.unlock();
+        }
+    }
+
+    public static void clearFunctionsRegistry() {
+        functionsRegistryLock.lock();
+        try {
+            functionsRegistry.clear();
+        } finally {
+            functionsRegistryLock.unlock();
+        }
+    }
+
+    static void registerFunction(DuckDBRegisteredFunction function) {
+        functionsRegistryLock.lock();
+        try {
+            functionsRegistry.add(function);
+        } finally {
+            functionsRegistryLock.unlock();
+        }
     }
 
     private static DriverPropertyInfo createDriverPropInfo(String name, String value, String description) {
