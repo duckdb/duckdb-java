@@ -218,6 +218,9 @@ Table function callback must implement `DuckDBTableFunction` interface:
  - `localInit` (optional) - called once for every thread before the function execution, returns an object used to track thread-local state during function execution
  - `apply` - has access to bind data, global init data and local init date, writes results into output vectors, returns a number of written row, is called by the engine repeatedly until it return zero rows
 
+To enable parallel function execution it is necessary to set desired number of threads using `info.setMaxThreads()` method during the global init call.
+Depending on the query it also may be necessary to set `preserve_insertion_order=FALSE` option ([reference](https://duckdb.org/docs/current/configuration/overview#global-configuration-options)) in connection string or in connection properties object.
+
 All callback arguments (including parameter objects) are only valid during the callback execution.
 
 In general, Java table functions interface exposes the [C API table function interface](https://github.com/duckdb/duckdb-java/blob/2f4ed44df2fd1f89594cc7af28f9f8daba5fa582/src/duckdb/src/include/duckdb.h#L4145-L4478)
