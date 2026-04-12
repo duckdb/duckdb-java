@@ -1289,8 +1289,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             "CASE WHEN logical_type IN ('STRUCT', 'UNION') THEN " + Types.STRUCT + " ELSE " + Types.DISTINCT + " END";
         String baseTypeExpr = "CASE WHEN logical_type IN ('STRUCT', 'UNION') THEN NULL::SMALLINT "
                               + "WHEN logical_type = 'ENUM' THEN " + Types.VARCHAR + "::SMALLINT "
-                              + "ELSE CAST(CASE logical_type " + dataMap + " ELSE " + Types.OTHER
-                              + " END AS SMALLINT) END";
+                              + "ELSE CAST(CASE logical_type " + dataMap + " ELSE " + Types.OTHER +
+                              " END AS SMALLINT) END";
 
         StringBuilder sb = new StringBuilder(QUERY_SB_DEFAULT_CAPACITY);
         sb.append("SELECT").append(lineSeparator());
