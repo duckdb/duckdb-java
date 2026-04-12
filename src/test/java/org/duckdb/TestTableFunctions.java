@@ -12,6 +12,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.duckdb.DuckDBFunctions.FunctionException;
 
@@ -334,6 +335,65 @@ public class TestTableFunctions {
                 assertEquals(rs.getString(17), "foobar");
                 assertFalse(rs.next());
             }
+        }
+    }
+
+    public static void test_table_function_multiple_threads() throws Exception {
+        long count = (1 << 16) + 7;
+        AtomicInteger threadsUsed = new AtomicInteger(0);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL + ";preserve_insertion_order=FALSE;");
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.tableFunction()
+                .withName("java_table_long_result")
+                .withParameter(long.class)
+                .withFunction(new DuckDBTableFunction<Long, AtomicLong, Object>() {
+                    @Override
+                    public Long bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                        info.addResultColumn("col1", Long.TYPE).addResultColumn("col2", String.class);
+                        return info.getParameter(0).getLong();
+                    }
+
+                    @Override
+                    public AtomicLong init(DuckDBTableFunctionInitInfo info) throws Exception {
+                        info.setMaxThreads(Runtime.getRuntime().availableProcessors());
+                        return new AtomicLong(count);
+                    }
+
+                    @Override
+                    public Object localInit(DuckDBTableFunctionInitInfo info) throws Exception {
+                        threadsUsed.incrementAndGet();
+                        return null;
+                    }
+
+                    @Override
+                    public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                        AtomicLong remaining = info.getInitData();
+
+                        DuckDBWritableVector vec1 = output.vector(0);
+                        DuckDBWritableVector vec2 = output.vector(1);
+
+                        long val = info.getBindData();
+                        long limit = output.capacity();
+                        long row = 0;
+                        for (; row < limit && remaining.decrementAndGet() >= 0; row++) {
+                            vec1.setLong(row, val);
+                            vec2.setString(row, val + "foo");
+                        }
+                        return row;
+                    }
+                })
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery("FROM java_table_long_result(42)")) {
+                long fetched = 0;
+                while (rs.next()) {
+                    long val = 42;
+                    assertEquals(rs.getLong(1), val);
+                    assertEquals(rs.getString(2), val + "foo");
+                    fetched++;
+                }
+                assertEquals(fetched, count);
+            }
+            assertEquals(threadsUsed.get(), Runtime.getRuntime().availableProcessors());
         }
     }
 }
