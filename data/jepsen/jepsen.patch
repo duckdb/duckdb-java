@@ -1,0 +1,39 @@
+diff --git a/local-node/project.clj b/local-node/project.clj
+index 89480ff..fdc1a64 100644
+--- a/local-node/project.clj
++++ b/local-node/project.clj
+@@ -13,7 +13,7 @@
+                  [org.clj-commons/slingshot "0.13.0"]
+                  [org.clojure/tools.logging "1.3.0"]
+                  [io.jepsen/generator "0.1.1"]
+-                  [org.duckdb/duckdb_jdbc "1.5.0.0"]
++                  [org.duckdb/duckdb_jdbc "1-jepsen"]
+                  ; Fixes a few known issues (not sure what exactly) in 1.5.0.0
+                  ; [org.duckdb/duckdb_jdbc "1.5.1.0-7e03e76d-SNAPSHOT"]
+                  ; Fixes the data corruption issue we found with strings!
+diff --git a/local-node/src/jepsen/duckdb/local_node.clj b/local-node/src/jepsen/duckdb/local_node.clj
+index cbd66a3..bf0d35e 100644
+--- a/local-node/src/jepsen/duckdb/local_node.clj
++++ b/local-node/src/jepsen/duckdb/local_node.clj
+@@ -164,7 +164,7 @@
+           conn (c/open opts)]
+       (info "Options are:\n" (with-out-str (pprint opts)))
+       (setup! conn opts)
+-      (http/run-server (handler conn opts) (select-keys opts [:port]))
++      (http/run-server (handler conn opts) {:port (:port opts) :reuse-address true})
+       (info "Waiting for HTTP requests on port" (:port opts))
+       (while true
+         (Thread/sleep 100000)))
+diff --git a/project.clj b/project.clj
+index 8b280e7..9e85e33 100644
+--- a/project.clj
++++ b/project.clj
+@@ -4,7 +4,7 @@
+   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
+             :url "https://www.eclipse.org/legal/epl-2.0/"}
+   :dependencies [[org.clojure/clojure "1.12.4"]
+-                 [jepsen "0.3.12-SNAPSHOT"]
++                 [jepsen "0.3.11"]
+                  [clj-http "3.13.1"]]
+   :main jepsen.duckdb.cli
+   :repl-options {:init-ns jepsen.duckdb.repl}
