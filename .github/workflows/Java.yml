@@ -350,6 +350,101 @@ jobs:
           path: |
             asan.log
 
+  java-linux-amd64-jepsen:
+    name: Linux Jepsen (amd64)
+    runs-on: ubuntu-latest
+    needs: java-linux-amd64
+    env:
+      MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Jepsen
+        uses: actions/checkout@v4
+        with:
+          repository: jepsen-io/duckdb
+          ref: 95731d970339780b934ac106831d704ce3ad23ba
+          path: jepsen
+
+      - name: Cache Key
+        id: cache_key
+        run: |
+          DUCKDB_VERSION=$(python ./scripts/print_duckdb_version.py)
+          KEY="${{ runner.os }}-${{ runner.arch }}-$DUCKDB_VERSION"
+          echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }}
+
+      - name: Build
+        uses: ./.github/composite-actions/linux-build-docker
+        with:
+          docker_image: '${{ env.MANYLINUX_IMAGE }}'
+
+      - name: Install Dependencies 
+        run: |
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+          sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
+          sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
+            gnuplot \
+            graphviz \
+            leiningen
+
+      - name: Setup Default Java
+        run: |
+          echo "JAVA_HOME=${JAVA_HOME_21_X64}" >> $GITHUB_ENV
+          echo "${JAVA_HOME_21_X64}/bin" >> $GITHUB_PATH
+          sudo update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
+          sudo update-alternatives --set javac /usr/lib/jvm/java-21-openjdk-amd64/bin/javac
+          /usr/bin/java --version
+
+      - name: Install JAR
+        run: |
+          mvn -B -ntp --version
+          mvn -B -ntp install:install-file \
+            -Dfile=${{ github.workspace }}/build/release/duckdb_jdbc.jar \
+            -DgroupId=org.duckdb \
+            -DartifactId=duckdb_jdbc \
+            -Dversion=1-jepsen \
+            -Dpackaging=jar
+
+      - name: Run Jepsen
+        working-directory: jepsen
+        run: |
+          patch -p1 < ${{ github.workspace }}/data/jepsen/jepsen.patch
+          lein --version
+          lein run test \
+            --time-limit 10 \
+            --max-writes-per-key 8 \
+            --concurrency 5 \
+            --rate 1000 \
+            --log-sql \
+            --upsert merge-into \
+            --duckdb-log \
+            | grep -v '^INFO' \
+            | tee jepsen.log
+          tail -n 1 jepsen.log | grep -q '^Everything looks good!'
+
+      - name: Zip Results
+        if: always()
+        working-directory: jepsen
+        run: |
+          zip -qyr store.zip store
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jepsen
+          path: |
+            jepsen/store.zip
+
   java-linux-aarch64:
     name: Linux (aarch64)
     runs-on: ubuntu-24.04-arm
@@ -766,6 +861,7 @@ jobs:
       - java-linux-amd64-tck
       - java-linux-amd64-spark
       - java-linux-amd64-asan
+      - java-linux-amd64-jepsen
       - java-linux-aarch64
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
@@ -849,6 +945,7 @@ jobs:
       - java-linux-amd64-tck
       - java-linux-amd64-spark
       - java-linux-amd64-asan
+      - java-linux-amd64-jepsen
       - java-linux-aarch64
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
@@ -921,6 +1018,7 @@ jobs:
       - java-linux-amd64-tck
       - java-linux-amd64-spark
       - java-linux-amd64-asan
+      - java-linux-amd64-jepsen
       - java-linux-aarch64
       - java-linux-amd64-musl
       - java-linux-aarch64-musl
