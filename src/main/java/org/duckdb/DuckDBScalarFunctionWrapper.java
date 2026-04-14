@@ -1,10 +1,12 @@
 package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.duckdb.DuckDBBindings.duckdb_scalar_function_set_error;
+import static org.duckdb.JdbcUtils.collectStackTrace;
 
 import java.nio.ByteBuffer;
 
-final class DuckDBScalarFunctionWrapper {
+class DuckDBScalarFunctionWrapper {
     private final DuckDBScalarFunction function;
 
     DuckDBScalarFunctionWrapper(DuckDBScalarFunction function) {
@@ -17,16 +19,8 @@ final class DuckDBScalarFunctionWrapper {
             DuckDBWritableVector outputWriter = new DuckDBWritableVector(outputVector, inputReader.rowCount());
             function.apply(inputReader, outputWriter);
         } catch (Throwable throwable) {
-            reportError(functionInfo, throwable);
+            String trace = collectStackTrace(throwable);
+            duckdb_scalar_function_set_error(functionInfo, trace.getBytes(UTF_8));
         }
-    }
-
-    private static void reportError(ByteBuffer functionInfo, Throwable throwable) {
-        String message = throwable.getMessage();
-        String className = throwable.getClass().getName();
-        String formatted =
-            message == null || message.isEmpty() ? className : String.format("%s: %s", className, message);
-        String error = "Java scalar function threw exception: " + formatted;
-        DuckDBBindings.duckdb_scalar_function_set_error(functionInfo, error.getBytes(UTF_8));
     }
 }

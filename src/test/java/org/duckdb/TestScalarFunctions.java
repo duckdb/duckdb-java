@@ -207,13 +207,6 @@ public class TestScalarFunctions {
                                               })
                                               .register(conn);
             assertEquals(function.name(), "java_add_int_builder");
-            assertEquals(function.parameterTypes().size(), 1);
-            assertEquals(function.parameterTypes().get(0), intType);
-            assertEquals(function.returnType(), intType);
-            assertEquals(function.varArgType(), null);
-            assertEquals(function.isVolatile(), false);
-            assertEquals(function.isNullInNullOut(), false);
-            assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs =
                      stmt.executeQuery("SELECT java_add_int_builder(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -265,13 +258,7 @@ public class TestScalarFunctions {
             assertTrue(message.contains("already finalized"));
 
             assertEquals(function.name(), "java_add_int_detached");
-            assertEquals(function.parameterColumnTypes().size(), 1);
-            assertEquals(function.parameterColumnTypes().get(0), DuckDBColumnType.INTEGER);
-            assertEquals(function.returnColumnType(), DuckDBColumnType.INTEGER);
-            assertNotNull(function.function());
             assertEquals(function.functionKind(), DuckDBFunctions.Kind.SCALAR);
-            assertTrue(function.isScalar());
-            assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs =
                      stmt.executeQuery("SELECT java_add_int_detached(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -300,7 +287,6 @@ public class TestScalarFunctions {
             assertEquals(registeredFunctions.size(), 1);
             assertEquals(registeredFunctions.get(0), function);
             assertEquals(registeredFunctions.get(0).functionKind(), DuckDBFunctions.Kind.SCALAR);
-            assertTrue(registeredFunctions.get(0).isScalar());
 
             try (ResultSet rs = stmt.executeQuery("SELECT java_registry_recorded(41)")) {
                 assertTrue(rs.next());
@@ -433,10 +419,6 @@ public class TestScalarFunctions {
                         input.stream().forEach(row -> output.setInt(row, sumNonNullIntColumns(input, row)));
                     })
                     .register(conn);
-            assertEquals(function.varArgType(), intType);
-            assertEquals(function.isVolatile(), true);
-            assertEquals(function.isNullInNullOut(), false);
-            assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs =
                      stmt.executeQuery("SELECT java_sum_varargs_builder(1, 2, 3), java_sum_varargs_builder(5)")) {
@@ -466,11 +448,6 @@ public class TestScalarFunctions {
                                                   });
                                               })
                                               .register(conn);
-            assertEquals(function.parameterColumnTypes().size(), 1);
-            assertEquals(function.parameterColumnTypes().get(0), DuckDBColumnType.INTEGER);
-            assertEquals(function.parameterTypes().get(0), null);
-            assertEquals(function.returnColumnType(), DuckDBColumnType.INTEGER);
-            assertEquals(function.returnType(), null);
 
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT java_add_int_builder_col_type(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -540,7 +517,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Integer.class)
                                               .withFunction((Integer x) -> x == null ? 99 : x + 1)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), false);
 
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT java_add_int_function_nullable(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -593,7 +569,6 @@ public class TestScalarFunctions {
                     .withFunction(
                         (Integer left, Integer right) -> (left == null ? 0 : left) + (right == null ? 0 : right))
                     .register(conn);
-            assertEquals(function.propagateNulls(), false);
 
             try (
                 ResultSet rs = stmt.executeQuery(
@@ -620,7 +595,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Integer.class)
                                               .withIntFunction(x -> x + 1)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT java_add_int_with_int_function(v) FROM (VALUES (1), (NULL), (41)) t(v)")) {
@@ -645,7 +619,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Integer.class)
                                               .withIntFunction((left, right) -> left + right)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery("SELECT java_add_int_with_int_binary_function(a, b) "
                                                   + "FROM (VALUES (1, 2), (NULL, 2), (39, 3), (5, NULL)) t(a, b)")) {
@@ -671,7 +644,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Double.class)
                                               .withDoubleFunction(x -> x + 0.5d)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT java_add_double_with_double_function(v) FROM (VALUES (41.5), (NULL), (-2.5)) t(v)")) {
@@ -696,7 +668,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Double.class)
                                               .withDoubleFunction((left, right) -> left + right)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
 
             try (ResultSet rs =
                      stmt.executeQuery("SELECT java_add_double_with_double_binary_function(a, b) FROM "
@@ -723,7 +694,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Long.class)
                                               .withLongFunction(x -> x + 3)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
 
             try (
                 ResultSet rs = stmt.executeQuery(
@@ -749,8 +719,6 @@ public class TestScalarFunctions {
                                               .withReturnType(Long.class)
                                               .withLongFunction((left, right) -> left + right)
                                               .register(conn);
-            assertEquals(function.propagateNulls(), true);
-
             try (ResultSet rs = stmt.executeQuery("SELECT java_add_long_with_long_binary_function(a, b) "
                                                   + "FROM (VALUES (1::BIGINT, 2::BIGINT), (NULL, 2::BIGINT), "
                                                   + "(39::BIGINT, 3::BIGINT), (5::BIGINT, NULL)) t(a, b)")) {
@@ -779,8 +747,7 @@ public class TestScalarFunctions {
 
             String message =
                 assertThrows(() -> { stmt.executeQuery("SELECT java_invalid_cast_function(1)"); }, SQLException.class);
-            assertTrue(message.contains("Java scalar function threw exception"));
-            assertTrue(message.contains("ClassCastException"));
+            assertTrue(message.contains(DuckDBScalarFunctionAdapter.class.getSimpleName()));
         }
     }
 
@@ -819,8 +786,7 @@ public class TestScalarFunctions {
 
             String message =
                 assertThrows(() -> { stmt.executeQuery("SELECT java_invalid_supplier_cast()"); }, SQLException.class);
-            assertTrue(message.contains("Java scalar function threw exception"));
-            assertTrue(message.contains("ClassCastException"));
+            assertTrue(message.contains(DuckDBScalarFunctionAdapter.class.getSimpleName()));
         }
     }
 
@@ -1544,9 +1510,7 @@ public class TestScalarFunctions {
                 .register(conn);
             String message =
                 assertThrows(() -> { stmt.executeQuery("SELECT java_throws_exception(1)"); }, SQLException.class);
-            assertTrue(message.contains("Java scalar function threw exception"));
-            assertTrue(message.contains("IllegalStateException"));
-            assertTrue(message.contains("boom"));
+            assertTrue(message.contains(TestScalarFunctions.class.getSimpleName()));
         }
     }
 

@@ -1,7 +1,12 @@
 package org.duckdb;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public class DuckDBBindings {
 
@@ -37,9 +42,77 @@ public class DuckDBBindings {
 
     static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
 
-    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction, Object function);
+    static native void duckdb_scalar_function_set_extra_info(ByteBuffer scalarFunction, Object callback);
+
+    static native void duckdb_scalar_function_set_function(ByteBuffer scalarFunction);
 
     static native void duckdb_scalar_function_set_error(ByteBuffer functionInfo, byte[] error);
+
+    // table function bind
+
+    static native void duckdb_bind_add_result_column(ByteBuffer bind_info, byte[] name, ByteBuffer logical_type);
+
+    static native long duckdb_bind_get_parameter_count(ByteBuffer bind_info);
+
+    static native ByteBuffer duckdb_bind_get_parameter(ByteBuffer bind_info, long index);
+
+    static native ByteBuffer duckdb_bind_get_named_parameter(ByteBuffer bind_info, byte[] name);
+
+    static native void duckdb_bind_set_bind_data(ByteBuffer bind_info, Object bind_data);
+
+    static native void duckdb_bind_set_cardinality(ByteBuffer bind_info, long cardinality, boolean is_exact);
+
+    static native void duckdb_bind_set_error(ByteBuffer bind_info, byte[] error);
+
+    // table function init
+
+    static native Object duckdb_init_get_bind_data(ByteBuffer init_info);
+
+    static native void duckdb_init_set_init_data(ByteBuffer init_info, Object init_data);
+
+    static native long duckdb_init_get_column_count(ByteBuffer init_info);
+
+    static native long duckdb_init_get_column_index(ByteBuffer init_info, long column_index);
+
+    static native void duckdb_init_set_max_threads(ByteBuffer init_info, long max_threads);
+
+    static native void duckdb_init_set_error(ByteBuffer init_info, byte[] error);
+
+    // table function
+
+    static native ByteBuffer duckdb_create_table_function();
+
+    static native void duckdb_destroy_table_function(ByteBuffer table_function);
+
+    static native void duckdb_table_function_set_name(ByteBuffer table_function, byte[] name);
+
+    static native void duckdb_table_function_add_parameter(ByteBuffer table_function, ByteBuffer logical_type);
+
+    static native void duckdb_table_function_add_named_parameter(ByteBuffer table_function, byte[] name,
+                                                                 ByteBuffer logical_type);
+
+    static native void duckdb_table_function_set_extra_info(ByteBuffer table_function,
+                                                            DuckDBTableFunctionWrapper callback);
+
+    static native void duckdb_table_function_set_bind(ByteBuffer table_function);
+
+    static native void duckdb_table_function_set_init(ByteBuffer table_function);
+
+    static native void duckdb_table_function_set_local_init(ByteBuffer table_function);
+
+    static native void duckdb_table_function_set_function(ByteBuffer table_function);
+
+    static native void duckdb_table_function_supports_projection_pushdown(ByteBuffer table_function, boolean pushdown);
+
+    static native int duckdb_register_table_function(ByteBuffer connection, ByteBuffer table_function);
+
+    static native Object duckdb_function_get_bind_data(ByteBuffer table_function_info);
+
+    static native Object duckdb_function_get_init_data(ByteBuffer table_function_info);
+
+    static native Object duckdb_function_get_local_init_data(ByteBuffer table_function_info);
+
+    static native void duckdb_function_set_error(ByteBuffer table_function_info, byte[] error);
 
     // logical type
 
@@ -147,6 +220,64 @@ public class DuckDBBindings {
     static native int duckdb_append_data_chunk(ByteBuffer appender, ByteBuffer chunk);
 
     static native int duckdb_append_default_to_chunk(ByteBuffer appender, ByteBuffer chunk, long col, long row);
+
+    // value
+
+    static native boolean duckdb_is_null_value(ByteBuffer value);
+
+    static native int duckdb_get_value_type(ByteBuffer value);
+
+    static native void duckdb_destroy_value(ByteBuffer value);
+
+    static native boolean duckdb_get_bool(ByteBuffer value);
+
+    static native byte duckdb_get_int8(ByteBuffer value);
+
+    static native short duckdb_get_uint8(ByteBuffer value);
+
+    static native short duckdb_get_int16(ByteBuffer value);
+
+    static native int duckdb_get_uint16(ByteBuffer value);
+
+    static native int duckdb_get_int32(ByteBuffer value);
+
+    static native long duckdb_get_uint32(ByteBuffer value);
+
+    static native long duckdb_get_int64(ByteBuffer value);
+
+    static native long duckdb_get_uint64(ByteBuffer value);
+
+    static native BigInteger duckdb_get_hugeint(ByteBuffer value);
+
+    static native BigInteger duckdb_get_uhugeint(ByteBuffer value);
+
+    static native BigInteger duckdb_get_bignum(ByteBuffer value);
+
+    static native BigDecimal duckdb_get_decimal(ByteBuffer value);
+
+    static native float duckdb_get_float(ByteBuffer value);
+
+    static native double duckdb_get_double(ByteBuffer value);
+
+    static native int duckdb_get_date(ByteBuffer value);
+
+    static native long duckdb_get_time(ByteBuffer value);
+
+    static native long duckdb_get_time_ns(ByteBuffer value);
+
+    static native long duckdb_get_time_tz(ByteBuffer value);
+
+    static native long duckdb_get_timestamp(ByteBuffer value);
+
+    static native long duckdb_get_timestamp_tz(ByteBuffer value);
+
+    static native long duckdb_get_timestamp_s(ByteBuffer value);
+
+    static native long duckdb_get_timestamp_ms(ByteBuffer value);
+
+    static native long duckdb_get_timestamp_ns(ByteBuffer value);
+
+    static native byte[] duckdb_get_varchar(ByteBuffer value);
 
     enum CAPIType {
         DUCKDB_TYPE_INVALID(0, 0),

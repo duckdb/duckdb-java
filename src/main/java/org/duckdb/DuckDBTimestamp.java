@@ -61,6 +61,10 @@ public class DuckDBTimestamp {
         return LocalDateTime.ofInstant(instant, zoneId);
     }
 
+    static LocalDateTime localDateTimeFromTimestamp(long value, ChronoUnit unit) throws SQLException {
+        return localDateTimeFromTimestamp(value, unit, null);
+    }
+
     public static LocalDateTime localDateTimeFromTimestamp(long value, ChronoUnit unit, ZoneId zoneIdNullable)
         throws SQLException {
         Instant instant = createInstant(value, unit);
