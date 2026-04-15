@@ -2226,6 +2226,35 @@ public class TestDuckDBJDBC {
         DriverManager.getConnection("jdbc:duckdb:;foo=bar;jdbc_ignore_unsupported_options=yes;", config).close();
     }
 
+    public static void test_issue_22042_pivot_autocommit_false() throws Exception {
+        // Dynamic PIVOT expands to CREATE TYPE + SELECT; inside a JDBC transaction the preprocessor can also inject
+        // leading/trailing SET statements. The driver must still prepare the SELECT and return a ResultSet.
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.setAutoCommit(false);
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("pivot values(1,2),(1,3) x(y,z) on x using first(y)")) {
+                int rows = 0;
+                boolean sawPivot2Col1 = false;
+                boolean sawPivot3Null = false;
+                while (rs.next()) {
+                    rows++;
+                    int c1 = rs.getInt(1);
+                    Object c2 = rs.getObject(2);
+                    if (c1 == 2 && c2 != null && ((Number) c2).intValue() == 1) {
+                        sawPivot2Col1 = true;
+                    }
+                    if (c1 == 3 && c2 == null) {
+                        sawPivot3Null = true;
+                    }
+                }
+                assertEquals(rows, 2);
+                assertTrue(sawPivot2Col1);
+                assertTrue(sawPivot3Null);
+            }
+            conn.rollback();
+        }
+    }
+
     public static void test_extension_excel() throws Exception {
         // Check whether the Excel extension can be installed and loaded automatically
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();

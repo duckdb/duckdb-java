@@ -44,10 +44,16 @@ struct ConnectionHolder {
 
 struct StatementHolder {
 	duckdb::unique_ptr<duckdb::PreparedStatement> stmt;
+	//! When the preprocessor expands a statement into several (e.g. PIVOT + transaction policy SETs), we prepare the
+	//! last SELECT and run any trailing statements (typically SET current_transaction_invalidation_policy) after each
+	//! successful execute. Stored as SQL text so repeated execute() on the PreparedStatement remains correct.
+	duckdb::vector<std::string> trailing_queries_after_execute;
 };
 
 struct PendingHolder {
 	duckdb::unique_ptr<duckdb::PendingQueryResult> pending;
+	duckdb::vector<std::string> trailing_queries_after_execute;
+	duckdb::Connection *connection_for_trailing = nullptr;
 };
 
 struct ResultHolder {

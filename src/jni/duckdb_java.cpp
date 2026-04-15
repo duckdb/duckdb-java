@@ -190,7 +190,35 @@ void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	}
 }
 
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 #include "utf8proc_wrapper.hpp"
+
+namespace {
+
+//! When a query is expanded into several statements (e.g. dynamic PIVOT creating a temp enum, or transaction policy SET
+//! wrappers), the JDBC driver must prepare the statement that actually returns the result set — typically the last
+//! SELECT — not merely the syntactically last statement.
+idx_t FindLastSelectStatementIndex(const duckdb::vector<duckdb::unique_ptr<SQLStatement>> &statements) {
+	for (idx_t i = statements.size(); i > 0; i--) {
+		if (statements[i - 1]->type == StatementType::SELECT_STATEMENT) {
+			return i - 1;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
+void ExecuteTrailingQueries(ClientContext &context, const duckdb::vector<string> &trailing_queries) {
+	QueryParameters parameters;
+	for (const auto &trailing_sql : trailing_queries) {
+		auto res = context.Query(trailing_sql, parameters);
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+}
+
+} // namespace
 
 jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
@@ -205,9 +233,17 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 		throw InvalidInputException("No statements to execute.");
 	}
 
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+	idx_t prepare_idx = FindLastSelectStatementIndex(statements);
+	if (prepare_idx == DConstants::INVALID_INDEX) {
+		prepare_idx = statements.size() - 1;
+	}
+
+	duckdb::vector<string> trailing_queries;
+	for (idx_t i = prepare_idx + 1; i < statements.size(); i++) {
+		trailing_queries.push_back(statements[i]->ToString());
+	}
+
+	for (idx_t i = 0; i < prepare_idx; i++) {
 		auto res = conn_ref->Query(std::move(statements[i]));
 		if (res->HasError()) {
 			res->ThrowError();
@@ -215,7 +251,8 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 	}
 
 	auto stmt_ref = make_uniq<StatementHolder>();
-	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
+	stmt_ref->stmt = conn_ref->Prepare(std::move(statements[prepare_idx]));
+	stmt_ref->trailing_queries_after_execute = std::move(trailing_queries);
 	if (stmt_ref->stmt->HasError()) {
 		string error_msg = string(stmt_ref->stmt->GetError());
 		stmt_ref->stmt = nullptr;
@@ -238,9 +275,17 @@ jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jb
 		throw InvalidInputException("No statements to execute.");
 	}
 
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+	idx_t prepare_idx = FindLastSelectStatementIndex(statements);
+	if (prepare_idx == DConstants::INVALID_INDEX) {
+		prepare_idx = statements.size() - 1;
+	}
+
+	duckdb::vector<string> trailing_queries;
+	for (idx_t i = prepare_idx + 1; i < statements.size(); i++) {
+		trailing_queries.push_back(statements[i]->ToString());
+	}
+
+	for (idx_t i = 0; i < prepare_idx; i++) {
 		auto res = conn_ref->Query(std::move(statements[i]));
 		if (res->HasError()) {
 			res->ThrowError();
@@ -255,7 +300,9 @@ jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jb
 	    stream_results ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 
 	auto pending_ref = make_uniq<PendingHolder>();
-	pending_ref->pending = conn_ref->PendingQuery(std::move(statements.back()), query_parameters);
+	pending_ref->pending = conn_ref->PendingQuery(std::move(statements[prepare_idx]), query_parameters);
+	pending_ref->trailing_queries_after_execute = std::move(trailing_queries);
+	pending_ref->connection_for_trailing = conn_ref;
 
 	return env->NewDirectByteBuffer(pending_ref.release(), 0);
 }
@@ -298,6 +345,13 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		env->ThrowNew(exc_type, error_msg.c_str());
 		return nullptr;
 	}
+	try {
+		ExecuteTrailingQueries(*stmt_ref->stmt->context, stmt_ref->trailing_queries_after_execute);
+	} catch (const std::exception &ex) {
+		res_ref->res = nullptr;
+		ThrowJNI(env, ex.what());
+		return nullptr;
+	}
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }
 
@@ -316,6 +370,21 @@ jobject _duckdb_jdbc_execute_pending(JNIEnv *env, jclass, jobject pending_ref_bu
 		jclass exc_type = duckdb::ExceptionType::INTERRUPT == error_type ? J_SQLTimeoutException : J_SQLException;
 		env->ThrowNew(exc_type, error_msg.c_str());
 		return nullptr;
+	}
+	if (!pending_ref->trailing_queries_after_execute.empty()) {
+		D_ASSERT(pending_ref->connection_for_trailing);
+		try {
+			for (const auto &trailing_sql : pending_ref->trailing_queries_after_execute) {
+				auto tres = pending_ref->connection_for_trailing->Query(trailing_sql);
+				if (tres->HasError()) {
+					tres->ThrowError();
+				}
+			}
+		} catch (const std::exception &ex) {
+			res_ref->res = nullptr;
+			ThrowJNI(env, ex.what());
+			return nullptr;
+		}
 	}
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }

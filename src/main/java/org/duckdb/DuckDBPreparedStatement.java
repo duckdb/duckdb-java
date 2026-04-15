@@ -148,10 +148,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             try {
                 conn.checkOpen();
 
-                if (!isConnAutoCommit()) {
-                    startTransaction();
-                }
-
                 stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, sql.getBytes(UTF_8));
                 // Track prepared statement inside the parent connection
                 conn.preparedStatements.add(this);
