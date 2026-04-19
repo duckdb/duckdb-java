@@ -1,6 +1,5 @@
 package org.duckdb;
 
-import static java.lang.System.lineSeparator;
 import static java.util.Arrays.asList;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
@@ -1114,6 +1113,28 @@ public class TestMetadata {
                 assertTrue(names.contains("many_things"));
                 assertTrue(names.contains("one_thing"));
                 assertEquals(names.size(), 2);
+            }
+        }
+    }
+
+    public static void test_metadata_is_nullable() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INT, col2 INT NOT NULL)");
+            DatabaseMetaData dbMeta = conn.getMetaData();
+            try (ResultSet rs = dbMeta.getColumns(null, null, "tab1", null)) {
+                ResultSetMetaData rsMeta = rs.getMetaData();
+                assertEquals(rsMeta.getColumnName(11), "NULLABLE");
+                assertEquals(rsMeta.getColumnType(11), Types.INTEGER);
+                assertEquals(rsMeta.getColumnName(18), "IS_NULLABLE");
+                assertEquals(rsMeta.getColumnType(18), Types.VARCHAR);
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt("NULLABLE"), DatabaseMetaData.columnNullable);
+                assertEquals(rs.getString("IS_NULLABLE"), "YES");
+                assertTrue(rs.next());
+                assertEquals(rs.getInt("NULLABLE"), DatabaseMetaData.columnNoNulls);
+                assertEquals(rs.getString("IS_NULLABLE"), "NO");
+                assertFalse(rs.next());
             }
         }
     }
