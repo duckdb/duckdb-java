@@ -827,7 +827,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("NULL AS 'BUFFER_LENGTH'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("numeric_scale AS 'DECIMAL_DIGITS'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("10 AS 'NUM_PREC_RADIX'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE'")
+        sb.append("CASE WHEN is_nullable = TRUE THEN 1 else 0 END AS 'NULLABLE'")
             .append(TRAILING_COMMA)
             .append(lineSeparator());
         sb.append("comment as 'REMARKS'").append(TRAILING_COMMA).append(lineSeparator());
@@ -836,7 +836,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         sb.append("NULL AS 'SQL_DATETIME_SUB'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'CHAR_OCTET_LENGTH'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("column_index AS 'ORDINAL_POSITION'").append(TRAILING_COMMA).append(lineSeparator());
-        sb.append("is_nullable AS 'IS_NULLABLE'").append(TRAILING_COMMA).append(lineSeparator());
+        sb.append("CASE WHEN is_nullable = TRUE THEN 'YES' ELSE 'NO' END AS 'IS_NULLABLE'")
+            .append(TRAILING_COMMA)
+            .append(lineSeparator());
         sb.append("NULL AS 'SCOPE_CATALOG'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SCOPE_SCHEMA'").append(TRAILING_COMMA).append(lineSeparator());
         sb.append("NULL AS 'SCOPE_TABLE'").append(TRAILING_COMMA).append(lineSeparator());
