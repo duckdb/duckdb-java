@@ -33,6 +33,8 @@ class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
+class WindowFunction;
+class WindowFunctionSet;
 
 struct PragmaInfo;
 
@@ -137,6 +139,7 @@ public:
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
+protected:
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
 	//! The set of original arguments of the function - only set if Function::EraseArgument is called
@@ -147,6 +150,30 @@ public:
 	LogicalType varargs;
 
 public:
+	vector<LogicalType> &GetArguments() {
+		return arguments;
+	}
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<LogicalType> &GetOriginalArguments() {
+		return original_arguments;
+	}
+	const vector<LogicalType> &GetOriginalArguments() const {
+		return original_arguments;
+	}
+
+	const LogicalType &GetVarArgs() const {
+		return varargs;
+	}
+	LogicalType &GetVarArgs() {
+		return varargs;
+	} // TODO: Dont expose mutable accessor
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
+	}
+
 	DUCKDB_API virtual string ToString() const;
 
 	DUCKDB_API bool HasVarArgs() const;
@@ -223,7 +250,7 @@ public:
 		return collation_handling;
 	}
 
-public:
+protected:
 	//! Return type of the function
 	LogicalType return_type;
 	//! The stability of the function (see FunctionStability enum for more info)
