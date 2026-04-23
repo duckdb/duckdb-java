@@ -489,12 +489,20 @@ jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv *env, jclass, jobject re
 		if (FlatVector::IsNull(vec, row_idx)) {
 			continue;
 		}
-		auto d_str = (reinterpret_cast<string_t *>(FlatVector::GetData(vec)))[row_idx];
+		const string_t *vec_data = FlatVector::GetData<string_t>(vec);
+		auto d_str = vec_data[row_idx];
 		auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 		env->SetObjectArrayElement(string_data, row_idx, j_str);
 	}
 
 	return string_data;
+}
+
+template <typename T>
+static jobject make_vec_data_buf(JNIEnv *env, Vector &vec, idx_t row_count) {
+	T *vec_data = FlatVector::GetDataMutable<T>(vec);
+	idx_t len = row_count * sizeof(T);
+	return make_data_buf(env, vec_data, len);
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
@@ -514,56 +522,56 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 
 	switch (vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
+		constlen_data = make_vec_data_buf<bool>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TINYINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
+		constlen_data = make_vec_data_buf<int8_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
+		constlen_data = make_vec_data_buf<int16_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::INTEGER:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+		constlen_data = make_vec_data_buf<int32_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::BIGINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+		constlen_data = make_vec_data_buf<int64_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::UTINYINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint8_t));
+		constlen_data = make_vec_data_buf<uint8_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::USMALLINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint16_t));
+		constlen_data = make_vec_data_buf<uint16_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::UINTEGER:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint32_t));
+		constlen_data = make_vec_data_buf<uint32_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::UBIGINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint64_t));
+		constlen_data = make_vec_data_buf<uint64_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::HUGEINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::UHUGEINT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uhugeint_t));
+		constlen_data = make_vec_data_buf<uhugeint_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::FLOAT:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
+		constlen_data = make_vec_data_buf<float>(env, vec, row_count);
 		break;
 	case LogicalTypeId::DECIMAL: {
 		auto physical_type = vec.GetType().InternalType();
 
 		switch (physical_type) {
 		case PhysicalType::INT16:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
+			constlen_data = make_vec_data_buf<int16_t>(env, vec, row_count);
 			break;
 		case PhysicalType::INT32:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+			constlen_data = make_vec_data_buf<int32_t>(env, vec, row_count);
 			break;
 		case PhysicalType::INT64:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+			constlen_data = make_vec_data_buf<int64_t>(env, vec, row_count);
 			break;
 		case PhysicalType::INT128:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+			constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
 			break;
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
@@ -571,26 +579,26 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	}
 	case LogicalTypeId::DOUBLE:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
+		constlen_data = make_vec_data_buf<double>(env, vec, row_count);
 		break;
 	case LogicalTypeId::DATE:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(date_t));
+		constlen_data = make_vec_data_buf<date_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_t));
+		constlen_data = make_vec_data_buf<dtime_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME_NS:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_ns_t));
+		constlen_data = make_vec_data_buf<dtime_ns_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME_TZ:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_tz_t));
+		constlen_data = make_vec_data_buf<dtime_tz_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
+		constlen_data = make_vec_data_buf<timestamp_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::ENUM:
 		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
@@ -633,22 +641,24 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			if (FlatVector::IsNull(vec, row_idx)) {
 				continue;
 			}
-			auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+
+			const string_t *vec_data = FlatVector::GetData<string_t>(vec);
+			const string_t d_str = vec_data[row_idx];
 
 			auto j_arr = env->NewByteArray(d_str.GetSize());
 			auto j_arr_el = env->GetByteArrayElements(j_arr, nullptr);
-			memcpy((void *)j_arr_el, (void *)d_str.GetData(), d_str.GetSize());
+			memcpy(j_arr_el, d_str.GetData(), d_str.GetSize());
 			env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
 		}
 		break;
 	case LogicalTypeId::UUID:
-		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::ARRAY: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
-		auto &array_vector = ArrayVector::GetEntry(vec);
+		auto &array_vector = ArrayVector::GetChildMutable(vec);
 		auto total_size = row_count * ArrayType::GetSize(vec.GetType());
 		auto j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
 
@@ -674,7 +684,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		auto list_entries = FlatVector::GetData<list_entry_t>(vec);
 
 		auto list_size = ListVector::GetListSize(vec);
-		auto &list_vector = ListVector::GetEntry(vec);
+		auto &list_vector = ListVector::GetChildMutable(vec);
 		auto j_vec = ProcessVector(env, conn_ref, list_vector, list_size);
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -721,7 +731,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			if (FlatVector::IsNull(vec, row_idx)) {
 				continue;
 			}
-			auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+			const string_t *vec_data = FlatVector::GetData<string_t>(vec);
+			const string_t d_str = vec_data[row_idx];
 			auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 		}
