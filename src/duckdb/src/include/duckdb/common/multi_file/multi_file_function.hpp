@@ -342,7 +342,7 @@ public:
 			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
-			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
+			// requires getting the ref to the file mutex pointer with the lock still held: readers get be resized
 			parallel_lock.unlock();
 			unique_lock<mutex> current_file_lock(file_mutex);
 			parallel_lock.lock();
@@ -361,7 +361,6 @@ public:
 
 	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
 		auto &reader = *lstate.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
@@ -419,13 +418,16 @@ public:
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
 				                                                  *scan_data.local_state)) {
-					if (!current_reader_data.reader) {
+					scan_data.reader = current_reader_data.reader;
+					if (!scan_data.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
 					scan_data.batch_index = gstate.batch_index++;
 					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
+					parallel_lock.unlock();
+					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
 					if (old_file_index != scan_data.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
