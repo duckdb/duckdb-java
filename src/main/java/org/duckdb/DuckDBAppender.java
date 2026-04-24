@@ -41,6 +41,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         supportedTypes.add(DUCKDB_TYPE_VARCHAR.typeId);
         supportedTypes.add(DUCKDB_TYPE_BLOB.typeId);
+        supportedTypes.add(DUCKDB_TYPE_GEOMETRY.typeId);
 
         supportedTypes.add(DUCKDB_TYPE_DATE.typeId);
         supportedTypes.add(DUCKDB_TYPE_TIME.typeId);
@@ -71,7 +72,8 @@ public class DuckDBAppender implements AutoCloseable {
     private static final CAPIType[] timestampMicrosTypes =
         new CAPIType[] {DUCKDB_TYPE_TIMESTAMP, DUCKDB_TYPE_TIMESTAMP_TZ};
     private static final CAPIType[] collectionTypes = new CAPIType[] {DUCKDB_TYPE_ARRAY, DUCKDB_TYPE_LIST};
-    private static final CAPIType[] varlenTypes = new CAPIType[] {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_BLOB};
+    private static final CAPIType[] varlenTypes =
+        new CAPIType[] {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_BLOB, DUCKDB_TYPE_GEOMETRY};
     private static final CAPIType[] varcharOrEnumTypes = new CAPIType[] {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_ENUM};
 
     private static final int STRING_MAX_INLINE_BYTES = 12;

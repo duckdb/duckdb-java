@@ -356,7 +356,11 @@ public class DuckDBBindings {
         // enum type, only useful as logical type
         DUCKDB_TYPE_STRING_LITERAL(37),
         // enum type, only useful as logical type
-        DUCKDB_TYPE_INTEGER_LITERAL(38);
+        DUCKDB_TYPE_INTEGER_LITERAL(38),
+        // duckdb_time_ns (nanoseconds)
+        // DUCKDB_TYPE_TIME_NS = 39,
+        // WKB blob
+        DUCKDB_TYPE_GEOMETRY(40, 16);
 
         final int typeId;
         final long widthBytes;
