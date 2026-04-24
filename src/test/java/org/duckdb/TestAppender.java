@@ -991,4 +991,39 @@ public class TestAppender {
             }
         }
     }
+
+    public static void test_appender_basic_geometry() throws Exception {
+        byte[] geometryBytes =
+            new byte[] {1, 1, 0, 0, 0, -51, -52, -52, -52, -52, -116, 68, 64, -102, -103, -103, -103, -103, 25, 69, 64};
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab1 (col1 INT, col2 GEOMETRY)");
+            stmt.execute("INSERT INTO tab1 VALUES (0, 'POINT(41.1 42.2)'::GEOMETRY)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?, ST_GeomFromWKB(?))")) {
+                ps.setInt(1, 1);
+                ps.setBytes(2, geometryBytes);
+                ps.execute();
+            }
+            try (DuckDBAppender appender = conn.createAppender("tab1")) {
+                appender.beginRow().append(2).append(geometryBytes).endRow().flush();
+            }
+            try (ResultSet rs = stmt.executeQuery("FROM tab1 ORDER BY col1")) {
+                for (int i = 0; i < 3; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getInt(1), i);
+                    byte[] bytes = rs.getBytes(2);
+                    List<Byte> list = new ArrayList<>();
+                    for (byte b : bytes) {
+                        list.add(b);
+                    }
+                    List<Byte> expected = new ArrayList<>();
+                    for (byte b : geometryBytes) {
+                        expected.add(b);
+                    }
+                    assertListsEqual(expected, list);
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
 }
