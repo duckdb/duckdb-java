@@ -185,7 +185,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		if (TypeHasData(result.GetType())) {
-			FlatVector::SetData(result, base_ptr, vdata.count);
+			FlatVector::SetData(result, base_ptr, count_t(vdata.count));
 		}
 		FlatVector::ValidityMutable(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
@@ -229,9 +229,11 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto internal_type = vector_type.InternalType();
 	auto &vdata = GetVectorData(vector_index);
 	if (vdata.count == 0) {
+		FlatVector::SetSize(result, 0);
 		return 0;
 	}
 	auto vcount = ReadVectorInternal(state, vector_index, result);
+	FlatVector::SetSize(result, vcount);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetChildMutable(result);

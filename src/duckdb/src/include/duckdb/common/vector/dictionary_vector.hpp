@@ -50,7 +50,7 @@ public:
 		this->sel_vector.Initialize(vector);
 	}
 	optional_idx GetDictionarySize() const {
-		if (!entry->data.HasSize() || entry->data.size() == 0) {
+		if (entry->data.size() == 0) {
 			// FIXME: we should be directly returning entry->data.size(), this should not be an optional_idx
 			return optional_idx();
 		}
@@ -87,6 +87,7 @@ public:
 	                                        idx_t count) override;
 
 protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
@@ -94,6 +95,16 @@ protected:
 private:
 	SelectionVector sel_vector;
 	buffer_ptr<DictionaryEntry> entry;
+};
+
+class SelectionDataHolder : public AuxiliaryDataHolder {
+public:
+	explicit SelectionDataHolder(buffer_ptr<SelectionData> selection_data_p)
+	    : selection_data(std::move(selection_data_p)) {
+	}
+
+private:
+	buffer_ptr<SelectionData> selection_data;
 };
 
 struct DictionaryVector {

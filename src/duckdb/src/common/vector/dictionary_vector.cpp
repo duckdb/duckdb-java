@@ -7,27 +7,25 @@
 namespace duckdb {
 
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
-      entry(std::move(entry_p)) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(sel), entry(std::move(entry_p)) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
                                    buffer_ptr<DictionaryEntry> entry_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
-      entry(std::move(entry_p)) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(std::move(data)), entry(std::move(entry_p)) {
 }
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(sel) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
-	v_size = sel_count_p;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(std::move(data)) {
 }
 DictionaryBuffer::DictionaryBuffer(idx_t count)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
-	v_size = count;
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(count)),
+      sel_vector(count) {
 }
 
 idx_t DictionaryBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -89,6 +87,31 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const
 		result = Slice(type, sel, count);
 		cache.cache[target_data] = result;
 	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionary vectors");
+	}
+	auto count = end - offset;
+	auto &sel_data = GetSelVector().sel_data();
+	if (!sel_data) {
+		// non-owning sel, we need to create a new selection vector to slice
+		SelectionVector new_sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			new_sel.set_index(i, sel_vector.get_index(offset + i));
+		}
+		return make_uniq<DictionaryBuffer>(new_sel, count, entry);
+	}
+	if (offset == 0) {
+		// for offset = 0 all we have to do is update the count - so just create a new buffer
+		return make_uniq<DictionaryBuffer>(sel_data, end, entry);
+	}
+	SelectionVector sliced_sel(sel_vector.data() + offset, count);
+	auto result = make_uniq<DictionaryBuffer>(sliced_sel, count, entry);
+	result->AddAuxiliaryData(make_uniq<SelectionDataHolder>(sel_data));
 	return result;
 }
 

@@ -4,11 +4,12 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
-VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), capacity(capacity) {
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capacity)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)), capacity(capacity) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		children.emplace_back(child_type.second, capacity);
@@ -16,14 +17,14 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, idx_t capacity_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), children(std::move(children_p)),
-      capacity(capacity_p) {
+VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, capacity_t capacity_p)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)),
+      children(std::move(children_p)), capacity(capacity_p) {
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER),
+VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, count_t count)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count),
       capacity(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE)) {
 	auto &other_vector = other.children;
 	for (auto &child_vector : other_vector) {
@@ -35,7 +36,6 @@ VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const Selectio
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
-	v_size = count;
 }
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
@@ -48,8 +48,15 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-void VectorStructBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
+void VectorStructBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	for (auto &child : children) {
+		FlatVector::SetSize(child, new_size);
+	}
+}
+
+void VectorStructBuffer::ResetCapacity(idx_t capacity_p) {
+	this->capacity = capacity_p;
 	validity.Reset(capacity);
 }
 
@@ -103,15 +110,28 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 	for (idx_t i = 0; i < children.size(); i++) {
 		result_children.emplace_back(children[i], offset, end);
 	}
-	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), end - offset);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
-	result->SetVectorSize(end - offset);
+	auto count = count_t(end - offset);
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(count));
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->SetVectorSize(count);
 	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                            idx_t count) {
-	return make_buffer<VectorStructBuffer>(*this, sel, count);
+	return make_buffer<VectorStructBuffer>(*this, sel, count_t(count));
+}
+
+buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	vector<Vector> result_children;
+	for (idx_t i = 0; i < children.size(); i++) {
+		result_children.emplace_back(Vector::Ref(children[i]));
+	}
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(1ULL));
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
+	return result;
 }
 
 void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
@@ -223,7 +243,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 		result_children.emplace_back(Vector::Ref(children[i]));
 		result_children[i].Flatten(sel, count);
 	}
-	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), count);
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);
@@ -248,6 +268,10 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 
 const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
+}
+
+const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector) {
+	return StructVector::GetEntries(vector);
 }
 
 } // namespace duckdb
