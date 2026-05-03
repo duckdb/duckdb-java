@@ -25,9 +25,6 @@
 U_NAMESPACE_BEGIN
 namespace unisets {
 
-#pragma push_macro("COMMA")
-#undef COMMA
-
 enum Key {
     // NONE is used to indicate null in chooseFrom().
     // EMPTY is used to get an empty UnicodeSet.
@@ -77,8 +74,6 @@ enum Key {
     // The number of elements in the enum.
     UNISETS_KEY_COUNT
 };
-
-#pragma pop_macro("COMMA")
 
 /**
  * Gets the static-allocated UnicodeSet according to the provided key. The

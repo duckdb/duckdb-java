@@ -1277,24 +1277,17 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 
 template <class V = VertexXY>
 static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	const auto geom_data = source_vec.Values<string_t>(row_count);
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(target_vec, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_entry = geom_data[row_idx];
+		if (!geom_entry.IsValid()) {
+			vert_writer.WriteNull();
 			continue;
 		}
 
-		const auto &blob = geom_data[row_idx];
+		const auto &blob = geom_entry.GetValue();
 		const auto blob_data = blob.GetData();
 		const auto blob_size = blob.GetSize();
 
@@ -1303,32 +1296,24 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 		// Skip byte order and type/meta
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			vert_data[dim_idx][row_idx] = reader.Read<double>();
-		}
+		vert_writer.ForEach([&](auto &child_writer) { child_writer.WriteValue(reader.Read<double>()); });
 	}
 }
 
 template <class V = VertexXY>
 static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
 	auto vert_iter = source_vec.Values<typename V::STRUCT_TYPE>(row_count);
-	auto geom_data = FlatVector::GetDataMutable<string_t>(target_vec);
-
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-
 		const auto vert_entry = vert_iter[row_idx];
 		if (!vert_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
 		// byte order + type/meta + vertex data
 		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(V);
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		const auto blob_data = blob.GetDataWriteable();
 
 		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
@@ -1342,7 +1327,6 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 		vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 
 		blob.Finalize();
-		geom_data[out_idx] = blob;
 	}
 }
 
@@ -1419,14 +1403,13 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 
 template <class V = VertexXY>
 static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
 	auto line_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>(row_count);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
 		const auto line_entry = line_iter[row_idx];
 		if (!line_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -1434,7 +1417,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 		// byte order + type/meta + vertex count + vertex data
 		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) + vert_count * sizeof(V);
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
@@ -1449,7 +1432,6 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1554,14 +1536,13 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 
 template <class V = VertexXY>
 static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
 	auto poly_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(row_count);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
 		const auto poly_entry = poly_iter[row_idx];
 		if (!poly_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -1572,8 +1553,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 		for (const auto ring_entry : poly_entry.GetChildValues()) {
 			blob_size += sizeof(uint32_t) + ring_entry.GetListLength() * sizeof(V);
 		}
-
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta = static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
@@ -1590,7 +1570,6 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1670,14 +1649,13 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 
 template <class V = VertexXY>
 static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
 	auto mult_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>(row_count);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
 		const auto mult_entry = mult_iter[row_idx];
 		if (!mult_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -1686,7 +1664,8 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 		// byte order + type/meta + part count + (point header + vertex) per part
 		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) +
 		                       part_count * (sizeof(uint8_t) + sizeof(uint32_t) + sizeof(V));
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
@@ -1705,7 +1684,6 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1818,14 +1796,13 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 
 template <class V = VertexXY>
 static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
 	auto mult_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(row_count);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
 		const auto mult_entry = mult_iter[row_idx];
 		if (!mult_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -1838,7 +1815,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 			blob_size += sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) + line_entry.GetListLength() * sizeof(V);
 		}
 
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
@@ -1860,7 +1837,6 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1988,15 +1964,14 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 template <class V = VertexXY>
 static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
 	auto mult_iter =
 	    source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>(row_count);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
 		const auto mult_entry = mult_iter[row_idx];
 		if (!mult_entry.IsValid()) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -2012,7 +1987,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 			}
 		}
 
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
@@ -2037,7 +2012,6 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
