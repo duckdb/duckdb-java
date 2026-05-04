@@ -82,6 +82,8 @@
 
 #include "extension/icu/third_party/icu/common/propname.cpp"
 
+#include "extension/icu/third_party/icu/common/fixedstring.cpp"
+
 #include "extension/icu/third_party/icu/common/sharedobject.cpp"
 
 #include "extension/icu/third_party/icu/common/ustack.cpp"
