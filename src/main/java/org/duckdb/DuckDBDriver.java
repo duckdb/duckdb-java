@@ -31,6 +31,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
     public static final String JDBC_PIN_DB = "jdbc_pin_db";
     public static final String JDBC_IGNORE_UNSUPPORTED_OPTIONS = "jdbc_ignore_unsupported_options";
+    public static final String JDBC_JFR_MEMORY_MONITOR = "jdbc_jfr_memory_monitor";
 
     static final String DUCKDB_URL_PREFIX = "jdbc:duckdb:";
     static final String MEMORY_DB = ":memory:";
@@ -75,6 +76,11 @@ public class DuckDBDriver implements java.sql.Driver {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+        // Eagerly register the JFR periodic memory-usage event (when JFR is available)
+        // so that recordings started before any monitored connection is opened see the
+        // event type and honor its period setting. On JVMs without JFR (e.g. Java 8)
+        // this is a silent no-op.
+        JfrMemoryMonitor.init();
     }
 
     public Connection connect(String url, Properties info) throws SQLException {
@@ -165,6 +171,9 @@ public class DuckDBDriver implements java.sql.Driver {
                                       "Do not close the DB instance after all connections to it are closed"));
         list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
                                       "Silently discard unsupported connection options"));
+        list.add(createDriverPropInfo(
+            JDBC_JFR_MEMORY_MONITOR, "",
+            "User-assigned identifier under which this connection's DuckDB instance is tracked in the duckdb.MemoryUsage JFR event. Leave empty to disable monitoring. JFR controls the event's enabled state and period via recording settings. Requires a JFR-capable JVM."));
         list.sort((o1, o2) -> o1.name.compareToIgnoreCase(o2.name));
         return list.toArray(new DriverPropertyInfo[0]);
     }

@@ -48,6 +48,21 @@ public final class DuckDBConnection implements java.sql.Connection {
     private final boolean readOnly;
     private final String sessionInitSQL;
 
+    /**
+     * User-supplied identifier for JFR memory monitoring (the value of the
+     * {@value DuckDBDriver#JDBC_JFR_MEMORY_MONITOR} property). {@code null} or empty
+     * means this connection does not participate in monitoring — either the user
+     * did not opt in, or this connection IS the monitor connection.
+     */
+    final String monitorName;
+
+    /**
+     * Native address of the underlying DuckDB instance. Captured once at construction so that
+     * {@link #close()} can notify {@link JfrMemoryMonitor} without an additional JNI call
+     * and so the JFR event can expose it as a secondary disambiguator.
+     */
+    final long dbAddress;
+
     public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties) throws Exception {
         return newConnection(url, readOnly, null, properties);
     }
@@ -60,19 +75,25 @@ public final class DuckDBConnection implements java.sql.Connection {
         String dbName = dbNameFromUrl(url);
         String autoCommitStr = removeOption(properties, JDBC_AUTO_COMMIT);
         boolean autoCommit = isStringTruish(autoCommitStr, true);
+        String monitorName = removeOption(properties, DuckDBDriver.JDBC_JFR_MEMORY_MONITOR);
         ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties);
-        return new DuckDBConnection(nativeReference, url, readOnly, sessionInitSQL, autoCommit);
+        return new DuckDBConnection(nativeReference, url, readOnly, sessionInitSQL, autoCommit, monitorName);
     }
 
     private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly, String sessionInitSQL,
-                             boolean autoCommit) throws SQLException {
+                             boolean autoCommit, String monitorName) throws SQLException {
         this.connRef = connectionReference;
         this.url = url;
         this.readOnly = readOnly;
         this.autoCommit = autoCommit;
         this.sessionInitSQL = sessionInitSQL;
+        this.monitorName = (monitorName != null && !monitorName.isEmpty()) ? monitorName : null;
+        this.dbAddress = DuckDBNative.duckdb_jdbc_db_address(connectionReference);
         // Hardcoded 'true' here is intentional, autocommit is handled in stmt#execute()
         DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
+        if (this.monitorName != null) {
+            JfrMemoryMonitor.connectionOpened(this);
+        }
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
@@ -99,12 +120,24 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public DuckDBConnection duplicate() throws SQLException {
+        return duplicate(this.monitorName);
+    }
+
+    /**
+     * Creates a duplicate connection that is invisible to the JFR memory monitor.
+     * Used exclusively by the monitor itself to avoid re-entrant lifecycle callbacks.
+     */
+    DuckDBConnection duplicateForMonitor() throws SQLException {
+        return duplicate(null);
+    }
+
+    private DuckDBConnection duplicate(String monitorName) throws SQLException {
         checkOpen();
         connRefLock.lock();
         try {
             checkOpen();
             ByteBuffer dupRef = DuckDBNative.duckdb_jdbc_connect(connRef);
-            return new DuckDBConnection(dupRef, url, readOnly, sessionInitSQL, autoCommit);
+            return new DuckDBConnection(dupRef, url, readOnly, sessionInitSQL, autoCommit, monitorName);
         } finally {
             connRefLock.unlock();
         }
@@ -128,6 +161,10 @@ public final class DuckDBConnection implements java.sql.Connection {
         if (isClosed()) {
             return;
         }
+        // Notify the memory monitor only from the call that actually performed
+        // the disconnect, and after releasing connRefLock so the monitor's own
+        // native disconnect does not block the caller under our lock.
+        boolean notifyMonitor = false;
         connRefLock.lock();
         try {
             if (isClosed()) {
@@ -173,8 +210,12 @@ public final class DuckDBConnection implements java.sql.Connection {
 
             DuckDBNative.duckdb_jdbc_disconnect(connRef);
             connRef = null;
+            notifyMonitor = (monitorName != null);
         } finally {
             connRefLock.unlock();
+        }
+        if (notifyMonitor) {
+            JfrMemoryMonitor.connectionClosed(dbAddress);
         }
     }
 
