@@ -48,8 +48,6 @@ set(DUCKDB_INCLUDE_DIRS
   src/duckdb/third_party/hyperloglog
   src/duckdb/third_party/jaro_winkler
   src/duckdb/third_party/jaro_winkler/details
-  src/duckdb/third_party/libpg_query
-  src/duckdb/third_party/libpg_query/include
   src/duckdb/third_party/lz4
   src/duckdb/third_party/brotli/include
   src/duckdb/third_party/brotli/common
@@ -243,14 +241,12 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_parser_constraints.cpp
   src/duckdb/ub_src_parser_expression.cpp
   src/duckdb/ub_src_parser_parsed_data.cpp
+  src/duckdb/ub_src_parser_peg.cpp
+  src/duckdb/ub_src_parser_peg_tokenizer.cpp
+  src/duckdb/ub_src_parser_peg_transformer.cpp
   src/duckdb/ub_src_parser_query_node.cpp
   src/duckdb/ub_src_parser_statement.cpp
   src/duckdb/ub_src_parser_tableref.cpp
-  src/duckdb/src/parser/transform/constraint/transform_constraint.cpp
-  src/duckdb/ub_src_parser_transform_expression.cpp
-  src/duckdb/ub_src_parser_transform_helpers.cpp
-  src/duckdb/ub_src_parser_transform_statement.cpp
-  src/duckdb/ub_src_parser_transform_tableref.cpp
   src/duckdb/ub_src_planner.cpp
   src/duckdb/ub_src_planner_binder_expression.cpp
   src/duckdb/ub_src_planner_binder_query_node.cpp
@@ -277,16 +273,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_storage_table.cpp
   src/duckdb/ub_src_storage_table_variant.cpp
   src/duckdb/ub_src_transaction.cpp
-  src/duckdb/src/verification/copied_statement_verifier.cpp
-  src/duckdb/src/verification/deserialized_statement_verifier.cpp
-  src/duckdb/src/verification/explain_statement_verifier.cpp
-  src/duckdb/src/verification/external_statement_verifier.cpp
-  src/duckdb/src/verification/fetch_row_verifier.cpp
-  src/duckdb/src/verification/no_operator_caching_verifier.cpp
-  src/duckdb/src/verification/parsed_statement_verifier.cpp
-  src/duckdb/src/verification/prepared_statement_verifier.cpp
-  src/duckdb/src/verification/statement_verifier.cpp
-  src/duckdb/src/verification/unoptimized_statement_verifier.cpp
   src/duckdb/third_party/fmt/format.cc
   src/duckdb/third_party/fsst/libfsst.cpp
   src/duckdb/third_party/miniz/miniz.cpp
@@ -319,16 +305,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/fastpforlib/bitpacking.cpp
   src/duckdb/third_party/utf8proc/utf8proc.cpp
   src/duckdb/third_party/utf8proc/utf8proc_wrapper.cpp
-  src/duckdb/third_party/libpg_query/pg_functions.cpp
-  src/duckdb/third_party/libpg_query/postgres_parser.cpp
-  src/duckdb/third_party/libpg_query/src_backend_nodes_list.cpp
-  src/duckdb/third_party/libpg_query/src_backend_nodes_makefuncs.cpp
-  src/duckdb/third_party/libpg_query/src_backend_nodes_value.cpp
-  src/duckdb/third_party/libpg_query/src_backend_parser_gram.cpp
-  src/duckdb/third_party/libpg_query/src_backend_parser_parser.cpp
-  src/duckdb/third_party/libpg_query/src_backend_parser_scan.cpp
-  src/duckdb/third_party/libpg_query/src_backend_parser_scansup.cpp
-  src/duckdb/third_party/libpg_query/src_common_keywords.cpp
   src/duckdb/third_party/mbedtls/library/aes.cpp
   src/duckdb/third_party/mbedtls/library/asn1parse.cpp
   src/duckdb/third_party/mbedtls/library/asn1write.cpp
@@ -385,52 +361,52 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/zstd/dict/divsufsort.cpp
   src/duckdb/third_party/zstd/dict/fastcover.cpp
   src/duckdb/third_party/zstd/dict/zdict.cpp
-  src/duckdb/extension/core_functions/function_list.cpp
-  src/duckdb/extension/core_functions/lambda_functions.cpp
   src/duckdb/extension/core_functions/core_functions_extension.cpp
-  src/duckdb/ub_extension_core_functions_scalar_random.cpp
-  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
-  src/duckdb/ub_extension_core_functions_scalar_union.cpp
-  src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
-  src/duckdb/ub_extension_core_functions_scalar_date.cpp
-  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
-  src/duckdb/ub_extension_core_functions_scalar_array.cpp
-  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
-  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
-  src/duckdb/extension/core_functions/scalar/math/numeric.cpp
-  src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
-  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
-  src/duckdb/ub_extension_core_functions_scalar_string.cpp
-  src/duckdb/ub_extension_core_functions_scalar_map.cpp
-  src/duckdb/ub_extension_core_functions_scalar_list.cpp
+  src/duckdb/extension/core_functions/lambda_functions.cpp
+  src/duckdb/extension/core_functions/function_list.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
   src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_regression.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
-  src/duckdb/extension/parquet/zstd_file_system.cpp
-  src/duckdb/extension/parquet/parquet_field_id.cpp
-  src/duckdb/extension/parquet/parquet_geometry.cpp
-  src/duckdb/extension/parquet/column_writer.cpp
-  src/duckdb/extension/parquet/parquet_timestamp.cpp
+  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
+  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
+  src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
+  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
+  src/duckdb/extension/core_functions/scalar/math/numeric.cpp
+  src/duckdb/ub_extension_core_functions_scalar_array.cpp
+  src/duckdb/ub_extension_core_functions_scalar_union.cpp
+  src/duckdb/ub_extension_core_functions_scalar_blob.cpp
+  src/duckdb/ub_extension_core_functions_scalar_list.cpp
+  src/duckdb/ub_extension_core_functions_scalar_map.cpp
+  src/duckdb/ub_extension_core_functions_scalar_date.cpp
+  src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
+  src/duckdb/ub_extension_core_functions_scalar_random.cpp
+  src/duckdb/ub_extension_core_functions_scalar_string.cpp
+  src/duckdb/ub_extension_core_functions_scalar_struct.cpp
+  src/duckdb/extension/parquet/parquet_reader.cpp
   src/duckdb/extension/parquet/parquet_statistics.cpp
+  src/duckdb/extension/parquet/zstd_file_system.cpp
+  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
   src/duckdb/extension/parquet/parquet_shredding.cpp
   src/duckdb/extension/parquet/parquet_multi_file_info.cpp
-  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
-  src/duckdb/extension/parquet/serialize_parquet.cpp
-  src/duckdb/extension/parquet/parquet_crypto.cpp
   src/duckdb/extension/parquet/parquet_metadata.cpp
+  src/duckdb/extension/parquet/parquet_timestamp.cpp
+  src/duckdb/extension/parquet/parquet_crypto.cpp
+  src/duckdb/extension/parquet/serialize_parquet.cpp
+  src/duckdb/extension/parquet/parquet_column_schema.cpp
+  src/duckdb/extension/parquet/parquet_extension.cpp
+  src/duckdb/extension/parquet/parquet_field_id.cpp
+  src/duckdb/extension/parquet/column_writer.cpp
+  src/duckdb/extension/parquet/column_reader.cpp
   src/duckdb/extension/parquet/parquet_writer.cpp
   src/duckdb/extension/parquet/parquet_float16.cpp
-  src/duckdb/extension/parquet/column_reader.cpp
-  src/duckdb/extension/parquet/parquet_extension.cpp
-  src/duckdb/extension/parquet/parquet_column_schema.cpp
-  src/duckdb/extension/parquet/parquet_reader.cpp
+  src/duckdb/extension/parquet/parquet_geometry.cpp
   src/duckdb/ub_extension_parquet_reader.cpp
   src/duckdb/ub_extension_parquet_reader_variant.cpp
+  src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/ub_extension_parquet_writer.cpp
   src/duckdb/ub_extension_parquet_writer_variant.cpp
-  src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/third_party/parquet/parquet_types.cpp
   src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
   src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
@@ -469,157 +445,157 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/brotli/enc/metablock.cpp
   src/duckdb/third_party/brotli/enc/static_dict.cpp
   src/duckdb/third_party/brotli/enc/utf8_util.cpp
-  src/duckdb/extension/icu/./icu-makedate.cpp
-  src/duckdb/extension/icu/./icu-timezone.cpp
-  src/duckdb/extension/icu/./icu-datetrunc.cpp
-  src/duckdb/extension/icu/./icu-list-range.cpp
-  src/duckdb/extension/icu/./icu-current.cpp
-  src/duckdb/extension/icu/./icu-table-range.cpp
-  src/duckdb/extension/icu/./icu_extension.cpp
   src/duckdb/extension/icu/./icu-timebucket.cpp
+  src/duckdb/extension/icu/./icu-datepart.cpp
+  src/duckdb/extension/icu/./icu-datetrunc.cpp
+  src/duckdb/extension/icu/./icu-current.cpp
+  src/duckdb/extension/icu/./icu_extension.cpp
+  src/duckdb/extension/icu/./icu-table-range.cpp
   src/duckdb/extension/icu/./icu-datefunc.cpp
+  src/duckdb/extension/icu/./icu-makedate.cpp
+  src/duckdb/extension/icu/./icu-dateadd.cpp
+  src/duckdb/extension/icu/./icu-timezone.cpp
   src/duckdb/extension/icu/./icu-strptime.cpp
   src/duckdb/extension/icu/./icu-datesub.cpp
-  src/duckdb/extension/icu/./icu-datepart.cpp
-  src/duckdb/extension/icu/./icu-dateadd.cpp
-  src/duckdb/extension/icu/third_party/icu/common/unormcmp.cpp
-  src/duckdb/extension/icu/third_party/icu/common/loclikelysubtags.cpp
+  src/duckdb/extension/icu/./icu-list-range.cpp
   src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.cpp
   src/duckdb/extension/icu/third_party/icu/common/utrie2_builder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/utrie2.cpp
-  src/duckdb/extension/icu/third_party/icu/common/localebuilder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ucase.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uresbund.cpp
+  src/duckdb/extension/icu/third_party/icu/common/umutablecptrie.cpp
+  src/duckdb/extension/icu/third_party/icu/common/unames.cpp
+  src/duckdb/extension/icu/third_party/icu/common/uscript_props.cpp
+  src/duckdb/extension/icu/third_party/icu/common/putil.cpp
+  src/duckdb/extension/icu/third_party/icu/common/ubiditransform.cpp
+  src/duckdb/extension/icu/third_party/icu/common/locmap.cpp
+  src/duckdb/extension/icu/third_party/icu/common/locdistance.cpp
   src/duckdb/extension/icu/third_party/icu/common/ucptrie.cpp
   src/duckdb/extension/icu/third_party/icu/common/uhash.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ubidi_props.cpp
+  src/duckdb/extension/icu/third_party/icu/common/localebuilder.cpp
   src/duckdb/extension/icu/third_party/icu/common/uvector.cpp
-  src/duckdb/extension/icu/third_party/icu/common/unames.cpp
-  src/duckdb/extension/icu/third_party/icu/common/locmap.cpp
-  src/duckdb/extension/icu/third_party/icu/common/loadednormalizer2impl.cpp
-  src/duckdb/extension/icu/third_party/icu/common/wintz.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ucharstriebuilder.cpp
+  src/duckdb/extension/icu/third_party/icu/common/ucase.cpp
+  src/duckdb/extension/icu/third_party/icu/common/utrie2.cpp
+  src/duckdb/extension/icu/third_party/icu/common/ubidi_props.cpp
   src/duckdb/extension/icu/third_party/icu/common/ustrcase.cpp
-  src/duckdb/extension/icu/third_party/icu/common/bytestriebuilder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uloc.cpp
   src/duckdb/extension/icu/third_party/icu/common/uresdata.cpp
-  src/duckdb/extension/icu/third_party/icu/common/umutablecptrie.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ubiditransform.cpp
-  src/duckdb/extension/icu/third_party/icu/common/putil.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uscript_props.cpp
   src/duckdb/extension/icu/third_party/icu/common/umapfile.cpp
-  src/duckdb/extension/icu/third_party/icu/common/locdistance.cpp
   src/duckdb/extension/icu/third_party/icu/common/utrie.cpp
+  src/duckdb/extension/icu/third_party/icu/common/loadednormalizer2impl.cpp
+  src/duckdb/extension/icu/third_party/icu/common/ucharstriebuilder.cpp
+  src/duckdb/extension/icu/third_party/icu/common/unormcmp.cpp
+  src/duckdb/extension/icu/third_party/icu/common/wintz.cpp
+  src/duckdb/extension/icu/third_party/icu/common/uresbund.cpp
+  src/duckdb/extension/icu/third_party/icu/common/uloc.cpp
+  src/duckdb/extension/icu/third_party/icu/common/loclikelysubtags.cpp
   src/duckdb/extension/icu/third_party/icu/common/unifiedcache.cpp
+  src/duckdb/extension/icu/third_party/icu/common/bytestriebuilder.cpp
   src/duckdb/ub_extension_icu_third_party_icu_common.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/persncal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/rbnf.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_data.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-strtod.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_mapper.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtitvfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/string_segment.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/choicfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/calendar.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_formatimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/tmutfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/islamcal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/formattedval_sbimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_capi.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/currpinf.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_decimal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_patternstring.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtfmtsym.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numrange_fluent.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/gregocal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_scientific.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/ucol_res.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_complexconverter.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_asformat.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/compactdecimalformat.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_router.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_fluent.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dayperiodrules.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_output.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/iso8601cal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_compact.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/ucol.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_usageprefs.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_grouping.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/number_symbolswrapper.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_rounding.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/plurrule.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/vtzone.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_capi.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-cached-powers.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/fmtable.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/string_segment.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/chnsecal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numsys.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/plurrule.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/smpdtfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_skeletons.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/nfsubs.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/coptccal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numrange_fluent.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/taiwncal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/measfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/decimfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_decimalquantity.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-string-to-double.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_usageprefs.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_patternstring.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_formatimpl.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/dtfmtsym.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_integerwidth.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/wintzimpl.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_rounding.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/dtitvfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_symbols.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/quantityformatter.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/timezone.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/indiancal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/msgfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/persncal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/dtptngen.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/choicfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_affixes.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_mapper.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/compactdecimalformat.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/buddhcal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_scientific.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum-dtoa.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/gregocal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_decimal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/cecal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-double-to-string.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/hebrwcal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_longnames.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_currencysymbols.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/upluralrules.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_compact.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/nfrule.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_compositions.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-strtod.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_parsednumber.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/vtzone.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/plurfmt.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/windtfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/calendar.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/formattedval_sbimpl.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numrange_capi.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/units_complexconverter.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_utils.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/tzgnames.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/nfrs.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/decNumber.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numsys.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_patternmodifier.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/units_router.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_impl.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_scientific.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/islamcal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-fast-dtoa.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/units_data.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/collationroot.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/currpinf.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/gregoimp.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/number_simple.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-cached-powers.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/quantityformatter.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/wintzimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_decimalquantity.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_grouping.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_symbols.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-fast-dtoa.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/coptccal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/msgfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/measunit_extra.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtptngen.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-string-to-double.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/japancal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/timezone.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/fmtable.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_longnames.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_utils.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numrange_capi.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_integerwidth.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_impl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-double-to-string.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum-dtoa.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_affixes.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_multiplier.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_currencysymbols.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/indiancal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/hebrwcal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/nfrs.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_skeletons.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/plurfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_validators.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/ethpccal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/rbnf.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/iso8601cal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/tmutfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_asformat.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/pluralranges.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_patternmodifier.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/decimfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_scientific.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/winnmfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/buddhcal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/dayperiodrules.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/ethpccal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_multiplier.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/ucol_res.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/numparse_currency.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/smpdtfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/tzgnames.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/collationroot.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/nfsubs.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/upluralrules.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/taiwncal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_fluent.cpp
   src/duckdb/extension/icu/third_party/icu/i18n/numrange_impl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/measfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/cecal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_parsednumber.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_compositions.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/winnmfmt.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/number_output.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/japancal.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/numparse_validators.cpp
+  src/duckdb/extension/icu/third_party/icu/i18n/measunit_extra.cpp
   src/duckdb/ub_extension_icu_third_party_icu_i18n.cpp
   src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
-  src/duckdb/extension/json/json_multi_file_info.cpp
+  src/duckdb/extension/json/json_reader.cpp
+  src/duckdb/extension/json/json_functions.cpp
   src/duckdb/extension/json/json_deserializer.cpp
+  src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/extension/json/json_scan.cpp
-  src/duckdb/extension/json/json_common.cpp
   src/duckdb/extension/json/serialize_json.cpp
   src/duckdb/extension/json/json_enums.cpp
-  src/duckdb/extension/json/json_reader.cpp
-  src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/extension/json/json_extension.cpp
-  src/duckdb/extension/json/json_functions.cpp
+  src/duckdb/extension/json/json_multi_file_info.cpp
+  src/duckdb/extension/json/json_common.cpp
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/generated_extension_loader_package_build.cpp)
 

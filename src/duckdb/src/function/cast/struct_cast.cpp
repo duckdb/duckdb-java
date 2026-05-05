@@ -121,12 +121,13 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 			auto target_idx = cast_data.target_null_indexes[i];
 			auto &target_vector = target_children[target_idx];
 
-			ConstantVector::SetNull(target_vector);
+			ConstantVector::SetNull(target_vector, count_t(count));
 		}
 	}
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
 		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 		return all_converted;
 	}
@@ -134,6 +135,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	source.Flatten(count);
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity = FlatVector::Validity(source);
+	FlatVector::SetSize(result, count);
 	result.Verify(count);
 	return all_converted;
 }
@@ -280,7 +282,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 		count = 1;
 		if (ConstantVector::IsNull(source)) {
 			// If there's only a null in there we don't need to cast anything
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return true;
 		}
 	}
@@ -344,7 +346,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity_entries.IsValid(i)) { // is row null?
 			if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				FlatVector::SetNull(result, i, true);
 			}

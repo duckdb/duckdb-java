@@ -198,6 +198,7 @@ bool SupportsOtherBucket(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -229,6 +230,7 @@ Value OtherBucketValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -258,11 +260,11 @@ Value OtherBucketValue(const LogicalType &type) {
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
-		result.Reference(Value::BOOLEAN(false));
+		result.Reference(Value::BOOLEAN(false), count_t(args.size()));
 		return;
 	}
 	auto v = OtherBucketValue(input_type);
-	Vector ref(v);
+	Vector ref(v, count_t(args.size()));
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
 
 	// Set NULL if input is NULL.
@@ -393,12 +395,12 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 
-	function = GetHistogramBinFunction<HIST>(arguments[0]->return_type);
+	function.ReplaceImplementation(GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType()));
 	return nullptr;
 }
 

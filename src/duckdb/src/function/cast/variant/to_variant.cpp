@@ -127,9 +127,9 @@ struct VariantLocalData : FunctionLocalState {
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			ConstantVector::SetNull(unshredded_entry);
+			ConstantVector::SetNull(unshredded_entry, count_t(new_capacity));
 		}
-		ConstantVector::SetNull(unshredded_child);
+		ConstantVector::SetNull(unshredded_child, count_t(new_capacity));
 	}
 
 	Vector &GetShreddedVector(idx_t req_capacity) {
@@ -202,6 +202,7 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
 	auto &shredded_child = top_shredded[1];
 	ShreddedVectorReference(source, shredded_child, count);
+	FlatVector::SetSize(shredded_vector, count_t(count));
 	result.Shred(shredded_vector, count);
 	return true;
 }

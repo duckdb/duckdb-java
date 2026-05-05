@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/size.hpp"
 
 namespace duckdb {
 
@@ -70,10 +71,20 @@ private:
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
 
+class VectorBufferHolder : public AuxiliaryDataHolder {
+public:
+	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer_p) : buffer(std::move(buffer_p)) {
+	}
+
+private:
+	buffer_ptr<VectorBuffer> buffer;
+};
+
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
 public:
-	explicit VectorBuffer(VectorType vector_type, VectorBufferType type) : vector_type(vector_type), buffer_type(type) {
+	explicit VectorBuffer(VectorType vector_type, VectorBufferType type, count_t count_p)
+	    : vector_type(vector_type), buffer_type(type), v_size(count_p) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -94,14 +105,14 @@ public:
 	virtual const ValidityMask &GetValidityMask() const {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
-	//! FIXME: should be removed
-	bool HasSize() const {
-		return v_size.IsValid();
-	}
 	idx_t Size() const {
-		return v_size.GetIndex();
+		return v_size;
 	}
-	void SetVectorSize(idx_t new_size);
+	virtual void SetVectorSize(idx_t new_size);
+	//! Set only this buffer's vector size without propagating to children (for struct/array buffers)
+	void SetVectorSizeOnly(idx_t new_size) {
+		v_size = new_size;
+	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
@@ -120,9 +131,10 @@ public:
 		return nullptr;
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
-	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 
 	inline VectorType GetVectorType() const {
 		return vector_type;
@@ -151,7 +163,8 @@ public:
 	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
 	//! Returns the total amount of bytes allocated by the vector buffer
 	virtual idx_t GetAllocationSize() const;
-	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	void Verify(const LogicalType &type) const;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Get the value at the given index directly from the buffer's data
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
@@ -181,6 +194,10 @@ public:
 	virtual void Resize(idx_t current_size, idx_t new_size);
 
 protected:
+	//! Slice a constant vector with a specific count
+	buffer_ptr<VectorBuffer> ConstantSlice(const LogicalType &type, count_t count);
+	//! Slice a constant vector with a specific count
+	virtual buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count);
 	//! Slice the buffer with a selection vector, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
@@ -191,12 +208,13 @@ protected:
 	virtual buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                                      idx_t count) const;
 
+	virtual void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+
 protected:
 	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
-	//! FIXME: optional_idx only temporarily...
-	optional_idx v_size;
+	idx_t v_size;
 
 public:
 	template <class TARGET>
