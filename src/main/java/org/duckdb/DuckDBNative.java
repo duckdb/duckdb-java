@@ -152,6 +152,23 @@ final class DuckDBNative {
     /** Returns the native address of the underlying DuckDB instance as a stable identity key. */
     static native long duckdb_jdbc_db_address(ByteBuffer conn_ref) throws SQLException;
 
+    /**
+     * Reads DuckDB memory counters directly via {@code BufferManager::GetMemoryUsageInfo()}.
+     * Returns a packed {@code long[]} of length {@code 3 * N} where N is the number of memory
+     * entries reported: {@code [tag_0, size_0, evicted_0, tag_1, size_1, evicted_1, ...]}. Each
+     * {@code tag} is an index into the {@link #duckdb_jdbc_memory_tags} array; entries may be
+     * returned in any order. The {@code db_ref} argument must be a live pinned DB reference
+     * created with {@link #duckdb_jdbc_create_db_ref}.
+     */
+    static native long[] duckdb_jdbc_memory_snapshot(ByteBuffer db_ref) throws SQLException;
+
+    /**
+     * Returns the DuckDB memory-tag names indexed by {@code MemoryTag} enum value. Tag indices
+     * returned by {@link #duckdb_jdbc_memory_snapshot} can be used directly as indices into this
+     * array. The result is stable for a given native library and safe to cache.
+     */
+    static native String[] duckdb_jdbc_memory_tags() throws SQLException;
+
     static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
 
     static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref) throws SQLException;

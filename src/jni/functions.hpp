@@ -25,6 +25,14 @@ jlong _duckdb_jdbc_db_address(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address(JNIEnv * env, jclass param0, jobject param1);
 
+jlongArray _duckdb_jdbc_memory_snapshot(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT jlongArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1memory_1snapshot(JNIEnv * env, jclass param0, jobject param1);
+
+jobjectArray _duckdb_jdbc_memory_tags(JNIEnv * env, jclass param0);
+
+JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1memory_1tags(JNIEnv * env, jclass param0);
+
 void _duckdb_jdbc_destroy_db_ref(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref(JNIEnv * env, jclass param0, jobject param1);

@@ -5,6 +5,8 @@ extern "C" {
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
@@ -19,6 +21,8 @@ extern "C" {
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/storage/buffer/temporary_file_information.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
@@ -98,6 +102,64 @@ jobject _duckdb_jdbc_create_db_ref(JNIEnv *env, jclass, jobject conn_ref_buf) {
 jlong _duckdb_jdbc_db_address(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = get_connection_ref(env, conn_ref_buf);
 	return (jlong)conn_ref->db.get();
+}
+
+jlongArray _duckdb_jdbc_memory_snapshot(JNIEnv *env, jclass, jobject db_ref_buf) {
+	if (nullptr == db_ref_buf) {
+		throw std::runtime_error("db_ref is null");
+	}
+	auto db_ref = (DBHolder *)env->GetDirectBufferAddress(db_ref_buf);
+	if (!db_ref || !db_ref->db) {
+		throw std::runtime_error("invalid db_ref");
+	}
+	auto &instance = *db_ref->db->instance;
+	auto infos = BufferManager::GetBufferManager(instance).GetMemoryUsageInfo();
+
+	// Packed layout: [tag_0, size_0, evicted_0, tag_1, size_1, evicted_1, ...].
+	// The tag index is emitted explicitly so the Java side does not depend on
+	// the order in which GetMemoryUsageInfo() returns entries. Any entry index
+	// beyond MEMORY_TAG_COUNT (not expected from the current native impl) is
+	// dropped; Java would ignore unknown tag indices in any case.
+	jsize n = (jsize)infos.size();
+	if (n > (jsize)MEMORY_TAG_COUNT) {
+		n = (jsize)MEMORY_TAG_COUNT;
+	}
+	jlongArray result = env->NewLongArray(n * 3);
+	if (!result) {
+		return nullptr; // OOM: a pending OutOfMemoryError is already set by the JVM.
+	}
+	jlong buf[MEMORY_TAG_COUNT * 3];
+	for (jsize i = 0; i < n; i++) {
+		buf[i * 3 + 0] = (jlong)infos[i].tag;
+		buf[i * 3 + 1] = (jlong)infos[i].size;
+		buf[i * 3 + 2] = (jlong)infos[i].evicted_data;
+	}
+	env->SetLongArrayRegion(result, 0, n * 3, buf);
+	return result;
+}
+
+jobjectArray _duckdb_jdbc_memory_tags(JNIEnv *env, jclass) {
+	const jsize n = (jsize)MEMORY_TAG_COUNT;
+	jclass string_cls = env->FindClass("java/lang/String");
+	if (!string_cls) {
+		return nullptr;
+	}
+	jobjectArray result = env->NewObjectArray(n, string_cls, nullptr);
+	env->DeleteLocalRef(string_cls);
+	if (!result) {
+		return nullptr;
+	}
+	for (jsize i = 0; i < n; i++) {
+		const char *name = EnumUtil::ToChars<MemoryTag>(MemoryTag(i));
+		jstring s = env->NewStringUTF(name);
+		if (!s) {
+			env->DeleteLocalRef(result);
+			return nullptr;
+		}
+		env->SetObjectArrayElement(result, i, s);
+		env->DeleteLocalRef(s);
+	}
+	return result;
 }
 
 void _duckdb_jdbc_destroy_db_ref(JNIEnv *env, jclass, jobject db_ref_buf) {

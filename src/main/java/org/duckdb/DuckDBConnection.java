@@ -50,9 +50,9 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     /**
      * User-supplied identifier for JFR memory monitoring (the value of the
-     * {@value DuckDBDriver#JDBC_JFR_MEMORY_MONITOR} property). {@code null} or empty
-     * means this connection does not participate in monitoring — either the user
-     * did not opt in, or this connection IS the monitor connection.
+     * {@value DuckDBDriver#JDBC_JFR_MEMORY_MONITOR} property), or {@code null} when the property
+     * was absent or empty. A non-null value opts this connection into monitoring and becomes the
+     * {@code component} field on every emitted {@link DuckDBMemoryEvent}.
      */
     final String monitorName;
 
@@ -120,18 +120,6 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public DuckDBConnection duplicate() throws SQLException {
-        return duplicate(this.monitorName);
-    }
-
-    /**
-     * Creates a duplicate connection that is invisible to the JFR memory monitor.
-     * Used exclusively by the monitor itself to avoid re-entrant lifecycle callbacks.
-     */
-    DuckDBConnection duplicateForMonitor() throws SQLException {
-        return duplicate(null);
-    }
-
-    private DuckDBConnection duplicate(String monitorName) throws SQLException {
         checkOpen();
         connRefLock.lock();
         try {
@@ -162,8 +150,8 @@ public final class DuckDBConnection implements java.sql.Connection {
             return;
         }
         // Notify the memory monitor only from the call that actually performed
-        // the disconnect, and after releasing connRefLock so the monitor's own
-        // native disconnect does not block the caller under our lock.
+        // the disconnect, and only after releasing connRefLock so the potentially
+        // slow DB-instance teardown does not run while we hold the lock.
         boolean notifyMonitor = false;
         connRefLock.lock();
         try {
