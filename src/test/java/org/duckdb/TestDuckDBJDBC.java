@@ -2285,7 +2285,7 @@ public class TestDuckDBJDBC {
      * <ul>
      *   <li>No events are emitted when the {@code jdbc_jfr_memory_monitor} property is absent.</li>
      *   <li>Events are emitted when the property is set, for each independent in-memory database,
-     *   tagged with the user-supplied name.</li>
+     *   tagged with the user-supplied component identifier.</li>
      *   <li>Each event carries a non-empty tag and non-negative memory values.</li>
      * </ul>
      */
@@ -2302,7 +2302,7 @@ public class TestDuckDBJDBC {
             assertTrue(events.isEmpty(), "Expected no events when monitor property is not set");
         }
 
-        // --- Part 2: property set -> events emitted under each supplied name ---
+        // --- Part 2: property set -> events emitted under each supplied component ---
         Properties propsA = new Properties();
         propsA.setProperty(DuckDBDriver.JDBC_JFR_MEMORY_MONITOR, "component-a");
         Properties propsB = new Properties();
@@ -2322,18 +2322,14 @@ public class TestDuckDBJDBC {
             List<RecordedEvent> events = dumpEvents(rec);
             assertFalse(events.isEmpty(), "Expected at least one DuckDBMemory JFR event");
 
-            Set<String> names = new HashSet<>();
+            Set<String> components = new HashSet<>();
             for (RecordedEvent event : events) {
-                String name = event.getString("name");
-                assertTrue(name != null && !name.isEmpty(), "name field must be non-empty");
-                names.add(name);
+                String component = event.getString("component");
+                assertTrue(component != null && !component.isEmpty(), "component field must be non-empty");
+                components.add(component);
 
                 String tag = event.getString("tag");
                 assertTrue(tag != null && !tag.isEmpty(), "tag field must be non-empty");
-
-                String dbUrl = event.getString("dbUrl");
-                assertTrue(dbUrl != null && dbUrl.startsWith("jdbc:duckdb:"),
-                           "dbUrl must be a JDBC URL, was: " + dbUrl);
 
                 long dbAddress = event.getLong("dbAddress");
                 assertTrue(dbAddress != 0L, "dbAddress must be non-zero");
@@ -2344,9 +2340,9 @@ public class TestDuckDBJDBC {
                 assertTrue(tmpStorage >= 0, "temporaryStorageBytes must be >= 0");
             }
 
-            // Each component must emit events under its own name.
-            assertTrue(names.contains("component-a") && names.contains("component-b"),
-                       "Expected events for both component names, got: " + names);
+            // Each component must emit events under its own identifier.
+            assertTrue(components.contains("component-a") && components.contains("component-b"),
+                       "Expected events for both component identifiers, got: " + components);
         }
     }
 
@@ -2407,15 +2403,15 @@ public class TestDuckDBJDBC {
                 assertFalse(events.isEmpty(), "Expected events for the shared file-based DB");
 
                 Set<Long> addresses = new HashSet<>();
-                Set<String> names = new HashSet<>();
+                Set<String> components = new HashSet<>();
                 for (RecordedEvent e : events) {
                     addresses.add(e.getLong("dbAddress"));
-                    names.add(e.getString("name"));
+                    components.add(e.getString("component"));
                 }
                 assertEquals(addresses.size(), 1,
                              "Two connections to the same file DB must share dbAddress, got " + addresses);
-                assertEquals(names, new HashSet<>(singletonList("shared-db")),
-                             "All events must be tagged with the supplied name, got: " + names);
+                assertEquals(components, new HashSet<>(singletonList("shared-db")),
+                             "All events must be tagged with the supplied component, got: " + components);
             }
         }
     }

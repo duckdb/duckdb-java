@@ -171,9 +171,12 @@ public class DuckDBDriver implements java.sql.Driver {
                                       "Do not close the DB instance after all connections to it are closed"));
         list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
                                       "Silently discard unsupported connection options"));
-        list.add(createDriverPropInfo(
-            JDBC_JFR_MEMORY_MONITOR, "",
-            "User-assigned identifier under which this connection's DuckDB instance is tracked in the duckdb.MemoryUsage JFR event. Leave empty to disable monitoring. JFR controls the event's enabled state and period via recording settings. Requires a JFR-capable JVM."));
+        list.add(
+            createDriverPropInfo(JDBC_JFR_MEMORY_MONITOR, "",
+                                 "User-assigned identifier under which this connection's DuckDB instance is tracked"
+                                     + " in the duckdb.MemoryUsage JFR event. Leave empty to disable monitoring."
+                                     + " JFR controls the event's enabled state and period via recording settings."
+                                     + " Requires a JFR-capable JVM."));
         list.sort((o1, o2) -> o1.name.compareToIgnoreCase(o2.name));
         return list.toArray(new DriverPropertyInfo[0]);
     }

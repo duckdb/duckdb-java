@@ -59,7 +59,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     /**
      * Native address of the underlying DuckDB instance. Captured once at construction so that
      * {@link #close()} can notify {@link JfrMemoryMonitor} without an additional JNI call
-     * and so the JFR event can expose it as a secondary disambiguator.
+     * and so the JFR event can expose it as a stable per-instance identifier.
      */
     final long dbAddress;
 

@@ -1,83 +1,58 @@
 package org.duckdb;
 
-import java.lang.reflect.Method;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * Indirection over {@link DuckDBMemoryMonitor} that is safe to reference on JVMs without JFR
- * support (e.g. Java 8). When {@code jdk.jfr.FlightRecorder} is not available at runtime, every
- * method on this class is a silent no-op.
+ * support (e.g. stripped Java 8 builds). When {@code jdk.jfr.FlightRecorder} is not available
+ * at runtime, every method on this class is a silent no-op and {@code DuckDBMemoryMonitor} —
+ * which imports {@code jdk.jfr.*} — is never resolved.
  *
- * <p>Only this class may reference {@code DuckDBMemoryMonitor} or {@code DuckDBMemoryEvent}; any
- * direct reference from the other main classes would trigger class resolution at load time and
- * fail verification on a non-JFR JVM.
+ * <p>This relies on the JVM's lazy class resolution: an {@code invokestatic} against
+ * {@link DuckDBMemoryMonitor} only triggers resolution of that class when the instruction
+ * actually executes. The {@link #AVAILABLE} guard therefore prevents the JFR-dependent class
+ * from ever being loaded on non-JFR JVMs.
+ *
+ * <p>Only this class may reference {@code DuckDBMemoryMonitor} or {@code DuckDBMemoryEvent};
+ * any direct reference from the other main classes would risk eager resolution on class load.
  */
 final class JfrMemoryMonitor {
 
     private static final Logger logger = Logger.getLogger(JfrMemoryMonitor.class.getName());
 
-    private static final Method INIT;
-    private static final Method CONNECTION_OPENED;
-    private static final Method CONNECTION_CLOSED;
+    private static final boolean AVAILABLE;
 
     static {
-        Method init = null;
-        Method opened = null;
-        Method closed = null;
+        boolean available;
         try {
-            // Probe for JFR first: on Java 8 this throws ClassNotFoundException
-            // and we never touch DuckDBMemoryMonitor (which imports jdk.jfr.*).
             Class.forName("jdk.jfr.FlightRecorder");
-            Class<?> impl = Class.forName("org.duckdb.DuckDBMemoryMonitor");
-            init = impl.getDeclaredMethod("init");
-            opened = impl.getDeclaredMethod("connectionOpened", DuckDBConnection.class);
-            closed = impl.getDeclaredMethod("connectionClosed", long.class);
-            init.setAccessible(true);
-            opened.setAccessible(true);
-            closed.setAccessible(true);
+            available = true;
         } catch (Throwable t) {
-            // JFR unavailable; every method becomes a silent no-op.
+            available = false;
             logger.log(Level.FINE, "JFR memory monitor is not available on this JVM", t);
         }
-        INIT = init;
-        CONNECTION_OPENED = opened;
-        CONNECTION_CLOSED = closed;
+        AVAILABLE = available;
     }
 
     private JfrMemoryMonitor() {
     }
 
     static void init() {
-        if (INIT == null) {
-            return;
-        }
-        try {
-            INIT.invoke(null);
-        } catch (Throwable t) {
-            logger.log(Level.FINE, "JFR memory monitor init failed", t);
+        if (AVAILABLE) {
+            DuckDBMemoryMonitor.init();
         }
     }
 
     static void connectionOpened(DuckDBConnection conn) {
-        if (CONNECTION_OPENED == null) {
-            return;
-        }
-        try {
-            CONNECTION_OPENED.invoke(null, conn);
-        } catch (Throwable t) {
-            logger.log(Level.FINE, "JFR connectionOpened failed", t);
+        if (AVAILABLE) {
+            DuckDBMemoryMonitor.connectionOpened(conn);
         }
     }
 
     static void connectionClosed(long dbAddress) {
-        if (CONNECTION_CLOSED == null) {
-            return;
-        }
-        try {
-            CONNECTION_CLOSED.invoke(null, dbAddress);
-        } catch (Throwable t) {
-            logger.log(Level.FINE, "JFR connectionClosed failed", t);
+        if (AVAILABLE) {
+            DuckDBMemoryMonitor.connectionClosed(dbAddress);
         }
     }
 }

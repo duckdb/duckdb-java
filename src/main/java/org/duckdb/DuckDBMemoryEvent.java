@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import jdk.jfr.Category;
+import jdk.jfr.DataAmount;
 import jdk.jfr.Description;
 import jdk.jfr.Event;
 import jdk.jfr.Label;
@@ -36,28 +37,28 @@ import jdk.jfr.StackTrace;
 @Description("Periodic snapshot of DuckDB internal memory consumption per tag")
 @Category("DuckDB")
 @StackTrace(false)
-public class DuckDBMemoryEvent extends Event {
+final class DuckDBMemoryEvent extends Event {
 
-    @Label("Name")
+    @Label("Component")
     @Description(
         "User-assigned identifier of the DuckDB instance (value of the jdbc_jfr_memory_monitor connection property)")
-    String name;
+    String component;
 
     @Label("Tag")
     @Description("DuckDB internal memory tag (e.g. \"Base\", \"Hash Table\", \"Buffer Manager\")")
     String tag;
 
-    @Label("Database URL")
-    @Description("JDBC URL or database name of the DuckDB instance emitting this event")
-    String dbUrl;
-
     @Label("Database Address")
     @Description("Native address of the underlying DuckDB instance; disambiguates databases when names collide")
     long dbAddress;
 
-    @Label("Memory Usage") @Description("Bytes currently allocated for this tag") long memoryUsageBytes;
+    @Label("Memory Usage")
+    @Description("Bytes currently allocated for this tag")
+    @DataAmount(DataAmount.BYTES)
+    long memoryUsageBytes;
 
     @Label("Temporary Storage Usage")
     @Description("Bytes spilled to the temporary storage for this tag")
+    @DataAmount(DataAmount.BYTES)
     long temporaryStorageBytes;
 }
