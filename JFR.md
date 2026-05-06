@@ -68,10 +68,7 @@ Equivalent `.jfc` snippet:
 ```
 
 When no recording enables the event, the driver performs zero work —
-the native buffer-manager counters are not read. When enabled, each
-JFR tick performs one lock-free read of the per-tag counters straight
-from `BufferManager::GetMemoryUsageInfo()`; no SQL is issued and no
-connection-level lock is taken.
+the DuckDB `duckdb_memory()` query is never issued.
 
 ## Event schema
 
