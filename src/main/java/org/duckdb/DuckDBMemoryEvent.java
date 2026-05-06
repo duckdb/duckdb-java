@@ -45,7 +45,7 @@ final class DuckDBMemoryEvent extends Event {
     String component;
 
     @Label("Tag")
-    @Description("DuckDB internal memory tag (e.g. \"Base\", \"Hash Table\", \"Buffer Manager\")")
+    @Description("DuckDB internal memory tag (e.g. \"BASE_TABLE\", \"HASH_TABLE\", \"ALLOCATOR\")")
     String tag;
 
     @Label("Database Address")
