@@ -60,20 +60,41 @@ final class DuckDBMemoryMonitor {
      * started before the first monitored connection still see the event type.
      * Iterating an empty monitor map at each tick is cheap, so there is no
      * downside to registering unconditionally.
+     *
+     * <p>Any failure from JFR (e.g. {@link SecurityException} under a
+     * {@code SecurityManager}, or an unexpected {@link Error} from a non-standard
+     * JFR implementation) is caught and logged: the feature must never prevent
+     * {@link DuckDBDriver} from loading.
      */
     static synchronized void init() {
         if (initialized) {
             return;
         }
-        FlightRecorder.addPeriodicEvent(DuckDBMemoryEvent.class, DuckDBMemoryMonitor::firePeriodicEvent);
         initialized = true;
+        try {
+            FlightRecorder.addPeriodicEvent(DuckDBMemoryEvent.class, DuckDBMemoryMonitor::firePeriodicEvent);
+        } catch (Throwable t) {
+            logger.log(Level.WARNING, "JFR periodic event registration failed; memory monitoring disabled", t);
+        }
     }
 
     /**
      * Called when a new connection is opened with JFR memory monitoring enabled.
-     * The caller guarantees {@code conn.monitorName} is non-null.
+     * The caller guarantees {@code conn.monitorName} is non-null and that
+     * {@link #init()} has already been called (which is the contract of
+     * {@link DuckDBConnection#newConnection}).
+     *
+     * <p>A zero {@code dbAddress} is treated as a "no such instance" sentinel and
+     * skipped: the native layer is expected to return a non-zero pointer for every
+     * live DuckDB instance, so a zero value indicates a bug or an unexpected state.
+     * Registering under key {@code 0} would silently alias every such connection
+     * into a single monitor entry.
      */
     static void connectionOpened(DuckDBConnection conn) {
+        if (conn.dbAddress == 0L) {
+            logger.log(Level.FINE, "Skipping JFR memory monitor registration: native DuckDB address is 0");
+            return;
+        }
         monitors.compute(conn.dbAddress, (k, existing) -> {
             PerDbMonitor m = (existing != null) ? existing : new PerDbMonitor();
             m.open(conn);
@@ -82,11 +103,16 @@ final class DuckDBMemoryMonitor {
     }
 
     /**
-     * Called when a monitored connection is closed.
+     * Called when a monitored connection is closed. Symmetric with
+     * {@link #connectionOpened(DuckDBConnection)}: a zero {@code dbAddress} means
+     * no entry was ever registered, so there is nothing to tear down.
      *
      * @param dbAddress the native db address captured at construction time
      */
     static void connectionClosed(long dbAddress) {
+        if (dbAddress == 0L) {
+            return;
+        }
         monitors.compute(dbAddress, (k, existing) -> {
             if (existing == null) {
                 return null;
@@ -105,36 +131,37 @@ final class DuckDBMemoryMonitor {
                 m.sample();
             } catch (Throwable t) {
                 // Defensive: a failure in one monitor must not prevent emission for others.
+                logger.log(Level.FINE, "JFR memory sample failed", t);
             }
         }
     }
 
     /**
-     * Per-name monitor state. Mutating methods ({@link #open}, {@link #close})
-     * are invoked inside {@link ConcurrentHashMap#compute} on {@link #monitors}
-     * and are serialized per key. {@link #sample} runs on the JFR hook thread
-     * without the compute lock and reads {@code volatile} fields.
+     * Per-database monitor state.
+     *
+     * <p>Two threads may touch an instance: the user thread closing a monitored
+     * connection (via {@link #close()}, invoked inside {@link ConcurrentHashMap#compute})
+     * and the JFR periodic thread sampling the database (via {@link #sample()}).
+     * They are mutually exclusive under the instance's intrinsic lock so that
+     * {@link #close()} can never free a {@link PreparedStatement} that
+     * {@link #sample()} is executing against.
+     *
+     * <p>{@link #open(DuckDBConnection)} is only invoked inside {@code compute}, which
+     * already serialises it against itself and {@link #close()} per key, but it still
+     * synchronises on {@code this} to establish a happens-before with any concurrent
+     * {@link #sample()}.
      */
     static final class PerDbMonitor {
 
         private static final String QUERY =
             "SELECT tag, memory_usage_bytes, temporary_storage_bytes FROM duckdb_memory()";
 
-        /** Guarded by compute()-serialization. */
+        // All fields below are guarded by the instance's intrinsic lock.
         private int openConnections = 0;
-
-        /**
-         * Written under compute(); read without lock by the JFR hook.
-         *
-         * <p>The prepared statement is parsed + planned once and executed on every tick,
-         * avoiding the per-tick parse overhead of a fresh {@code createStatement}. It is
-         * only touched from the JFR hook thread (JFR serialises periodic callbacks), so
-         * no additional synchronisation is required for re-execution.
-         */
-        private volatile DuckDBConnection monitorConn;
-        private volatile PreparedStatement sampleStmt;
-        private volatile String component;
-        private volatile long dbAddress;
+        private DuckDBConnection monitorConn;
+        private PreparedStatement sampleStmt;
+        private String component;
+        private long dbAddress;
 
         /**
          * Opens (or re-attempts opening) the monitor connection and increments
@@ -143,20 +170,19 @@ final class DuckDBMemoryMonitor {
          * close-balance is preserved; a subsequent {@code open()} will retry
          * while {@code monitorConn == null}.
          */
-        void open(DuckDBConnection conn) {
+        synchronized void open(DuckDBConnection conn) {
             if (monitorConn == null) {
                 DuckDBConnection mc = null;
                 try {
                     mc = conn.duplicateForMonitor();
-                    PreparedStatement ps = mc.prepareStatement(QUERY);
+                    sampleStmt = mc.prepareStatement(QUERY);
                     component = conn.monitorName;
                     dbAddress = conn.dbAddress;
-                    sampleStmt = ps;
-                    // Publish monitorConn last so readers see fully-populated state.
                     monitorConn = mc;
                 } catch (SQLException e) {
                     logger.log(Level.WARNING, "Failed to open JFR memory-monitor connection; will retry on next open()",
                                e);
+                    sampleStmt = null;
                     if (mc != null) {
                         try {
                             mc.close();
@@ -172,47 +198,46 @@ final class DuckDBMemoryMonitor {
         /**
          * Decrements the ref count; when it reaches zero, releases the cached
          * statement and monitor connection, and signals the caller to remove
-         * the map entry.
+         * the map entry. Blocks any in-flight {@link #sample()} until it
+         * completes, ensuring the statement is never closed mid-execution.
          *
          * @return {@code true} when the entry should be removed
          */
-        boolean close() {
-            if (--openConnections <= 0) {
-                PreparedStatement ps = sampleStmt;
-                DuckDBConnection mc = monitorConn;
-                sampleStmt = null;
-                monitorConn = null;
-                if (ps != null) {
-                    try {
-                        ps.close();
-                    } catch (SQLException e) {
-                        logger.log(Level.FINE, "Failed to close JFR memory-monitor statement", e);
-                    }
-                }
-                if (mc != null) {
-                    try {
-                        mc.close();
-                    } catch (SQLException e) {
-                        logger.log(Level.FINE, "Failed to close JFR memory-monitor connection", e);
-                    }
-                }
-                return true;
+        synchronized boolean close() {
+            if (--openConnections > 0) {
+                return false;
             }
-            return false;
+            PreparedStatement ps = sampleStmt;
+            DuckDBConnection mc = monitorConn;
+            sampleStmt = null;
+            monitorConn = null;
+            if (ps != null) {
+                try {
+                    ps.close();
+                } catch (SQLException e) {
+                    logger.log(Level.FINE, "Failed to close JFR memory-monitor statement", e);
+                }
+            }
+            if (mc != null) {
+                try {
+                    mc.close();
+                } catch (SQLException e) {
+                    logger.log(Level.FINE, "Failed to close JFR memory-monitor connection", e);
+                }
+            }
+            return true;
         }
 
-        /** Invoked by the JFR periodic hook. Must not throw. */
-        void sample() {
-            DuckDBConnection mc = monitorConn;
+        /**
+         * Invoked by the JFR periodic hook. Must not throw. Holds the monitor's
+         * intrinsic lock for the duration so that {@link #close()} cannot release
+         * the cached statement mid-execution. The query against {@code duckdb_memory()}
+         * is a quick system-table scan; any contention with a concurrent connection
+         * close is bounded by its runtime.
+         */
+        synchronized void sample() {
             PreparedStatement ps = sampleStmt;
-            if (mc == null || ps == null) {
-                return;
-            }
-            try {
-                if (mc.isClosed()) {
-                    return;
-                }
-            } catch (SQLException ignored) {
+            if (ps == null) {
                 return;
             }
             String componentSnap = component;
@@ -224,8 +249,10 @@ final class DuckDBMemoryMonitor {
                     long temporaryStorageBytes = rs.getLong(3);
                     emitEvent(componentSnap, addr, tag, memoryUsageBytes, temporaryStorageBytes);
                 }
-            } catch (Exception ignored) {
-                // Propagating would break JFR's periodic dispatch; swallow.
+            } catch (Throwable t) {
+                // Propagating would break JFR's periodic dispatch; log at FINE so
+                // operators can diagnose silent emission gaps without flooding logs.
+                logger.log(Level.FINE, "JFR memory sample query failed", t);
             }
         }
 

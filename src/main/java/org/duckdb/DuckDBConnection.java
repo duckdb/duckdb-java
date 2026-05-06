@@ -50,9 +50,10 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     /**
      * User-supplied identifier for JFR memory monitoring (the value of the
-     * {@value DuckDBDriver#JDBC_JFR_MEMORY_MONITOR} property). {@code null} or empty
-     * means this connection does not participate in monitoring — either the user
-     * did not opt in, or this connection IS the monitor connection.
+     * {@value DuckDBDriver#JDBC_JFR_MEMORY_MONITOR} property). Either {@code null}
+     * (the user did not opt in, or this is the monitor's own internal duplicate
+     * connection) or a non-empty string; empty or absent property values are
+     * normalised to {@code null} in the constructor.
      */
     final String monitorName;
 
@@ -69,6 +70,10 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public static DuckDBConnection newConnection(String url, boolean readOnly, String sessionInitSQL,
                                                  Properties properties) throws SQLException {
+        // Ensure the JFR periodic memory-usage event is registered for callers
+        // that bypass DuckDBDriver (which also calls this in its static init).
+        // Idempotent and a no-op on JVMs without JFR.
+        JfrMemoryMonitor.init();
         if (null == properties) {
             properties = new Properties();
         }
@@ -215,7 +220,12 @@ public final class DuckDBConnection implements java.sql.Connection {
             connRefLock.unlock();
         }
         if (notifyMonitor) {
-            JfrMemoryMonitor.connectionClosed(dbAddress);
+            try {
+                JfrMemoryMonitor.connectionClosed(dbAddress);
+            } catch (Throwable t) {
+                // The connection is already disconnected at this point; a failure
+                // in the monitor teardown must not propagate to close() callers.
+            }
         }
     }
 
