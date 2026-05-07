@@ -162,6 +162,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/function/cast/union/from_struct.cpp
   src/duckdb/ub_src_function_cast_variant.cpp
   src/duckdb/ub_src_function_pragma.cpp
+  src/duckdb/src/function/scalar/comparison/between.cpp
   src/duckdb/ub_src_function_scalar_compressed_materialization.cpp
   src/duckdb/ub_src_function_scalar.cpp
   src/duckdb/src/function/scalar/date/strftime.cpp
