@@ -78,7 +78,7 @@ JFR tick.
 | Field                   | Type   | Meaning                                                           |
 | ----------------------- | ------ | ----------------------------------------------------------------- |
 | `component`             | String | Application-supplied identifier (the JDBC property value).        |
-| `tag`                   | String | DuckDB memory tag (e.g. `IN_MEMORY_TABLE`, `HASH_TABLE`, `ALLOCATOR`). |
+| `tag`                   | String | DuckDB memory tag (e.g. `BASE_TABLE`, `HASH_TABLE`, `ALLOCATOR`). |
 | `dbAddress`             | long   | Native address of the DuckDB instance — stable per-instance id.   |
 | `memoryUsageBytes`      | long   | Bytes currently allocated for this tag.                           |
 | `temporaryStorageBytes` | long   | Bytes spilled to temporary storage for this tag.                  |
@@ -88,10 +88,8 @@ Plus the standard JFR fields `startTime`, `duration`, `eventThread`
 
 ## Attribution model
 
-The monitor is keyed on the **native DuckDB instance address**, not
-on the JDBC connection. This matters when multiple connections share
-a DuckDB instance (multiple `DriverManager.getConnection` calls
-against the same file DB, or `conn.duplicate()`):
+The monitor is keyed on the **native DuckDB instance address**
+(exposed as `dbAddress`), not on the JDBC connection:
 
 - One sample stream per distinct DuckDB instance — no double-counting
   of shared memory.
@@ -102,8 +100,20 @@ against the same file DB, or `conn.duplicate()`):
   torn down when the last one closes; a subsequent `getConnection`
   starts a fresh monitor.
 
-To attribute memory to distinct logical components, open each against
-a distinct DuckDB instance and give each one a unique
+### When two `getConnection` calls share an instance
+
+| URL / operation                          | Same `dbAddress`?                |
+| ---------------------------------------- | -------------------------------- |
+| `jdbc:duckdb:` (unnamed in-memory)       | **No** — fresh instance per call |
+| `jdbc:duckdb::memory:<name>`             | Yes, when `<name>` matches       |
+| `jdbc:duckdb:/path/to/file.db`           | Yes, when the path matches       |
+| `conn.duplicate()`                       | Yes, always                      |
+
+Connections that share an instance share a `dbAddress` and therefore
+a single `component` label (the one supplied by the first opted-in
+connection). For per-component attribution, open each component
+against a URL that yields a fresh instance — unnamed in-memory URLs
+are the simplest choice — and give each connection a unique
 `jdbc_jfr_memory_monitor` value.
 
 ## Requirements
