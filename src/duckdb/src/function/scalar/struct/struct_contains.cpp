@@ -18,10 +18,10 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	const auto &target_type = target.GetType();
 
 	UnifiedVectorFormat vector_format;
-	input_vector.ToUnifiedFormat(count, vector_format);
+	input_vector.ToUnifiedFormat(vector_format);
 
 	UnifiedVectorFormat target_format;
-	target.ToUnifiedFormat(count, target_format);
+	target.ToUnifiedFormat(target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
 	vector<const T *> member_data_ptrs;
@@ -30,7 +30,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	for (auto &member : members) {
 		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
-			member.ToUnifiedFormat(count, member_format);
+			member.ToUnifiedFormat(member_format);
 			member_data_ptrs.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;
@@ -42,7 +42,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 
@@ -179,7 +179,7 @@ static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 
@@ -196,7 +196,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	auto &child_type = arguments[0]->return_type;
+	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -208,17 +208,17 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		return nullptr;
 	}
 
-	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		throw InternalException("Can't check for containment in an empty struct");
 	}
 	if (!StructType::IsUnnamed(child_type)) {
-		throw BinderException("%s can only be used on unnamed structs", bound_function.name);
+		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
 	}
 	bound_function.GetArguments()[0] = child_type;
 
 	// the value type must match one of the struct's children
-	LogicalType max_child_type = arguments[1]->return_type;
+	LogicalType max_child_type = arguments[1]->GetReturnType();
 	vector<LogicalType> new_child_types;
 	for (auto &child : struct_children) {
 		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {

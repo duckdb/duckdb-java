@@ -85,9 +85,9 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 			return false;
 		}
 		string child_name;
-		if (func.children[0]->return_type.id() == LogicalTypeId::STRUCT &&
-		    !StructType::IsUnnamed(func.children[0]->return_type)) {
-			child_name = StructType::GetChildName(func.children[0]->return_type, child_idx);
+		if (func.children[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
+		    !StructType::IsUnnamed(func.children[0]->GetReturnType())) {
+			child_name = StructType::GetChildName(func.children[0]->GetReturnType(), child_idx);
 		}
 		struct_path.push_back({child_idx, std::move(child_name)});
 		return true;
@@ -108,32 +108,33 @@ static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filt
 static void NormalizeLegacyExpression(unique_ptr<Expression> &expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &owned_expr) {
-		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.alias, col_ref.return_type, 0ULL);
+		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
 	    });
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.index = 0; });
 }
 
-static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundComparisonExpression &comparison) {
-	const Expression *subject = nullptr;
-	const Value *constant = nullptr;
-	auto comparison_type = comparison.type;
-	if (comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		subject = comparison.left.get();
-		constant = &comparison.right->Cast<BoundConstantExpression>().value;
-	} else if (comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		subject = comparison.right.get();
-		constant = &comparison.left->Cast<BoundConstantExpression>().value;
-		comparison_type = FlipComparisonType(comparison_type);
-	} else {
+static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundFunctionExpression &comparison) {
+	auto comparison_type = comparison.GetExpressionType();
+	auto &left = BoundComparisonExpression::Left(comparison);
+	auto &right = BoundComparisonExpression::Right(comparison);
+	bool lhs_constant = left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+	bool rhs_constant = right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+	if (!lhs_constant && !rhs_constant) {
 		return nullptr;
+	}
+	auto &subject = rhs_constant ? left : right;
+	auto &constant_expr = rhs_constant ? right : left;
+	auto &constant = constant_expr.Cast<BoundConstantExpression>().value;
+	if (!rhs_constant) {
+		comparison_type = FlipComparisonType(comparison_type);
 	}
 
 	vector<LegacyStructPathEntry> struct_path;
-	if (!TryExtractLegacySubject(*subject, struct_path)) {
+	if (!TryExtractLegacySubject(subject, struct_path)) {
 		return nullptr;
 	}
-	if (constant->IsNull()) {
+	if (constant.IsNull()) {
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			return WrapStructFilterPath(make_uniq<IsNotNullFilter>(), struct_path);
@@ -146,11 +147,11 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundC
 	if (!IsSupportedConstantComparison(comparison_type)) {
 		return nullptr;
 	}
-	return WrapStructFilterPath(make_uniq<ConstantFilter>(comparison_type, *constant), struct_path);
+	return WrapStructFilterPath(make_uniq<ConstantFilter>(comparison_type, constant), struct_path);
 }
 
 static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOperatorExpression &op) {
-	switch (op.type) {
+	switch (op.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL: {
 		if (op.children.size() != 1) {
@@ -160,7 +161,7 @@ static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOpe
 		if (!TryExtractLegacySubject(*op.children[0], struct_path)) {
 			return nullptr;
 		}
-		if (op.type == ExpressionType::OPERATOR_IS_NULL) {
+		if (op.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
 			return WrapStructFilterPath(make_uniq<IsNullFilter>(), struct_path);
 		}
 		return WrapStructFilterPath(make_uniq<IsNotNullFilter>(), struct_path);
@@ -197,13 +198,13 @@ static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOpe
 
 static unique_ptr<TableFilter> SerializeConjunctionToLegacyFilter(const BoundConjunctionExpression &conjunction) {
 	unique_ptr<ConjunctionFilter> result;
-	if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
+	if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		result = make_uniq<ConjunctionAndFilter>();
-	} else if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
+	} else if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		result = make_uniq<ConjunctionOrFilter>();
 	} else {
 		throw SerializationException("Unsupported conjunction type %s during table-filter serialization",
-		                             EnumUtil::ToString(conjunction.type));
+		                             EnumUtil::ToString(conjunction.GetExpressionType()));
 	}
 	for (auto &child : conjunction.children) {
 		auto child_filter = SerializeExpressionToLegacyFilter(*child);
@@ -219,8 +220,8 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 		return SerializeConjunctionToLegacyFilter(expr.Cast<BoundConjunctionExpression>());
 	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto result = TrySerializeComparisonToLegacyFilter(expr.Cast<BoundComparisonExpression>());
+	if (BoundComparisonExpression::IsComparison(expr.GetExpressionType())) {
+		auto result = TrySerializeComparisonToLegacyFilter(expr.Cast<BoundFunctionExpression>());
 		if (result) {
 			return result;
 		}

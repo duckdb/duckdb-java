@@ -772,7 +772,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Read the data into a buffer handle.
 			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
-			auto data_ptr = buffer_handle.Ptr();
+			auto data_ptr = buffer_handle.GetDataMutable();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 
@@ -1197,7 +1197,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	auto &row_identifiers = chunk.data[0];
-	row_identifiers.Flatten(chunk.size());
+	row_identifiers.Flatten();
 	auto source_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Delete the row IDs from the current table.

@@ -593,7 +593,7 @@ public class TestTimestamp {
                 assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(1969, 1, 1, 0, 0, 0, 123456789));
             }
 
-            try (ResultSet rs = stmt.executeQuery("SELECT TIMESTAMP WITH TIME ZONE '1969-01-01 00:00:00.123456Z'")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT '1969-01-01 00:00:00.123456Z'::TIMESTAMP WITH TIME ZONE")) {
                 rs.next();
                 assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(1969, 1, 1, 2, 0, 0, 123456000));
             }

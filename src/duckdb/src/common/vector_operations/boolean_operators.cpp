@@ -22,6 +22,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
 		auto ldata = ConstantVector::GetData<uint8_t>(left);
 		auto rdata = ConstantVector::GetData<uint8_t>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
@@ -29,14 +30,14 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 		bool is_null = OP::Operation(*ldata > 0, *rdata > 0, ConstantVector::IsNull(left),
 		                             ConstantVector::IsNull(right), *result_data);
 		if (is_null) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 		return;
 	}
 	// perform generic loop
 	// we use uint8 to avoid load of gunk bools
-	auto left_data = left.Values<uint8_t>(count);
-	auto right_data = right.Values<uint8_t>(count);
+	auto left_data = left.Values<uint8_t>();
+	auto right_data = right.Values<uint8_t>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<bool>(result);

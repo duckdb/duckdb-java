@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -33,7 +34,8 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 			return false;
 		}
 		auto &op = expr->Cast<BoundOperatorExpression>();
-		if ((op.type != ExpressionType::OPERATOR_IS_NULL && op.type != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
 		    op.children.size() != 1) {
 			return false;
 		}
@@ -293,7 +295,7 @@ void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, V
 	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	result.Flatten(scan_count);
+	result.Flatten();
 	updates->FetchUpdates(transaction, vector_index, result);
 }
 
@@ -351,10 +353,10 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
-	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result.Flatten(scan_count);
+		result.Flatten();
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
 }
@@ -372,15 +374,17 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
                         SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
                         TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(scan_count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t s_count) {
-	Scan(transaction, vector_index, state, result);
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 	result.Slice(sel, s_count);
 }
 
@@ -390,7 +394,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 
 void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(append_count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	AppendData(append_stats, state, vdata, append_count);
 }
 
@@ -608,7 +612,7 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 		throw InternalException("ColumnData::FetchUpdateData out of range");
 	}
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-	base_vector.Flatten(fetch_count);
+	base_vector.Flatten();
 	return fetch_count;
 }
 

@@ -1,0 +1,23 @@
+diff --git a/src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.h b/src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.h
+index 5d90ce59..49742844 100644
+--- a/src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.h
++++ b/src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.h
+@@ -25,6 +25,9 @@
+ U_NAMESPACE_BEGIN
+ namespace unisets {
+ 
++#pragma push_macro("COMMA")
++#undef COMMA
++
+ enum Key {
+     // NONE is used to indicate null in chooseFrom().
+     // EMPTY is used to get an empty UnicodeSet.
+@@ -75,6 +78,8 @@ enum Key {
+     UNISETS_KEY_COUNT
+ };
+ 
++#pragma pop_macro("COMMA")
++
+ /**
+  * Gets the static-allocated UnicodeSet according to the provided key. The
+  * pointer will be deleted during u_cleanup(); the caller should NOT delete it.

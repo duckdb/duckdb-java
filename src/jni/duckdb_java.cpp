@@ -711,8 +711,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			if (variant_val.IsNull()) {
 				continue;
 			}
-			Vector variant_vec(variant_val);
-			variant_vec.Flatten(1);
+			Vector variant_vec(variant_val.type());
+			variant_vec.SetValue(0, variant_val);
 			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
 			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
 			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);

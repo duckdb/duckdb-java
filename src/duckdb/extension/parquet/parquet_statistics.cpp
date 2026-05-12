@@ -316,6 +316,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		return Value::TIMESTAMP(timestamp_value);
 	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_NS: {
 		timestamp_ns_t timestamp_value;
 		if (schema_ele.type_info == ParquetExtraTypeInfo::IMPALA_TIMESTAMP) {
@@ -340,6 +341,9 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				timestamp_value = ParquetTimestampUsToTimestampNs(val);
 				break;
 			}
+		}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
+			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value));
 		}
 		return Value::TIMESTAMPNS(timestamp_value);
 	}
@@ -437,6 +441,7 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
                                                    optional_ptr<const ColumnChunk> column_chunk) {
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -450,10 +455,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UUID:
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -639,13 +646,17 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 }
 
 static bool HasFilterConstants(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.type == ExpressionType::COMPARE_EQUAL && comp.right->type == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = comp.right->Cast<BoundConstantExpression>();
-			return !constant.value.IsNull();
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			return false;
 		}
-		return false;
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
+		return !constant.value.IsNull();
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -728,12 +739,16 @@ static uint64_t ValueXXH64(const Value &constant) {
 }
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.type != ExpressionType::COMPARE_EQUAL || comp.right->type != ExpressionType::VALUE_CONSTANT) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return false;
 		}
-		auto &constant = comp.right->Cast<BoundConstantExpression>();
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
 		D_ASSERT(!constant.value.IsNull());
 		auto hash = ValueXXH64(constant.value);
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
@@ -741,7 +756,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		bool any_children_true = false;
 		ExpressionIterator::EnumerateChildren(

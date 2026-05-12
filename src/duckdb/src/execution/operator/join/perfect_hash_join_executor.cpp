@@ -78,7 +78,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	}
 
 	// We only do this optimization for inner joins with one integer equality condition
-	const auto key_type = op.conditions[0].GetLHS().return_type;
+	const auto key_type = op.conditions[0].GetLHS().GetReturnType();
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
 	    op.conditions[0].GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
 	    !TypeIsInteger(key_type.InternalType())) {
@@ -225,7 +225,7 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	}
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
-	auto entries = source.Values<T>(count);
+	auto entries = source.Values<T>();
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto input_value = entries.GetValueUnsafe(i);
@@ -373,7 +373,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	const auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	const auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
-	auto entries = source.Values<T>(count);
+	auto entries = source.Values<T>();
 	// build selection vector for non-dense build
 	for (idx_t i = 0; i < count; ++i) {
 		auto entry = entries[i];

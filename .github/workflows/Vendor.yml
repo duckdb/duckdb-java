@@ -85,6 +85,9 @@ jobs:
         id: commit_and_push
         if: ${{ steps.check_for_changes.outcome == 'success' && steps.check_for_changes.outputs.has_changes == 'true' }}
         run: |
+          # apply local patches
+          patch -p1 < ./data/icu/comma.patch
+          # commit and push changes
           MSG="Update vendored DuckDB sources to ${{ steps.vendor.outputs.vendor_rev }}"
           git add src/duckdb CMakeLists.txt
           git commit -m "${MSG}"
