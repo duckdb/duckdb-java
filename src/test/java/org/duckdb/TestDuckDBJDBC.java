@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -50,6 +51,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import jdk.jfr.Recording;
+import jdk.jfr.consumer.RecordedEvent;
+import jdk.jfr.consumer.RecordingFile;
 import org.duckdb.test.TempDirectory;
 
 public class TestDuckDBJDBC {
@@ -2285,9 +2289,9 @@ public class TestDuckDBJDBC {
                 runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
                          TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
                          TestBatch.class, TestBindings.class, TestClosure.class, TestExtensionTypes.class,
-                         TestMetadata.class, TestNoLib.class, TestSpatial.class, TestParameterMetadata.class,
-                         TestPrepare.class, TestResults.class, TestScalarFunctions.class, TestSessionInit.class,
-                         TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
+                         TestJfrEvents.class, TestMetadata.class, TestNoLib.class, TestSpatial.class,
+                         TestParameterMetadata.class, TestPrepare.class, TestResults.class, TestScalarFunctions.class,
+                         TestSessionInit.class, TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
         }
         System.exit(statusCode);
     }
