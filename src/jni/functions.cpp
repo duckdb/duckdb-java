@@ -44,6 +44,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address(J
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
 
+		return 0;
 	}
 }
 
