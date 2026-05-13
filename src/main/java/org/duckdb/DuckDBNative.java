@@ -149,6 +149,9 @@ final class DuckDBNative {
 
     static native void duckdb_jdbc_destroy_db_ref(ByteBuffer db_ref) throws SQLException;
 
+    /** Returns the native address of the underlying DuckDB instance as a stable identity key. */
+    static native long duckdb_jdbc_db_address(ByteBuffer conn_ref) throws SQLException;
+
     static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
 
     static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref) throws SQLException;

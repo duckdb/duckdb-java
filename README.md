@@ -22,3 +22,5 @@ java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar"  or
 ```
 
 Scalar function usage examples: [UDF.MD](UDF.MD)
+
+JFR memory monitoring usage: [JFR.md](JFR.md)
