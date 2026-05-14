@@ -64,6 +64,17 @@ public class TestClosure {
         }
     }
 
+    public static void test_result_set_auto_closed_chunked() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
+            DuckDBPreparedStatement ps = conn.prepare("select 42");
+            DuckDBChunkedResult rs1 = ps.query();
+            DuckDBChunkedResult rs2 = ps.query();
+            assertTrue(rs1.isClosed());
+            ps.close();
+            assertTrue(rs2.isClosed());
+        }
+    }
+
     public static void test_statements_auto_closed_on_conn_close() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt1 = conn.createStatement();
@@ -109,6 +120,16 @@ public class TestClosure {
         assertTrue(ps.isClosed());
     }
 
+    public static void test_result_chunked_auto_closed_on_conn_close_prepared() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+        DuckDBPreparedStatement ps = conn.prepare("select 42");
+        DuckDBChunkedResult rs = ps.query();
+        rs.nextChunk();
+        conn.close();
+        assertTrue(rs.isClosed());
+        assertTrue(ps.isClosed());
+    }
+
     public static void test_statement_auto_closed_on_completion() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             Statement stmt = conn.createStatement();
@@ -128,6 +149,18 @@ public class TestClosure {
             assertTrue(ps.isCloseOnCompletion());
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
+            }
+            assertTrue(ps.isClosed());
+        }
+    }
+
+    public static void test_prepared_statement_chunked_auto_closed_on_completion() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class)) {
+            DuckDBPreparedStatement ps = conn.prepare("select 42");
+            ps.closeOnCompletion();
+            assertTrue(ps.isCloseOnCompletion());
+            try (DuckDBChunkedResult rs = ps.query()) {
+                rs.nextChunk();
             }
             assertTrue(ps.isClosed());
         }
@@ -454,6 +487,37 @@ public class TestClosure {
                         resultsCount[0]++;
                     }
                 }, SQLException.class);
+                assertTrue(resultsCount[0] > 0);
+                assertTrue(resultsCount[0] < rowsCount);
+            }
+        }
+    }
+
+    @SuppressWarnings("try")
+    public static void test_results_fetch_no_hang_prepared_chunked() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        long rowsCount = 1 << 24;
+        int iterations = 1;
+        for (int i = 0; i < iterations; i++) {
+            try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+                 DuckDBPreparedStatement ps =
+                     conn.prepare("SELECT i, i::VARCHAR FROM range(0, " + rowsCount + ") AS t(i)");
+                 DuckDBChunkedResult rs = ps.query()) {
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(400);
+                        conn.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+                long[] resultsCount = new long[1];
+                assertThrows(() -> {
+                    while (rs.nextChunk()) {
+                        resultsCount[0] += rs.chunk().rowCount();
+                        Thread.sleep(50);
+                    }
+                }, IllegalStateException.class);
                 assertTrue(resultsCount[0] > 0);
                 assertTrue(resultsCount[0] < rowsCount);
             }

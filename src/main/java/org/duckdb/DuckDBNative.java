@@ -178,6 +178,8 @@ final class DuckDBNative {
     // returns res_ref result reference object
     static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params) throws SQLException;
 
+    static native ByteBuffer duckdb_jdbc_execute_capi(ByteBuffer stmt_ref, Object[] params) throws SQLException;
+
     static native ByteBuffer duckdb_jdbc_pending_query(ByteBuffer conn_ref, byte[] query) throws SQLException;
 
     static native ByteBuffer duckdb_jdbc_execute_pending(ByteBuffer pending_ref) throws SQLException;
