@@ -14,13 +14,22 @@ class DuckDBScalarFunctionWrapper {
     }
 
     public void execute(ByteBuffer functionInfo, ByteBuffer inputChunk, ByteBuffer outputVector) {
+        DuckDBDataChunkReader inputReader = null;
+        DuckDBWritableVector outputWriter = null;
         try {
-            DuckDBDataChunkReader inputReader = new DuckDBDataChunkReader(inputChunk);
-            DuckDBWritableVector outputWriter = new DuckDBWritableVector(outputVector, inputReader.rowCount());
+            inputReader = new DuckDBDataChunkReader(inputChunk);
+            outputWriter = new DuckDBWritableVector(outputVector, inputReader.rowCount());
             function.apply(inputReader, outputWriter);
         } catch (Throwable throwable) {
             String trace = collectStackTrace(throwable);
             duckdb_scalar_function_set_error(functionInfo, trace.getBytes(UTF_8));
+        } finally {
+            if (null != inputReader) {
+                inputReader.close();
+            }
+            if (null != outputWriter) {
+                outputWriter.close();
+            }
         }
     }
 }

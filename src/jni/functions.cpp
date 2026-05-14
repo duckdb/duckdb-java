@@ -206,6 +206,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	}
 }
 
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1capi(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2) {
+	try {
+		return _duckdb_jdbc_execute_capi(env, param0, param1, param2);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+
+		return nullptr;
+	}
+}
+
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending(JNIEnv * env, jclass param0, jobject param1) {
 	try {
 		return _duckdb_jdbc_execute_pending(env, param0, param1);

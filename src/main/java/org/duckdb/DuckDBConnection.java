@@ -303,6 +303,11 @@ public final class DuckDBConnection implements java.sql.Connection {
         return prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, 0);
     }
 
+    public DuckDBPreparedStatement prepare(String sql) throws SQLException {
+        PreparedStatement ps = prepareStatement(sql);
+        return ps.unwrap(DuckDBPreparedStatement.class);
+    }
+
     public DatabaseMetaData getMetaData() throws SQLException {
         return new DuckDBDatabaseMetaData(this);
     }

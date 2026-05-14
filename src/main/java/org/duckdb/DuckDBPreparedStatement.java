@@ -55,6 +55,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBResultSet selectResult = null;
     private long updateResult = 0;
 
+    private DuckDBChunkedResult chunkedResult = null;
+
     private boolean returnsChangedRows = false;
     private boolean returnsNothing = false;
     private boolean returnsResultSet = false;
@@ -137,10 +139,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             meta = null;
             params = new Object[0];
 
-            if (selectResult != null) {
-                selectResult.close();
-            }
-            selectResult = null;
+            clearResults();
             updateResult = 0;
 
             // Lock connection while still holding statement lock
@@ -213,11 +212,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         try {
             checkOpen();
             checkPrepared();
-
-            if (selectResult != null) {
-                selectResult.close();
-            }
-            selectResult = null;
+            clearResults();
 
             if (!isConnAutoCommit()) {
                 startTransaction();
@@ -251,9 +246,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 pendingQuery.close();
             }
             if (queryFailed) {
-                if (null != selectResult) {
-                    selectResult.close();
-                } else if (null != resultRef) {
+                clearResults();
+                if (null != resultRef) {
                     DuckDBNative.duckdb_jdbc_free_result(resultRef);
                 }
                 close();
@@ -268,6 +262,51 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
 
         return returnsResultSet;
+    }
+
+    public DuckDBChunkedResult query() throws SQLException {
+        checkOpen();
+        if (!isPreparedStatement) {
+            throw new SQLException("Data Chunk interface can only be used with prepared statements");
+        }
+
+        // Wait with dispatching a new query if connection is locked by cancel() call
+        Lock connLock = getConnRefLock();
+        connLock.lock();
+        connLock.unlock();
+
+        boolean queryFailed = false;
+        stmtRefLock.lock();
+        try {
+            checkOpen();
+            clearResults();
+
+            if (!isConnAutoCommit()) {
+                startTransaction();
+            }
+
+            scheduleCancelTask();
+
+            ByteBuffer chunkedResultRef = DuckDBNative.duckdb_jdbc_execute_capi(stmtRef, params);
+
+            cleanupCancelQueryTask();
+
+            chunkedResult = new DuckDBChunkedResult(this, chunkedResultRef);
+            chunkedResult.checkError();
+            return chunkedResult;
+
+        } catch (SQLException e) {
+            clearResults();
+            queryFailed = true;
+            throw e;
+
+        } finally {
+            stmtRefLock.unlock();
+            this.query = null;
+            if (queryFailed) {
+                close();
+            }
+        }
     }
 
     @Override
@@ -420,10 +459,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
             cleanupCancelQueryTask();
 
-            if (selectResult != null) {
-                selectResult.close();
-                selectResult = null;
-            }
+            clearResults();
             if (stmtRef != null) {
                 // Delete prepared statement
                 DuckDBNative.duckdb_jdbc_release(stmtRef);
@@ -1331,6 +1367,17 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             return conn.connRefLock;
         } catch (NullPointerException e) {
             throw new SQLException(e);
+        }
+    }
+
+    private void clearResults() throws SQLException {
+        if (selectResult != null) {
+            selectResult.close();
+            selectResult = null;
+        }
+        if (chunkedResult != null) {
+            chunkedResult.close();
+            chunkedResult = null;
         }
     }
 

@@ -10,6 +10,7 @@ extern "C" {
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -265,13 +266,13 @@ jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jb
 	return env->NewDirectByteBuffer(pending_ref.release(), 0);
 }
 
-jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
+static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, jobject stmt_ref_buf,
+                                                                  jobjectArray params, bool stream_results) {
 	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
 	if (!stmt_ref) {
 		throw InvalidInputException("Invalid statement");
 	}
 
-	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
@@ -290,20 +291,38 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		}
 	}
 
-	Value result;
-	bool stream_results =
-	    stmt_ref->stmt->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
-
-	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
-	if (res_ref->res->HasError()) {
-		std::string error_msg = std::string(res_ref->res->GetError());
-		duckdb::ExceptionType error_type = res_ref->res->GetErrorType();
-		res_ref->res = nullptr;
+	auto res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
+	if (res->HasError()) {
+		std::string error_msg = std::string(res->GetError());
+		duckdb::ExceptionType error_type = res->GetErrorType();
 		jclass exc_type = duckdb::ExceptionType::INTERRUPT == error_type ? J_SQLTimeoutException : J_SQLException;
 		env->ThrowNew(exc_type, error_msg.c_str());
 		return nullptr;
 	}
+	return res;
+}
+
+jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
+	if (!stmt_ref) {
+		throw InvalidInputException("Invalid statement");
+	}
+	Value result;
+	bool stream_results =
+	    stmt_ref->stmt->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
+	auto res_ref = make_uniq<ResultHolder>();
+	res_ref->res = execute_prepared_statement(env, stmt_ref_buf, params, stream_results);
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
+}
+
+jobject _duckdb_jdbc_execute_capi(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
+	auto res_ptr = execute_prepared_statement(env, stmt_ref_buf, params, true);
+	if (!res_ptr) {
+		return nullptr;
+	}
+	auto out = make_uniq<duckdb_result>();
+	DuckDBTranslateResult(std::move(res_ptr), out.get());
+	return env->NewDirectByteBuffer(out.release(), 0);
 }
 
 jobject _duckdb_jdbc_execute_pending(JNIEnv *env, jclass, jobject pending_ref_buf) {

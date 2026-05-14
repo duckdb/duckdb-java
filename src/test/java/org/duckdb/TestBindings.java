@@ -30,11 +30,11 @@ public class TestBindings {
         input.setInt(1, 41);
         input.setInt(2, -5);
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(inputVec, 3);
+        DuckDBReadableVector readable = new DuckDBReadableVector(inputVec, null, 3);
         DuckDBWritableVector output = new DuckDBWritableVector(outputVec, 3);
         readable.stream().forEachOrdered(row -> { output.setInt(row, readable.getInt(row) + 1); });
 
-        DuckDBReadableVector result = new DuckDBReadableVector(outputVec, 3);
+        DuckDBReadableVector result = new DuckDBReadableVector(outputVec, null, 3);
         assertEquals(result.getInt(0), 2);
         assertEquals(result.getInt(1), 42);
         assertEquals(result.getInt(2), -4);
@@ -161,7 +161,7 @@ public class TestBindings {
         writable.setNull(0);
         writable.setString(1, "duckdb");
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
         assertNull(readable.getString(0));
         assertEquals(readable.getString(1), "duckdb");
         assertThrows(() -> { readable.getString(rowCount); }, IndexOutOfBoundsException.class);
@@ -182,7 +182,7 @@ public class TestBindings {
         ByteBuffer rawData = duckdb_vector_get_data(vec, (long) rowCount * Integer.BYTES);
         assertEquals(rawData.order(ByteOrder.nativeOrder()).getInt(0), expected);
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
         assertEquals(readable.getInt(0), expected);
 
         duckdb_destroy_vector(vec);
@@ -237,7 +237,7 @@ public class TestBindings {
             assertEquals(nativeData.getLong(i * Long.BYTES), values[i].longValue());
         }
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
         for (int i = 0; i < values.length; i++) {
             assertEquals(readable.getUint64(i), values[i]);
         }
@@ -269,7 +269,7 @@ public class TestBindings {
             assertEquals(nativeData.getLong(offset + Long.BYTES), values[i].shiftRight(Long.SIZE).longValue());
         }
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
         for (int i = 0; i < values.length; i++) {
             assertEquals(readable.getUHugeInt(i), values[i]);
         }
@@ -401,7 +401,7 @@ public class TestBindings {
             writable.setNull(row);
         }
 
-        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
         for (long row : boundaryRows) {
             assertTrue(readable.isNull(row));
         }
@@ -414,7 +414,7 @@ public class TestBindings {
             writable.setInt(row, (int) (row + 1000));
         }
 
-        DuckDBReadableVector revalidated = new DuckDBReadableVector(vec, rowCount);
+        DuckDBReadableVector revalidated = new DuckDBReadableVector(vec, null, rowCount);
         for (long row : boundaryRows) {
             assertFalse(revalidated.isNull(row));
             assertEquals(revalidated.getInt(row), (int) (row + 1000));
