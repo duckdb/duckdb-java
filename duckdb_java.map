@@ -29,6 +29,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute;
+    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1capi;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1result_1to_1strings;
@@ -174,6 +175,13 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1get_1timestamp_1ms;
     Java_org_duckdb_DuckDBBindings_duckdb_1get_1timestamp_1ns;
     Java_org_duckdb_DuckDBBindings_duckdb_1get_1varchar;
+
+    Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1result;
+    Java_org_duckdb_DuckDBBindings_duckdb_1fetch_1chunk;
+    Java_org_duckdb_DuckDBBindings_duckdb_1column_1name;
+    Java_org_duckdb_DuckDBBindings_duckdb_1column_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1column_1count;
+    Java_org_duckdb_DuckDBBindings_duckdb_1result_1error;
 
     duckdb_adbc_init;
     duckdb_add_aggregate_function_to_set;

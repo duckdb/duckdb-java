@@ -24,16 +24,18 @@ public final class DuckDBReadableVector {
     private static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
     private final ByteBuffer vectorRef;
+    private final DuckDBDataChunkReader chunkNullable;
     private final long rowCount;
     private final DuckDBVectorTypeInfo typeInfo;
     private final ByteBuffer data;
     private final ByteBuffer validity;
 
-    DuckDBReadableVector(ByteBuffer vectorRef, long rowCount) {
+    DuckDBReadableVector(ByteBuffer vectorRef, DuckDBDataChunkReader chunkNullable, long rowCount) {
         if (vectorRef == null) {
             throw new FunctionException("Invalid vector reference");
         }
         this.vectorRef = vectorRef;
+        this.chunkNullable = chunkNullable;
         this.rowCount = rowCount;
         try {
             this.typeInfo = DuckDBVectorTypeInfo.fromVector(vectorRef);
@@ -316,15 +318,23 @@ public final class DuckDBReadableVector {
         if (isNull(row)) {
             return null;
         }
-        byte[] bytes = duckdb_vector_get_string(data, row);
+        if (null != chunkNullable) {
+            chunkNullable.checkOpen();
+            chunkNullable.chunkRefLock.lock();
+            chunkNullable.checkOpen();
+        }
+        byte[] bytes = null;
+        try {
+            bytes = duckdb_vector_get_string(data, row);
+        } finally {
+            if (null != chunkNullable) {
+                chunkNullable.chunkRefLock.unlock();
+            }
+        }
         if (bytes == null) {
             return null;
         }
         return new String(bytes, UTF_8);
-    }
-
-    ByteBuffer vectorRef() {
-        return vectorRef;
     }
 
     private void requireType(DuckDBColumnType expected) {

@@ -14,13 +14,15 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.concurrent.locks.ReentrantLock;
 import org.duckdb.DuckDBFunctions.FunctionException;
 
 public final class DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
     private static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
-    private final ByteBuffer vectorRef;
+    private ByteBuffer vectorRef;
+    private final ReentrantLock vectorRefLock = new ReentrantLock();
     private final long rowCount;
     private final DuckDBVectorTypeInfo typeInfo;
     private final ByteBuffer data;
@@ -469,12 +471,15 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
-        duckdb_vector_assign_string_element_len(vectorRef, row, value.getBytes(UTF_8));
+        checkOpen();
+        vectorRefLock.lock();
+        try {
+            checkOpen();
+            duckdb_vector_assign_string_element_len(vectorRef, row, value.getBytes(UTF_8));
+        } finally {
+            vectorRefLock.unlock();
+        }
         markValid(row);
-    }
-
-    ByteBuffer vectorRef() {
-        return vectorRef;
     }
 
     private void markValid(long row) {
@@ -586,5 +591,30 @@ public final class DuckDBWritableVector {
 
     private int checkedByteOffset(long row, int elementWidth) {
         return Math.toIntExact(Math.multiplyExact(row, (long) elementWidth));
+    }
+
+    void close() {
+        if (isClosed()) {
+            return;
+        }
+        vectorRefLock.lock();
+        try {
+            if (isClosed()) {
+                return;
+            }
+            vectorRef = null;
+        } finally {
+            vectorRefLock.unlock();
+        }
+    }
+
+    private boolean isClosed() {
+        return vectorRef == null;
+    }
+
+    private void checkOpen() {
+        if (isClosed()) {
+            throw new IllegalStateException("Vector was closed");
+        }
     }
 }
