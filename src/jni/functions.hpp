@@ -85,6 +85,10 @@ jobject _duckdb_jdbc_execute(JNIEnv * env, jclass param0, jobject param1, jobjec
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
 
+jobject _duckdb_jdbc_execute_capi(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1capi(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
+
 jobject _duckdb_jdbc_execute_pending(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending(JNIEnv * env, jclass param0, jobject param1);

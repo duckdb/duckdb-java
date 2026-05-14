@@ -279,6 +279,20 @@ public class DuckDBBindings {
 
     static native byte[] duckdb_get_varchar(ByteBuffer value);
 
+    // result
+
+    static native void duckdb_destroy_result(ByteBuffer result);
+
+    static native ByteBuffer duckdb_fetch_chunk(ByteBuffer result);
+
+    static native byte[] duckdb_column_name(ByteBuffer result, long col);
+
+    static native int duckdb_column_type(ByteBuffer result, long col);
+
+    static native long duckdb_column_count(ByteBuffer result);
+
+    static native byte[] duckdb_result_error(ByteBuffer result);
+
     enum CAPIType {
         DUCKDB_TYPE_INVALID(0, 0),
         // bool

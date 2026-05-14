@@ -752,6 +752,7 @@ add_library(duckdb_java SHARED
   src/jni/bindings_common.cpp
   src/jni/bindings_data_chunk.cpp
   src/jni/bindings_logical_type.cpp
+  src/jni/bindings_result.cpp
   src/jni/bindings_scalar_function.cpp
   src/jni/bindings_table_function.cpp
   src/jni/bindings_table_function_bind.cpp
