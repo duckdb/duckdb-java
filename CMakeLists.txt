@@ -87,10 +87,6 @@ set(DUCKDB_INCLUDE_DIRS
   src/duckdb/extension/icu/third_party/icu/i18n
   src/duckdb/extension/json/include)
 
-set(JEMALLOC_INCLUDE_DIRS
-  src/duckdb/extension/jemalloc/include
-  src/duckdb/extension/jemalloc/jemalloc/include)
-
 set(DUCKDB_DEFINITIONS
   -DDUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
   -DDUCKDB_EXTENSION_PARQUET_LINKED
@@ -104,9 +100,10 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_catalog_default.cpp
   src/duckdb/src/common/adbc/adbc.cpp
   src/duckdb/ub_src_common_adbc_nanoarrow.cpp
-  src/duckdb/ub_src_common.cpp
+  src/duckdb/ub_src_common_allocator.cpp
   src/duckdb/ub_src_common_arrow_appender.cpp
   src/duckdb/ub_src_common_arrow.cpp
+  src/duckdb/ub_src_common.cpp
   src/duckdb/src/common/crypto/md5.cpp
   src/duckdb/ub_src_common_enums.cpp
   src/duckdb/ub_src_common_exception.cpp
@@ -466,74 +463,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/generated_extension_loader_package_build.cpp)
 
-set(JEMALLOC_SRC_FILES 
-  src/duckdb/extension/jemalloc/jemalloc_extension.cpp
-  src/duckdb/extension/jemalloc/jemalloc/src/jemalloc.c
-  src/duckdb/extension/jemalloc/jemalloc/src/arena.c
-  src/duckdb/extension/jemalloc/jemalloc/src/background_thread.c
-  src/duckdb/extension/jemalloc/jemalloc/src/base.c
-  src/duckdb/extension/jemalloc/jemalloc/src/batcher.c
-  src/duckdb/extension/jemalloc/jemalloc/src/bin.c
-  src/duckdb/extension/jemalloc/jemalloc/src/bin_info.c
-  src/duckdb/extension/jemalloc/jemalloc/src/bitmap.c
-  src/duckdb/extension/jemalloc/jemalloc/src/buf_writer.c
-  src/duckdb/extension/jemalloc/jemalloc/src/cache_bin.c
-  src/duckdb/extension/jemalloc/jemalloc/src/ckh.c
-  src/duckdb/extension/jemalloc/jemalloc/src/counter.c
-  src/duckdb/extension/jemalloc/jemalloc/src/ctl.c
-  src/duckdb/extension/jemalloc/jemalloc/src/decay.c
-  src/duckdb/extension/jemalloc/jemalloc/src/div.c
-  src/duckdb/extension/jemalloc/jemalloc/src/ecache.c
-  src/duckdb/extension/jemalloc/jemalloc/src/edata.c
-  src/duckdb/extension/jemalloc/jemalloc/src/edata_cache.c
-  src/duckdb/extension/jemalloc/jemalloc/src/ehooks.c
-  src/duckdb/extension/jemalloc/jemalloc/src/emap.c
-  src/duckdb/extension/jemalloc/jemalloc/src/eset.c
-  src/duckdb/extension/jemalloc/jemalloc/src/exp_grow.c
-  src/duckdb/extension/jemalloc/jemalloc/src/extent.c
-  src/duckdb/extension/jemalloc/jemalloc/src/extent_dss.c
-  src/duckdb/extension/jemalloc/jemalloc/src/extent_mmap.c
-  src/duckdb/extension/jemalloc/jemalloc/src/fxp.c
-  src/duckdb/extension/jemalloc/jemalloc/src/san.c
-  src/duckdb/extension/jemalloc/jemalloc/src/san_bump.c
-  src/duckdb/extension/jemalloc/jemalloc/src/hook.c
-  src/duckdb/extension/jemalloc/jemalloc/src/hpa.c
-  src/duckdb/extension/jemalloc/jemalloc/src/hpa_hooks.c
-  src/duckdb/extension/jemalloc/jemalloc/src/hpdata.c
-  src/duckdb/extension/jemalloc/jemalloc/src/inspect.c
-  src/duckdb/extension/jemalloc/jemalloc/src/large.c
-  src/duckdb/extension/jemalloc/jemalloc/src/log.c
-  src/duckdb/extension/jemalloc/jemalloc/src/malloc_io.c
-  src/duckdb/extension/jemalloc/jemalloc/src/mutex.c
-  src/duckdb/extension/jemalloc/jemalloc/src/nstime.c
-  src/duckdb/extension/jemalloc/jemalloc/src/pa.c
-  src/duckdb/extension/jemalloc/jemalloc/src/pa_extra.c
-  src/duckdb/extension/jemalloc/jemalloc/src/pai.c
-  src/duckdb/extension/jemalloc/jemalloc/src/pac.c
-  src/duckdb/extension/jemalloc/jemalloc/src/pages.c
-  src/duckdb/extension/jemalloc/jemalloc/src/peak_event.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof_data.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof_log.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof_recent.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof_stats.c
-  src/duckdb/extension/jemalloc/jemalloc/src/prof_sys.c
-  src/duckdb/extension/jemalloc/jemalloc/src/psset.c
-  src/duckdb/extension/jemalloc/jemalloc/src/rtree.c
-  src/duckdb/extension/jemalloc/jemalloc/src/safety_check.c
-  src/duckdb/extension/jemalloc/jemalloc/src/sc.c
-  src/duckdb/extension/jemalloc/jemalloc/src/sec.c
-  src/duckdb/extension/jemalloc/jemalloc/src/stats.c
-  src/duckdb/extension/jemalloc/jemalloc/src/sz.c
-  src/duckdb/extension/jemalloc/jemalloc/src/tcache.c
-  src/duckdb/extension/jemalloc/jemalloc/src/test_hooks.c
-  src/duckdb/extension/jemalloc/jemalloc/src/thread_event.c
-  src/duckdb/extension/jemalloc/jemalloc/src/ticker.c
-  src/duckdb/extension/jemalloc/jemalloc/src/tsd.c
-  src/duckdb/extension/jemalloc/jemalloc/src/util.c
-  src/duckdb/extension/jemalloc/jemalloc/src/witness.c
-  src/duckdb/extension/jemalloc/jemalloc/src/zone.c)
-
 
 # a few OS-specific variables
 
@@ -584,10 +513,7 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 # main shared lib compilation
 
 if(MSVC OR ZOS)
-  list(APPEND DUCKDB_INCLUDE_DIRS src/stubs)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
-else()
-  list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED
@@ -616,11 +542,6 @@ target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH}
   ${JAVA_INCLUDE_PATH2}
   ${DUCKDB_INCLUDE_DIRS})
-
-if (NOT MSVC AND NOT ZOS)
-  target_include_directories(duckdb_java PRIVATE
-    ${JEMALLOC_INCLUDE_DIRS})
-endif()
 
 target_link_libraries(duckdb_java PRIVATE
   duckdb-native
