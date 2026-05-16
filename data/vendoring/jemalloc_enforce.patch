@@ -1,0 +1,12 @@
+diff --git a/src/common/allocator/allocator_standard.cpp b/src/common/allocator/allocator_standard.cpp
+index 45e03d46b1..260a6fee8b 100644
+--- a/src/common/allocator/allocator_standard.cpp
++++ b/src/common/allocator/allocator_standard.cpp
+@@ -1,6 +1,7 @@
+ #include "duckdb/common/allocator.hpp"
+ 
+ #ifndef DUCKDB_ENABLE_JEMALLOC
++#error "jemalloc not enabled"
+ 
+ #include "duckdb/common/assert.hpp"
+ #include "duckdb/common/atomic.hpp"

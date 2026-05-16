@@ -38,7 +38,21 @@ endif()
 # variables set by vendor.py
 
 set(DUCKDB_INCLUDE_DIRS
+  src/duckdb/extension/core_functions/include
+  src/duckdb/extension/icu/include
+  src/duckdb/extension/icu/third_party/icu/common
+  src/duckdb/extension/icu/third_party/icu/i18n
+  src/duckdb/extension/json/include
+  src/duckdb/extension/parquet/include
   src/duckdb/src/include
+  src/duckdb/third_party/brotli/common
+  src/duckdb/third_party/brotli/common
+  src/duckdb/third_party/brotli/dec
+  src/duckdb/third_party/brotli/dec
+  src/duckdb/third_party/brotli/enc
+  src/duckdb/third_party/brotli/enc
+  src/duckdb/third_party/brotli/include
+  src/duckdb/third_party/brotli/include
   src/duckdb/third_party/concurrentqueue
   src/duckdb/third_party/fast_float
   src/duckdb/third_party/fastpforlib
@@ -51,41 +65,30 @@ set(DUCKDB_INCLUDE_DIRS
   src/duckdb/third_party/libpg_query
   src/duckdb/third_party/libpg_query/include
   src/duckdb/third_party/lz4
-  src/duckdb/third_party/brotli/include
-  src/duckdb/third_party/brotli/common
-  src/duckdb/third_party/brotli/dec
-  src/duckdb/third_party/brotli/enc
+  src/duckdb/third_party/lz4
+  src/duckdb/third_party/mbedtls
+  src/duckdb/third_party/mbedtls/include
   src/duckdb/third_party/mbedtls/include
   src/duckdb/third_party/mbedtls/library
   src/duckdb/third_party/miniz
+  src/duckdb/third_party/parquet
   src/duckdb/third_party/pcg
   src/duckdb/third_party/pdqsort
   src/duckdb/third_party/re2
   src/duckdb/third_party/ska_sort
   src/duckdb/third_party/skiplist
+  src/duckdb/third_party/snappy
   src/duckdb/third_party/tdigest
+  src/duckdb/third_party/thrift
   src/duckdb/third_party/utf8proc
   src/duckdb/third_party/utf8proc/include
   src/duckdb/third_party/vergesort
   src/duckdb/third_party/yyjson/include
   src/duckdb/third_party/zstd/include
-  src/duckdb/extension/core_functions/include
-  src/duckdb/extension/parquet/include
-  src/duckdb/third_party/parquet
-  src/duckdb/third_party/thrift
-  src/duckdb/third_party/lz4
-  src/duckdb/third_party/brotli/include
-  src/duckdb/third_party/brotli/common
-  src/duckdb/third_party/brotli/dec
-  src/duckdb/third_party/brotli/enc
-  src/duckdb/third_party/snappy
-  src/duckdb/third_party/mbedtls
-  src/duckdb/third_party/mbedtls/include
-  src/duckdb/third_party/zstd/include
-  src/duckdb/extension/icu/include
-  src/duckdb/extension/icu/third_party/icu/common
-  src/duckdb/extension/icu/third_party/icu/i18n
-  src/duckdb/extension/json/include)
+  src/duckdb/third_party/zstd/include)
+
+set(JEMALLOC_INCLUDE_DIRS
+  src/duckdb/third_party/jemalloc/include)
 
 set(DUCKDB_DEFINITIONS
   -DDUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
@@ -94,30 +97,58 @@ set(DUCKDB_DEFINITIONS
   -DDUCKDB_EXTENSION_JSON_LINKED)
 
 set(DUCKDB_SRC_FILES 
-  src/duckdb/ub_src_catalog.cpp
-  src/duckdb/ub_src_catalog_catalog_entry.cpp
-  src/duckdb/ub_src_catalog_catalog_entry_dependency.cpp
-  src/duckdb/ub_src_catalog_default.cpp
+  src/duckdb/extension/core_functions/core_functions_extension.cpp
+  src/duckdb/extension/core_functions/function_list.cpp
+  src/duckdb/extension/core_functions/lambda_functions.cpp
+  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
+  src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
+  src/duckdb/extension/core_functions/scalar/math/numeric.cpp
+  src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
+  src/duckdb/extension/icu/icu-current.cpp
+  src/duckdb/extension/icu/icu-dateadd.cpp
+  src/duckdb/extension/icu/icu-datefunc.cpp
+  src/duckdb/extension/icu/icu-datepart.cpp
+  src/duckdb/extension/icu/icu-datesub.cpp
+  src/duckdb/extension/icu/icu-datetrunc.cpp
+  src/duckdb/extension/icu/icu-list-range.cpp
+  src/duckdb/extension/icu/icu-makedate.cpp
+  src/duckdb/extension/icu/icu-strptime.cpp
+  src/duckdb/extension/icu/icu-table-range.cpp
+  src/duckdb/extension/icu/icu-timebucket.cpp
+  src/duckdb/extension/icu/icu-timezone.cpp
+  src/duckdb/extension/icu/icu_extension.cpp
+  src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
+  src/duckdb/extension/json/json_common.cpp
+  src/duckdb/extension/json/json_deserializer.cpp
+  src/duckdb/extension/json/json_enums.cpp
+  src/duckdb/extension/json/json_extension.cpp
+  src/duckdb/extension/json/json_functions.cpp
+  src/duckdb/extension/json/json_multi_file_info.cpp
+  src/duckdb/extension/json/json_reader.cpp
+  src/duckdb/extension/json/json_scan.cpp
+  src/duckdb/extension/json/json_serializer.cpp
+  src/duckdb/extension/json/serialize_json.cpp
+  src/duckdb/extension/parquet/column_reader.cpp
+  src/duckdb/extension/parquet/column_writer.cpp
+  src/duckdb/extension/parquet/parquet_column_schema.cpp
+  src/duckdb/extension/parquet/parquet_crypto.cpp
+  src/duckdb/extension/parquet/parquet_extension.cpp
+  src/duckdb/extension/parquet/parquet_field_id.cpp
+  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
+  src/duckdb/extension/parquet/parquet_float16.cpp
+  src/duckdb/extension/parquet/parquet_geometry.cpp
+  src/duckdb/extension/parquet/parquet_metadata.cpp
+  src/duckdb/extension/parquet/parquet_multi_file_info.cpp
+  src/duckdb/extension/parquet/parquet_reader.cpp
+  src/duckdb/extension/parquet/parquet_shredding.cpp
+  src/duckdb/extension/parquet/parquet_statistics.cpp
+  src/duckdb/extension/parquet/parquet_timestamp.cpp
+  src/duckdb/extension/parquet/parquet_writer.cpp
+  src/duckdb/extension/parquet/serialize_parquet.cpp
+  src/duckdb/extension/parquet/zstd_file_system.cpp
+  src/duckdb/generated_extension_loader_package_build.cpp
   src/duckdb/src/common/adbc/adbc.cpp
-  src/duckdb/ub_src_common_adbc_nanoarrow.cpp
-  src/duckdb/ub_src_common_allocator.cpp
-  src/duckdb/ub_src_common_arrow_appender.cpp
-  src/duckdb/ub_src_common_arrow.cpp
-  src/duckdb/ub_src_common.cpp
   src/duckdb/src/common/crypto/md5.cpp
-  src/duckdb/ub_src_common_enums.cpp
-  src/duckdb/ub_src_common_exception.cpp
-  src/duckdb/ub_src_common_multi_file.cpp
-  src/duckdb/ub_src_common_operator.cpp
-  src/duckdb/ub_src_common_progress_bar.cpp
-  src/duckdb/ub_src_common_row_operations.cpp
-  src/duckdb/ub_src_common_serializer.cpp
-  src/duckdb/ub_src_common_sort.cpp
-  src/duckdb/ub_src_common_tree_renderer.cpp
-  src/duckdb/ub_src_common_types.cpp
-  src/duckdb/ub_src_common_types_column.cpp
-  src/duckdb/ub_src_common_types_row.cpp
-  src/duckdb/ub_src_common_types_variant.cpp
   src/duckdb/src/common/value_operations/comparison_operations.cpp
   src/duckdb/src/common/vector_operations/boolean_operators.cpp
   src/duckdb/src/common/vector_operations/comparison_operators.cpp
@@ -129,119 +160,24 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/common/vector_operations/vector_copy.cpp
   src/duckdb/src/common/vector_operations/vector_hash.cpp
   src/duckdb/src/common/vector_operations/vector_storage.cpp
-  src/duckdb/ub_src_execution.cpp
-  src/duckdb/ub_src_execution_expression_executor.cpp
-  src/duckdb/ub_src_execution_index_art.cpp
-  src/duckdb/ub_src_execution_index.cpp
-  src/duckdb/ub_src_execution_nested_loop_join.cpp
-  src/duckdb/ub_src_execution_operator_aggregate.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_buffer_manager.cpp
   src/duckdb/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_scanner.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_sniffer.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_state_machine.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_table_function.cpp
-  src/duckdb/ub_src_execution_operator_csv_scanner_util.cpp
   src/duckdb/src/execution/operator/filter/physical_filter.cpp
-  src/duckdb/ub_src_execution_operator_helper.cpp
-  src/duckdb/ub_src_execution_operator_join.cpp
-  src/duckdb/ub_src_execution_operator_order.cpp
-  src/duckdb/ub_src_execution_operator_persistent.cpp
-  src/duckdb/ub_src_execution_operator_projection.cpp
-  src/duckdb/ub_src_execution_operator_scan.cpp
-  src/duckdb/ub_src_execution_operator_schema.cpp
-  src/duckdb/ub_src_execution_operator_set.cpp
-  src/duckdb/ub_src_execution_physical_plan.cpp
-  src/duckdb/ub_src_execution_sample.cpp
-  src/duckdb/ub_src_function_aggregate_distributive.cpp
   src/duckdb/src/function/aggregate/sorted_aggregate_function.cpp
-  src/duckdb/ub_src_function.cpp
-  src/duckdb/ub_src_function_cast.cpp
   src/duckdb/src/function/cast/union/from_struct.cpp
-  src/duckdb/ub_src_function_cast_variant.cpp
-  src/duckdb/ub_src_function_pragma.cpp
-  src/duckdb/ub_src_function_scalar_compressed_materialization.cpp
-  src/duckdb/ub_src_function_scalar.cpp
   src/duckdb/src/function/scalar/date/strftime.cpp
-  src/duckdb/ub_src_function_scalar_generic.cpp
   src/duckdb/src/function/scalar/geometry/geometry_functions.cpp
-  src/duckdb/ub_src_function_scalar_list.cpp
   src/duckdb/src/function/scalar/map/map_contains.cpp
-  src/duckdb/ub_src_function_scalar_operator.cpp
   src/duckdb/src/function/scalar/sequence/nextval.cpp
-  src/duckdb/ub_src_function_scalar_string.cpp
-  src/duckdb/ub_src_function_scalar_string_regexp.cpp
-  src/duckdb/ub_src_function_scalar_struct.cpp
-  src/duckdb/ub_src_function_scalar_system.cpp
-  src/duckdb/ub_src_function_scalar_variant.cpp
-  src/duckdb/ub_src_function_table_arrow.cpp
-  src/duckdb/ub_src_function_table.cpp
-  src/duckdb/ub_src_function_table_system.cpp
   src/duckdb/src/function/table/version/pragma_version.cpp
   src/duckdb/src/function/variant/variant_shredding.cpp
-  src/duckdb/ub_src_function_window.cpp
-  src/duckdb/ub_src_logging.cpp
-  src/duckdb/ub_src_main.cpp
-  src/duckdb/ub_src_main_buffered_data.cpp
-  src/duckdb/ub_src_main_capi.cpp
-  src/duckdb/ub_src_main_capi_cast.cpp
-  src/duckdb/ub_src_main_chunk_scan_state.cpp
   src/duckdb/src/main/extension/extension_alias.cpp
   src/duckdb/src/main/extension/extension_helper.cpp
   src/duckdb/src/main/extension/extension_install.cpp
   src/duckdb/src/main/extension/extension_load.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
   src/duckdb/src/main/http/http_util.cpp
-  src/duckdb/ub_src_main_relation.cpp
-  src/duckdb/ub_src_main_secret.cpp
-  src/duckdb/ub_src_main_settings.cpp
-  src/duckdb/ub_src_optimizer.cpp
-  src/duckdb/ub_src_optimizer_compressed_materialization.cpp
-  src/duckdb/ub_src_optimizer_join_order.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
-  src/duckdb/ub_src_optimizer_pullup.cpp
-  src/duckdb/ub_src_optimizer_pushdown.cpp
-  src/duckdb/ub_src_optimizer_rule.cpp
-  src/duckdb/ub_src_optimizer_statistics_expression.cpp
-  src/duckdb/ub_src_optimizer_statistics_operator.cpp
-  src/duckdb/ub_src_parallel.cpp
-  src/duckdb/ub_src_parser.cpp
-  src/duckdb/ub_src_parser_constraints.cpp
-  src/duckdb/ub_src_parser_expression.cpp
-  src/duckdb/ub_src_parser_parsed_data.cpp
-  src/duckdb/ub_src_parser_query_node.cpp
-  src/duckdb/ub_src_parser_statement.cpp
-  src/duckdb/ub_src_parser_tableref.cpp
   src/duckdb/src/parser/transform/constraint/transform_constraint.cpp
-  src/duckdb/ub_src_parser_transform_expression.cpp
-  src/duckdb/ub_src_parser_transform_helpers.cpp
-  src/duckdb/ub_src_parser_transform_statement.cpp
-  src/duckdb/ub_src_parser_transform_tableref.cpp
-  src/duckdb/ub_src_planner.cpp
-  src/duckdb/ub_src_planner_binder_expression.cpp
-  src/duckdb/ub_src_planner_binder_query_node.cpp
-  src/duckdb/ub_src_planner_binder_statement.cpp
-  src/duckdb/ub_src_planner_binder_tableref.cpp
-  src/duckdb/ub_src_planner_expression.cpp
-  src/duckdb/ub_src_planner_expression_binder.cpp
-  src/duckdb/ub_src_planner_filter.cpp
-  src/duckdb/ub_src_planner_operator.cpp
-  src/duckdb/ub_src_planner_subquery.cpp
-  src/duckdb/ub_src_storage.cpp
-  src/duckdb/ub_src_storage_buffer.cpp
-  src/duckdb/ub_src_storage_checkpoint.cpp
-  src/duckdb/ub_src_storage_compression_alp.cpp
-  src/duckdb/ub_src_storage_compression.cpp
-  src/duckdb/ub_src_storage_compression_chimp.cpp
-  src/duckdb/ub_src_storage_compression_dict_fsst.cpp
-  src/duckdb/ub_src_storage_compression_dictionary.cpp
-  src/duckdb/ub_src_storage_compression_roaring.cpp
-  src/duckdb/ub_src_storage_metadata.cpp
-  src/duckdb/ub_src_storage_serialization.cpp
-  src/duckdb/ub_src_storage_statistics.cpp
-  src/duckdb/ub_src_storage_table.cpp
-  src/duckdb/ub_src_storage_table_variant.cpp
-  src/duckdb/ub_src_transaction.cpp
   src/duckdb/src/verification/copied_statement_verifier.cpp
   src/duckdb/src/verification/deserialized_statement_verifier.cpp
   src/duckdb/src/verification/explain_statement_verifier.cpp
@@ -252,38 +188,42 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/verification/prepared_statement_verifier.cpp
   src/duckdb/src/verification/statement_verifier.cpp
   src/duckdb/src/verification/unoptimized_statement_verifier.cpp
+  src/duckdb/third_party/brotli/common/constants.cpp
+  src/duckdb/third_party/brotli/common/context.cpp
+  src/duckdb/third_party/brotli/common/dictionary.cpp
+  src/duckdb/third_party/brotli/common/platform.cpp
+  src/duckdb/third_party/brotli/common/shared_dictionary.cpp
+  src/duckdb/third_party/brotli/common/transform.cpp
+  src/duckdb/third_party/brotli/dec/bit_reader.cpp
+  src/duckdb/third_party/brotli/dec/decode.cpp
+  src/duckdb/third_party/brotli/dec/huffman.cpp
+  src/duckdb/third_party/brotli/dec/state.cpp
+  src/duckdb/third_party/brotli/enc/backward_references.cpp
+  src/duckdb/third_party/brotli/enc/backward_references_hq.cpp
+  src/duckdb/third_party/brotli/enc/bit_cost.cpp
+  src/duckdb/third_party/brotli/enc/block_splitter.cpp
+  src/duckdb/third_party/brotli/enc/brotli_bit_stream.cpp
+  src/duckdb/third_party/brotli/enc/cluster.cpp
+  src/duckdb/third_party/brotli/enc/command.cpp
+  src/duckdb/third_party/brotli/enc/compound_dictionary.cpp
+  src/duckdb/third_party/brotli/enc/compress_fragment.cpp
+  src/duckdb/third_party/brotli/enc/compress_fragment_two_pass.cpp
+  src/duckdb/third_party/brotli/enc/dictionary_hash.cpp
+  src/duckdb/third_party/brotli/enc/encode.cpp
+  src/duckdb/third_party/brotli/enc/encoder_dict.cpp
+  src/duckdb/third_party/brotli/enc/entropy_encode.cpp
+  src/duckdb/third_party/brotli/enc/fast_log.cpp
+  src/duckdb/third_party/brotli/enc/histogram.cpp
+  src/duckdb/third_party/brotli/enc/literal_cost.cpp
+  src/duckdb/third_party/brotli/enc/memory.cpp
+  src/duckdb/third_party/brotli/enc/metablock.cpp
+  src/duckdb/third_party/brotli/enc/static_dict.cpp
+  src/duckdb/third_party/brotli/enc/utf8_util.cpp
+  src/duckdb/third_party/fastpforlib/bitpacking.cpp
   src/duckdb/third_party/fmt/format.cc
   src/duckdb/third_party/fsst/libfsst.cpp
-  src/duckdb/third_party/miniz/miniz.cpp
-  src/duckdb/third_party/re2/re2/bitmap256.cc
-  src/duckdb/third_party/re2/re2/bitstate.cc
-  src/duckdb/third_party/re2/re2/compile.cc
-  src/duckdb/third_party/re2/re2/dfa.cc
-  src/duckdb/third_party/re2/re2/filtered_re2.cc
-  src/duckdb/third_party/re2/re2/mimics_pcre.cc
-  src/duckdb/third_party/re2/re2/nfa.cc
-  src/duckdb/third_party/re2/re2/onepass.cc
-  src/duckdb/third_party/re2/re2/parse.cc
-  src/duckdb/third_party/re2/re2/perl_groups.cc
-  src/duckdb/third_party/re2/re2/prefilter.cc
-  src/duckdb/third_party/re2/re2/prefilter_tree.cc
-  src/duckdb/third_party/re2/re2/prog.cc
-  src/duckdb/third_party/re2/re2/re2.cc
-  src/duckdb/third_party/re2/re2/regexp.cc
-  src/duckdb/third_party/re2/re2/set.cc
-  src/duckdb/third_party/re2/re2/simplify.cc
-  src/duckdb/third_party/re2/re2/stringpiece.cc
-  src/duckdb/third_party/re2/re2/tostring.cc
-  src/duckdb/third_party/re2/re2/unicode_casefold.cc
-  src/duckdb/third_party/re2/re2/unicode_groups.cc
-  src/duckdb/third_party/re2/util/rune.cc
-  src/duckdb/third_party/re2/util/strutil.cc
   src/duckdb/third_party/hyperloglog/hyperloglog.cpp
   src/duckdb/third_party/hyperloglog/sds.cpp
-  src/duckdb/third_party/skiplist/SkipList.cpp
-  src/duckdb/third_party/fastpforlib/bitpacking.cpp
-  src/duckdb/third_party/utf8proc/utf8proc.cpp
-  src/duckdb/third_party/utf8proc/utf8proc_wrapper.cpp
   src/duckdb/third_party/libpg_query/pg_functions.cpp
   src/duckdb/third_party/libpg_query/postgres_parser.cpp
   src/duckdb/third_party/libpg_query/src_backend_nodes_list.cpp
@@ -294,6 +234,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/libpg_query/src_backend_parser_scan.cpp
   src/duckdb/third_party/libpg_query/src_backend_parser_scansup.cpp
   src/duckdb/third_party/libpg_query/src_common_keywords.cpp
+  src/duckdb/third_party/lz4/lz4.cpp
   src/duckdb/third_party/mbedtls/library/aes.cpp
   src/duckdb/third_party/mbedtls/library/asn1parse.cpp
   src/duckdb/third_party/mbedtls/library/asn1write.cpp
@@ -317,6 +258,39 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/mbedtls/library/sha1.cpp
   src/duckdb/third_party/mbedtls/library/sha256.cpp
   src/duckdb/third_party/mbedtls/mbedtls_wrapper.cpp
+  src/duckdb/third_party/miniz/miniz.cpp
+  src/duckdb/third_party/parquet/parquet_types.cpp
+  src/duckdb/third_party/re2/re2/bitmap256.cc
+  src/duckdb/third_party/re2/re2/bitstate.cc
+  src/duckdb/third_party/re2/re2/compile.cc
+  src/duckdb/third_party/re2/re2/dfa.cc
+  src/duckdb/third_party/re2/re2/filtered_re2.cc
+  src/duckdb/third_party/re2/re2/mimics_pcre.cc
+  src/duckdb/third_party/re2/re2/nfa.cc
+  src/duckdb/third_party/re2/re2/onepass.cc
+  src/duckdb/third_party/re2/re2/parse.cc
+  src/duckdb/third_party/re2/re2/perl_groups.cc
+  src/duckdb/third_party/re2/re2/prefilter.cc
+  src/duckdb/third_party/re2/re2/prefilter_tree.cc
+  src/duckdb/third_party/re2/re2/prog.cc
+  src/duckdb/third_party/re2/re2/re2.cc
+  src/duckdb/third_party/re2/re2/regexp.cc
+  src/duckdb/third_party/re2/re2/set.cc
+  src/duckdb/third_party/re2/re2/simplify.cc
+  src/duckdb/third_party/re2/re2/stringpiece.cc
+  src/duckdb/third_party/re2/re2/tostring.cc
+  src/duckdb/third_party/re2/re2/unicode_casefold.cc
+  src/duckdb/third_party/re2/re2/unicode_groups.cc
+  src/duckdb/third_party/re2/util/rune.cc
+  src/duckdb/third_party/re2/util/strutil.cc
+  src/duckdb/third_party/skiplist/SkipList.cpp
+  src/duckdb/third_party/snappy/snappy-sinksource.cc
+  src/duckdb/third_party/snappy/snappy.cc
+  src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
+  src/duckdb/third_party/thrift/thrift/transport/TBufferTransports.cpp
+  src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
+  src/duckdb/third_party/utf8proc/utf8proc.cpp
+  src/duckdb/third_party/utf8proc/utf8proc_wrapper.cpp
   src/duckdb/third_party/yyjson/yyjson.cpp
   src/duckdb/third_party/zstd/common/debug.cpp
   src/duckdb/third_party/zstd/common/entropy_common.cpp
@@ -350,118 +324,214 @@ set(DUCKDB_SRC_FILES
   src/duckdb/third_party/zstd/dict/divsufsort.cpp
   src/duckdb/third_party/zstd/dict/fastcover.cpp
   src/duckdb/third_party/zstd/dict/zdict.cpp
-  src/duckdb/extension/core_functions/core_functions_extension.cpp
-  src/duckdb/extension/core_functions/lambda_functions.cpp
-  src/duckdb/extension/core_functions/function_list.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
+  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
   src/duckdb/ub_extension_core_functions_aggregate_holistic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_nested.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_distributive.cpp
-  src/duckdb/ub_extension_core_functions_aggregate_algebraic.cpp
   src/duckdb/ub_extension_core_functions_aggregate_regression.cpp
-  src/duckdb/extension/core_functions/scalar/bit/bitstring.cpp
-  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
-  src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
-  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
-  src/duckdb/extension/core_functions/scalar/math/numeric.cpp
   src/duckdb/ub_extension_core_functions_scalar_array.cpp
-  src/duckdb/ub_extension_core_functions_scalar_union.cpp
   src/duckdb/ub_extension_core_functions_scalar_blob.cpp
+  src/duckdb/ub_extension_core_functions_scalar_date.cpp
+  src/duckdb/ub_extension_core_functions_scalar_debug.cpp
+  src/duckdb/ub_extension_core_functions_scalar_generic.cpp
   src/duckdb/ub_extension_core_functions_scalar_list.cpp
   src/duckdb/ub_extension_core_functions_scalar_map.cpp
-  src/duckdb/ub_extension_core_functions_scalar_date.cpp
-  src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
   src/duckdb/ub_extension_core_functions_scalar_random.cpp
   src/duckdb/ub_extension_core_functions_scalar_string.cpp
   src/duckdb/ub_extension_core_functions_scalar_struct.cpp
-  src/duckdb/extension/parquet/parquet_reader.cpp
-  src/duckdb/extension/parquet/parquet_statistics.cpp
-  src/duckdb/extension/parquet/zstd_file_system.cpp
-  src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
-  src/duckdb/extension/parquet/parquet_shredding.cpp
-  src/duckdb/extension/parquet/parquet_multi_file_info.cpp
-  src/duckdb/extension/parquet/parquet_metadata.cpp
-  src/duckdb/extension/parquet/parquet_timestamp.cpp
-  src/duckdb/extension/parquet/parquet_crypto.cpp
-  src/duckdb/extension/parquet/serialize_parquet.cpp
-  src/duckdb/extension/parquet/parquet_column_schema.cpp
-  src/duckdb/extension/parquet/parquet_extension.cpp
-  src/duckdb/extension/parquet/parquet_field_id.cpp
-  src/duckdb/extension/parquet/column_writer.cpp
-  src/duckdb/extension/parquet/column_reader.cpp
-  src/duckdb/extension/parquet/parquet_writer.cpp
-  src/duckdb/extension/parquet/parquet_float16.cpp
-  src/duckdb/extension/parquet/parquet_geometry.cpp
-  src/duckdb/ub_extension_parquet_reader.cpp
-  src/duckdb/ub_extension_parquet_reader_variant.cpp
-  src/duckdb/ub_extension_parquet_decoder.cpp
-  src/duckdb/ub_extension_parquet_writer.cpp
-  src/duckdb/ub_extension_parquet_writer_variant.cpp
-  src/duckdb/third_party/parquet/parquet_types.cpp
-  src/duckdb/third_party/thrift/thrift/protocol/TProtocol.cpp
-  src/duckdb/third_party/thrift/thrift/transport/TTransportException.cpp
-  src/duckdb/third_party/thrift/thrift/transport/TBufferTransports.cpp
-  src/duckdb/third_party/snappy/snappy.cc
-  src/duckdb/third_party/snappy/snappy-sinksource.cc
-  src/duckdb/third_party/lz4/lz4.cpp
-  src/duckdb/third_party/brotli/common/constants.cpp
-  src/duckdb/third_party/brotli/common/context.cpp
-  src/duckdb/third_party/brotli/common/dictionary.cpp
-  src/duckdb/third_party/brotli/common/platform.cpp
-  src/duckdb/third_party/brotli/common/shared_dictionary.cpp
-  src/duckdb/third_party/brotli/common/transform.cpp
-  src/duckdb/third_party/brotli/dec/bit_reader.cpp
-  src/duckdb/third_party/brotli/dec/decode.cpp
-  src/duckdb/third_party/brotli/dec/huffman.cpp
-  src/duckdb/third_party/brotli/dec/state.cpp
-  src/duckdb/third_party/brotli/enc/backward_references.cpp
-  src/duckdb/third_party/brotli/enc/backward_references_hq.cpp
-  src/duckdb/third_party/brotli/enc/bit_cost.cpp
-  src/duckdb/third_party/brotli/enc/block_splitter.cpp
-  src/duckdb/third_party/brotli/enc/brotli_bit_stream.cpp
-  src/duckdb/third_party/brotli/enc/cluster.cpp
-  src/duckdb/third_party/brotli/enc/command.cpp
-  src/duckdb/third_party/brotli/enc/compound_dictionary.cpp
-  src/duckdb/third_party/brotli/enc/compress_fragment.cpp
-  src/duckdb/third_party/brotli/enc/compress_fragment_two_pass.cpp
-  src/duckdb/third_party/brotli/enc/dictionary_hash.cpp
-  src/duckdb/third_party/brotli/enc/encode.cpp
-  src/duckdb/third_party/brotli/enc/encoder_dict.cpp
-  src/duckdb/third_party/brotli/enc/entropy_encode.cpp
-  src/duckdb/third_party/brotli/enc/fast_log.cpp
-  src/duckdb/third_party/brotli/enc/histogram.cpp
-  src/duckdb/third_party/brotli/enc/literal_cost.cpp
-  src/duckdb/third_party/brotli/enc/memory.cpp
-  src/duckdb/third_party/brotli/enc/metablock.cpp
-  src/duckdb/third_party/brotli/enc/static_dict.cpp
-  src/duckdb/third_party/brotli/enc/utf8_util.cpp
-  src/duckdb/extension/icu/./icu-timebucket.cpp
-  src/duckdb/extension/icu/./icu-datepart.cpp
-  src/duckdb/extension/icu/./icu-datetrunc.cpp
-  src/duckdb/extension/icu/./icu-current.cpp
-  src/duckdb/extension/icu/./icu_extension.cpp
-  src/duckdb/extension/icu/./icu-table-range.cpp
-  src/duckdb/extension/icu/./icu-datefunc.cpp
-  src/duckdb/extension/icu/./icu-makedate.cpp
-  src/duckdb/extension/icu/./icu-dateadd.cpp
-  src/duckdb/extension/icu/./icu-timezone.cpp
-  src/duckdb/extension/icu/./icu-strptime.cpp
-  src/duckdb/extension/icu/./icu-datesub.cpp
-  src/duckdb/extension/icu/./icu-list-range.cpp
+  src/duckdb/ub_extension_core_functions_scalar_union.cpp
   src/duckdb/ub_extension_icu_third_party_icu_common.cpp
   src/duckdb/ub_extension_icu_third_party_icu_i18n.cpp
-  src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
-  src/duckdb/extension/json/json_reader.cpp
-  src/duckdb/extension/json/json_functions.cpp
-  src/duckdb/extension/json/json_deserializer.cpp
-  src/duckdb/extension/json/json_serializer.cpp
-  src/duckdb/extension/json/json_scan.cpp
-  src/duckdb/extension/json/serialize_json.cpp
-  src/duckdb/extension/json/json_enums.cpp
-  src/duckdb/extension/json/json_extension.cpp
-  src/duckdb/extension/json/json_multi_file_info.cpp
-  src/duckdb/extension/json/json_common.cpp
   src/duckdb/ub_extension_json_json_functions.cpp
-  src/duckdb/generated_extension_loader_package_build.cpp)
+  src/duckdb/ub_extension_parquet_decoder.cpp
+  src/duckdb/ub_extension_parquet_reader.cpp
+  src/duckdb/ub_extension_parquet_reader_variant.cpp
+  src/duckdb/ub_extension_parquet_writer.cpp
+  src/duckdb/ub_extension_parquet_writer_variant.cpp
+  src/duckdb/ub_src_catalog.cpp
+  src/duckdb/ub_src_catalog_catalog_entry.cpp
+  src/duckdb/ub_src_catalog_catalog_entry_dependency.cpp
+  src/duckdb/ub_src_catalog_default.cpp
+  src/duckdb/ub_src_common.cpp
+  src/duckdb/ub_src_common_adbc_nanoarrow.cpp
+  src/duckdb/ub_src_common_allocator.cpp
+  src/duckdb/ub_src_common_arrow.cpp
+  src/duckdb/ub_src_common_arrow_appender.cpp
+  src/duckdb/ub_src_common_enums.cpp
+  src/duckdb/ub_src_common_exception.cpp
+  src/duckdb/ub_src_common_multi_file.cpp
+  src/duckdb/ub_src_common_operator.cpp
+  src/duckdb/ub_src_common_progress_bar.cpp
+  src/duckdb/ub_src_common_row_operations.cpp
+  src/duckdb/ub_src_common_serializer.cpp
+  src/duckdb/ub_src_common_sort.cpp
+  src/duckdb/ub_src_common_tree_renderer.cpp
+  src/duckdb/ub_src_common_types.cpp
+  src/duckdb/ub_src_common_types_column.cpp
+  src/duckdb/ub_src_common_types_row.cpp
+  src/duckdb/ub_src_common_types_variant.cpp
+  src/duckdb/ub_src_execution.cpp
+  src/duckdb/ub_src_execution_expression_executor.cpp
+  src/duckdb/ub_src_execution_index.cpp
+  src/duckdb/ub_src_execution_index_art.cpp
+  src/duckdb/ub_src_execution_nested_loop_join.cpp
+  src/duckdb/ub_src_execution_operator_aggregate.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_buffer_manager.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_scanner.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_sniffer.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_state_machine.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_table_function.cpp
+  src/duckdb/ub_src_execution_operator_csv_scanner_util.cpp
+  src/duckdb/ub_src_execution_operator_helper.cpp
+  src/duckdb/ub_src_execution_operator_join.cpp
+  src/duckdb/ub_src_execution_operator_order.cpp
+  src/duckdb/ub_src_execution_operator_persistent.cpp
+  src/duckdb/ub_src_execution_operator_projection.cpp
+  src/duckdb/ub_src_execution_operator_scan.cpp
+  src/duckdb/ub_src_execution_operator_schema.cpp
+  src/duckdb/ub_src_execution_operator_set.cpp
+  src/duckdb/ub_src_execution_physical_plan.cpp
+  src/duckdb/ub_src_execution_sample.cpp
+  src/duckdb/ub_src_function.cpp
+  src/duckdb/ub_src_function_aggregate_distributive.cpp
+  src/duckdb/ub_src_function_cast.cpp
+  src/duckdb/ub_src_function_cast_variant.cpp
+  src/duckdb/ub_src_function_pragma.cpp
+  src/duckdb/ub_src_function_scalar.cpp
+  src/duckdb/ub_src_function_scalar_compressed_materialization.cpp
+  src/duckdb/ub_src_function_scalar_generic.cpp
+  src/duckdb/ub_src_function_scalar_list.cpp
+  src/duckdb/ub_src_function_scalar_operator.cpp
+  src/duckdb/ub_src_function_scalar_string.cpp
+  src/duckdb/ub_src_function_scalar_string_regexp.cpp
+  src/duckdb/ub_src_function_scalar_struct.cpp
+  src/duckdb/ub_src_function_scalar_system.cpp
+  src/duckdb/ub_src_function_scalar_variant.cpp
+  src/duckdb/ub_src_function_table.cpp
+  src/duckdb/ub_src_function_table_arrow.cpp
+  src/duckdb/ub_src_function_table_system.cpp
+  src/duckdb/ub_src_function_window.cpp
+  src/duckdb/ub_src_logging.cpp
+  src/duckdb/ub_src_main.cpp
+  src/duckdb/ub_src_main_buffered_data.cpp
+  src/duckdb/ub_src_main_capi.cpp
+  src/duckdb/ub_src_main_capi_cast.cpp
+  src/duckdb/ub_src_main_chunk_scan_state.cpp
+  src/duckdb/ub_src_main_relation.cpp
+  src/duckdb/ub_src_main_secret.cpp
+  src/duckdb/ub_src_main_settings.cpp
+  src/duckdb/ub_src_optimizer.cpp
+  src/duckdb/ub_src_optimizer_compressed_materialization.cpp
+  src/duckdb/ub_src_optimizer_join_order.cpp
+  src/duckdb/ub_src_optimizer_pullup.cpp
+  src/duckdb/ub_src_optimizer_pushdown.cpp
+  src/duckdb/ub_src_optimizer_rule.cpp
+  src/duckdb/ub_src_optimizer_statistics_expression.cpp
+  src/duckdb/ub_src_optimizer_statistics_operator.cpp
+  src/duckdb/ub_src_parallel.cpp
+  src/duckdb/ub_src_parser.cpp
+  src/duckdb/ub_src_parser_constraints.cpp
+  src/duckdb/ub_src_parser_expression.cpp
+  src/duckdb/ub_src_parser_parsed_data.cpp
+  src/duckdb/ub_src_parser_query_node.cpp
+  src/duckdb/ub_src_parser_statement.cpp
+  src/duckdb/ub_src_parser_tableref.cpp
+  src/duckdb/ub_src_parser_transform_expression.cpp
+  src/duckdb/ub_src_parser_transform_helpers.cpp
+  src/duckdb/ub_src_parser_transform_statement.cpp
+  src/duckdb/ub_src_parser_transform_tableref.cpp
+  src/duckdb/ub_src_planner.cpp
+  src/duckdb/ub_src_planner_binder_expression.cpp
+  src/duckdb/ub_src_planner_binder_query_node.cpp
+  src/duckdb/ub_src_planner_binder_statement.cpp
+  src/duckdb/ub_src_planner_binder_tableref.cpp
+  src/duckdb/ub_src_planner_expression.cpp
+  src/duckdb/ub_src_planner_expression_binder.cpp
+  src/duckdb/ub_src_planner_filter.cpp
+  src/duckdb/ub_src_planner_operator.cpp
+  src/duckdb/ub_src_planner_subquery.cpp
+  src/duckdb/ub_src_storage.cpp
+  src/duckdb/ub_src_storage_buffer.cpp
+  src/duckdb/ub_src_storage_checkpoint.cpp
+  src/duckdb/ub_src_storage_compression.cpp
+  src/duckdb/ub_src_storage_compression_alp.cpp
+  src/duckdb/ub_src_storage_compression_chimp.cpp
+  src/duckdb/ub_src_storage_compression_dict_fsst.cpp
+  src/duckdb/ub_src_storage_compression_dictionary.cpp
+  src/duckdb/ub_src_storage_compression_roaring.cpp
+  src/duckdb/ub_src_storage_metadata.cpp
+  src/duckdb/ub_src_storage_serialization.cpp
+  src/duckdb/ub_src_storage_statistics.cpp
+  src/duckdb/ub_src_storage_table.cpp
+  src/duckdb/ub_src_storage_table_variant.cpp
+  src/duckdb/ub_src_transaction.cpp)
+
+set(JEMALLOC_SRC_FILES 
+  src/duckdb/third_party/jemalloc/src/arena.c
+  src/duckdb/third_party/jemalloc/src/background_thread.c
+  src/duckdb/third_party/jemalloc/src/base.c
+  src/duckdb/third_party/jemalloc/src/batcher.c
+  src/duckdb/third_party/jemalloc/src/bin.c
+  src/duckdb/third_party/jemalloc/src/bin_info.c
+  src/duckdb/third_party/jemalloc/src/bitmap.c
+  src/duckdb/third_party/jemalloc/src/buf_writer.c
+  src/duckdb/third_party/jemalloc/src/cache_bin.c
+  src/duckdb/third_party/jemalloc/src/ckh.c
+  src/duckdb/third_party/jemalloc/src/counter.c
+  src/duckdb/third_party/jemalloc/src/ctl.c
+  src/duckdb/third_party/jemalloc/src/decay.c
+  src/duckdb/third_party/jemalloc/src/div.c
+  src/duckdb/third_party/jemalloc/src/ecache.c
+  src/duckdb/third_party/jemalloc/src/edata.c
+  src/duckdb/third_party/jemalloc/src/edata_cache.c
+  src/duckdb/third_party/jemalloc/src/ehooks.c
+  src/duckdb/third_party/jemalloc/src/emap.c
+  src/duckdb/third_party/jemalloc/src/eset.c
+  src/duckdb/third_party/jemalloc/src/exp_grow.c
+  src/duckdb/third_party/jemalloc/src/extent.c
+  src/duckdb/third_party/jemalloc/src/extent_dss.c
+  src/duckdb/third_party/jemalloc/src/extent_mmap.c
+  src/duckdb/third_party/jemalloc/src/fxp.c
+  src/duckdb/third_party/jemalloc/src/hook.c
+  src/duckdb/third_party/jemalloc/src/hpa.c
+  src/duckdb/third_party/jemalloc/src/hpa_hooks.c
+  src/duckdb/third_party/jemalloc/src/hpdata.c
+  src/duckdb/third_party/jemalloc/src/inspect.c
+  src/duckdb/third_party/jemalloc/src/jemalloc.c
+  src/duckdb/third_party/jemalloc/src/large.c
+  src/duckdb/third_party/jemalloc/src/log.c
+  src/duckdb/third_party/jemalloc/src/malloc_io.c
+  src/duckdb/third_party/jemalloc/src/mutex.c
+  src/duckdb/third_party/jemalloc/src/nstime.c
+  src/duckdb/third_party/jemalloc/src/pa.c
+  src/duckdb/third_party/jemalloc/src/pa_extra.c
+  src/duckdb/third_party/jemalloc/src/pac.c
+  src/duckdb/third_party/jemalloc/src/pages.c
+  src/duckdb/third_party/jemalloc/src/pai.c
+  src/duckdb/third_party/jemalloc/src/peak_event.c
+  src/duckdb/third_party/jemalloc/src/prof.c
+  src/duckdb/third_party/jemalloc/src/prof_data.c
+  src/duckdb/third_party/jemalloc/src/prof_log.c
+  src/duckdb/third_party/jemalloc/src/prof_recent.c
+  src/duckdb/third_party/jemalloc/src/prof_stats.c
+  src/duckdb/third_party/jemalloc/src/prof_sys.c
+  src/duckdb/third_party/jemalloc/src/psset.c
+  src/duckdb/third_party/jemalloc/src/rtree.c
+  src/duckdb/third_party/jemalloc/src/safety_check.c
+  src/duckdb/third_party/jemalloc/src/san.c
+  src/duckdb/third_party/jemalloc/src/san_bump.c
+  src/duckdb/third_party/jemalloc/src/sc.c
+  src/duckdb/third_party/jemalloc/src/sec.c
+  src/duckdb/third_party/jemalloc/src/stats.c
+  src/duckdb/third_party/jemalloc/src/sz.c
+  src/duckdb/third_party/jemalloc/src/tcache.c
+  src/duckdb/third_party/jemalloc/src/test_hooks.c
+  src/duckdb/third_party/jemalloc/src/thread_event.c
+  src/duckdb/third_party/jemalloc/src/ticker.c
+  src/duckdb/third_party/jemalloc/src/tsd.c
+  src/duckdb/third_party/jemalloc/src/util.c
+  src/duckdb/third_party/jemalloc/src/witness.c
+  src/duckdb/third_party/jemalloc/src/zone.c)
 
 
 # a few OS-specific variables
@@ -513,7 +583,10 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 # main shared lib compilation
 
 if(MSVC OR ZOS)
+  list(APPEND DUCKDB_INCLUDE_DIRS src/stubs)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
+else()
+  list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED
@@ -543,6 +616,11 @@ target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH2}
   ${DUCKDB_INCLUDE_DIRS})
 
+if (NOT MSVC AND NOT ZOS)
+  target_include_directories(duckdb_java PRIVATE
+    ${JEMALLOC_INCLUDE_DIRS})
+endif()
+
 target_link_libraries(duckdb_java PRIVATE
   duckdb-native
   ${CMAKE_DL_LIBS})
@@ -571,7 +649,7 @@ target_compile_definitions(duckdb_java PRIVATE
 
 if(NOT MSVC AND NOT ZOS)
   target_compile_definitions(duckdb_java PRIVATE
-    -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
+    -DDUCKDB_ENABLE_JEMALLOC)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

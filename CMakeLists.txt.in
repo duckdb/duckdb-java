@@ -40,11 +40,17 @@ endif()
 set(DUCKDB_INCLUDE_DIRS
   ${INCLUDES})
 
+set(JEMALLOC_INCLUDE_DIRS
+  ${JEMALLOC_INCLUDES})
+
 set(DUCKDB_DEFINITIONS
   ${DEFINES})
 
 set(DUCKDB_SRC_FILES 
   ${SOURCES})
+
+set(JEMALLOC_SRC_FILES 
+  ${JEMALLOC_SOURCES})
 
 
 # a few OS-specific variables
@@ -96,7 +102,10 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 # main shared lib compilation
 
 if(MSVC OR ZOS)
+  list(APPEND DUCKDB_INCLUDE_DIRS src/stubs)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
+else()
+  list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
 add_library(duckdb_java SHARED
@@ -126,6 +135,11 @@ target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH2}
   ${DUCKDB_INCLUDE_DIRS})
 
+if (NOT MSVC AND NOT ZOS)
+  target_include_directories(duckdb_java PRIVATE
+    ${JEMALLOC_INCLUDE_DIRS})
+endif()
+
 target_link_libraries(duckdb_java PRIVATE
   duckdb-native
   ${CMAKE_DL_LIBS})
@@ -154,7 +168,7 @@ target_compile_definitions(duckdb_java PRIVATE
 
 if(NOT MSVC AND NOT ZOS)
   target_compile_definitions(duckdb_java PRIVATE
-    -DDUCKDB_EXTENSION_JEMALLOC_LINKED)
+    -DDUCKDB_ENABLE_JEMALLOC)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

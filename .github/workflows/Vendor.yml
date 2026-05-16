@@ -50,8 +50,16 @@ jobs:
           echo "Checking out engine ref: ${{ inputs.duckdb-sha }} on branch: ${{ github.ref_name }}"
           git checkout ${{ inputs.duckdb-sha }}
 
-      - name: Vendor sources
+      - name: Apply local patches
+        id: apply_local_patches
         if: ${{ steps.checkout_engine_rev.outcome == 'success' }}
+        working-directory: .git/duckdb
+        run: |
+          patch -p1 < ${{ github.workspace }}/data/vendoring/jemalloc_packaging.patch
+          git diff HEAD
+
+      - name: Vendor sources
+        if: ${{ steps.apply_local_patches.outcome == 'success' }}
         id: vendor
         run: |
           REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)

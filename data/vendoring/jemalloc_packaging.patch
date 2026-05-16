@@ -1,0 +1,32 @@
+diff --git a/scripts/package_build.py b/scripts/package_build.py
+index 2f218a9db1..f6fea2fc34 100644
+--- a/scripts/package_build.py
++++ b/scripts/package_build.py
+@@ -41,6 +41,7 @@ def third_party_includes():
+     includes += [os.path.join('third_party', 'vergesort')]
+     includes += [os.path.join('third_party', 'yyjson', 'include')]
+     includes += [os.path.join('third_party', 'zstd', 'include')]
++    includes += [os.path.join('third_party', 'jemalloc', 'include')]
+     return includes
+ 
+ 
+@@ -58,6 +59,7 @@ def third_party_sources():
+     sources += [os.path.join('third_party', 'mbedtls')]
+     sources += [os.path.join('third_party', 'yyjson')]
+     sources += [os.path.join('third_party', 'zstd')]
++    sources += [os.path.join('third_party', 'jemalloc')]
+     return sources
+ 
+ 
+diff --git a/src/common/allocator/allocator_jemalloc.cpp b/src/common/allocator/allocator_jemalloc.cpp
+index 4587add993..b795fa85ba 100644
+--- a/src/common/allocator/allocator_jemalloc.cpp
++++ b/src/common/allocator/allocator_jemalloc.cpp
+@@ -1,5 +1,6 @@
+ #include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/numeric_utils.hpp"
++#include "duckdb/common/string_util.hpp"
+ 
+ #include <thread>
+ #include <cstdint>
+ 

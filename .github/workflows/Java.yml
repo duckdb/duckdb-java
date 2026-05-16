@@ -51,6 +51,12 @@ jobs:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
 
+      - name: Enforce jemalloc
+        working-directory: src/duckdb
+        run: |
+          patch -p1 < ${{ github.workspace }}/data/vendoring/jemalloc_enforce.patch
+          git diff HEAD
+
       - name: Build
         uses: ./.github/composite-actions/linux-build-docker
         with:
