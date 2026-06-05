@@ -519,6 +519,9 @@ jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv *env, jclass, jobject re
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
+	if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
+		vec.Flatten(row_count);
+	}
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
 	auto null_array = env->NewBooleanArray(row_count);
@@ -723,7 +726,6 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 				continue;
 			}
 			Vector variant_vec(variant_val);
-			variant_vec.Flatten(1);
 			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
 			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
 			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);
@@ -734,6 +736,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		Vector string_vec(LogicalType::VARCHAR);
 		VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
 		vec.ReferenceAndSetType(string_vec);
+		if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
+			vec.Flatten(row_count);
+		}
 		// fall through on purpose
 	}
 	case LogicalTypeId::VARCHAR:
