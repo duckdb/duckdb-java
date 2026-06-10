@@ -134,11 +134,13 @@ static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSe
 }
 
 void _duckdb_jdbc_set_schema(JNIEnv *env, jclass, jobject conn_ref_buf, jstring schema) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)));
+	set_catalog_search_path(
+	    env, conn_ref_buf, CatalogSearchEntry(Identifier(INVALID_CATALOG), Identifier(jstring_to_string(env, schema))));
 }
 
 void _duckdb_jdbc_set_catalog(JNIEnv *env, jclass, jobject conn_ref_buf, jstring catalog) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA));
+	set_catalog_search_path(
+	    env, conn_ref_buf, CatalogSearchEntry(Identifier(jstring_to_string(env, catalog)), Identifier(DEFAULT_SCHEMA)));
 }
 
 jstring _duckdb_jdbc_get_catalog(JNIEnv *env, jclass, jobject conn_ref_buf) {
@@ -448,12 +450,17 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 	if (n_param > 0) {
 		auto expected_parameter_types = stmt->GetExpectedParameterTypes();
 		for (auto &it : stmt->named_param_map) {
-			param_types[it.second - 1] = expected_parameter_types[it.first];
+			param_types[it.second - 1] = expected_parameter_types[it.first.GetIdentifierName()];
 		}
 	}
 
-	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties(), param_types);
+	duckdb::vector<std::string> names;
+	names.reserve(stmt->GetNames().size());
+	for (const Identifier &ident : stmt->GetNames()) {
+		names.emplace_back(ident.GetIdentifierName());
+	}
+	return build_meta(env, stmt->ColumnCount(), n_param, names, stmt->GetTypes(), stmt->GetStatementProperties(),
+	                  param_types);
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
@@ -531,7 +538,7 @@ static jobject make_vec_data_buf(JNIEnv *env, Vector &vec, idx_t row_count) {
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
 	if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
-		vec.Flatten(row_count);
+		vec.Flatten();
 	}
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
@@ -730,7 +737,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	}
 	case LogicalTypeId::VARIANT: {
 		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(vec, 1, format);
+		Vector::RecursiveToUnifiedFormat(vec, format);
 		UnifiedVariantVectorData vector_data(format);
 		varlen_data = env->NewObjectArray(row_count, J_Object, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -738,7 +745,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			if (variant_val.IsNull()) {
 				continue;
 			}
-			Vector variant_vec(variant_val);
+			Vector variant_vec(variant_val.type());
+ 			variant_vec.SetValue(0, variant_val);
 			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
 			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
 			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);
@@ -750,7 +758,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
 		vec.ReferenceAndSetType(string_vec);
 		if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
-			vec.Flatten(row_count);
+			vec.Flatten();
 		}
 		// fall through on purpose
 	}
@@ -787,7 +795,7 @@ jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, 
 	}
 	auto schema_name = jbyteArray_to_string(env, schema_name_j);
 	auto table_name = jbyteArray_to_string(env, table_name_j);
-	auto appender = new Appender(*conn_ref, schema_name, table_name);
+	auto appender = new Appender(*conn_ref, Identifier(schema_name), Identifier(table_name));
 	return env->NewDirectByteBuffer(appender, 0);
 }
 
@@ -940,7 +948,7 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	parameters.push_back(Value::POINTER((uintptr_t)factory));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(Identifier(name), true, true);
 }
 
 void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
