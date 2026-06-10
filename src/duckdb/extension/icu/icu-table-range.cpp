@@ -113,8 +113,8 @@ struct ICUTableRange {
 		input.Flatten();
 		for (idx_t c = 0; c < input.ColumnCount(); c++) {
 			if (FlatVector::IsNull(input.data[c], row_id)) {
-				result.start = timestamp_tz_t(0);
-				result.end = timestamp_tz_t(0);
+				result.start = timestamp_tz_t::epoch();
+				result.end = timestamp_tz_t::epoch();
 				result.increment = interval_t();
 				result.greater_than_check = true;
 				result.inclusive_bound = false;
@@ -201,7 +201,6 @@ struct ICUTableRange {
 			}
 			if (state.empty_range) {
 				// empty range
-				output.SetCardinality(0);
 				state.current_input_row++;
 				state.initialized_row = false;
 				return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -247,6 +246,7 @@ struct ICUTableRange {
 		    RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series_function.cardinality = Cardinality;
+		generate_series_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		generate_series.AddFunction(generate_series_function);
 
 		loader.RegisterFunction(generate_series);

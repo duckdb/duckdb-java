@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -18,6 +19,27 @@
 #include <functional>
 
 namespace duckdb {
+
+//! Complement-fold trait for comparison selection. On the NO_NULL path a comparison op's selection
+//! is the exact complement of its complement op's selection (no NULL third bucket).
+//! Note LessThanEquals is not handled since that's done upstream in the general case (see
+//! VectorOperations::LessThan[Equals])
+template <class OP>
+struct ComparisonSelectComplement {
+	static constexpr bool FOLD = false;
+};
+template <>
+struct ComparisonSelectComplement<NotEquals> {
+	static constexpr bool FOLD = true;
+	using COMPLEMENT = Equals;
+	static constexpr bool SWAP_OPERANDS = false;
+};
+template <>
+struct ComparisonSelectComplement<GreaterThanEquals> {
+	static constexpr bool FOLD = true;
+	using COMPLEMENT = GreaterThan;
+	static constexpr bool SWAP_OPERANDS = true; // GreaterThanEquals(a,b) == !GreaterThan(b,a)
+};
 
 struct DefaultNullCheckOperator {
 	template <class LEFT_TYPE, class RIGHT_TYPE>
@@ -127,9 +149,11 @@ struct BinaryExecutor {
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteConstant(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteConstant(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::SetSize(result, count);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 
 		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
@@ -146,7 +170,7 @@ struct BinaryExecutor {
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteFlat(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
 		auto rdata =
 		    RIGHT_CONSTANT ? ConstantVector::GetData<RIGHT_TYPE>(right) : FlatVector::GetData<RIGHT_TYPE>(right);
@@ -158,31 +182,34 @@ struct BinaryExecutor {
 		}
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &result_validity = FlatVector::ValidityMutable(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::ValidityMutable(right), count);
+				result_validity.Copy(FlatVector::Validity(right), count);
 			} else {
-				FlatVector::SetValidity(result, FlatVector::ValidityMutable(right));
+				FlatVector::SetValidity(result, FlatVector::Validity(right));
 			}
 		} else if (RIGHT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::ValidityMutable(left), count);
+				result_validity.Copy(FlatVector::Validity(left), count);
 			} else {
-				FlatVector::SetValidity(result, FlatVector::ValidityMutable(left));
+				FlatVector::SetValidity(result, FlatVector::Validity(left));
 			}
 		} else {
 			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::ValidityMutable(left), count);
+				result_validity.Copy(FlatVector::Validity(left), count);
 				if (result_validity.CannotHaveNull()) {
-					result_validity.Copy(FlatVector::ValidityMutable(right), count);
+					result_validity.Copy(FlatVector::Validity(right), count);
 				} else {
-					result_validity.Combine(FlatVector::ValidityMutable(right), count);
+					result_validity.Combine(FlatVector::Validity(right), count);
 				}
 			} else {
-				FlatVector::SetValidity(result, FlatVector::ValidityMutable(left));
-				result_validity.Combine(FlatVector::ValidityMutable(right), count);
+				FlatVector::SetValidity(result, FlatVector::Validity(left));
+				result_validity.Combine(FlatVector::Validity(right), count);
 			}
 		}
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
@@ -219,13 +246,16 @@ struct BinaryExecutor {
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteGeneric(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		UnifiedVectorFormat ldata, rdata;
 
 		left.ToUnifiedFormat(ldata);
 		right.ToUnifiedFormat(rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
@@ -234,7 +264,7 @@ struct BinaryExecutor {
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteSwitch(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
@@ -258,7 +288,7 @@ struct BinaryExecutor {
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
-	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+	static void Execute(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		constexpr bool adds_nulls = std::is_same<decltype(fun(std::declval<LEFT_TYPE>(), std::declval<RIGHT_TYPE>())),
 		                                         optional<RESULT_TYPE>>::value;
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper<adds_nulls>, bool, FUNC>(
@@ -267,19 +297,48 @@ public:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
 	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
-	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	static void Execute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(left, right, result, count, false);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
+	static void ExecuteStandard(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
 	}
 
+private:
+	static idx_t CheckExecuteCount(const Vector &left, const Vector &right) {
+		if (left.size() != right.size()) {
+			throw InternalException(
+			    "Mismatch in input vector sizes for BinaryExecutor - left has %d rows but right has %d", left.size(),
+			    right.size());
+		}
+		return left.size();
+	}
+
+public:
+	//! Convenience overloads without explicit count - count is derived from the input vectors.
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
+	static void Execute(const Vector &left, const Vector &right, Vector &result, FUNC fun) {
+		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC>(left, right, result, CheckExecuteCount(left, right), fun);
+	}
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
+	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
+	static void Execute(const Vector &left, const Vector &right, Vector &result) {
+		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, OPWRAPPER>(left, right, result, CheckExecuteCount(left, right));
+	}
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+	static void ExecuteStandard(const Vector &left, const Vector &right, Vector &result) {
+		ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, CheckExecuteCount(left, right));
+	}
+
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t SelectConstant(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+	static idx_t SelectConstant(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
 	                            SelectionVector *true_sel, SelectionVector *false_sel) {
 		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
@@ -303,6 +362,8 @@ public:
 		}
 	}
 
+// NOTE: the flat path is intentionally NOT covered by the ComparisonSelectComplement fold (unlike
+// the generic and constant paths above). It is null-unified — there is no NO_NULL template split;
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
@@ -387,7 +448,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static idx_t SelectFlat(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+	static idx_t SelectFlat(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
 	                        SelectionVector *true_sel, SelectionVector *false_sel) {
 		auto ldata = LEFT_CONSTANT ? ConstantVector::GetData<LEFT_TYPE>(left) : FlatVector::GetData<LEFT_TYPE>(left);
 		auto rdata =
@@ -412,13 +473,13 @@ public:
 
 		if (LEFT_CONSTANT) {
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    ldata, rdata, sel, count, FlatVector::ValidityMutable(right), true_sel, false_sel);
+			    ldata, rdata, sel, count, FlatVector::Validity(right), true_sel, false_sel);
 		} else if (RIGHT_CONSTANT) {
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    ldata, rdata, sel, count, FlatVector::ValidityMutable(left), true_sel, false_sel);
+			    ldata, rdata, sel, count, FlatVector::Validity(left), true_sel, false_sel);
 		} else {
-			ValidityMask combined_mask = FlatVector::ValidityMutable(left);
-			combined_mask.Combine(FlatVector::ValidityMutable(right), count);
+			ValidityMask combined_mask = FlatVector::Validity(left);
+			combined_mask.Combine(FlatVector::Validity(right), count);
 			return SelectFlatLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
 			    ldata, rdata, sel, count, combined_mask, true_sel, false_sel);
 		}
@@ -461,6 +522,15 @@ public:
 	                                   const SelectionVector &generic_sel, const ValidityMask &mask,
 	                                   const SelectionVector &result_sel, idx_t count, SelectionVector *true_sel,
 	                                   SelectionVector *false_sel) {
+		// NO_NULL complement fold: NotEquals/GreaterThanEquals are exactly the complement of
+		// Equals/GreaterThan when there are no NULLs
+		if constexpr (!CAN_HAVE_NULL && ComparisonSelectComplement<OP>::FOLD) {
+			using FOLDED = ComparisonSelectComplement<OP>;
+			constexpr bool FOLDED_RIGHT_CONSTANT = FOLDED::SWAP_OPERANDS ? !RIGHT_CONSTANT : RIGHT_CONSTANT;
+			return count - SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, typename FOLDED::COMPLEMENT,
+			                                     FOLDED_RIGHT_CONSTANT, CAN_HAVE_NULL>(
+			                   constant, data, generic_sel, mask, result_sel, count, false_sel, true_sel);
+		}
 		if (true_sel && false_sel) {
 			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, CAN_HAVE_NULL, true, true>(
 			    constant, data, generic_sel, mask, result_sel, count, true_sel, false_sel);
@@ -490,7 +560,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool RIGHT_CONSTANT>
-	static idx_t SelectGenericConstant(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+	static idx_t SelectGenericConstant(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		constexpr bool LEFT_CONSTANT = !RIGHT_CONSTANT;
 		if (LEFT_CONSTANT && ConstantVector::IsNull(left)) {
@@ -540,7 +610,7 @@ public:
 	static inline idx_t SelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                                      const SelectionVector *__restrict lsel,
 	                                      const SelectionVector *__restrict rsel, const SelectionVector &result_sel,
-	                                      idx_t count, ValidityMask &lvalidity, ValidityMask &rvalidity,
+	                                      idx_t count, const ValidityMask &lvalidity, const ValidityMask &rvalidity,
 	                                      SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 #ifdef DUCKDB_SMALLER_BINARY
@@ -552,15 +622,16 @@ public:
 			auto result_idx = result_sel.get_index(i);
 			auto lindex = lsel->get_index(i);
 			auto rindex = rsel->get_index(i);
-			if ((NO_NULL || (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex))) &&
-			    OP::Operation(ldata[lindex], rdata[rindex])) {
-				if (HAS_TRUE_SEL) {
-					true_sel->set_index(true_count++, result_idx);
-				}
-			} else {
-				if (HAS_FALSE_SEL) {
-					false_sel->set_index(false_count++, result_idx);
-				}
+			const bool comparison_result =
+			    (NO_NULL || (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex))) &&
+			    OP::Operation(ldata[lindex], rdata[rindex]);
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
 			}
 		}
 		if (HAS_TRUE_SEL) {
@@ -575,8 +646,22 @@ public:
 	static inline idx_t
 	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-	                           const SelectionVector &result_sel, idx_t count, ValidityMask &lvalidity,
-	                           ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	                           const SelectionVector &result_sel, idx_t count, const ValidityMask &lvalidity,
+	                           const ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+		// NO_NULL complement fold: NotEquals/GreaterThanEquals are exactly the complement of
+		// Equals/GreaterThan when there are no NULLs
+		if constexpr (NO_NULL && ComparisonSelectComplement<OP>::FOLD) {
+			using FOLDED = ComparisonSelectComplement<OP>;
+			if constexpr (FOLDED::SWAP_OPERANDS) {
+				return count -
+				       SelectGenericLoopSelSwitch<RIGHT_TYPE, LEFT_TYPE, typename FOLDED::COMPLEMENT, NO_NULL>(
+				           rdata, ldata, rsel, lsel, result_sel, count, rvalidity, lvalidity, false_sel, true_sel);
+			} else {
+				return count -
+				       SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, typename FOLDED::COMPLEMENT, NO_NULL>(
+				           ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, false_sel, true_sel);
+			}
+		}
 		if (true_sel && false_sel) {
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
@@ -595,8 +680,8 @@ public:
 	static inline idx_t
 	SelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-	                        const SelectionVector &result_sel, idx_t count, ValidityMask &lvalidity,
-	                        ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	                        const SelectionVector &result_sel, idx_t count, const ValidityMask &lvalidity,
+	                        const ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifndef DUCKDB_SMALLER_BINARY
 		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
@@ -612,7 +697,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t SelectGeneric(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+	static idx_t SelectGeneric(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
 	                           SelectionVector *true_sel, SelectionVector *false_sel) {
 		UnifiedVectorFormat ldata, rdata;
 
@@ -625,8 +710,8 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                    SelectionVector *false_sel) {
+	static idx_t Select(const Vector &left, const Vector &right, const SelectionVector *sel, idx_t count,
+	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
 		}

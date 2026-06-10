@@ -1,5 +1,3 @@
-#include "src/common/allocator.cpp"
-
 #include "src/common/assert.cpp"
 
 #include "src/common/bignum.cpp"
@@ -15,6 +13,8 @@
 #include "src/common/checksum.cpp"
 
 #include "src/common/client_box_renderer_context.cpp"
+
+#include "src/common/clustered_aggregate.cpp"
 
 #include "src/common/column_data_collection_render_interface.cpp"
 
@@ -58,7 +58,11 @@
 
 #include "src/common/hive_partitioning.cpp"
 
+#include "src/common/identifier.cpp"
+
 #include "src/common/local_file_system.cpp"
+
+#include "src/common/memory_mapped_file.cpp"
 
 #include "src/common/opener_file_system.cpp"
 
@@ -76,9 +80,9 @@
 
 #include "src/common/render_tree.cpp"
 
-#include "src/common/serialization_compatibility.cpp"
-
 #include "src/common/stacktrace.cpp"
+
+#include "src/common/storage_compatibility.cpp"
 
 #include "src/common/string_util.cpp"
 

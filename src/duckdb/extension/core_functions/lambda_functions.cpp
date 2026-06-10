@@ -80,7 +80,7 @@ struct ListTransformFunctor {
 		offset += entry.length;
 	}
 	//! Appends the lambda vector to the result's child vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
 	                         ListFilterInfo &, LambdaExecuteInfo &) {
 		ListVector::Append(result, lambda_vector, elem_cnt);
 	}
@@ -102,8 +102,8 @@ struct ListFilterFunctor {
 		entry_lengths.push_back(entry.length);
 	}
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
-	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt,
+	                         list_entry_t *result_entries, ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 
@@ -177,9 +177,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-	info.input_chunk.SetCardinality(elem_cnt);
-	info.lambda_chunk.SetCardinality(elem_cnt);
-
 	// slice the child vector
 	Vector slice(column_info.vector, column_info.sel, elem_cnt);
 
@@ -378,7 +375,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}

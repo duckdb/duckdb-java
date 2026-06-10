@@ -32,6 +32,7 @@
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 
@@ -58,29 +59,20 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
-      query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
-                                                                             : make_shared_ptr<QueryBinderState>()),
       entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
+		inside_subquery = parent->inside_subquery;
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
+		if (binder_type != BinderType::VIEW_BINDER) {
+			// inherit expression binders from parent
+			active_binders = parent->active_binders;
+		}
 	}
-}
-
-template <class T>
-BoundStatement Binder::BindWithCTE(T &statement) {
-	auto &cte_map = statement.cte_map;
-	if (cte_map.map.empty()) {
-		return Bind(statement);
-	}
-
-	auto stmt_node = make_uniq<StatementNode>(statement);
-	stmt_node->cte_map = cte_map.Copy();
-	return Bind(*stmt_node);
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
@@ -136,7 +128,11 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
-		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+		return Bind(statement.Cast<MergeIntoStatement>());
+	case StatementType::CONNECT_STATEMENT:
+		return Bind(statement.Cast<ConnectStatement>());
+	case StatementType::DISCONNECT_STATEMENT:
+		return Bind(statement.Cast<DisconnectStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -245,18 +241,26 @@ void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder &binder) {
-	GetActiveBinders().push_back(binder);
+void Binder::SetInsideSubquery() {
+	inside_subquery = true;
 }
 
-void Binder::PopExpressionBinder() {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().pop_back();
+bool Binder::IsInsideSubquery() const {
+	return inside_subquery;
 }
 
-void Binder::SetActiveBinder(ExpressionBinder &binder) {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().back() = binder;
+void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
+	// push all active expression binders
+	auto &active_binders = GetActiveBinders();
+	for (auto &active_binder : parent.GetActiveBinders()) {
+		active_binders.push_back(active_binder);
+	}
+	// finally push this binder
+	active_binders.push_back(binder);
+}
+
+void Binder::FinishSubqueryBind() {
+	GetActiveBinders().clear();
 }
 
 ExpressionBinder &Binder::GetActiveBinder() {
@@ -268,7 +272,7 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	return query_binder_state->active_binders;
+	return active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
@@ -293,20 +297,20 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
-	string empty_schema;
+	Identifier empty_schema;
 	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name,
-                                                 const string &column_name, ErrorData &error) {
-	string empty_catalog;
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
+                                                 const Identifier &column_name, ErrorData &error) {
+	Identifier empty_catalog;
 	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name,
-                                                 const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
+                                                 const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
@@ -327,7 +331,15 @@ BindingMode Binder::GetBindingMode() {
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
-	can_contain_nulls = can_contain_nulls_p;
+	legacy_can_contain_nulls = can_contain_nulls_p;
+}
+
+bool Binder::CanContainNulls() const {
+	if (!Settings::Get<LegacyDisableNullTypeSetting>(context)) {
+		// if this legacy setting is not enabled nulls are not special - they can just occur anywhere
+		return true;
+	}
+	return legacy_can_contain_nulls;
 }
 
 void Binder::SetAlwaysRequireRebind() {
@@ -339,7 +351,7 @@ void Binder::AddTableName(string table_name) {
 	global_binder_state->table_names.insert(std::move(table_name));
 }
 
-void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
+void Binder::AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement) {
 	auto it = global_binder_state->replacement_scans.find(table_name);
 	replacement->column_name_alias.clear();
 	replacement->alias.clear();
@@ -354,7 +366,7 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return global_binder_state->table_names;
 }
 
-case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+identifier_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 	return global_binder_state->replacement_scans;
 }
 
@@ -511,17 +523,17 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, TableIndex update_table_index,
+                                     const Identifier &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 
 	auto binder = Binder::CreateBinder(context);
 
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
-		names.push_back(col.Name());
+		names.emplace_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
 			bound_columns.emplace_back(column_count);
@@ -562,14 +574,14 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	return result;
 }
 
-optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema
-shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name) {
 	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
 
 	vector<CatalogSearchEntry> search_path;
@@ -582,11 +594,9 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	return new_binder;
 }
 
-static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
-
-unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
-                                                          vector<unique_ptr<ParsedExpression>> &returning_list,
-                                                          TableCatalogEntry &table, TriggerEventType event_type) {
+unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node,
+                                                     vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                     TableCatalogEntry &table, TriggerEventType event_type) {
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
 	if (expanded_tables.find(table) != expanded_tables.end()) {
 		if (global_binder_state->trigger_creation_table == &table) {
@@ -596,46 +606,136 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 		return nullptr;
 	}
-	auto triggers = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
-	                                          TriggerTiming::AFTER, event_type);
-	if (triggers.empty()) {
+	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
+	auto before_triggers = table.GetTriggersForEvent(txn, TriggerTiming::BEFORE, event_type);
+	auto after_triggers = table.GetTriggersForEvent(txn, TriggerTiming::AFTER, event_type);
+
+	// UPDATE OF <cols>: drop triggers whose OF list is disjoint from the SET list.
+	// Triggers without an OF list are unrestricted and always fire.
+	if (event_type == TriggerEventType::UPDATE_EVENT && node.type == QueryNodeType::UPDATE_QUERY_NODE) {
+		auto &update_node = node.Cast<UpdateQueryNode>();
+		identifier_set_t updated_columns;
+		if (update_node.set_info) {
+			updated_columns.insert(update_node.set_info->columns.begin(), update_node.set_info->columns.end());
+		}
+		auto trigger_does_not_fire = [&](const_reference<TriggerCatalogEntry> trig) {
+			const auto &of_cols = trig.get().columns;
+			return !of_cols.empty() && std::none_of(of_cols.begin(), of_cols.end(),
+			                                        [&](const Identifier &c) { return updated_columns.count(c) > 0; });
+		};
+		auto drop_non_firing = [&](vector<const_reference<TriggerCatalogEntry>> &triggers) {
+			triggers.erase(std::remove_if(triggers.begin(), triggers.end(), trigger_does_not_fire), triggers.end());
+		};
+		drop_non_firing(before_triggers);
+		drop_non_firing(after_triggers);
+	}
+
+	if (before_triggers.empty() && after_triggers.empty()) {
 		return nullptr;
 	}
 	if (!returning_list.empty()) {
-		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
+		throw NotImplementedException("RETURNING is not yet supported on tables with triggers");
+	}
+	if (node.type == QueryNodeType::INSERT_QUERY_NODE) {
+		auto &insert_node = node.Cast<InsertQueryNode>();
+		if (insert_node.on_conflict_info && insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
+			// Only AFTER triggers can carry REFERENCING NEW TABLE — BEFORE rejects it at CREATE time.
+			for (auto &trigger : after_triggers) {
+				if (!trigger.get().referencing_new_table.empty()) {
+					throw NotImplementedException(
+					    "ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers");
+				}
+			}
+		}
 	}
 	expanded_tables.insert(table);
-	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+	auto bound = ExpandTriggers(node, returning_list, before_triggers, after_triggers);
+
+	// Erasing from the set, so we will track expanded tables only while we're on the same node in the recursive stack,
+	// meaning we're on the same "trigger" in the trigger chain.
+	expanded_tables.erase(table);
+	return make_uniq<BoundStatement>(std::move(bound));
 }
 
-BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-                                           const vector<const_reference<TriggerCatalogEntry>> &triggers) {
-	// multiple triggers per table are not yet supported
-	D_ASSERT(triggers.size() == 1);
+static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
+static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
+static constexpr const char *TRIGGER_BEFORE_BODY_CTE_PREFIX = "__duckdb_trigger_before_body_";
+
+static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const Identifier &base_cte_name) {
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_ref = make_uniq<BaseTableRef>();
+	alias_ref->table_name = base_cte_name;
+	alias_select->from_table = std::move(alias_ref);
+	alias_cte->query_node = std::move(alias_select);
+	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	return alias_cte;
+}
+
+BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+                                      const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers) {
+	D_ASSERT(!before_triggers.empty() || !after_triggers.empty());
 
 	D_ASSERT(returning_list.empty());
 	returning_list.push_back(make_uniq<StarExpression>());
 
-	auto base_cte = make_uniq<CommonTableExpressionInfo>();
-	base_cte->query_node = node.Copy();
-	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-	base_cte->is_trigger_generated = true;
-
-	// Unreferenced DML CTE
-	auto &trigger = triggers[0].get();
-	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
-	trig_cte->query_node = trigger.trigger_action->Copy();
-	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
-	trig_cte->is_trigger_generated = true;
+	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
+	Identifier base_cte_name(TRIGGER_BASE_CTE_PREFIX + uuid_suffix);
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
-	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
-	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
+
+	// CTE definition order == execution order: BEFORE bodies, then base (DML), then AFTER bodies.
+
+	// BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE TRIGGER time)
+	for (idx_t i = 0; i < before_triggers.size(); i++) {
+		auto &trigger = before_triggers[i].get();
+		auto body_cte_name = string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+
+		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+		trig_cte->query_node = trigger.trigger_action->Copy();
+		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+		trig_cte->is_trigger_generated = true;
+
+		outer->cte_map.map[Identifier(body_cte_name)] = std::move(trig_cte);
+	}
+
+	// Base CTE: the original DML, materialized so AFTER bodies can scan it (transition tables)
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = node.Copy();
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
+	outer->cte_map.map[base_cte_name] = std::move(base_cte);
+
+	// AFTER bodies — may reference base via REFERENCING NEW/OLD TABLE aliases
+	for (idx_t i = 0; i < after_triggers.size(); i++) {
+		auto &trigger = after_triggers[i].get();
+		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+
+		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+		trig_cte->query_node = trigger.trigger_action->Copy();
+		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+		trig_cte->is_trigger_generated = true;
+
+		// Inject the transition-table aliases (REFERENCING NEW/OLD TABLE) into this trigger body's own
+		// cte_map. That scopes the aliases to this trigger only (sibling triggers can't see them), and
+		// if the body has a local WITH that defines the same name, the local WITH shadows the alias.
+		auto &body_map = trig_cte->query_node->cte_map.map;
+		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
+			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+		if (!trigger.referencing_old_table.empty() && body_map.find(trigger.referencing_old_table) == body_map.end()) {
+			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+
+		outer->cte_map.map[Identifier(body_cte_name)] = std::move(trig_cte);
+	}
 
 	auto bound = Bind(*outer);
 	auto &properties = GetStatementProperties();

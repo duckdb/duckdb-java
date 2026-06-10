@@ -74,12 +74,12 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
 	    : bind_data(bind_data_p), stats(stats_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	BaseStatistics &stats;
+	const BaseStatistics &stats;
 };
 
 struct FunctionStatisticsInput {
@@ -238,6 +238,9 @@ public: // Properties
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
 	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
 
+	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
+	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)
@@ -362,7 +365,8 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
+	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
@@ -393,20 +397,19 @@ public:
 	template <class TA, class TR, class OP>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
-		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result, input.size());
+		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result);
 	}
 
 	template <class TA, class TB, class TR, class OP>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result, input.size());
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result);
 	}
 
 	template <class TA, class TB, class TC, class TR, class OP>
 	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 3);
-		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result,
-		                                                     input.size());
+		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result);
 	}
 
 public:

@@ -160,7 +160,7 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {
-	if (!chunk) {
+	if (IsSkipped()) {
 		return 0;
 	}
 
@@ -171,8 +171,9 @@ uint64_t ColumnReader::TotalCompressedSize() {
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {
-	if (!chunk) {
-		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	if (IsSkipped()) {
+		//! This column reader is skipped
+		return 0;
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
@@ -281,7 +282,8 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		}
 		auto stats =
 		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
-		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		auto &expr_filter = filter->Cast<ExpressionFilter>();
+		if (stats && expr_filter.CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			page_is_filtered_out = true;
 		}
 	}
@@ -326,7 +328,8 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 	}
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+                               idx_t rows_to_skip) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -352,8 +355,19 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {
-		// this page has been filtered out so we don't need to read it
 		return;
+	}
+
+	if (rows_to_skip > 0 && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+		idx_t page_num_values =
+		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
+		if (rows_to_skip >= page_num_values) {
+			trans.Skip(page_hdr.compressed_page_size);
+			page_is_filtered_out = true;
+			page_rows_available = page_num_values;
+			return;
+		}
 	}
 
 	switch (page_hdr.type) {
@@ -453,7 +467,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
-			throw std::runtime_error("Page size mismatch");
+			throw InternalException("Page size mismatch");
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
@@ -634,11 +648,11 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 }
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
-                                    optional_ptr<TableFilterState> filter_state) {
+                                    optional_ptr<TableFilterState> filter_state, idx_t rows_to_skip) {
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
 		aad_crypto_metadata.page_ordinal = page_ordinal;
-		PrepareRead(filter, filter_state);
+		PrepareRead(filter, filter_state, rows_to_skip);
 		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
@@ -860,7 +874,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
-		auto skip_now = ReadPageHeaders(to_skip);
+		auto skip_now = ReadPageHeaders(to_skip, nullptr, nullptr, to_skip);
 		if (page_is_filtered_out) {
 			// the page has been filtered out entirely - skip
 			page_rows_available -= skip_now;

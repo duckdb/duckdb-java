@@ -14,11 +14,6 @@ namespace {
 template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.hist = nullptr;
-	}
-
-	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &) {
 		if (state.hist) {
 			delete state.hist;
@@ -68,9 +63,9 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 
 	auto &input = inputs[0];
 
-	auto extra_state = OP::CreateExtraState(count);
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	OP::PrepareData(input, count, extra_state, input_data);
+	OP::PrepareData(input, extra_state, input_data);
 
 	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>();
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);

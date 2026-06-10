@@ -4,10 +4,11 @@
 namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(const QualifiedName &use_target) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
+                                                                      const QualifiedName &use_target) {
 	string value_str;
 	if (IsInvalidSchema(use_target.schema)) {
-		value_str = SQLIdentifier::ToString(use_target.name);
+		value_str = SQLIdentifier::ToString(use_target.name.GetIdentifierName());
 	} else {
 		value_str = SQLIdentifier(use_target.schema) + "." + SQLIdentifier(use_target.name);
 	}
@@ -17,30 +18,36 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(const Qual
 }
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &pr) {
-	if (pr.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result;
-		result.name = pr.Cast<IdentifierParseResult>().identifier;
-		return result;
-	}
-	return transformer.Transform<QualifiedName>(pr);
+QualifiedName PEGTransformerFactory::TransformSchemaNameAsUseTarget(PEGTransformer &transformer,
+                                                                    const Identifier &schema_name) {
+	QualifiedName result;
+	result.name = schema_name;
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransformer &transformer,
+                                                                     const Identifier &catalog_name) {
+	QualifiedName result;
+	result.name = catalog_name;
+	return result;
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(const string &catalog_name,
-                                                                     const string &reserved_schema_name,
-                                                                     const vector<string> &dot_identifier) {
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
+                                                                     const Identifier &catalog_name,
+                                                                     const Identifier &reserved_schema_name,
+                                                                     const vector<Identifier> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
+	result.catalog = Identifier::InvalidCatalog();
 	result.schema = catalog_name;
 	result.name = reserved_schema_name;
 	return result;
 }
 
-string PEGTransformerFactory::TransformDotIdentifier(const string &identifier) {
+Identifier PEGTransformerFactory::TransformDotIdentifier(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 } // namespace duckdb

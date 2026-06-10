@@ -43,10 +43,15 @@
 #include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -61,6 +66,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
@@ -75,6 +81,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
 	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -93,6 +100,10 @@ bool Optimizer::OptimizerDisabled(OptimizerType type) {
 }
 
 bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) {
+	if (!Settings::Get<EnableOptimizerSetting>(context_p)) {
+		// all optimizes are disabled
+		return true;
+	}
 	auto &config = DBConfig::GetConfig(context_p);
 	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
@@ -107,9 +118,10 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
-	callback();
-	profiler.EndPhase();
+	{
+		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		callback();
+	}
 	if (plan) {
 		Verify(*plan);
 	}
@@ -140,6 +152,19 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 		}
 	}
 	return false;
+}
+
+void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return;
+	}
+	if (DatabaseManager::Get(context).GetRemoteCatalogCount() > 0) {
+		// if we have any remote catalogs attached then pushdown into remote
+		RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
+			RemotePushdownOptimizer optimizer(binder);
+			optimizer.Rewrite(statement);
+		});
+	}
 }
 
 void Optimizer::RunBuiltInOptimizers() {
@@ -246,6 +271,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
+	// and the fact side dominates cardinality — reduces probe-side work.
+	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
+		PartialAggregatePushdown partial_aggregate_pushdown(*this);
+		partial_aggregate_pushdown.VisitOperator(plan);
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
@@ -387,6 +419,9 @@ void Optimizer::RunBuiltInOptimizers() {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return plan_p;
+	}
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
@@ -416,13 +451,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
                                                      unique_ptr<Expression> c2) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
@@ -430,7 +465,7 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
                                                      unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
@@ -439,10 +474,10 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error);
+	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

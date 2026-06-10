@@ -92,14 +92,6 @@ struct ReservoirQuantileBindData : public FunctionData {
 };
 
 struct ReservoirQuantileOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.v = nullptr;
-		state.len = 0;
-		state.pos = 0;
-		state.r_samp = nullptr;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -251,8 +243,8 @@ AggregateFunction ReservoirQuantileListAggregate(const LogicalType &input_type, 
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
-	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>

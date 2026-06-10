@@ -1,8 +1,21 @@
 #include "duckdb/function/aggregate_function.hpp"
+
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
+
+AggregateInputData::AggregateInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
+                                       AggregateCombineType combine_type_p)
+    : AggregateInputData(expr.Function(), expr.BindInfo().get(), allocator_p, combine_type_p) {
+}
+
+AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocator &allocator_p,
+                                       AggregateCombineType combine_type_p)
+    : AggregateInputData(aggr.function, aggr.bind_data_wrapper ? aggr.bind_data_wrapper->function_data.get() : nullptr,
+                         allocator_p, combine_type_p) {
+}
 
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
@@ -14,10 +27,10 @@ bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &
 
 bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rhs) const {
 	return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
-	       combine == rhs.combine && finalize == rhs.finalize && simple_update == rhs.simple_update &&
+	       combine == rhs.combine && finalize == rhs.finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
-	       serialize == rhs.serialize && deserialize == rhs.deserialize;
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
