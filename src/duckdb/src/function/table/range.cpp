@@ -148,7 +148,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -170,7 +169,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 		// increment the index pointer by the remaining count
 		state.current_idx += remaining;
-		output.SetCardinality(remaining);
 		if (remaining == 0) {
 			// move to next row
 			state.current_input_row++;
@@ -348,7 +346,6 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -406,6 +403,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet generate_series("generate_series");
 	range_function.bind = RangeFunctionBind<true>;
 	range_function.in_out_function = RangeFunction<true>;
+	range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	range_function.GetArguments() = {LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
@@ -416,6 +414,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
 	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	generate_series_in_out.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	generate_series.AddFunction(generate_series_in_out);
 	set.AddFunction(generate_series);
 }

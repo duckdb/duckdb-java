@@ -103,12 +103,6 @@ struct ApproximateQuantileBindData : public FunctionData {
 struct ApproxQuantileOperation {
 	using SAVE_TYPE = duckdb_tdigest::Value;
 
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.pos = 0;
-		state.h = nullptr;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -273,7 +267,7 @@ unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
 
 AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	auto function = GetApproximateQuantileDecimalAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;
@@ -337,8 +331,8 @@ AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, con
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
-	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
@@ -394,7 +388,7 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 
 AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	auto function = GetApproxQuantileListAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;

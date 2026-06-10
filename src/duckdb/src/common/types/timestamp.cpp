@@ -26,6 +26,21 @@ static inline T TemporalRound(T value, T scale) {
 	return UnsafeNumericCast<T>((value + negative) / scale - negative);
 }
 
+static bool CanStartTimestampSuffix(char c) {
+	return c == 'Z' || c == '+' || c == '-' || StringUtil::CharacterIsSpace(c);
+}
+
+static idx_t TimestampTimeLength(const char *str, idx_t len) {
+	idx_t suffix_pos = 0;
+	while (suffix_pos < len && StringUtil::CharacterIsSpace(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	while (suffix_pos < len && !CanStartTimestampSuffix(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	return suffix_pos;
+}
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -63,10 +78,10 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		pos++;
 	}
 	idx_t time_pos = 0;
-	// TryConvertTime may recursively call us, so we opt for a stricter
-	// operation. Note that we can't pass strict== true here because we
-	// want to process any suffix.
-	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time, false, nanos)) {
+	// TryConvertTime may recursively call us, so we use TryConvertInterval.
+	// Note that we can't pass strict== true here because we want to process any suffix.
+	auto time_len = TimestampTimeLength(str + pos, len - pos);
+	if (!Time::TryConvertInterval(str + pos, time_len, time_pos, time, false, nanos) || time_pos != time_len) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
@@ -121,7 +136,6 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
                                                    optional_ptr<int32_t> nanos, bool strict) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
-	// We don't understand TZ without an extension, so fail if one was provided.
 	auto success = TryConvertTimestampTZ(str, len, result, use_offset, has_offset, tz, nanos);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
@@ -144,7 +158,14 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 			return TimestampCastResult::SUCCESS;
 		}
 	}
-	return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	// We don't understand TZ without an extension, so fail if one was provided AND we were supposed to use it.
+	if (use_offset && !tz.Empty()) {
+		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	} else if (strict && !tz.Empty()) {
+		return TimestampCastResult::STRICT_UTC;
+	} else {
+		return TimestampCastResult::SUCCESS;
+	}
 }
 
 bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestamp_ns_t &result) {
@@ -180,7 +201,7 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 
 string Timestamp::FormatError(const string &str) {
 	return StringUtil::Format("invalid timestamp field format: \"%s\", "
-	                          "expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH[:MM[:SS]]| ZONE])",
+	                          "expected format is (YYYY-MM-DD HH:MM[:SS[.US]][±HH[:MM[:SS]]| ZONE])",
 	                          str);
 }
 
@@ -315,11 +336,8 @@ timestamp_t Timestamp::FromString(const string &str, bool use_offset) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
-	if (timestamp == timestamp_t::infinity()) {
-		return Date::PINF.str;
-	}
-	if (timestamp == timestamp_t::ninfinity()) {
-		return Date::NINF.str;
+	if (!timestamp.IsFinite()) {
+		return Date::ToInfinity(timestamp);
 	}
 
 	date_t date;

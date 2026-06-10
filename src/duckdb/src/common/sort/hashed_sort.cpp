@@ -346,12 +346,12 @@ void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &tar
 }
 
 void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector) {
-	const auto count = input_chunk.size();
 	D_ASSERT(group_chunk.ColumnCount() > 0);
 
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
+	const idx_t count = group_chunk.size();
 	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
 	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
 		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
@@ -388,7 +388,7 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
-	payload_chunk.SetCardinality(input_chunk);
+	payload_chunk.SetChildCardinality(input_chunk.size());
 
 	// OVER(PARTITION BY...)
 	auto &hash_vector = payload_chunk.data.back();
@@ -542,7 +542,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 		auto &expr = *order.expression;
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			auto &ref = expr.Cast<BoundReferenceExpression>();
-			sort_ids.emplace_back(ref.index);
+			sort_ids.emplace_back(ref.Index());
 			continue;
 		}
 

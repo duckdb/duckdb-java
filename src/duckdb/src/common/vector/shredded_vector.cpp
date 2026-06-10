@@ -44,8 +44,8 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	auto unshredded_val = unshredded.GetValue(index);
 
 	child_list_t<LogicalType> shredded_subtypes;
-	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
-	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("unshredded", unshredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("shredded", shredded.GetType()));
 	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
 	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val, count_t(1));
 	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val, count_t(1));
@@ -113,7 +113,7 @@ void ShreddedVector::Unshred(const Vector &vec, const SelectionVector &sel, idx_
 	vec.ConstReference(unshredded_vector);
 }
 
-bool ShreddedVector::IsFullyShredded(Vector &vec) {
+bool ShreddedVector::IsFullyShredded(const Vector &vec) {
 	auto &unshredded_vector = GetUnshreddedVector(vec);
 	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
 		return true;

@@ -102,79 +102,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
-	output.SetCardinality(index);
-}
-
-//	Wrap the multiply-named and non-type-safe cast utilities.
-struct ICUCast {
-	template <class SRC, class DST>
-	static inline DST Operation(SRC input) {
-		throw NotImplementedException("Naive timezone cast could not be performed!");
-	}
-};
-
-//	From naive types to TIMESTAMP_TZ
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_t src) {
-	return timestamp_tz_t(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_ms_t src) {
-	return CastTimestampMsToUs::Operation<timestamp_ms_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_ns_t src) {
-	return CastTimestampMsToUs::Operation<timestamp_ns_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_sec_t src) {
-	return timestamp_tz_t(CastTimestampSecToUs::Operation<timestamp_sec_t, timestamp_tz_t>(src));
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_t(Cast::Operation<date_t, timestamp_t>(src));
-}
-
-template <>
-timestamp_tz_ns_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_ns_t(Cast::Operation<date_t, timestamp_tz_ns_t>(src));
-}
-
-//	From TIMESTAMP_TZ to naive types
-template <>
-timestamp_sec_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToSec::Operation<timestamp_tz_t, timestamp_sec_t>(src);
-}
-
-template <>
-timestamp_ms_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToMs::Operation<timestamp_tz_t, timestamp_ms_t>(src);
-}
-
-template <>
-timestamp_t ICUCast::Operation(timestamp_tz_t src) {
-	return timestamp_t(src);
-}
-
-template <>
-timestamp_ns_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToNs::Operation<timestamp_tz_t, timestamp_ns_t>(src);
-}
-
-//	From TIMESTAMP_TZ_NS
-template <>
-timestamp_ns_t ICUCast::Operation(timestamp_tz_ns_t src) {
-	return timestamp_ns_t(src);
-}
-
-//	From TIME_TZ
-template <>
-dtime_tz_t ICUCast::Operation(dtime_tz_t src) {
-	return src;
 }
 
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
@@ -443,7 +370,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindDataNow>();
+		auto &info = func_expr.BindInfo()->Cast<BindDataNow>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -458,8 +385,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		rdata[0] = GetLocalTimestamp(state);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -474,8 +401,8 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 		rdata[0] = Timestamp::GetTime(local);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -589,36 +516,34 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP, typename SRC, typename DST>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
 		// Two cases: constant TZ, variable TZ
 		D_ASSERT(input.ColumnCount() == 2);
-		auto &tz_vec = input.data[0];
-		auto &ts_vec = input.data[1];
+		const auto &tz_vec = input.data[0];
+		const auto &ts_vec = input.data[1];
 		if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(tz_vec)) {
 				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
 			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, input.size(),
-			                                 [&](SRC ts) { return OP::Operation(calendar, ts); });
+			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, [&](SRC ts) { return OP::Operation(calendar, ts); });
 		} else {
-			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, input.size(),
-			                                            [&](string_t tz_id, SRC ts) {
-				                                            if (ts.IsFinite()) {
-					                                            SetTimeZone(calendar, tz_id);
-					                                            return OP::Operation(calendar, ts);
-				                                            } else {
-					                                            return ICUCast::Operation<SRC, DST>(ts);
-				                                            }
-			                                            });
+			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, [&](string_t tz_id, SRC ts) {
+				if (ts.IsFinite()) {
+					SetTimeZone(calendar, tz_id);
+					return OP::Operation(calendar, ts);
+				} else {
+					return Cast::Operation<SRC, DST>(ts);
+				}
+			});
 		}
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
 		                               Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,

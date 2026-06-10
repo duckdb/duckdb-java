@@ -197,7 +197,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	vector<reference<ValidityMask>> child_masks;
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		if (!is_unnamed) {
-			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
+			child_names.insert({StructType::GetChildName(result.GetType(), child_idx).GetIdentifierName(), child_idx});
 		}
 		child_masks.emplace_back(FlatVector::ValidityMutable(child_vectors[child_idx]));
 		child_masks[child_idx].get().SetAllInvalid(count);
@@ -461,14 +461,11 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_ns_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCast>);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_sec_t, duckdb::TryCastToTimestampSec>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_sec_t, duckdb::TryCast>);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ms_t, duckdb::TryCastToTimestampMS>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ms_t, duckdb::TryCast>);
 	case LogicalTypeId::BLOB:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>);
 	case LogicalTypeId::BIT:

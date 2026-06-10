@@ -15,7 +15,6 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/user_settings.hpp"
@@ -39,11 +38,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
-	//! The custom settings for the profiler
-	//! (empty = use the default settings)
-	profiler_settings_t profiler_settings = MetricsUtils::GetDefaultMetrics();
-	//! The input format type of the profiler settings
-	LogicalTypeId profiler_settings_type = LogicalTypeId::VARCHAR;
+	//! Glob patterns for tracked_metrics (controls which metrics are gathered and displayed).
+	//! Default "*" means all metrics are tracked.
+	vector<string> tracked_metrics = {"*"};
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -58,8 +55,6 @@ struct ClientConfig {
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
-	//! Enable the running of optimizers
-	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! If this context should also try to use the available replacement scans
@@ -88,13 +83,6 @@ struct ClientConfig {
 
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
-
-	//! If HTTP logging is enabled or not.
-	bool enable_http_logging = true;
-
-	//! **DEPRECATED** The file to save query HTTP logging information to, instead of printing it to the console
-	//! (empty = output to the DuckDB logger)
-	string http_logging_output;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

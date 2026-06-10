@@ -48,11 +48,15 @@
 
 #include "src/optimizer/outer_join_simplification.cpp"
 
+#include "src/optimizer/partial_aggregate_pushdown.cpp"
+
 #include "src/optimizer/partitioned_execution.cpp"
 
 #include "src/optimizer/projection_pullup.cpp"
 
 #include "src/optimizer/regex_range_filter.cpp"
+
+#include "src/optimizer/remote_pushdown_optimizer.cpp"
 
 #include "src/optimizer/remove_duplicate_groups.cpp"
 

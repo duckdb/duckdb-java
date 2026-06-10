@@ -12,6 +12,8 @@
 
 #include "src/planner/column_binding.cpp"
 
+#include "src/planner/column_qualifier.cpp"
+
 #include "src/planner/expression.cpp"
 
 #include "src/planner/expression_binder.cpp"
@@ -31,8 +33,6 @@
 #include "src/planner/statement_preprocessor.cpp"
 
 #include "src/planner/table_binding.cpp"
-
-#include "src/planner/table_filter.cpp"
 
 #include "src/planner/table_filter_set.cpp"
 

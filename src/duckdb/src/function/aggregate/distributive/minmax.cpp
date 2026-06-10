@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -21,8 +23,10 @@ namespace {
 
 template <class T>
 struct MinMaxState {
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
 	T value;
-	bool isset;
+	bool is_set;
 };
 
 template <class OP>
@@ -62,27 +66,17 @@ static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
 }
 
 struct MinMaxBase {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
-		if (!state.isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
-			state.isset = true;
-		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
-		}
+		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
-			state.isset = true;
+			state.is_set = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
 		}
@@ -93,71 +87,65 @@ struct MinMaxBase {
 	}
 };
 
-struct NumericMinMaxBase : public MinMaxBase {
+template <class REDUCE_OP>
+struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		state.value = input;
 	}
 
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		if (!local.is_set) {
+			local.value = input;
+			local.is_set = true;
+		} else {
+			local.value = REDUCE_OP::template Operation<INPUT_TYPE>(local.value, input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
+	}
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
+		state.value = REDUCE_OP::template Operation<INPUT_TYPE>(state.value, input);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
 		}
 	}
-};
-
-struct MinOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
-			state.value = input;
-		}
-	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (!source.isset) {
-			// source is NULL, nothing to do
+		if (!source.is_set) {
 			return;
 		}
-		if (!target.isset) {
-			// target is NULL, use source value directly
+		if (!target.is_set) {
 			target = source;
-		} else if (GreaterThan::Operation(target.value, source.value)) {
-			target.value = source.value;
+		} else {
+			using value_type = decltype(target.value);
+			target.value = REDUCE_OP::template Operation<value_type>(target.value, source.value);
 		}
 	}
 };
 
-struct MaxOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
-			state.value = input;
-		}
-	}
+using MinOperation = NumericMinMaxBase<Min>;
+using MaxOperation = NumericMinMaxBase<Max>;
 
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (!source.isset) {
-			// source is NULL, nothing to do
-			return;
-		}
-		if (!target.isset) {
-			// target is NULL, use source value directly
-			target = source;
-		} else if (LessThan::Operation(target.value, source.value)) {
-			target.value = source.value;
-		}
-	}
-};
-
-struct MinMaxStringState : MinMaxState<string_t> {
+struct MinMaxStringState {
+	string_t value;
+	bool is_set;
 	void Destroy() {
-		if (isset && !value.IsInlined()) {
+		if (is_set && !value.IsInlined()) {
 			delete[] value.GetData();
 		}
 	}
@@ -171,7 +159,7 @@ struct MinMaxStringState : MinMaxState<string_t> {
 			// non-inlined string, need to allocate space for it somehow
 			auto len = input.GetSize();
 			char *ptr;
-			if (!isset || value.GetSize() < len) {
+			if (!is_set || value.GetSize() < len) {
 				// we cannot fit this into the current slot - destroy it and re-allocate
 				Destroy();
 				ptr = new char[len];
@@ -199,7 +187,7 @@ struct StringMinMaxBase : public MinMaxBase {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
@@ -208,37 +196,32 @@ struct StringMinMaxBase : public MinMaxBase {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
-		if (!source.isset) {
+		if (!source.is_set) {
 			// source is NULL, nothing to do
 			return;
 		}
-		if (!target.isset) {
+		if (!target.is_set) {
 			// target is NULL, use source value directly
 			Assign(target, source.value, input_data);
-			target.isset = true;
+			target.is_set = true;
 		} else {
 			OP::template Execute<string_t, STATE>(target, source.value, input_data);
 		}
 	}
 };
 
-struct MinOperationString : public StringMinMaxBase {
+template <class COMPARE>
+struct StringMinMaxOperation : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
+		if (COMPARE::template Operation<INPUT_TYPE>(input, state.value)) {
 			Assign(state, input, input_data);
 		}
 	}
 };
 
-struct MaxOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
-			Assign(state, input, input_data);
-		}
-	}
-};
+using MinOperationString = StringMinMaxOperation<LessThan>;
+using MaxOperationString = StringMinMaxOperation<GreaterThan>;
 
 template <OrderType ORDER_TYPE_TEMPLATED>
 struct VectorMinMaxBase {
@@ -246,11 +229,6 @@ struct VectorMinMaxBase {
 
 	static bool IgnoreNull() {
 		return true;
-	}
-
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
 	}
 
 	template <class STATE>
@@ -265,9 +243,9 @@ struct VectorMinMaxBase {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			Assign(state, input, input_data);
-			state.isset = true;
+			state.is_set = true;
 			return;
 		}
 		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
@@ -277,7 +255,7 @@ struct VectorMinMaxBase {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
-		if (!source.isset) {
+		if (!source.is_set) {
 			// source is NULL, nothing to do
 			return;
 		}
@@ -286,7 +264,7 @@ struct VectorMinMaxBase {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx,
@@ -312,7 +290,8 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	return AggregateFunction(
 	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
-	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
 	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
@@ -337,18 +316,22 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+	auto input_type = arguments[0]->GetReturnType();
 
-	// We should also push collations for non-VARCHAR here, but we aren't ready for it yet (see internal #8704)
-	const auto collation = arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR &&
-	                       (!StringType::GetCollation(arguments[0]->GetReturnType()).empty() ||
-	                        !Settings::Get<DefaultCollationSetting>(context).empty());
+	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT uses an explicit
+	// binary-comparable key so min/max follows the same logical order as comparisons and ORDER BY.
+	const auto varchar_collation =
+	    input_type.id() == LogicalTypeId::VARCHAR &&
+	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
+	const auto collation = input_type.id() == LogicalTypeId::BIT || varchar_collation;
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
 		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
 		QueryErrorContext error_context;
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", function_name,
+		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(),
+		                                                             Identifier(function_name),
 		                                                             OnEntryNotFound::RETURN_NULL, error_context);
 		if (!func) {
 			throw NotImplementedException(
@@ -376,7 +359,6 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		return make_uniq<ArgMinMaxFunctionData>();
 	}
 
-	auto input_type = arguments[0]->GetReturnType();
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -385,22 +367,24 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto state_export_type = function.GetStateTypeCallback();
 	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 
-	minmax_func.SetStructStateExport(state_export_type);
+	if (state_export_type) {
+		minmax_func.SetStructStateExport(state_export_type);
+	}
 	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
-	arguments = std::move(expr->children);
+	arguments = std::move(expr->GetChildrenMutable());
 
-	function = std::move(expr->function);
-	return std::move(expr->bind_info);
+	function = std::move(expr->FunctionMutable());
+	return std::move(expr->BindInfoMutable());
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
-	return AggregateFunction(name, {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	return AggregateFunction(Identifier(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
 } // namespace
@@ -447,9 +431,9 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 
-	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState();
 
-	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, true);
+	STATE::VAL_TYPE::PrepareData(val_vector, val_extra_state, val_format, true);
 
 	n_vector.ToUnifiedFormat(n_format);
 	state_vector.ToUnifiedFormat(state_format);
@@ -548,14 +532,16 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 template <class COMPARATOR>
 AggregateFunction GetMinMaxNFunction() {
 	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-LogicalType GetExportStateType(const BoundAggregateFunction &function) {
-	auto struct_children_types = child_list_t<LogicalType> {};
+AggregateStateLayout GetExportStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> struct_children_types;
 	struct_children_types.emplace_back("value", function.GetReturnType());
-	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
-	return LogicalType::STRUCT(std::move(struct_children_types));
+	struct_children_types.emplace_back("is_set", LogicalType::BOOLEAN);
+	return AggregateStateLayout(LogicalType::STRUCT(std::move(struct_children_types)),
+	                            AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 } // namespace
@@ -564,14 +550,14 @@ LogicalType GetExportStateType(const BoundAggregateFunction &function) {
 //---------------------------------------------------s
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
-	min.AddFunction(MinFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	min.AddFunction(MinFunction::GetFunction());
 	min.AddFunction(GetMinMaxNFunction<LessThan>().SetStructStateExport(GetExportStateType));
 	return min;
 }
 
 AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
-	max.AddFunction(MaxFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	max.AddFunction(MaxFunction::GetFunction());
 	max.AddFunction(GetMinMaxNFunction<GreaterThan>().SetStructStateExport(GetExportStateType));
 	return max;
 }

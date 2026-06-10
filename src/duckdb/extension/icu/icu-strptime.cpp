@@ -178,16 +178,16 @@ struct ICUStrptime : public ICUDateFunc {
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &str_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &str_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		UnaryExecutor::Execute<string_t, T>(str_arg, result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) {
 			T parsed;
 			ParseOne(calendar, input, info.formats, parsed);
 			return parsed;
@@ -235,11 +235,11 @@ struct ICUStrptime : public ICUDateFunc {
 	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &str_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &str_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -248,7 +248,7 @@ struct ICUStrptime : public ICUDateFunc {
 		if (ConstantVector::IsNull(fmt_arg)) {
 			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
-			UnaryExecutor::Execute<string_t, T>(str_arg, result, args.size(), [&](string_t input) -> optional<T> {
+			UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) -> optional<T> {
 				T result;
 				if (TryParseOne(calendar, input, info.formats, result)) {
 					return result;
@@ -335,7 +335,7 @@ struct ICUStrptime : public ICUDateFunc {
 		return bound_function.GetBindCallback()(new_input);
 	}
 
-	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
+	static void TailPatch(const Identifier &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &scalar_function = loader.GetFunction(name);
 		auto &functions = scalar_function.functions.functions;
@@ -368,7 +368,7 @@ struct ICUStrptime : public ICUDateFunc {
 		bound_function.SetBindCallback(StrpTimeBindFunction);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		TailPatch(name, loader, types);
 
@@ -513,7 +513,7 @@ struct ICUStrptime : public ICUDateFunc {
 bind_scalar_function_t ICUStrptime::bind_strptime = nullptr; // NOLINT
 
 struct ICUStrftime : public ICUDateFunc {
-	static void ParseFormatSpecifier(string_t &format_str, StrfTimeFormat &format) {
+	static void ParseFormatSpecifier(const string_t &format_str, StrfTimeFormat &format) {
 		const auto format_specifier = format_str.GetString();
 		const auto error = StrTimeFormat::ParseFormatSpecifier(format_specifier, format);
 		if (!error.empty()) {
@@ -581,11 +581,11 @@ struct ICUStrftime : public ICUDateFunc {
 	template <typename T>
 	static void ICUStrftimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &src_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &src_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
 
@@ -597,30 +597,30 @@ struct ICUStrftime : public ICUDateFunc {
 			StrfTimeFormat format;
 			ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-			UnaryExecutor::Execute<T, string_t>(src_arg, result, args.size(), [&](T input) {
+			UnaryExecutor::Execute<T, string_t>(src_arg, result, [&](T input) {
 				if (input.IsFinite()) {
 					return Operation(calendar.get(), input, tz_name, format, result);
 				} else {
-					return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+					return StringVector::AddString(result, Date::ToInfinity(input));
 				}
 			});
 		} else {
 			BinaryExecutor::Execute<T, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(), [&](T input, string_t format_specifier) {
+			    src_arg, fmt_arg, result, [&](T input, string_t format_specifier) {
 				    if (input.IsFinite()) {
 					    StrfTimeFormat format;
 					    ParseFormatSpecifier(format_specifier, format);
 
 					    return Operation(calendar.get(), input, tz_name, format, result);
 				    } else {
-					    return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+					    return StringVector::AddString(result, Date::ToInfinity(input));
 				    }
 			    });
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction<timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
@@ -632,7 +632,7 @@ struct ICUStrftime : public ICUDateFunc {
 	static string_t CastOperation(icu::Calendar *calendar, T input, Vector &result) {
 		// Infinity is always formatted the same way
 		if (!input.IsFinite()) {
-			return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+			return StringVector::AddString(result, Date::ToInfinity(input));
 		}
 
 		// decompose the timestamp

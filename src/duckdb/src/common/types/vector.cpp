@@ -2,36 +2,23 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/fsst_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/union_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
-
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/types/bignum.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -131,21 +118,70 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 	Reference(other);
 }
 
+void CheckTypeIsReinterpretable(const LogicalType &a, const LogicalType &b) {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
+	bool left_is_nested = a.IsNested();
+	bool right_is_nested = b.IsNested();
+	if (left_is_nested != right_is_nested) {
+		throw InternalException("Vector::Reinterpret (%s -> %s) - nested mismatch in reinterpret - either both need to "
+		                        "be nested or neither should be nested",
+		                        a, b);
+	}
+	auto left_internal = a.InternalType();
+	auto right_internal = b.InternalType();
+	if (!left_is_nested) {
+		// non-nested types - type size should be identical
+		if (GetTypeIdSize(left_internal) != GetTypeIdSize(right_internal)) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between types with different type sizes", a,
+			    b);
+		}
+		return;
+	}
+	if (left_internal != right_internal) {
+		throw InternalException(
+		    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between different nested types", a, b);
+	}
+	// recurse into children
+	switch (left_internal) {
+	case PhysicalType::STRUCT: {
+		auto &left_child_types = StructType::GetChildTypes(a);
+		auto &right_child_types = StructType::GetChildTypes(b);
+		if (left_child_types.size() != right_child_types.size()) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between struct types of different sizes", a,
+			    b);
+		}
+		for (idx_t child_idx = 0; child_idx < left_child_types.size(); ++child_idx) {
+			CheckTypeIsReinterpretable(left_child_types[child_idx].second, right_child_types[child_idx].second);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		auto &left_child_type = ListType::GetChildType(a);
+		auto &right_child_type = ListType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		auto &left_child_type = ArrayType::GetChildType(a);
+		auto &right_child_type = ArrayType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	default:
+		throw InternalException("Unsupported nested type in CheckTypeIsReinterpretable");
+	}
+}
+
 void Vector::Reinterpret(const Vector &other) {
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-#ifdef DEBUG
-	auto type_is_same = other_type == this_type;
-	bool this_is_nested = this_type.IsNested();
-	bool other_is_nested = other_type.IsNested();
-
-	bool not_nested = this_is_nested == false && other_is_nested == false;
-	bool type_size_equal = GetTypeIdSize(this_type.InternalType()) == GetTypeIdSize(other_type.InternalType());
-	//! Either the types are completely identical, or they are not nested and their physical type size is the same
-	//! The reason nested types are not allowed is because copying the auxiliary buffer does not happen recursively
-	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
-	D_ASSERT((not_nested && type_size_equal) || type_is_same);
-#endif
+	if (DBConfigOptions::global_verification_mode == DebugVerificationMode::VERIFY_VECTORS) {
+		CheckTypeIsReinterpretable(this_type, other_type);
+	}
 	ConstReference(other);
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
@@ -469,13 +505,14 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 }
 
 // FIXME: This should ideally be const
-void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_serialization) {
+void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 	auto &logical_type = GetType();
 
+	auto count = size();
 	UnifiedVectorFormat vdata;
 
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (!serializer.ShouldSerialize(5)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_3_0)) {
 		compressed_serialization = false;
 	}
 	if (compressed_serialization) {
@@ -508,14 +545,14 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					serializer.WriteProperty(90, "vector_type", VectorType::DICTIONARY_VECTOR);
 					serializer.WriteProperty(91, "sel_vector", sel_data, sizeof(sel_t) * count);
 					serializer.WriteProperty(92, "dict_count", used_count);
-					return dict.Serialize(serializer, used_count, false);
+					return dict.Serialize(serializer, false);
 				}
 			}
 		} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
 			serializer.WriteProperty(90, "vector_type", VectorType::CONSTANT_VECTOR);
 			// Resize to 1 so that size() == count == 1 during the recursive call, then restore
 			FlatVector::SetSize(*this, 1);
-			Vector::Serialize(serializer, 1, false); // just serialize one value
+			Vector::Serialize(serializer, false); // just serialize one value
 			FlatVector::SetSize(*this, count);
 			return;
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
@@ -550,13 +587,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
 		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
-		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		VectorOperations::WriteToStorage(*this, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
 	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
 		auto geoms = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 		// Are we targeting an older serialization version?
-		if (!serializer.ShouldSerialize(7)) {
+		if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 			// Serialize data as old-style SPATIAL format
 			string blob;
 			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
@@ -581,7 +618,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 			// new way to serialize strings, two blobs, first lengths, then string bytes
-			if (serializer.ShouldSerialize(8)) {
+			if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 				// we write all the lengths whether the string is null or not. lets not pull a parquet.
 				auto length_data_length = sizeof(uint32_t) * count;
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
@@ -628,8 +665,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 
 			// Serialize entries as a list
 			serializer.WriteList(103, "children", entries.size(), [&](Serializer::List &list, idx_t i) {
-				list.WriteObject(
-				    [&](Serializer &object) { entries[i].Serialize(object, count, compressed_serialization); });
+				list.WriteObject([&](Serializer &object) { entries[i].Serialize(object, compressed_serialization); });
 			});
 			break;
 		}
@@ -658,9 +694,8 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					object.WriteProperty(101, "length", entries[i].length);
 				});
 			});
-			serializer.WriteObject(106, "child", [&](Serializer &object) {
-				child.Serialize(object, list_size, compressed_serialization);
-			});
+			serializer.WriteObject(106, "child",
+			                       [&](Serializer &object) { child.Serialize(object, compressed_serialization); });
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -669,11 +704,9 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 
 			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
-			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
-			serializer.WriteObject(104, "child", [&](Serializer &object) {
-				child.Serialize(object, child_size, compressed_serialization);
-			});
+			serializer.WriteObject(104, "child",
+			                       [&](Serializer &object) { child.Serialize(object, compressed_serialization); });
 			break;
 		}
 		default:
@@ -850,6 +883,18 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
+void Vector::FlattenAndSetConstant() {
+	if (GetVectorType() != VectorType::FLAT_VECTOR && GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		Flatten();
+	}
+	// Struct buffers propagate vector type changes to their children. A flat or constant struct vector can still
+	// contain non-flat descendants, e.g. after slicing a list of structs, so normalize only those descendants first.
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
+		BufferMutable().Cast<VectorStructBuffer>().PrepareChildrenForSetConstant();
+	}
+	SetVectorType(VectorType::CONSTANT_VECTOR);
+}
+
 void Vector::Verify(idx_t) const {
 	Verify();
 }
@@ -874,7 +919,11 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) const {
 	buffer->Verify(GetType(), sel, count);
 }
 
-void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
+void Vector::DebugTransformToDictionary(Vector &vector) {
+	const auto count = vector.size();
+	if (count == 0) {
+		return;
+	}
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// only supported for flat vectors currently
 		return;
@@ -915,13 +964,14 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	vector.Verify();
 }
 
-void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
+void Vector::DebugShuffleNestedVector(Vector &vector) {
+	const auto count = vector.size();
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements
 		for (auto &entry : entries) {
-			Vector::DebugShuffleNestedVector(entry, count);
+			Vector::DebugShuffleNestedVector(entry);
 		}
 		break;
 	}
@@ -961,7 +1011,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		ListVector::SetListSize(vector, child_count);
 
 		// recurse into child elements
-		Vector::DebugShuffleNestedVector(child_vector, child_count);
+		Vector::DebugShuffleNestedVector(child_vector);
 		break;
 	}
 	default:
