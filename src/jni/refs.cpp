@@ -111,12 +111,7 @@ jmethodID J_Object_toString;
 jclass J_DuckDBTime;
 
 jclass J_ProfilerPrintFormat;
-jobject J_ProfilerPrintFormat_QUERY_TREE;
-jobject J_ProfilerPrintFormat_JSON;
-jobject J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER;
-jobject J_ProfilerPrintFormat_NO_OUTPUT;
-jobject J_ProfilerPrintFormat_HTML;
-jobject J_ProfilerPrintFormat_GRAPHVIZ;
+jmethodID J_ProfilerPrintFormat_getName;
 
 jclass J_QueryProgress;
 jmethodID J_QueryProgress_init;
@@ -305,18 +300,7 @@ void create_refs(JNIEnv *env) {
 	J_ByteOrder_NATIVE = make_static_method_call_ref(env, J_ByteOrder, "nativeOrder", "()Ljava/nio/ByteOrder;");
 
 	J_ProfilerPrintFormat = make_class_ref(env, "org/duckdb/ProfilerPrintFormat");
-	J_ProfilerPrintFormat_QUERY_TREE =
-	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "QUERY_TREE", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_JSON =
-	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "JSON", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER = make_static_object_field_ref(
-	    env, J_ProfilerPrintFormat, "QUERY_TREE_OPTIMIZER", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_NO_OUTPUT =
-	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "NO_OUTPUT", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_HTML =
-	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "HTML", "Lorg/duckdb/ProfilerPrintFormat;");
-	J_ProfilerPrintFormat_GRAPHVIZ =
-	    make_static_object_field_ref(env, J_ProfilerPrintFormat, "GRAPHVIZ", "Lorg/duckdb/ProfilerPrintFormat;");
+	J_ProfilerPrintFormat_getName = get_method_id(env, J_ProfilerPrintFormat, "getName", "()Ljava/lang/String;");
 
 	J_QueryProgress = make_class_ref(env, "org/duckdb/QueryProgress");
 	J_QueryProgress_init = get_method_id(env, J_QueryProgress, "<init>", "(DJJ)V");

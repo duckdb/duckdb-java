@@ -108,12 +108,7 @@ extern jmethodID J_Object_toString;
 extern jclass J_DuckDBTime;
 
 extern jclass J_ProfilerPrintFormat;
-extern jobject J_ProfilerPrintFormat_QUERY_TREE;
-extern jobject J_ProfilerPrintFormat_JSON;
-extern jobject J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER;
-extern jobject J_ProfilerPrintFormat_NO_OUTPUT;
-extern jobject J_ProfilerPrintFormat_HTML;
-extern jobject J_ProfilerPrintFormat_GRAPHVIZ;
+extern jmethodID J_ProfilerPrintFormat_getName;
 
 extern jclass J_QueryProgress;
 extern jmethodID J_QueryProgress_init;
