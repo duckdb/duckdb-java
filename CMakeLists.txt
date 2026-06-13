@@ -553,6 +553,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main.cpp
   src/duckdb/ub_src_main_buffered_data.cpp
   src/duckdb/ub_src_main_chunk_scan_state.cpp
+  src/duckdb/ub_src_main_profiler.cpp
   src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
   src/duckdb/ub_src_main_settings.cpp
