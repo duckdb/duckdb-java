@@ -971,25 +971,10 @@ void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
 }
 
 static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE)) {
-		return ProfilerPrintFormat::QUERY_TREE;
-	}
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_JSON)) {
-		return ProfilerPrintFormat::JSON;
-	}
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_QUERY_TREE_OPTIMIZER)) {
-		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-	}
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_NO_OUTPUT)) {
-		return ProfilerPrintFormat::NO_OUTPUT;
-	}
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_HTML)) {
-		return ProfilerPrintFormat::HTML;
-	}
-	if (env->IsSameObject(format, J_ProfilerPrintFormat_GRAPHVIZ)) {
-		return ProfilerPrintFormat::GRAPHVIZ;
-	}
-	throw InvalidInputException("Invalid profiling format");
+	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);
+	check_java_exception_and_rethrow(env);
+	const std::string name = jstring_to_string(env, static_cast<jstring>(jname));
+	return ProfilerPrintFormat::FromString(name);
 }
 
 jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
