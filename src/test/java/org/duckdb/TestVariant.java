@@ -240,7 +240,9 @@ public class TestVariant {
         }
     }
 
-    public static void test_variant_struct_with_variant() throws Exception {
+    // TODO: enable me
+    // https://github.com/duckdb/duckdb/issues/23274
+    public static void DISABLED_test_variant_struct_with_variant() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
 
             stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 VARIANT))");

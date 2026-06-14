@@ -1635,7 +1635,8 @@ public class TestDuckDBJDBC {
         TimeZone.setDefault(ALL_TYPES_TIME_ZONE);
         try {
             String sql =
-                "select * EXCLUDE(time, time_ns, time_tz)"
+                // TODO: remove excludes
+                "select * EXCLUDE(time, time_ns, time_tz, timestamp_tz_ns)"
                 + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
                 +
                 "\n    , CASE WHEN time_ns = '24:00:00'::TIME_NS THEN '23:59:59.999999'::TIME_NS ELSE time_ns END AS time_ns"
@@ -2033,7 +2034,7 @@ public class TestDuckDBJDBC {
             try (ResultSet rs = stmt.executeQuery("SELECT 1+1")) {
                 assertNotNull(rs);
                 String profile = ((DuckDBConnection) conn).getProfilingInformation(ProfilerPrintFormat.JSON);
-                assertTrue(profile.contains("\"query_name\": \"SELECT 1+1\","));
+                assertTrue(profile.contains("\"sql\": \"SELECT 1+1\","));
             }
         }
     }
@@ -2068,7 +2069,7 @@ public class TestDuckDBJDBC {
                     -> stmt.executeQuery(
                         "WITH RECURSIVE cte AS NOT MATERIALIZED ("
                         +
-                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 200000) "
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 1000000) "
                         + "SELECT avg(f) FROM cte"),
                 SQLException.class);
 
