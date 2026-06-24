@@ -107,7 +107,6 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
@@ -221,20 +220,19 @@ namespace duckdb {
 const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ARTConflictType::NO_CONFLICT), "NO_CONFLICT" },
-		{ static_cast<uint32_t>(ARTConflictType::CONSTRAINT), "CONSTRAINT" },
-		{ static_cast<uint32_t>(ARTConflictType::TRANSACTION), "TRANSACTION" }
+		{ static_cast<uint32_t>(ARTConflictType::CONSTRAINT), "CONSTRAINT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
-	return StringUtil::EnumToString(GetARTConflictTypeValues(), 3, "ARTConflictType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetARTConflictTypeValues(), 2, "ARTConflictType", static_cast<uint32_t>(value));
 }
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
-	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 2, "ARTConflictType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTHandlingResultValues() {
@@ -829,6 +827,7 @@ BinderType EnumUtil::FromString<BinderType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetBindingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BindingMode::STANDARD_BINDING), "STANDARD_BINDING" },
+		{ static_cast<uint32_t>(BindingMode::PREPARE), "PREPARE" },
 		{ static_cast<uint32_t>(BindingMode::EXTRACT_NAMES), "EXTRACT_NAMES" },
 		{ static_cast<uint32_t>(BindingMode::EXTRACT_REPLACEMENT_SCANS), "EXTRACT_REPLACEMENT_SCANS" },
 		{ static_cast<uint32_t>(BindingMode::EXTRACT_QUALIFIED_NAMES), "EXTRACT_QUALIFIED_NAMES" }
@@ -838,12 +837,12 @@ const StringUtil::EnumStringLiteral *GetBindingModeValues() {
 
 template<>
 const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
-	return StringUtil::EnumToString(GetBindingModeValues(), 4, "BindingMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetBindingModeValues(), 5, "BindingMode", static_cast<uint32_t>(value));
 }
 
 template<>
 BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
-	return static_cast<BindingMode>(StringUtil::StringToEnum(GetBindingModeValues(), 4, "BindingMode", value));
+	return static_cast<BindingMode>(StringUtil::StringToEnum(GetBindingModeValues(), 5, "BindingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBitpackingModeValues() {
@@ -6072,26 +6071,6 @@ const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingS
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value) {
 	return static_cast<VariantStatsShreddingState>(StringUtil::StringToEnum(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetVariantValueTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(VariantValueType::PRIMITIVE), "PRIMITIVE" },
-		{ static_cast<uint32_t>(VariantValueType::OBJECT), "OBJECT" },
-		{ static_cast<uint32_t>(VariantValueType::ARRAY), "ARRAY" },
-		{ static_cast<uint32_t>(VariantValueType::MISSING), "MISSING" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value) {
-	return StringUtil::EnumToString(GetVariantValueTypeValues(), 4, "VariantValueType", static_cast<uint32_t>(value));
-}
-
-template<>
-VariantValueType EnumUtil::FromString<VariantValueType>(const char *value) {
-	return static_cast<VariantValueType>(StringUtil::StringToEnum(GetVariantValueTypeValues(), 4, "VariantValueType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorBufferTypeValues() {
