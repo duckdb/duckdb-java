@@ -8,16 +8,15 @@
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
 
 #include <cstring>
 #include <exception>
 
 namespace duckdb {
 
-static ErrorData ErrorDataFromExceptionPtr(std::exception_ptr error_ptr) {
+static ErrorData ErrorDataFromExceptionPtr(const std::exception_ptr &error_ptr) {
 	try {
-		std::rethrow_exception(std::move(error_ptr));
+		std::rethrow_exception(error_ptr);
 	} catch (const std::exception &ex) {
 		return ErrorData(ex);
 	} catch (...) { // LCOV_EXCL_START
@@ -496,21 +495,13 @@ idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
 }
 
 ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
-    : client_context(client_context_p), target(target_p) {
+    : client_context(client_context_p), target(target_p), memory_governor(client_context_p) {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
 	max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
-	max_pending_bytes = AsyncWriteConfig::MAX_PENDING_BYTES_PER_THREAD * regular_threads;
-	min_pending_bytes = MinValue(max_pending_bytes, AsyncWriteConfig::MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 
 	AsyncWriteTarget &async_target = *this;
 	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target);
-	if (write_queue->IsAsync() && max_pending_bytes > 0) {
-		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
-		memory_state->SetMinimumReservation(min_pending_bytes);
-		memory_state->SetZero();
-	}
 }
 
 ManagedAsyncWriteQueue::~ManagedAsyncWriteQueue() {
@@ -568,6 +559,10 @@ void ManagedAsyncWriteQueue::DiscardExternalPendingBytes(idx_t bytes) noexcept {
 		return;
 	}
 	lock_guard<mutex> guard(lock);
+	if (closed) {
+		// a failure already cleared all external pending bytes via CancelPendingWritesAfterFailure
+		return;
+	}
 	D_ASSERT(external_pending_bytes >= bytes);
 	if (external_pending_bytes >= bytes) {
 		external_pending_bytes -= bytes;
@@ -588,7 +583,6 @@ void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, id
 		return;
 	}
 
-	AddCompletionAccounting(request);
 	{
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
@@ -629,7 +623,7 @@ void ManagedAsyncWriteQueue::SchedulePendingWritesInternal(SchedulePolicy policy
 
 void ManagedAsyncWriteQueue::UpdateMemoryState(MemoryUpdateMode mode) {
 	(void)mode;
-	if (!memory_state) {
+	if (!memory_governor.IsActive()) {
 		return;
 	}
 
@@ -638,56 +632,11 @@ void ManagedAsyncWriteQueue::UpdateMemoryState(MemoryUpdateMode mode) {
 		lock_guard<mutex> guard(lock);
 		current_pending_bytes = TotalPendingBytes();
 	}
-	if (current_pending_bytes == 0) {
-		return;
-	}
-
-	auto current_reservation = memory_state->GetReservation();
-	while (current_pending_bytes > MinValue(current_reservation, max_pending_bytes)) {
-		idx_t next_request;
-		if (memory_request_bytes > current_reservation) {
-			// TMM did not fully grant the previous request. Keep retrying it on later growth checks.
-			next_request = memory_request_bytes;
-		} else if (memory_request_bytes == 0) {
-			// Grow coarsely and only release on Close().
-			// Repeatedly shrinking here would touch shared TMM state on the write-registration hot path.
-			next_request = min_pending_bytes;
-		} else if (memory_request_bytes >= max_pending_bytes) {
-			return;
-		} else if (memory_request_bytes > max_pending_bytes / 2) {
-			next_request = max_pending_bytes;
-		} else {
-			next_request = memory_request_bytes * 2;
-		}
-		next_request = MinValue(MaxValue(next_request, min_pending_bytes), max_pending_bytes);
-		if (next_request <= memory_request_bytes) {
-			return;
-		}
-
-		auto previous_reservation = current_reservation;
-		memory_state->SetRemainingSizeAndUpdateReservation(client_context, next_request);
-		memory_request_bytes = next_request;
-		current_reservation = memory_state->GetReservation();
-		if (current_reservation <= previous_reservation) {
-			return;
-		}
-		if (current_reservation < next_request) {
-			return;
-		}
-	}
+	memory_governor.UpdateReservation(current_pending_bytes);
 }
 
 idx_t ManagedAsyncWriteQueue::BackpressureBudget() {
-	if (!memory_state) {
-		return NumericLimits<idx_t>::Maximum();
-	}
-	auto reservation = MinValue(memory_state->GetReservation(), max_pending_bytes);
-	// If TMM only grants a tiny reservation, do not retain an async backlog. This makes low-memory execution
-	// behave close to synchronous writes, but automatically allows overlap again if the reservation grows later.
-	if (reservation < AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD) {
-		return 0;
-	}
-	return reservation;
+	return memory_governor.BackpressureBudget();
 }
 
 idx_t ManagedAsyncWriteQueue::DrainTaskByteBudget() const {
@@ -731,6 +680,8 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 	pending_bytes -= request_size;
 	submitted_bytes += request_size;
 	submitted_requests++;
+	// Attach accounting only on submission, so cancelled pending writes never carry it.
+	AddCompletionAccounting(request);
 	return true;
 }
 
@@ -853,6 +804,7 @@ void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure(const ErrorData &er
 		auto request_size = pending.Size();
 		auto &request = pending.request;
 		request.payload.reset();
+		// Pending writes were never submitted, so request.completion is still the raw user callback (if any).
 		if (request.completion) {
 			try {
 				request.completion(request.offset, request_size, error);
@@ -898,11 +850,7 @@ void ManagedAsyncWriteQueue::Close() {
 }
 
 void ManagedAsyncWriteQueue::ReleaseMemoryReservation() {
-	if (!memory_state || memory_request_bytes == 0) {
-		return;
-	}
-	memory_state->SetZero();
-	memory_request_bytes = 0;
+	memory_governor.Release();
 }
 
 void ManagedAsyncWriteQueue::RethrowTaskError() {
@@ -1259,6 +1207,7 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
                                                           optional_ptr<const ErrorData> error) {
 	(void)offset;
 	bool refill = false;
+	auto refill_policy = SchedulePolicy::THRESHOLD;
 	{
 		lock_guard<mutex> guard(lock);
 		D_ASSERT(submitted_requests > 0);
@@ -1266,9 +1215,12 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
 		D_ASSERT(submitted_bytes >= size);
 		submitted_bytes -= size;
 		refill = !error && !closed && batch_depth == 0 && !pending_writes.empty();
+		if (force_completion_refill) {
+			refill_policy = SchedulePolicy::FORCE;
+		}
 	}
 	if (refill) {
-		SchedulePendingWritesInternal();
+		SchedulePendingWritesInternal(refill_policy);
 	}
 }
 
@@ -1338,9 +1290,14 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 		lock_guard<mutex> guard(lock);
 		batch_depth = previous_batch_depth;
 	};
+	auto set_force_completion_refill = [&](bool enabled) {
+		lock_guard<mutex> guard(lock);
+		force_completion_refill = enabled;
+	};
 
 	try {
 		open_batch_for_drain();
+		set_force_completion_refill(true);
 		write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::FORCE);
 		while (true) {
 			if (!write_queue->HasError()) {
@@ -1355,13 +1312,16 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 	} catch (...) {
 		try {
 			open_batch_for_drain();
+			set_force_completion_refill(true);
 			write_queue->WaitAll();
 		} catch (...) {
 		}
+		set_force_completion_refill(false);
 		restore_batch();
 		throw;
 	}
 
+	set_force_completion_refill(false);
 	restore_batch();
 	RethrowTaskError();
 }
