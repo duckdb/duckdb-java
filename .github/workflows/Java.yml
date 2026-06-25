@@ -159,8 +159,6 @@ jobs:
     name: Linux Spark (amd64)
     runs-on: ubuntu-latest
     needs: java-linux-amd64
-    # todo: enable me
-    if: ${{ false }}
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
       DUCKDB_JDBC_JAR: ${{ github.workspace }}/build/release/duckdb_jdbc.jar
@@ -849,7 +847,7 @@ jobs:
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
-      # - java-linux-amd64-spark
+      - java-linux-amd64-spark
       - java-linux-amd64-asan
       - java-linux-amd64-jepsen
       - java-linux-aarch64
@@ -934,7 +932,7 @@ jobs:
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
-      # - java-linux-amd64-spark
+      - java-linux-amd64-spark
       - java-linux-amd64-asan
       - java-linux-amd64-jepsen
       - java-linux-aarch64
