@@ -4,11 +4,17 @@ description: 'Linux test run in host OS'
 runs:
   using: "composite"
   steps:
+    - name: Setup JDK 26
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'corretto'
+        java-version: '26'
+
     - name: Tests Host
       shell: bash
       run: |
         cat /etc/os-release
-        ${JAVA_HOME_21_X64}/bin/java -version
-        ${JAVA_HOME_21_X64}/bin/java                                                \
+        java -version
+        java                                                \
           -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
           org.duckdb.TestDuckDBJDBC
