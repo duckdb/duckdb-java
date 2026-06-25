@@ -20,7 +20,7 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - run: |
@@ -34,7 +34,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -46,7 +46,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -57,7 +57,7 @@ jobs:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -101,7 +101,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -113,7 +113,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -126,7 +126,7 @@ jobs:
 
       - name: Checkout Platform TCK
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: jakartaee/platform-tck
           ref: 10.0.6
@@ -134,7 +134,7 @@ jobs:
 
       - name: Checkout CTS Runner 
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: duckdb/jdbc_compatibility_test_suite_runner
           path: jdbc_compatibility_test_suite_runner
@@ -179,7 +179,7 @@ jobs:
       MINIO_HOST: 127.0.0.1
       MINIO_PORT: 9000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -192,7 +192,7 @@ jobs:
 
       - name: Restore Cache
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -264,7 +264,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/ccache
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -285,7 +285,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -298,7 +298,7 @@ jobs:
           make sanitized
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -357,12 +357,12 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Checkout Jepsen
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: jepsen-io/duckdb
           ref: 95731d970339780b934ac106831d704ce3ad23ba
@@ -376,7 +376,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -452,7 +452,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -464,7 +464,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -475,7 +475,7 @@ jobs:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -513,7 +513,7 @@ jobs:
     env:
       ALPINE_IMAGE: alpine:3.22
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -525,7 +525,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -536,7 +536,7 @@ jobs:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -570,7 +570,7 @@ jobs:
     env:
       ALPINE_IMAGE: alpine:3.22
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -582,7 +582,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -593,7 +593,7 @@ jobs:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -629,7 +629,7 @@ jobs:
       CXX: 'ccache cl'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -650,7 +650,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -667,7 +667,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -707,7 +707,7 @@ jobs:
       CXX: 'ccache cl'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -732,7 +732,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -749,7 +749,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -790,7 +790,7 @@ jobs:
       CXX: 'ccache clang++'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -806,7 +806,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -822,7 +822,7 @@ jobs:
         run: make release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -870,7 +870,7 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -954,7 +954,7 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -1027,7 +1027,7 @@ jobs:
       - java-osx-universal
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
