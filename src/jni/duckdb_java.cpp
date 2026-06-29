@@ -974,7 +974,7 @@ static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
 	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);
 	check_java_exception_and_rethrow(env);
 	const std::string name = jstring_to_string(env, static_cast<jstring>(jname));
-	return ProfilerPrintFormat::FromString(name);
+	return ProfilerPrintFormat(name);
 }
 
 jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
