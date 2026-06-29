@@ -2029,12 +2029,27 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_get_profiling_information() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            // Query profiling is disabled.
+            for (ProfilerPrintFormat pf : ProfilerPrintFormat.values()) {
+                conn.getProfilingInformation(pf);
+            }
             stmt.execute("SET enable_profiling = 'no_output';");
             try (ResultSet rs = stmt.executeQuery("SELECT 1+1")) {
                 assertNotNull(rs);
-                String profile = ((DuckDBConnection) conn).getProfilingInformation(ProfilerPrintFormat.JSON);
-                assertTrue(profile.contains("\"sql\": \"SELECT 1+1\","));
+                {
+                    String profile = conn.getProfilingInformation(ProfilerPrintFormat.JSON);
+                    assertTrue(profile.contains("\"sql\": \"SELECT 1+1\","));
+                }
+                for (ProfilerPrintFormat pf : ProfilerPrintFormat.values()) {
+                    conn.getProfilingInformation(pf);
+                }
+            }
+            stmt.execute("CALL disable_profiling()");
+            // Query profiling is disabled.
+            for (ProfilerPrintFormat pf : ProfilerPrintFormat.values()) {
+                conn.getProfilingInformation(pf);
             }
         }
     }
