@@ -3,7 +3,6 @@
 #include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
@@ -36,7 +35,7 @@ string PhysicalOperator::ToString(optional_ptr<ClientContext> context, const Pro
 		// formats without output (e.g. "no_output") render nothing
 		return string();
 	}
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();
@@ -307,7 +306,8 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::VARIANT:
 		return false;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto &entries = StructType::GetChildTypes(type);
 		for (auto &entry : entries) {
 			if (!CanCacheType(entry.second)) {

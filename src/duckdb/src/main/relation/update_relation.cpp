@@ -20,7 +20,7 @@ UpdateRelation::UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {
 	auto basetable = make_uniq<BaseTableRef>();
-	basetable->GetQualifiedNameMutable() = QualifiedName(catalog_name, schema_name, table_name);
+	basetable->SetQualifiedName(QualifiedName(catalog_name, schema_name, table_name));
 
 	UpdateStatement stmt;
 	auto &node = *stmt.node;
@@ -48,8 +48,10 @@ const vector<ColumnDefinition> &UpdateRelation::Columns() {
 }
 
 string UpdateRelation::ToString(idx_t depth) {
-	string str = RenderWhitespace(depth) + "UPDATE " +
-	             ParseInfo::QualifierToString(catalog_name, schema_name, table_name) + " SET\n";
+	string str =
+	    RenderWhitespace(depth) + "UPDATE " +
+	    QualifiedName(catalog_name, schema_name, table_name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA) +
+	    " SET\n";
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		str += update_columns[i] + " = " + expressions[i]->ToString() + "\n";
 	}

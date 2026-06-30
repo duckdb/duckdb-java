@@ -17,7 +17,7 @@ DeleteRelation::DeleteRelation(shared_ptr<ClientContextWrapper> &context, unique
 
 BoundStatement DeleteRelation::Bind(Binder &binder) {
 	auto basetable = make_uniq<BaseTableRef>();
-	basetable->GetQualifiedNameMutable() = QualifiedName(catalog_name, schema_name, table_name);
+	basetable->SetQualifiedName(QualifiedName(catalog_name, schema_name, table_name));
 
 	DeleteStatement stmt;
 	auto &node = *stmt.node;
@@ -40,7 +40,8 @@ const vector<ColumnDefinition> &DeleteRelation::Columns() {
 
 string DeleteRelation::ToString(idx_t depth) {
 	string str =
-	    RenderWhitespace(depth) + "DELETE FROM " + ParseInfo::QualifierToString(catalog_name, schema_name, table_name);
+	    RenderWhitespace(depth) + "DELETE FROM " +
+	    QualifiedName(catalog_name, schema_name, table_name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (condition) {
 		str += " WHERE " + condition->ToString();
 	}
