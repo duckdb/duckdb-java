@@ -119,7 +119,7 @@ jstring _duckdb_jdbc_get_schema(JNIEnv *env, jclass, jobject conn_ref_buf) {
 
 	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
 
-	return env->NewStringUTF(entry.schema.c_str());
+	return env->NewStringUTF(entry.GetSchema().c_str());
 }
 
 static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry) {
@@ -150,11 +150,11 @@ jstring _duckdb_jdbc_get_catalog(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	}
 
 	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
-	if (entry.catalog == INVALID_CATALOG) {
-		entry.catalog = DatabaseManager::GetDefaultDatabase(*conn_ref->context);
+	if (entry.GetCatalog() == INVALID_CATALOG) {
+		entry.SetCatalog(DatabaseManager::GetDefaultDatabase(*conn_ref->context));
 	}
 
-	return env->NewStringUTF(entry.catalog.c_str());
+	return env->NewStringUTF(entry.GetCatalog().c_str());
 }
 
 void _duckdb_jdbc_set_auto_commit(JNIEnv *env, jclass, jobject conn_ref_buf, jboolean auto_commit) {
