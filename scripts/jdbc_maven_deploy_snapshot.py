@@ -83,8 +83,11 @@ def get_snapshot_version():
     # Fourth component is intentionally reset to 0 for SNAPSHOT versions
     # Get short commit hash for traceability
     commit_hash = run_cmd('git rev-parse --short HEAD')
+    # Override major and minor specifically for 2.0
+    major = 2
+    minor = 0
     # Increment patch version and include commit hash
-    return f"{major}.{minor + 1}-{commit_hash}-SNAPSHOT"
+    return f"{major}.{minor}-{commit_hash}-SNAPSHOT"
 
 
 def create_settings_xml(settings_path):
