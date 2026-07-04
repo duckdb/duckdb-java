@@ -21,40 +21,46 @@ void check_java_exception_and_rethrow(JNIEnv *env) {
 	}
 }
 
-std::string jbyteArray_to_string(JNIEnv *env, jbyteArray ba_j) {
-	if (nullptr == ba_j) {
+std::string jbyteArray_to_string(JNIEnv *env, jbyteArray jbytes) {
+	if (nullptr == jbytes) {
 		return std::string();
 	}
-	size_t len = static_cast<size_t>(env->GetArrayLength(ba_j));
+	size_t len = static_cast<size_t>(env->GetArrayLength(jbytes));
 	if (len == 0) {
 		return std::string();
 	}
 	std::string ret;
 	ret.resize(len);
 
-	jbyte *bytes = reinterpret_cast<jbyte *>(env->GetByteArrayElements(ba_j, nullptr));
+	jbyte *bytes = reinterpret_cast<jbyte *>(env->GetByteArrayElements(jbytes, nullptr));
 	if (bytes == nullptr) {
 		env->ThrowNew(J_SQLException, "GetByteArrayElements error");
 		return std::string();
 	}
 
 	std::memcpy(&ret[0], bytes, len);
-
-	env->ReleaseByteArrayElements(ba_j, bytes, 0);
-
+	env->ReleaseByteArrayElements(jbytes, bytes, 0);
 	return ret;
 }
 
 std::string jstring_to_string(JNIEnv *env, jstring jstr) {
 	jbyteArray bytes = reinterpret_cast<jbyteArray>(env->CallObjectMethod(jstr, J_String_getBytes, J_Charset_UTF8));
-	return jbyteArray_to_string(env, bytes);
+	check_java_exception_and_rethrow(env);
+	std::string res = jbyteArray_to_string(env, bytes);
+	env->DeleteLocalRef(bytes);
+	return res;
 }
 
-jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len) {
-	auto bb = env->NewDirectByteBuffer((void *)d_str, d_str_len);
-	auto j_cb = env->CallObjectMethod(J_Charset_UTF8, J_Charset_decode, bb);
-	auto j_str = env->CallObjectMethod(j_cb, J_CharBuffer_toString);
-	return j_str;
+jstring decode_charbuffer_to_jstring(JNIEnv *env, const char *cstr, idx_t len) {
+	auto bytebuf = env->NewDirectByteBuffer(reinterpret_cast<void *>(const_cast<char *>(cstr)), len);
+	check_java_exception_and_rethrow(env);
+	auto jcharbuf = env->CallObjectMethod(J_Charset_UTF8, J_Charset_decode, bytebuf);
+	check_java_exception_and_rethrow(env);
+	env->DeleteLocalRef(bytebuf);
+	auto jstr = env->CallObjectMethod(jcharbuf, J_CharBuffer_toString);
+	check_java_exception_and_rethrow(env);
+	env->DeleteLocalRef(jcharbuf);
+	return reinterpret_cast<jstring>(jstr);
 }
 
 jlong uint64_to_jlong(uint64_t value) {
@@ -145,6 +151,9 @@ jobject make_data_buf(JNIEnv *env, void *data, idx_t len) {
 	if (data != nullptr) {
 		jobject buf = env->NewDirectByteBuffer(data, uint64_to_jlong(len));
 		env->CallObjectMethod(buf, J_ByteBuffer_order, J_ByteOrder_NATIVE);
+		if (env->ExceptionCheck()) {
+			return nullptr;
+		}
 		return buf;
 	}
 

@@ -68,6 +68,7 @@ static duckdb::Value jobj_to_value(JNIEnv *env, const std::string &key, jobject 
 			duckdb::Value val(std::move(sval));
 			vec.push_back(std::move(val));
 		}
+		check_java_exception_and_rethrow(env);
 		return duckdb::Value::LIST(duckdb::LogicalType::VARCHAR, std::move(vec));
 
 	} else {
@@ -120,6 +121,7 @@ std::unique_ptr<duckdb::DBConfig> create_db_config(JNIEnv *env, jboolean read_on
 			                               error.RawMessage());
 		}
 	}
+	check_java_exception_and_rethrow(env);
 
 	return config;
 }
