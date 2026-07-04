@@ -19,11 +19,11 @@ inline void varchar_deleter(char *val) {
 
 void check_java_exception_and_rethrow(JNIEnv *env);
 
-std::string jbyteArray_to_string(JNIEnv *env, jbyteArray ba_j);
+std::string jbyteArray_to_string(JNIEnv *env, jbyteArray jbytes);
 
 std::string jstring_to_string(JNIEnv *env, jstring string_j);
 
-jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len);
+jstring decode_charbuffer_to_jstring(JNIEnv *env, const char *cstr, idx_t len);
 
 jlong uint64_to_jlong(uint64_t value);
 

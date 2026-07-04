@@ -49,7 +49,9 @@ std::string type_to_jduckdb_type(duckdb::LogicalType logical_type) {
 
 duckdb::Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
 	jint precision = env->CallIntMethod(decimal, J_BigDecimal_precision);
+	check_java_exception_and_rethrow(env);
 	jint scale = env->CallIntMethod(decimal, J_BigDecimal_scale);
+	check_java_exception_and_rethrow(env);
 
 	// Java BigDecimal type can have scale that exceeds the precision
 	// Which our DECIMAL type does not support (assert(width >= scale))
@@ -66,10 +68,13 @@ duckdb::Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
 
 	if (precision <= 18) { // normal sizes -> avoid string processing
 		jobject no_point_dec = env->CallObjectMethod(decimal, J_BigDecimal_scaleByPowTen, scale);
+		check_java_exception_and_rethrow(env);
 		jlong result = env->CallLongMethod(no_point_dec, J_BigDecimal_longValue);
+		check_java_exception_and_rethrow(env);
 		val = duckdb::Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
 	} else if (precision <= 38) { // larger than int64 -> get string and cast
 		jobject str_val = env->CallObjectMethod(decimal, J_BigDecimal_toPlainString);
+		check_java_exception_and_rethrow(env);
 		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
 		val = duckdb::Value(str_char);
 		val = val.DefaultCastAs(duckdb::LogicalType::DECIMAL(precision, scale));
@@ -88,45 +93,59 @@ static duckdb::Value create_value_from_hugeint(JNIEnv *env, jobject hugeint) {
 
 static duckdb::Value create_value_from_uuid(JNIEnv *env, jobject param) {
 	jlong most_significant = env->CallLongMethod(param, J_UUID_getMostSignificantBits);
+	check_java_exception_and_rethrow(env);
 	// Account for the following logic in UUID::FromString:
 	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
 	most_significant ^= (std::numeric_limits<int64_t>::min)();
 	jlong least_significant = env->CallLongMethod(param, J_UUID_getLeastSignificantBits);
+	check_java_exception_and_rethrow(env);
 	duckdb::hugeint_t hi = duckdb::hugeint_t(most_significant, least_significant);
 	return duckdb::Value::UUID(std::move(hi));
 }
 
 static duckdb::Value create_value_from_map(JNIEnv *env, jobject param, duckdb::ClientContext &context) {
-	auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_DuckMap_getSQLTypeName));
+	jstring jstr = reinterpret_cast<jstring>(env->CallObjectMethod(param, J_DuckMap_getSQLTypeName));
+	check_java_exception_and_rethrow(env);
+	auto typeName = jstring_to_string(env, jstr);
 
 	duckdb::LogicalType type;
 	context.RunFunctionInTransaction([&]() { type = duckdb::TransformStringToLogicalType(typeName, context); });
 
 	auto entrySet = env->CallObjectMethod(param, J_Map_entrySet);
+	check_java_exception_and_rethrow(env);
 	auto iterator = env->CallObjectMethod(entrySet, J_Set_iterator);
+	check_java_exception_and_rethrow(env);
 	duckdb::vector<duckdb::Value> entries;
 	while (env->CallBooleanMethod(iterator, J_Iterator_hasNext)) {
+		check_java_exception_and_rethrow(env);
 		auto entry = env->CallObjectMethod(iterator, J_Iterator_next);
+		check_java_exception_and_rethrow(env);
 
 		auto key = env->CallObjectMethod(entry, J_Entry_getKey);
+		check_java_exception_and_rethrow(env);
 		auto value = env->CallObjectMethod(entry, J_Entry_getValue);
+		check_java_exception_and_rethrow(env);
 		D_ASSERT(key);
 		D_ASSERT(value);
 
 		entries.push_back(duckdb::Value::STRUCT(
 		    {{"key", to_duckdb_value(env, key, context)}, {"value", to_duckdb_value(env, value, context)}}));
 	}
+	check_java_exception_and_rethrow(env);
 
 	return duckdb::Value::MAP(duckdb::ListType::GetChildType(type), entries);
 }
 
 static duckdb::Value create_value_from_struct(JNIEnv *env, jobject param, duckdb::ClientContext &context) {
-	auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_Struct_getSQLTypeName));
+	jstring jstr = reinterpret_cast<jstring>(env->CallObjectMethod(param, J_Struct_getSQLTypeName));
+	check_java_exception_and_rethrow(env);
+	auto typeName = jstring_to_string(env, jstr);
 
 	duckdb::LogicalType type;
 	context.RunFunctionInTransaction([&]() { type = TransformStringToLogicalType(typeName, context); });
 
-	auto jvalues = (jobjectArray)env->CallObjectMethod(param, J_Struct_getAttributes);
+	jobjectArray jvalues = reinterpret_cast<jobjectArray>(env->CallObjectMethod(param, J_Struct_getAttributes));
+	check_java_exception_and_rethrow(env);
 
 	int size = env->GetArrayLength(jvalues);
 
@@ -144,8 +163,11 @@ static duckdb::Value create_value_from_struct(JNIEnv *env, jobject param, duckdb
 }
 
 static duckdb::Value create_value_from_array(JNIEnv *env, jobject param, duckdb::ClientContext &context) {
-	auto typeName = jstring_to_string(env, (jstring)env->CallObjectMethod(param, J_Array_getBaseTypeName));
-	auto jvalues = (jobjectArray)env->CallObjectMethod(param, J_Array_getArray);
+	jstring jstr = reinterpret_cast<jstring>(env->CallObjectMethod(param, J_Array_getBaseTypeName));
+	check_java_exception_and_rethrow(env);
+	auto typeName = jstring_to_string(env, jstr);
+	jobjectArray jvalues = reinterpret_cast<jobjectArray>(env->CallObjectMethod(param, J_Array_getArray));
+	check_java_exception_and_rethrow(env);
 	int size = env->GetArrayLength(jvalues);
 
 	duckdb::LogicalType type;
@@ -163,34 +185,56 @@ static duckdb::Value create_value_from_array(JNIEnv *env, jobject param, duckdb:
 
 duckdb::Value to_duckdb_value(JNIEnv *env, jobject param, duckdb::ClientContext &context) {
 	param = env->CallStaticObjectMethod(J_Timestamp, J_Timestamp_valueOf, param);
+	check_java_exception_and_rethrow(env);
 
 	if (param == nullptr) {
 		return (duckdb::Value());
 	} else if (env->IsInstanceOf(param, J_Bool)) {
-		return (duckdb::Value::BOOLEAN(env->CallBooleanMethod(param, J_Bool_booleanValue)));
+		jboolean val = env->CallBooleanMethod(param, J_Bool_booleanValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::BOOLEAN(val);
 	} else if (env->IsInstanceOf(param, J_Byte)) {
-		return (duckdb::Value::TINYINT(env->CallByteMethod(param, J_Byte_byteValue)));
+		jbyte val = env->CallByteMethod(param, J_Byte_byteValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::TINYINT(val);
 	} else if (env->IsInstanceOf(param, J_Short)) {
-		return (duckdb::Value::SMALLINT(env->CallShortMethod(param, J_Short_shortValue)));
+		jshort val = env->CallShortMethod(param, J_Short_shortValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::SMALLINT(val);
 	} else if (env->IsInstanceOf(param, J_Int)) {
-		return (duckdb::Value::INTEGER(env->CallIntMethod(param, J_Int_intValue)));
+		jint val = env->CallIntMethod(param, J_Int_intValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::INTEGER(val);
 	} else if (env->IsInstanceOf(param, J_Long)) {
-		return (duckdb::Value::BIGINT(env->CallLongMethod(param, J_Long_longValue)));
+		jlong val = env->CallLongMethod(param, J_Long_longValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::BIGINT(val);
 	} else if (env->IsInstanceOf(param, J_HugeInt)) {
 		return create_value_from_hugeint(env, param);
 	} else if (env->IsInstanceOf(param, J_TimestampTZ)) { // Check for subclass before superclass!
-		return (duckdb::Value::TIMESTAMPTZ(
-		    (duckdb::timestamp_tz_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
+		jlong val = env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::TIMESTAMPTZ(static_cast<duckdb::timestamp_tz_t>(val));
 	} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
-		return (duckdb::Value::DATE((duckdb::date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+		jlong val = env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::DATE(static_cast<duckdb::date_t>(val));
 	} else if (env->IsInstanceOf(param, J_DuckDBTime)) {
-		return (duckdb::Value::TIME((duckdb::dtime_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
+		jlong val = env->CallLongMethod(param, J_Timestamp_getMicrosEpoch);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::TIME(static_cast<duckdb::dtime_t>(val));
 	} else if (env->IsInstanceOf(param, J_Timestamp)) {
-		return (duckdb::Value::TIMESTAMP((duckdb::timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
+		jlong val = env->CallLongMethod(param, J_Timestamp_getMicrosEpoch);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::TIMESTAMP(static_cast<duckdb::timestamp_t>(val));
 	} else if (env->IsInstanceOf(param, J_Float)) {
-		return (duckdb::Value::FLOAT(env->CallFloatMethod(param, J_Float_floatValue)));
+		jfloat val = env->CallFloatMethod(param, J_Float_floatValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::FLOAT(val);
 	} else if (env->IsInstanceOf(param, J_Double)) {
-		return (duckdb::Value::DOUBLE(env->CallDoubleMethod(param, J_Double_doubleValue)));
+		jdouble val = env->CallDoubleMethod(param, J_Double_doubleValue);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::DOUBLE(val);
 	} else if (env->IsInstanceOf(param, J_BigDecimal)) {
 		return create_value_from_bigdecimal(env, param);
 	} else if (env->IsInstanceOf(param, J_String)) {
