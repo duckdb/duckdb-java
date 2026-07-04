@@ -312,6 +312,9 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 	    stmt_ref->stmt->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
 	auto res_ref = make_uniq<ResultHolder>();
 	res_ref->res = execute_prepared_statement(env, stmt_ref_buf, params, stream_results);
+	if (res_ref->res == nullptr) {
+		return nullptr;
+	}
 	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }
 
@@ -389,15 +392,19 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 			col_name = types[col_idx].ToString();
 		}
 
-		env->SetObjectArrayElement(name_array, col_idx,
-		                           decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
-		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(col_name.c_str()));
-		env->SetObjectArrayElement(type_detail_array, col_idx,
-		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
+		jstring jname = decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length());
+		env->SetObjectArrayElement(name_array, col_idx, jname);
+		env->DeleteLocalRef(jname);
+		jstring jcolname = env->NewStringUTF(col_name.c_str());
+		env->SetObjectArrayElement(type_array, col_idx, jcolname);
+		env->DeleteLocalRef(jcolname);
+		jstring jtype = env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str());
+		env->SetObjectArrayElement(type_detail_array, col_idx, jtype);
+		env->DeleteLocalRef(jtype);
 	}
 
-	auto param_type_array = env->NewObjectArray(n_param, J_String, nullptr);
-	auto param_type_detail_array = env->NewObjectArray(n_param, J_String, nullptr);
+	jobjectArray param_type_array = env->NewObjectArray(n_param, J_String, nullptr);
+	jobjectArray param_type_detail_array = env->NewObjectArray(n_param, J_String, nullptr);
 
 	for (idx_t param_idx = 0; param_idx < n_param; param_idx++) {
 		std::string param_name;
@@ -407,15 +414,25 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 			param_name = param_types[param_idx].ToString();
 		}
 
-		env->SetObjectArrayElement(param_type_array, param_idx, env->NewStringUTF(param_name.c_str()));
-		env->SetObjectArrayElement(param_type_detail_array, param_idx,
-		                           env->NewStringUTF(type_to_jduckdb_type(param_types[param_idx]).c_str()));
+		jstring jname = env->NewStringUTF(param_name.c_str());
+		env->SetObjectArrayElement(param_type_array, param_idx, jname);
+		env->DeleteLocalRef(jname);
+		jstring jdetail = env->NewStringUTF(type_to_jduckdb_type(param_types[param_idx]).c_str());
+		env->SetObjectArrayElement(param_type_detail_array, param_idx, jdetail);
+		env->DeleteLocalRef(jdetail);
 	}
 
-	auto return_type = env->NewStringUTF(StatementReturnTypeToString(properties.return_type).c_str());
+	jstring return_type = env->NewStringUTF(StatementReturnTypeToString(properties.return_type).c_str());
 
-	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, n_param, column_count, name_array, type_array,
-	                      type_detail_array, return_type, param_type_array, param_type_detail_array);
+	jobject res = env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, n_param, column_count, name_array,
+	                             type_array, type_detail_array, return_type, param_type_array, param_type_detail_array);
+	env->DeleteLocalRef(return_type);
+	env->DeleteLocalRef(param_type_detail_array);
+	env->DeleteLocalRef(param_type_array);
+	env->DeleteLocalRef(type_detail_array);
+	env->DeleteLocalRef(type_array);
+	env->DeleteLocalRef(name_array);
+	return res;
 }
 
 jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
@@ -434,7 +451,7 @@ jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf)
 
 jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
 
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
 	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
 		throw InvalidInputException("Invalid statement");
 	}
@@ -456,7 +473,7 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
 
 jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf) {
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");
 	}
@@ -471,14 +488,16 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 		res_ref->chunk = make_uniq<DataChunk>();
 	}
 	auto row_count = res_ref->chunk->size();
-	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(), J_DuckVector, nullptr);
+	jobjectArray vec_array =
+	    reinterpret_cast<jobjectArray>(env->NewObjectArray(res_ref->chunk->ColumnCount(), J_DuckVector, nullptr));
 
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
 
-		auto jvec = ProcessVector(env, conn_ref, vec, row_count);
+		jobject jvec = ProcessVector(env, conn_ref, vec, row_count);
 
 		env->SetObjectArrayElement(vec_array, col_idx, jvec);
+		env->DeleteLocalRef(jvec);
 	}
 
 	return vec_array;
@@ -522,16 +541,16 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
 		vec.Flatten(row_count);
 	}
-	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
+	jstring type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
-	auto null_array = env->NewBooleanArray(row_count);
+	jbooleanArray null_array = env->NewBooleanArray(row_count);
 	jboolean *null_unique_array = env->GetBooleanArrayElements(null_array, nullptr);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		null_unique_array[row_idx] = FlatVector::IsNull(vec, row_idx);
 	}
 	env->ReleaseBooleanArrayElements(null_array, null_unique_array, 0);
 
-	auto jvec = env->NewObject(J_DuckVector, J_DuckVector_init, type_str, (int)row_count, null_array);
+	jobject jvec = env->NewObject(J_DuckVector, J_DuckVector_init, type_str, static_cast<int>(row_count), null_array);
 
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
@@ -622,9 +641,10 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			if (FlatVector::IsNull(vec, row_idx)) {
 				continue;
 			}
-			auto d_str = vec.GetValue(row_idx).ToString();
-			jstring j_str = env->NewStringUTF(d_str.c_str());
-			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+			auto dstr = vec.GetValue(row_idx).ToString();
+			jstring jstr = env->NewStringUTF(dstr.c_str());
+			env->SetObjectArrayElement(varlen_data, row_idx, jstr);
+			env->DeleteLocalRef(jstr);
 		}
 		break;
 	case LogicalTypeId::UNION:
@@ -636,16 +656,22 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		auto names = env->NewObjectArray(entries.size(), J_String, nullptr);
 
 		for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-			auto j_vec = ProcessVector(env, conn_ref, *entries[entry_i], row_count);
+			jobject j_vec = ProcessVector(env, conn_ref, *entries[entry_i], row_count);
 			env->SetObjectArrayElement(columns, entry_i, j_vec);
-			env->SetObjectArrayElement(names, entry_i,
-			                           env->NewStringUTF(StructType::GetChildName(vec.GetType(), entry_i).c_str()));
+			env->DeleteLocalRef(j_vec);
+			jstring jstr = env->NewStringUTF(StructType::GetChildName(vec.GetType(), entry_i).c_str());
+			env->SetObjectArrayElement(names, entry_i, jstr);
+			env->DeleteLocalRef(jstr);
 		}
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			env->SetObjectArrayElement(varlen_data, row_idx,
-			                           env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx,
-			                                          env->NewStringUTF(vec.GetType().ToString().c_str())));
+			jstring jstr = env->NewStringUTF(vec.GetType().ToString().c_str());
+			jobject jstruct = env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx, jstr);
+			env->SetObjectArrayElement(varlen_data, row_idx, jstruct);
+			env->DeleteLocalRef(jstruct);
+			env->DeleteLocalRef(jstr);
 		}
+		env->DeleteLocalRef(names);
+		env->DeleteLocalRef(columns);
 
 		break;
 	}
@@ -665,6 +691,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
+			env->DeleteLocalRef(j_arr);
 		}
 		break;
 	case LogicalTypeId::UUID:
@@ -674,7 +701,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
 		auto &array_vector = ArrayVector::GetEntry(vec);
 		auto total_size = row_count * ArrayType::GetSize(vec.GetType());
-		auto j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
+		jobject j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
 
 		auto limit = ArrayType::GetSize(vec.GetType());
 
@@ -688,7 +715,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+			env->DeleteLocalRef(j_obj);
 		}
+		env->DeleteLocalRef(j_vec);
 		break;
 	}
 	case LogicalTypeId::MAP:
@@ -712,7 +741,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+			env->DeleteLocalRef(j_obj);
 		}
+		env->DeleteLocalRef(j_vec);
 		break;
 	}
 	case LogicalTypeId::VARIANT: {
@@ -728,7 +759,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			Vector variant_vec(variant_val);
 			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
 			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
+			check_java_exception_and_rethrow(env);
 			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);
+			env->DeleteLocalRef(variant_j_vec);
 		}
 		break;
 	}
@@ -750,12 +783,22 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
 			auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+			env->DeleteLocalRef(j_str);
 		}
 		break;
 	}
 
 	env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
+	if (constlen_data != nullptr) {
+		env->DeleteLocalRef(constlen_data);
+	}
 	env->SetObjectField(jvec, J_DuckVector_varlen, varlen_data);
+	if (varlen_data != nullptr) {
+		env->DeleteLocalRef(varlen_data);
+	}
+
+	env->DeleteLocalRef(null_array);
+	env->DeleteLocalRef(type_str);
 
 	return jvec;
 }
