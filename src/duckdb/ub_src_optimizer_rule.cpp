@@ -30,11 +30,17 @@
 
 #include "src/optimizer/rule/join_dependent_filter.cpp"
 
+#include "src/optimizer/rule/left_to_prefix.cpp"
+
 #include "src/optimizer/rule/like_optimizations.cpp"
 
 #include "src/optimizer/rule/list_comprehension_rewrite.cpp"
 
+#include "src/optimizer/rule/monotone_preimage.cpp"
+
 #include "src/optimizer/rule/move_constants.cpp"
+
+#include "src/optimizer/rule/not_comparison_simplification.cpp"
 
 #include "src/optimizer/rule/ordered_aggregate_optimizer.cpp"
 
