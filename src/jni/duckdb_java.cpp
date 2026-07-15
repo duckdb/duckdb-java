@@ -72,11 +72,12 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
-jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
+jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props,
+                             jboolean cache_instance) {
 	auto database = jbyteArray_to_string(env, database_j);
 	std::unique_ptr<DBConfig> config = create_db_config(env, read_only, props);
-	bool cache_instance = database != ":memory:" && !database.empty();
-	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, cache_instance);
+	bool should_cache = cache_instance && database != ":memory:" && !database.empty();
+	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, should_cache);
 	auto conn_ref = new ConnectionHolder(shared_db);
 
 	return env->NewDirectByteBuffer(conn_ref, 0);

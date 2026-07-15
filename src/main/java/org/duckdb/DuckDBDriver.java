@@ -30,6 +30,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
     public static final String JDBC_PIN_DB = "jdbc_pin_db";
+    public static final String JDBC_INSTANCE_CACHE = "jdbc_instance_cache";
     public static final String JDBC_IGNORE_UNSUPPORTED_OPTIONS = "jdbc_ignore_unsupported_options";
     public static final String JDBC_JFR_MEMORY_MONITOR = "jdbc_jfr_memory_monitor";
 
@@ -132,6 +133,10 @@ public class DuckDBDriver implements java.sql.Driver {
         // Pin DB option
         String pinDbOptStr = removeOption(props, JDBC_PIN_DB);
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
+        boolean instanceCacheOpt = isStringTruish(getOption(props, JDBC_INSTANCE_CACHE), true);
+        if (pinDBOpt && !instanceCacheOpt) {
+            throw new SQLException("'jdbc_pin_db' cannot be enabled when 'jdbc_instance_cache' is disabled");
+        }
 
         // Create connection
         DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, sf.origFileText, props);
@@ -169,6 +174,8 @@ public class DuckDBDriver implements java.sql.Driver {
         list.add(createDriverPropInfo(JDBC_AUTO_COMMIT, "", "Set default auto-commit mode"));
         list.add(createDriverPropInfo(JDBC_PIN_DB, "",
                                       "Do not close the DB instance after all connections to it are closed"));
+        list.add(createDriverPropInfo(JDBC_INSTANCE_CACHE, "",
+                                      "Reuse the process-wide DuckDB instance for the same database path"));
         list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
                                       "Silently discard unsupported connection options"));
         list.add(

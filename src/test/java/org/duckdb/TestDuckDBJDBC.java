@@ -987,16 +987,41 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_instance_cache() throws Exception {
-        Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
-        database_file.toFile().delete();
+        String jdbcUrl = JDBC_URL + "memory:instance_cache_" + UUID.randomUUID();
+        try (DuckDBConnection conn1 = DriverManager.getConnection(jdbcUrl).unwrap(DuckDBConnection.class);
+             DuckDBConnection conn2 = DriverManager.getConnection(jdbcUrl).unwrap(DuckDBConnection.class)) {
+            assertEquals(conn1.dbAddress, conn2.dbAddress);
+        }
 
-        String jdbc_url = JDBC_URL + database_file.toString();
+        String isolatedUrl = jdbcUrl + ";" + DuckDBDriver.JDBC_INSTANCE_CACHE + "=false";
+        try (DuckDBConnection conn1 = DriverManager.getConnection(isolatedUrl).unwrap(DuckDBConnection.class);
+             DuckDBConnection conn2 = DriverManager.getConnection(isolatedUrl).unwrap(DuckDBConnection.class);
+             Statement stmt1 = conn1.createStatement(); Statement stmt2 = conn2.createStatement();
+             DuckDBConnection duplicate = conn1.duplicate()) {
+            assertTrue(conn1.dbAddress != conn2.dbAddress);
+            assertEquals(conn1.dbAddress, duplicate.dbAddress);
 
-        Connection conn = DriverManager.getConnection(jdbc_url);
-        Connection conn2 = DriverManager.getConnection(jdbc_url);
+            stmt1.execute("ATTACH ':memory:' AS attached");
+            stmt2.execute("ATTACH ':memory:' AS attached");
+            stmt1.execute("CREATE TABLE attached.test(i INTEGER)");
+            try (PreparedStatement prepared = conn1.prepareStatement("SELECT * FROM attached.test")) {
+                prepared.executeQuery().close();
+                stmt2.execute("DETACH attached");
+                prepared.executeQuery().close();
+            }
+        }
+    }
 
-        conn.close();
-        conn2.close();
+    public static void test_instance_cache_option_validation() throws Exception {
+        Properties properties = new Properties();
+        properties.setProperty(DuckDBDriver.JDBC_INSTANCE_CACHE, "maybe");
+        String message = assertThrows(() -> { DriverManager.getConnection(JDBC_URL, properties); }, SQLException.class);
+        assertTrue(message.contains("Invalid boolean option value"));
+
+        properties.setProperty(DuckDBDriver.JDBC_INSTANCE_CACHE, "false");
+        properties.setProperty(DuckDBDriver.JDBC_PIN_DB, "true");
+        message = assertThrows(() -> { DriverManager.getConnection(JDBC_URL, properties); }, SQLException.class);
+        assertTrue(message.contains("'jdbc_pin_db' cannot be enabled"));
     }
 
     public static void test_user_password() throws Exception {

@@ -80,7 +80,10 @@ public final class DuckDBConnection implements java.sql.Connection {
         String autoCommitStr = removeOption(properties, JDBC_AUTO_COMMIT);
         boolean autoCommit = isStringTruish(autoCommitStr, true);
         String monitorName = removeOption(properties, DuckDBDriver.JDBC_JFR_MEMORY_MONITOR);
-        ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties);
+        String instanceCacheStr = removeOption(properties, DuckDBDriver.JDBC_INSTANCE_CACHE);
+        boolean instanceCache = isStringTruish(instanceCacheStr, true);
+        ByteBuffer nativeReference =
+            DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties, instanceCache);
         return new DuckDBConnection(nativeReference, url, readOnly, sessionInitSQL, autoCommit, monitorName);
     }
 
