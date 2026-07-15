@@ -133,10 +133,6 @@ public class DuckDBDriver implements java.sql.Driver {
         // Pin DB option
         String pinDbOptStr = removeOption(props, JDBC_PIN_DB);
         boolean pinDBOpt = isStringTruish(pinDbOptStr, false);
-        boolean instanceCacheOpt = isStringTruish(getOption(props, JDBC_INSTANCE_CACHE), true);
-        if (pinDBOpt && !instanceCacheOpt) {
-            throw new SQLException("'jdbc_pin_db' cannot be enabled when 'jdbc_instance_cache' is disabled");
-        }
 
         // Create connection
         DuckDBConnection conn = DuckDBConnection.newConnection(pp.shortUrl, readOnly, sf.origFileText, props);
@@ -175,7 +171,9 @@ public class DuckDBDriver implements java.sql.Driver {
         list.add(createDriverPropInfo(JDBC_PIN_DB, "",
                                       "Do not close the DB instance after all connections to it are closed"));
         list.add(createDriverPropInfo(JDBC_INSTANCE_CACHE, "",
-                                      "Reuse the process-wide DuckDB instance for the same database path"));
+                                      "Reuse the process-wide DuckDB instance for the same database path. Disabling "
+                                          + "creates an isolated instance per connection and may cause local file lock "
+                                          + "conflicts. Pinning an uncached instance does not make it reusable."));
         list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
                                       "Silently discard unsupported connection options"));
         list.add(

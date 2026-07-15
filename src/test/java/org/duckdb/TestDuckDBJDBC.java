@@ -987,6 +987,14 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_instance_cache() throws Exception {
+        try (TempDirectory dir = new TempDirectory()) {
+            String fileUrl = JDBC_URL + dir.path().resolve("instance_cache.db");
+            try (DuckDBConnection conn1 = DriverManager.getConnection(fileUrl).unwrap(DuckDBConnection.class);
+                 DuckDBConnection conn2 = DriverManager.getConnection(fileUrl).unwrap(DuckDBConnection.class)) {
+                assertEquals(conn1.dbAddress, conn2.dbAddress);
+            }
+        }
+
         String jdbcUrl = JDBC_URL + "memory:instance_cache_" + UUID.randomUUID();
         try (DuckDBConnection conn1 = DriverManager.getConnection(jdbcUrl).unwrap(DuckDBConnection.class);
              DuckDBConnection conn2 = DriverManager.getConnection(jdbcUrl).unwrap(DuckDBConnection.class)) {
@@ -1017,11 +1025,6 @@ public class TestDuckDBJDBC {
         properties.setProperty(DuckDBDriver.JDBC_INSTANCE_CACHE, "maybe");
         String message = assertThrows(() -> { DriverManager.getConnection(JDBC_URL, properties); }, SQLException.class);
         assertTrue(message.contains("Invalid boolean option value"));
-
-        properties.setProperty(DuckDBDriver.JDBC_INSTANCE_CACHE, "false");
-        properties.setProperty(DuckDBDriver.JDBC_PIN_DB, "true");
-        message = assertThrows(() -> { DriverManager.getConnection(JDBC_URL, properties); }, SQLException.class);
-        assertTrue(message.contains("'jdbc_pin_db' cannot be enabled"));
     }
 
     public static void test_user_password() throws Exception {
