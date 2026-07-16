@@ -140,7 +140,8 @@ final class DuckDBNative {
      */
 
     // results ConnectionHolder reference object
-    static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
+    static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props,
+                                                 boolean cache_instance) throws SQLException;
 
     // returns conn_ref connection reference object
     static native ByteBuffer duckdb_jdbc_connect(ByteBuffer conn_ref) throws SQLException;
