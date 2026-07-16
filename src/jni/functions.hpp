@@ -9,9 +9,9 @@
 
 void ThrowJNI(JNIEnv* env, const char* message);
 
-jobject _duckdb_jdbc_startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3);
+jobject _duckdb_jdbc_startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3, jboolean param4);
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3);
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3, jboolean param4);
 
 jobject _duckdb_jdbc_connect(JNIEnv * env, jclass param0, jobject param1);
 

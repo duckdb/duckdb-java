@@ -30,6 +30,7 @@ public class DuckDBDriver implements java.sql.Driver {
     public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
     public static final String JDBC_AUTO_COMMIT = "jdbc_auto_commit";
     public static final String JDBC_PIN_DB = "jdbc_pin_db";
+    public static final String JDBC_INSTANCE_CACHE = "jdbc_instance_cache";
     public static final String JDBC_IGNORE_UNSUPPORTED_OPTIONS = "jdbc_ignore_unsupported_options";
     public static final String JDBC_JFR_MEMORY_MONITOR = "jdbc_jfr_memory_monitor";
 
@@ -169,6 +170,10 @@ public class DuckDBDriver implements java.sql.Driver {
         list.add(createDriverPropInfo(JDBC_AUTO_COMMIT, "", "Set default auto-commit mode"));
         list.add(createDriverPropInfo(JDBC_PIN_DB, "",
                                       "Do not close the DB instance after all connections to it are closed"));
+        list.add(createDriverPropInfo(JDBC_INSTANCE_CACHE, "",
+                                      "Reuse the process-wide DuckDB instance for the same database path. Disabling "
+                                          + "creates an isolated instance per connection and may cause local file lock "
+                                          + "conflicts. Pinning an uncached instance does not make it reusable."));
         list.add(createDriverPropInfo(JDBC_IGNORE_UNSUPPORTED_OPTIONS, "",
                                       "Silently discard unsupported connection options"));
         list.add(
