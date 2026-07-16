@@ -4,9 +4,9 @@
 #include "functions.hpp"
 #include <exception>
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3, jboolean param4) {
 	try {
-		return _duckdb_jdbc_startup(env, param0, param1, param2, param3);
+		return _duckdb_jdbc_startup(env, param0, param1, param2, param3, param4);
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
