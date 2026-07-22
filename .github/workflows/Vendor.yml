@@ -7,10 +7,20 @@ on:
         required: false
         default: ''
         type: 'string'
+      duckdb-version:
+        description: 'Vendor Specific DuckDB Version'
+        required: false
+        default: ''
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
         description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
+      duckdb-version:
+        description: 'Vendor Specific DuckDB Version'
         required: false
         default: ''
         type: 'string'
@@ -137,6 +147,8 @@ jobs:
              --base "${{ github.ref_name }}" \
              --title "${{ steps.commit_and_push.outputs.commit_msg }}" \
              --body-file body.txt
+            PR_NUM=$(gh pr list --head vendoring-${{ github.ref_name }} --json number --jq '.[].number')
+            echo "pr_num=${PR_NUM}" >> "${GITHUB_OUTPUT}"
 
       - name: Update PR
         id: update_pr
@@ -156,6 +168,16 @@ jobs:
             gh pr edit ${{ steps.check_pr_exists.outputs.pr_num }} \
              --title "${{ steps.commit_and_push.outputs.commit_msg }}" \
              --body-file body.txt 
-            # Close and re-open the PR to trigger the tests
-            gh pr close ${{ steps.check_pr_exists.outputs.pr_num }}
-            gh pr reopen ${{ steps.check_pr_exists.outputs.pr_num }}
+
+      - name: Dispatch Java CI
+        id: dispatch_java_ci
+        if: ${{ steps.create_pr.outcome == 'success' || steps.update_pr.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR_NUM: ${{ steps.create_pr.outputs.pr_num || steps.check_pr_exists.outputs.pr_num }}
+        run: |
+            gh workflow run Java.yml \
+             --ref vendoring-${{ github.ref_name }} \
+             -f duckdb_sha="${{ inputs.duckdb-sha }}" \
+             -f duckdb_version="${{ inputs.duckdb-version }}" \
+             -f pr_number="${PR_NUM}"
