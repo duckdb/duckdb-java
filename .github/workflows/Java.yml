@@ -1041,7 +1041,7 @@ jobs:
 
   java-finalize-vendoring:
     name: Finalize vendoring
-    if: ${{ always() && github.repository == 'duckdb/duckdb-java' && github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/vendoring-') && inputs.pr_number != '' && inputs.duckdb_sha != '' && inputs.duckdb_version != '' }}
+    if: ${{ always() && github.repository == 'duckdb/duckdb-java' && github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/vendoring-') && inputs.pr_number != '' && inputs.duckdb_sha != '' }}
     needs:
       - format-check
       - java-linux-amd64
