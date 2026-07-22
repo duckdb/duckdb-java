@@ -609,7 +609,7 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 // Drop and Delete
 //===--------------------------------------------------------------------===//
 
-void ART::CommitDrop(IndexLock &index_lock) {
+void ART::ResetStorage(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}
@@ -741,6 +741,10 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
                            set<row_t> &row_ids) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 
