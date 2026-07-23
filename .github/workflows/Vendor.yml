@@ -30,6 +30,10 @@ jobs:
     name: "Update Vendored Sources"
     if: ${{ github.repository == 'duckdb/duckdb-java' }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
 
     steps:
       - name: Set up Python
@@ -173,7 +177,7 @@ jobs:
         id: dispatch_java_ci
         if: ${{ steps.create_pr.outcome == 'success' || steps.update_pr.outcome == 'success' }}
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ steps.create_pr.outputs.pr_num || steps.check_pr_exists.outputs.pr_num }}
         run: |
             gh workflow run Java.yml \

@@ -1081,7 +1081,7 @@ jobs:
         if: always()
         uses: duckdb/duckdb-workflow-trigger/dispatch@main
         with:
-          github_token: ${{ secrets.PAT_TOKEN }}
+          github_token: ${{ secrets.DUCKDB_RELEASE_DISPATCH_TOKEN }}
           event: client_ready
           client: java
           duckdb_version: ${{ inputs.duckdb_version }}
