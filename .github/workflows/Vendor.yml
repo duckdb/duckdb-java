@@ -86,8 +86,14 @@ jobs:
           # Export vendor revision for use in later steps
           echo "vendor_rev=${REV}" >> "${GITHUB_OUTPUT}"
 
-      - name: Check for incoming changes
+      - name: Apply Patches
         if: ${{ steps.vendor.outcome == 'success' }}
+        id: patches
+        run: |
+          patch -p1 < ./data/patches/row_id_handling_enum_undef.patch
+
+      - name: Check for incoming changes
+        if: ${{ steps.patches.outcome == 'success' }}
         id: check_for_changes
         run: |
           if git diff --exit-code; then
