@@ -4,6 +4,8 @@ on:
     branches-ignore:
       - 'vendoring-*'
   pull_request:
+    branches-ignore:
+      - 'vendoring-*'
   workflow_dispatch:
     inputs:
       skip_tests:
