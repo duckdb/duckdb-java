@@ -136,10 +136,7 @@ jobs:
         id: create_pr
         if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'false' }}
         env:
-          # We cannot use default workflow's GITHUB_TOKEN here, because
-          # it is restricted to not trigger 'pull_request' event that
-          # we need to dispatch the testing workflow.
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
             # Write multiline PR msg to a body.txt file 
             echo "Changes:" > body.txt
@@ -158,10 +155,7 @@ jobs:
         id: update_pr
         if: ${{ steps.prepare_pr_message.outcome == 'success' && steps.check_pr_exists.outputs.pr_exists == 'true' }}
         env:
-          # We cannot use default workflow's GITHUB_TOKEN here, because
-          # it is restricted to not trigger 'pull_request' event that
-          # we need to dispatch the testing workflow.
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
             # Write existing PR body text to a file
             gh pr view vendoring-${{ github.ref_name }} --json body --jq '.body' > body.txt
