@@ -19,6 +19,7 @@ runs:
         -e CXX='ccache g++'                          \
         -e CCACHE_DIR=/duckdb/ccache                 \
         -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk \
+        -e OVERRIDE_GIT_DESCRIBE                     \
         ${{ inputs.docker_image }}                    \
         bash -c "
           set -e
