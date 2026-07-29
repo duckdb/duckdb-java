@@ -181,13 +181,12 @@ artifact_dir = sys.argv[1]
 external_version = ""
 if len(sys.argv) == 3:
     external_version = sys.argv[2]
-snapshot_version = get_snapshot_version(external_version)
+version = get_snapshot_version(external_version)
 
 if not os.path.isdir(artifact_dir):
     print(f"Error: artifact_dir '{artifact_dir}' is not a directory")
     sys.exit(1)
 
-version = get_snapshot_version()
 print(f"Deploying SNAPSHOT version: {version}")
 
 staging_dir = tempfile.mkdtemp()
