@@ -26,11 +26,6 @@ on:
         required: false
         default: ''
         type: 'string'
-env:
-  AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.duckdb_version }}
 
 jobs:
 
@@ -99,12 +94,6 @@ jobs:
       - name: JDBC Tests
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -512,12 +501,6 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-aarch64
@@ -569,12 +552,6 @@ jobs:
         with:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64-musl.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64-musl.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-amd64-musl
@@ -625,12 +602,6 @@ jobs:
         uses: ./.github/composite-actions/linux-tests-musl-docker
         with:
           docker_image: '${{ env.ALPINE_IMAGE }}'
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64-musl.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64-musl.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -703,12 +674,6 @@ jobs:
         run: |
           java -version
           make test
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -786,12 +751,6 @@ jobs:
           java -version
           make test
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-aarch64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-aarch64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-windows-aarch64
@@ -857,12 +816,6 @@ jobs:
       - name: See if this actually universal
         shell: bash
         run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -1027,7 +980,6 @@ jobs:
     name: Finalize vendoring
     if: ${{ always() && github.repository == 'duckdb/duckdb-java' && github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/vendoring-') && inputs.pr_number != '' && inputs.duckdb_sha != '' }}
     needs:
-      - format-check
       - java-linux-amd64
       - java-linux-amd64-tck
       - java-linux-amd64-spark
