@@ -67,6 +67,8 @@ jobs:
       - name: Vendor sources
         if: ${{ steps.checkout_engine_rev.outcome == 'success' }}
         id: vendor
+        env:
+          OVERRIDE_GIT_DESCRIBE: ${{ inputs.duckdb_version }}
         run: |
           REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)
           echo "Updating vendored DuckDB sources to ${REV}"
