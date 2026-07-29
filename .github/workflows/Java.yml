@@ -3,9 +3,6 @@ on:
   push:
     branches-ignore:
       - 'vendoring-*'
-  pull_request:
-    branches-ignore:
-      - 'vendoring-*'
   workflow_dispatch:
     inputs:
       skip_tests:
@@ -33,6 +30,7 @@ jobs:
 
   format-check:
     name: Format Check
+    if: ${{ !(github.event_name == 'pull_request' && startsWith(github.head_ref, 'vendoring-')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -907,7 +905,7 @@ jobs:
 
   maven-snapshot-deploy:
     if: ${{ github.repository == 'duckdb/duckdb-java' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/vendoring-main') && github.event_name == 'workflow_dispatch' }}
-    name: Maven SNAPSHOT Deploy
+    name: Maven S3 Deploy
     runs-on: ubuntu-latest
     needs:
       - java-linux-amd64
@@ -965,7 +963,7 @@ jobs:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
 
-      - name: Deploy SNAPSHOT to S3
+      - name: Deploy snapshot to S3
         shell: bash
         env:
           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
@@ -976,7 +974,7 @@ jobs:
           echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
           gpg --batch --import maven_pgp_key
-          python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts
+          python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts ${{ inputs.duckdb_version }}
 
   java-finalize-vendoring:
     name: Finalize vendoring

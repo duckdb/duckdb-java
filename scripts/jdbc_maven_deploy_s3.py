@@ -50,30 +50,15 @@ def run_cmd(cmd, check=True, cwd=project_dir):
         raise RuntimeError(f"Command failed with code {result.returncode}")
     return result.stdout.strip()
 
-def get_snapshot_version():
-    """
-    Calculate SNAPSHOT version from the last release tag and current commit.
-
-    DuckDB uses 4-part versioning (e.g., v1.4.4.0). We increment the second
-    component (minor) and remove the third and fourth for SNAPSHOTs.
-    Example: v1.4.4.0 + commit abc1234 -> 1.5-abc1234-SNAPSHOT
-    """
-    last_tag = run_cmd('git tag --sort=-committerdate').split('\n')[0]
-    version_regex = re.compile(r'^v(\d+)\.(\d+)\.(\d+)\.(\d+)$')
-    match = version_regex.search(last_tag)
-    if not match:
-        raise ValueError(f"Could not parse last tag: {last_tag}")
-    major = int(match.group(1))
-    minor = int(match.group(2))
-    patch = int(match.group(3))
-    # Fourth component is intentionally reset to 0 for SNAPSHOT versions
+def get_snapshot_version(external_version):
     # Get short commit hash for traceability
-    commit_hash = run_cmd('git rev-parse --short HEAD')
-    # Override major and minor specifically for 2.0
-    major = 2
-    minor = 0
-    # Increment patch version and include commit hash
-    return f"{major}.{minor}-{commit_hash}-SNAPSHOT"
+    commit_hash = run_cmd('git rev-parse --short=7 HEAD')
+    prefix = "2.0.0-dev"
+    if len(external_version) > 0:
+        prefix = external_version
+    if prefix[0] == "v":
+        prefix = prefix[1:]
+    return f"{prefix}-{commit_hash}"
 
 def create_combined_jar(artifact_dir, bundle_dir, version):
     """Create a fat JAR combining native libraries from multiple platforms."""
@@ -188,12 +173,15 @@ def create_javadoc_jar(jdbc_root, bundle_dir, version):
 # main
 
 if len(sys.argv) < 2:
-    print("Usage: jdbc_maven_deploy_s3.py <artifact_dir>")
+    print("Usage: jdbc_maven_deploy_s3.py <artifact_dir> [external_version]")
     print("\nDeploys SNAPSHOT builds to S3.")
     sys.exit(1)
 
 artifact_dir = sys.argv[1]
-snapshot_version = get_snapshot_version();
+external_version = ""
+if len(sys.argv) == 3:
+    external_version = sys.argv[2]
+snapshot_version = get_snapshot_version(external_version)
 
 if not os.path.isdir(artifact_dir):
     print(f"Error: artifact_dir '{artifact_dir}' is not a directory")
@@ -207,7 +195,6 @@ staging_dir = tempfile.mkdtemp()
 bundle_dir = path.join(staging_dir, version)
 os.mkdir(bundle_dir)
 
-print("\n=== Creating artifacts ===")
 pom = create_pom(bundle_dir, version)
 combined_jar = create_combined_jar(artifact_dir, bundle_dir, version)
 sources_jar = create_sources_jar(project_dir, bundle_dir, version)
@@ -240,7 +227,7 @@ for file in files_to_deploy:
 
 for file in files_to_deploy:
   file_name = path.basename(file)
-  subprocess.run(["gpg", "--sign", "-ab", file_name], cwd=bundle_dir)
+  run_cmd(f"gpg --sign -ab {file_name}", cwd=bundle_dir)
   with open(file, "rb") as fd:
     file_bytes = fd.read()
   for alg in ["md5", "sha1", "sha256"]:
@@ -260,3 +247,16 @@ if not ("AWS_ENDPOINT_URL" in os.environ and
   dry_run = "--dryrun"
 
 run_cmd(f"aws s3 cp {bundle_dir} s3://duckdb-staging/duckdb/duckdb-java/maven/org/duckdb/duckdb_jdbc/{version}/ {dry_run} --recursive", cwd=staging_dir)
+
+print(f"""
+<dependency>
+    <groupId>org.duckdb</groupId>
+    <artifactId>duckdb_jdbc</artifactId>
+    <version>{version}</version>
+</dependency>
+
+<repository>
+    <id>duckdb</id>
+    <url>https://duckdb-staging.duckdb.org/duckdb/duckdb-java/maven/</url>
+</repository>
+""")
