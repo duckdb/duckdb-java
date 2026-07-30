@@ -275,7 +275,7 @@ jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jb
 static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, jobject stmt_ref_buf,
                                                                   jobjectArray params, bool stream_results) {
 	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref) {
+	if (!stmt_ref || !stmt_ref->stmt) {
 		throw InvalidInputException("Invalid statement");
 	}
 
@@ -283,11 +283,14 @@ static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, j
 
 	idx_t param_len = env->GetArrayLength(params);
 
-	if (param_len != stmt_ref->stmt->named_param_map.size()) {
+	if (param_len != stmt_ref->stmt->GetParameterCount()) {
 		throw InvalidInputException("Parameter count mismatch");
 	}
 
-	auto &context = stmt_ref->stmt->context;
+	auto context = stmt_ref->stmt->TryGetContext();
+	if (!context) {
+		throw InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
+	}
 
 	if (param_len > 0) {
 		for (idx_t i = 0; i < param_len; i++) {
@@ -310,12 +313,16 @@ static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, j
 
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
 	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref) {
+	if (!stmt_ref || !stmt_ref->stmt) {
 		throw InvalidInputException("Invalid statement");
+	}
+	auto context = stmt_ref->stmt->TryGetContext();
+	if (!context) {
+		throw InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
 	}
 	Value result;
 	bool stream_results =
-	    stmt_ref->stmt->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
+	    context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
 	auto res_ref = make_uniq<ResultHolder>();
 	res_ref->res = execute_prepared_statement(env, stmt_ref_buf, params, stream_results);
 	if (res_ref->res == nullptr) {
@@ -463,12 +470,14 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 	}
 
 	auto &stmt = stmt_ref->stmt;
-	auto n_param = stmt->named_param_map.size();
+	auto n_param = stmt->GetParameterCount();
 	duckdb::vector<LogicalType> param_types(n_param);
 	if (n_param > 0) {
-		auto expected_parameter_types = stmt->GetExpectedParameterTypes();
-		for (auto &it : stmt->named_param_map) {
-			param_types[it.second - 1] = expected_parameter_types[it.first.GetIdentifierName()];
+		for (auto &it : stmt->GetNamedParameterMap()) {
+			LogicalType type;
+			if (stmt->TryGetParameterType(it.first, type)) {
+				param_types[it.second - 1] = type;
+			}
 		}
 	}
 
