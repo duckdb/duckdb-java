@@ -6,7 +6,7 @@ index 9533ce112..dd9f7fbe9 100644
  #pragma once
  
  #include "duckdb/common/constants.hpp"
-+#include "duckdb/common/windows_undefs.hpp" // test4
++#include "duckdb/common/windows_undefs.hpp" // test5
  
  namespace duckdb {
  
