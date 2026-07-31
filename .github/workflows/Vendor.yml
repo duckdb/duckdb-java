@@ -73,7 +73,7 @@ jobs:
           REV=$(cd .git/duckdb && git rev-parse --short HEAD && cd ../..)
           echo "Updating vendored DuckDB sources to ${REV}"
           git config --global user.email "github_bot@duckdblabs.com"
-          git config --global user.name "DuckDB Labs GitHub Bot"
+          git config --global user.name "DuckLabs GitHub Bot"
           # Vendoring branch must exist, it may or may not already have
           # a pending PR on it, we are rebasing it anyway
           git checkout vendoring-${{ github.ref_name }}

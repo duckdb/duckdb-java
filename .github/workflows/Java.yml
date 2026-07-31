@@ -1019,12 +1019,10 @@ jobs:
         continue-on-error: true
         run: |
             BASE_BRANCH="${{ steps.merge_vendoring_pr.outputs.base_branch }}"
-            # Delete vendoring-${BASE_BRANCH} branch and re-create it for future PRs
-            git push --delete origin vendoring-${BASE_BRANCH}
             git checkout --track origin/${BASE_BRANCH}
             git pull --ff-only
             git branch vendoring-${BASE_BRANCH}
-            git push origin vendoring-${BASE_BRANCH}
+            git push -f origin vendoring-${BASE_BRANCH}
 
       - name: Record client status
         if: always()
