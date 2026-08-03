@@ -53,6 +53,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     volatile boolean closeOnCompletion = false;
 
     private DuckDBResultSet selectResult = null;
+    private boolean selectResultReturned = false;
     private long updateResult = 0;
 
     private DuckDBChunkedResult chunkedResult = null;
@@ -231,6 +232,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             cleanupCancelQueryTask();
             DuckDBResultSetMetaData resultMeta = DuckDBNative.duckdb_jdbc_query_result_meta(resultRef);
             selectResult = new DuckDBResultSet(conn, this, resultMeta, resultRef);
+            selectResultReturned = false;
             returnsResultSet = resultMeta.return_type.equals(QUERY_RESULT);
             returnsChangedRows = resultMeta.return_type.equals(CHANGED_ROWS);
             returnsNothing = resultMeta.return_type.equals(NOTHING);
@@ -607,14 +609,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("Statement was closed");
         }
 
-        if (!returnsResultSet) {
+        if (!returnsResultSet || selectResultReturned) {
             return null;
         }
 
         // getResultSet can only be called once per result
-        ResultSet to_return = selectResult;
-        this.selectResult = null;
-        return to_return;
+        this.selectResultReturned = true;
+        return selectResult;
     }
 
     private long getUpdateCountInternal() throws SQLException {
@@ -1374,6 +1375,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (selectResult != null) {
             selectResult.close();
             selectResult = null;
+            selectResultReturned = false;
         }
         if (chunkedResult != null) {
             chunkedResult.close();
