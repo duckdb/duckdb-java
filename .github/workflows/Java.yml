@@ -3,6 +3,7 @@ on:
   push:
     branches-ignore:
       - 'vendoring-*'
+  pull_request:
   workflow_dispatch:
     inputs:
       skip_tests:
