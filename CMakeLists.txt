@@ -39,6 +39,7 @@ endif()
 
 set(DUCKDB_INCLUDE_DIRS
   src/duckdb/extension/core_functions/include
+  src/duckdb/extension/icu/collation/include
   src/duckdb/extension/icu/include
   src/duckdb/extension/icu/third_party/icu/common
   src/duckdb/extension/icu/third_party/icu/i18n
@@ -102,6 +103,10 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/core_functions/scalar/enum/enum_functions.cpp
   src/duckdb/extension/core_functions/scalar/math/numeric.cpp
   src/duckdb/extension/core_functions/scalar/operators/bitwise.cpp
+  src/duckdb/extension/icu/collation/collation_collator.cpp
+  src/duckdb/extension/icu/collation/collation_loader.cpp
+  src/duckdb/extension/icu/collation/collation_normalizer.cpp
+  src/duckdb/extension/icu/collation/generated/collation_data.cpp
   src/duckdb/extension/icu/icu-current.cpp
   src/duckdb/extension/icu/icu-dateadd.cpp
   src/duckdb/extension/icu/icu-datefunc.cpp
