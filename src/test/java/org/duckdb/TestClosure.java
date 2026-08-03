@@ -110,10 +110,34 @@ public class TestClosure {
         assertTrue(stmt.isClosed());
     }
 
+    public static void test_results_execute_auto_closed_on_conn_close() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("select 42");
+        ResultSet rs = stmt.getResultSet();
+        assertNull(stmt.getResultSet());
+        rs.next();
+        conn.close();
+        assertTrue(rs.isClosed());
+        assertTrue(stmt.isClosed());
+    }
+
     public static void test_results_auto_closed_on_conn_close_prepared() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         PreparedStatement ps = conn.prepareStatement("select 42");
         ResultSet rs = ps.executeQuery();
+        rs.next();
+        conn.close();
+        assertTrue(rs.isClosed());
+        assertTrue(ps.isClosed());
+    }
+
+    public static void test_results_execute_auto_closed_on_conn_close_prepared() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        PreparedStatement ps = conn.prepareStatement("select 42");
+        ps.execute();
+        ResultSet rs = ps.getResultSet();
+        assertNull(ps.getResultSet());
         rs.next();
         conn.close();
         assertTrue(rs.isClosed());
