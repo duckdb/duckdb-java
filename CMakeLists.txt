@@ -40,9 +40,8 @@ endif()
 set(DUCKDB_INCLUDE_DIRS
   src/duckdb/extension/core_functions/include
   src/duckdb/extension/icu/collation/include
+  src/duckdb/extension/icu/datetime/include
   src/duckdb/extension/icu/include
-  src/duckdb/extension/icu/third_party/icu/common
-  src/duckdb/extension/icu/third_party/icu/i18n
   src/duckdb/extension/json/include
   src/duckdb/extension/parquet/include
   src/duckdb/src/include
@@ -107,6 +106,19 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/icu/collation/collation_loader.cpp
   src/duckdb/extension/icu/collation/collation_normalizer.cpp
   src/duckdb/extension/icu/collation/generated/collation_data.cpp
+  src/duckdb/extension/icu/datetime/astronomy.cpp
+  src/duckdb/extension/icu/datetime/calendar.cpp
+  src/duckdb/extension/icu/datetime/chinese.cpp
+  src/duckdb/extension/icu/datetime/coptic.cpp
+  src/duckdb/extension/icu/datetime/generated/tz_data.cpp
+  src/duckdb/extension/icu/datetime/grego.cpp
+  src/duckdb/extension/icu/datetime/gregorian.cpp
+  src/duckdb/extension/icu/datetime/hebrew.cpp
+  src/duckdb/extension/icu/datetime/islamic.cpp
+  src/duckdb/extension/icu/datetime/japanese.cpp
+  src/duckdb/extension/icu/datetime/persian.cpp
+  src/duckdb/extension/icu/datetime/timezone.cpp
+  src/duckdb/extension/icu/datetime/tz_loader.cpp
   src/duckdb/extension/icu/icu-current.cpp
   src/duckdb/extension/icu/icu-dateadd.cpp
   src/duckdb/extension/icu/icu-datefunc.cpp
@@ -120,132 +132,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/icu/icu-timebucket.cpp
   src/duckdb/extension/icu/icu-timezone.cpp
   src/duckdb/extension/icu/icu_extension.cpp
-  src/duckdb/extension/icu/third_party/icu/common/bytestriebuilder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/loadednormalizer2impl.cpp
-  src/duckdb/extension/icu/third_party/icu/common/localebuilder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/locdistance.cpp
-  src/duckdb/extension/icu/third_party/icu/common/loclikelysubtags.cpp
-  src/duckdb/extension/icu/third_party/icu/common/locmap.cpp
-  src/duckdb/extension/icu/third_party/icu/common/putil.cpp
-  src/duckdb/extension/icu/third_party/icu/common/static_unicode_sets.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ubidi_props.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ubiditransform.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ucase.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ucharstriebuilder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ucptrie.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uhash.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uloc.cpp
-  src/duckdb/extension/icu/third_party/icu/common/umapfile.cpp
-  src/duckdb/extension/icu/third_party/icu/common/umutablecptrie.cpp
-  src/duckdb/extension/icu/third_party/icu/common/unames.cpp
-  src/duckdb/extension/icu/third_party/icu/common/unifiedcache.cpp
-  src/duckdb/extension/icu/third_party/icu/common/unormcmp.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uresbund.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uresdata.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uscript_props.cpp
-  src/duckdb/extension/icu/third_party/icu/common/ustrcase.cpp
-  src/duckdb/extension/icu/third_party/icu/common/utrie.cpp
-  src/duckdb/extension/icu/third_party/icu/common/utrie2.cpp
-  src/duckdb/extension/icu/third_party/icu/common/utrie2_builder.cpp
-  src/duckdb/extension/icu/third_party/icu/common/uvector.cpp
-  src/duckdb/extension/icu/third_party/icu/common/wintz.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/buddhcal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/calendar.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/cecal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/chnsecal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/choicfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/collationroot.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/compactdecimalformat.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/coptccal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/currpinf.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dayperiodrules.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/decNumber.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/decimfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum-dtoa.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-bignum.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-cached-powers.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-double-to-string.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-fast-dtoa.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-string-to-double.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/double-conversion-strtod.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtfmtsym.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtitvfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/dtptngen.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/ethpccal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/fmtable.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/formattedval_sbimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/gregocal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/gregoimp.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/hebrwcal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/indiancal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/islamcal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/iso8601cal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/japancal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/measfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/measunit_extra.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/msgfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/nfrs.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/nfrule.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/nfsubs.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_asformat.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_capi.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_compact.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_currencysymbols.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_decimalquantity.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_fluent.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_formatimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_grouping.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_integerwidth.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_longnames.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_mapper.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_multiplier.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_output.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_patternmodifier.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_patternstring.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_rounding.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_scientific.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_simple.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_skeletons.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_symbolswrapper.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_usageprefs.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/number_utils.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_affixes.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_compositions.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_currency.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_decimal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_impl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_parsednumber.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_scientific.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_symbols.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numparse_validators.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numrange_capi.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numrange_fluent.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numrange_impl.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/numsys.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/persncal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/pluralranges.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/plurfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/plurrule.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/quantityformatter.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/rbnf.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/smpdtfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/string_segment.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/taiwncal.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/timezone.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/tmutfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/tzgnames.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/ucol.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/ucol_res.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_complexconverter.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_data.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/units_router.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/upluralrules.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/vtzone.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/windtfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/winnmfmt.cpp
-  src/duckdb/extension/icu/third_party/icu/i18n/wintzimpl.cpp
-  src/duckdb/extension/icu/third_party/icu/stubdata/stubdata.cpp
   src/duckdb/extension/json/json_common.cpp
   src/duckdb/extension/json/json_deserializer.cpp
   src/duckdb/extension/json/json_enums.cpp
@@ -481,8 +367,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_core_functions_scalar_string.cpp
   src/duckdb/ub_extension_core_functions_scalar_struct.cpp
   src/duckdb/ub_extension_core_functions_scalar_union.cpp
-  src/duckdb/ub_extension_icu_third_party_icu_common.cpp
-  src/duckdb/ub_extension_icu_third_party_icu_i18n.cpp
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/ub_extension_parquet_reader.cpp
