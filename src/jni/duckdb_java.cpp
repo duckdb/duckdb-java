@@ -390,7 +390,7 @@ void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
 	}
 }
 
-static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
+static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<Identifier> &names,
                           const duckdb::vector<LogicalType> &types, StatementProperties properties,
                           const duckdb::vector<LogicalType> &param_types) {
 	auto name_array = env->NewObjectArray(column_count, J_String, nullptr);
@@ -405,7 +405,8 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 			col_name = types[col_idx].ToString();
 		}
 
-		jstring jname = decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length());
+		const std::string &sname = names[col_idx].GetIdentifierName();
+		jstring jname = decode_charbuffer_to_jstring(env, sname.c_str(), sname.length());
 		env->SetObjectArrayElement(name_array, col_idx, jname);
 		env->DeleteLocalRef(jname);
 		jstring jcolname = env->NewStringUTF(col_name.c_str());
@@ -458,8 +459,8 @@ jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf)
 	auto n_param = 0; // no params now
 	duckdb::vector<LogicalType> param_types(n_param);
 
-	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties,
-	                  param_types);
+	return build_meta(env, result->ColumnCount(), n_param, result->GetNames(), result->GetTypes(),
+	                  result->GetStatementProperties(), param_types);
 }
 
 jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
@@ -481,13 +482,8 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 		}
 	}
 
-	duckdb::vector<std::string> names;
-	names.reserve(stmt->GetNames().size());
-	for (const Identifier &ident : stmt->GetNames()) {
-		names.emplace_back(ident.GetIdentifierName());
-	}
-	return build_meta(env, stmt->ColumnCount(), n_param, names, stmt->GetTypes(), stmt->GetStatementProperties(),
-	                  param_types);
+	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
+	                  stmt->GetStatementProperties(), param_types);
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
