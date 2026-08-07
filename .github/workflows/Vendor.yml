@@ -87,7 +87,7 @@ jobs:
           echo "vendor_rev=${REV}" >> "${GITHUB_OUTPUT}"
 
       - name: Check for incoming changes
-        if: ${{ steps.patches.outcome == 'success' }}
+        if: ${{ steps.vendor.outcome == 'success' }}
         id: check_for_changes
         run: |
           if git diff --exit-code; then
