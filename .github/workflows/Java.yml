@@ -1,6 +1,8 @@
 name: Java JDBC
 on:
   push:
+    branches-ignore:
+      - 'vendoring-*'
   pull_request:
   workflow_dispatch:
     inputs:
@@ -9,10 +11,6 @@ on:
         required: false
         default: 'false'
         type: 'string'
-env:
-  AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
 
 jobs:
 
@@ -20,7 +18,7 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - run: |
@@ -34,7 +32,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -46,7 +44,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -63,7 +61,7 @@ jobs:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -88,12 +86,6 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-amd64
@@ -107,7 +99,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -119,7 +111,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -132,7 +124,7 @@ jobs:
 
       - name: Checkout Platform TCK
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: jakartaee/platform-tck
           ref: 10.0.6
@@ -140,7 +132,7 @@ jobs:
 
       - name: Checkout CTS Runner 
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: duckdb/jdbc_compatibility_test_suite_runner
           path: jdbc_compatibility_test_suite_runner
@@ -185,7 +177,7 @@ jobs:
       MINIO_HOST: 127.0.0.1
       MINIO_PORT: 9000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -198,7 +190,7 @@ jobs:
 
       - name: Restore Cache
         if: ${{ inputs.skip_tests != 'true' }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -270,7 +262,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/ccache
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -291,7 +283,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -304,7 +296,7 @@ jobs:
           make sanitized
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -363,12 +355,12 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Checkout Jepsen
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: jepsen-io/duckdb
           ref: 95731d970339780b934ac106831d704ce3ad23ba
@@ -382,7 +374,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -458,7 +450,7 @@ jobs:
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -470,7 +462,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -481,7 +473,7 @@ jobs:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -500,12 +492,6 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-aarch64
@@ -519,7 +505,7 @@ jobs:
     env:
       ALPINE_IMAGE: alpine:3.22
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -531,7 +517,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -542,7 +528,7 @@ jobs:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -557,12 +543,6 @@ jobs:
         with:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-amd64-musl.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64-musl.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-amd64-musl
@@ -576,7 +556,7 @@ jobs:
     env:
       ALPINE_IMAGE: alpine:3.22
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -588,7 +568,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -599,7 +579,7 @@ jobs:
           docker_image: '${{ env.ALPINE_IMAGE }}'
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -613,12 +593,6 @@ jobs:
         uses: ./.github/composite-actions/linux-tests-musl-docker
         with:
           docker_image: '${{ env.ALPINE_IMAGE }}'
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64-musl.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64-musl.jar
 
       - uses: actions/upload-artifact@v4
         with:
@@ -635,7 +609,7 @@ jobs:
       CXX: 'ccache cl'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -656,7 +630,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -673,7 +647,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -692,12 +666,6 @@ jobs:
           java -version
           make test
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-windows-amd64
@@ -713,7 +681,7 @@ jobs:
       CXX: 'ccache cl'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -738,7 +706,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -755,7 +723,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -774,12 +742,6 @@ jobs:
           java -version
           make test
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-windows-aarch64.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-aarch64.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-windows-aarch64
@@ -796,7 +758,7 @@ jobs:
       CXX: 'ccache clang++'
       CCACHE_DIR: ${{ github.workspace }}/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -812,7 +774,7 @@ jobs:
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }}
@@ -828,7 +790,7 @@ jobs:
         run: make release
 
       - name: Save Cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/ccache
           key: ${{ steps.cache_key.outputs.value }} 
@@ -846,12 +808,6 @@ jobs:
         shell: bash
         run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
 
-      - name: Deploy
-        shell: bash
-        run: |
-          cp build/release/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
-          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
-
       - uses: actions/upload-artifact@v4
         with:
           name: java-osx-universal
@@ -859,7 +815,7 @@ jobs:
             build/release/duckdb_jdbc.jar
 
   maven-deploy:
-    if: ${{ github.repository == 'duckdb/duckdb-java' && inputs.override_git_describe == '' && startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.repository == 'duckdb/duckdb-java' && startsWith(github.ref, 'refs/tags/') }}
     name: Maven Deploy
     runs-on: ubuntu-latest
     needs:
@@ -876,7 +832,7 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -938,14 +894,10 @@ jobs:
           path: |
             jdbc-artifacts
 
-  # Publish SNAPSHOT builds to Maven Central Snapshots repository on main branch
-  # SNAPSHOTs don't require GPG signatures or validation
-  # See: https://central.sonatype.org/publish/publish-portal-snapshots/
   maven-snapshot-deploy:
     if: ${{ github.repository == 'duckdb/duckdb-java' && github.ref == 'refs/heads/v1.5-variegata' && github.event_name == 'workflow_dispatch' }}
-    name: Maven SNAPSHOT Deploy
+    name: Maven S3 Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
@@ -960,15 +912,9 @@ jobs:
       - java-osx-universal
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '11'
-          distribution: 'temurin'
 
       - shell: bash
         run: mkdir jdbc-artifacts
@@ -1008,13 +954,18 @@ jobs:
           name: java-osx-universal
           path: jdbc-artifacts/java-osx-universal
 
-      - name: Deploy SNAPSHOT to Maven Central
+      - name: Deploy snapshot to S3
         shell: bash
         env:
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          python ./scripts/jdbc_maven_deploy_snapshot.py jdbc-artifacts .
+          mkdir -m  700 -p ~/.gnupg
+          echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
+          echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
+          gpg --batch --import maven_pgp_key
+          python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts 1.5.5.2-dev
 
   java-merge-vendoring-pr:
     name: Merge vendoring PR 
@@ -1033,7 +984,7 @@ jobs:
       - java-osx-universal
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
