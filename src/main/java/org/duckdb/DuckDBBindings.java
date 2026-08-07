@@ -4,9 +4,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 public class DuckDBBindings {
 
@@ -380,6 +377,22 @@ public class DuckDBBindings {
         final long widthBytes;
         final CAPIType[] typeArray;
 
+        private static final CAPIType[] BY_TYPE_ID;
+
+        static {
+            int max = 0;
+            CAPIType[] values = CAPIType.values();
+            for (CAPIType ct : values) {
+                if (ct.typeId > max) {
+                    max = ct.typeId;
+                }
+            }
+            BY_TYPE_ID = new CAPIType[max + 1];
+            for (CAPIType ct : values) {
+                BY_TYPE_ID[ct.typeId] = ct;
+            }
+        }
+
         CAPIType(int typeId) {
             this(typeId, 0);
         }
@@ -391,10 +404,8 @@ public class DuckDBBindings {
         }
 
         static CAPIType capiTypeFromTypeId(int typeId) throws SQLException {
-            for (CAPIType ct : CAPIType.values()) {
-                if (ct.typeId == typeId) {
-                    return ct;
-                }
+            if (typeId >= 0 && typeId < BY_TYPE_ID.length && BY_TYPE_ID[typeId] != null) {
+                return BY_TYPE_ID[typeId];
             }
             throw new SQLException("Invalid unknown ID not found: " + typeId);
         }
