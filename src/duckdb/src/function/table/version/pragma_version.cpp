@@ -1,5 +1,5 @@
 #ifndef DUCKDB_PATCH_VERSION
-#define DUCKDB_PATCH_VERSION "0-alpha36812"
+#define DUCKDB_PATCH_VERSION "0-alpha37080"
 #endif
 #ifndef DUCKDB_MINOR_VERSION
 #define DUCKDB_MINOR_VERSION 0
@@ -8,10 +8,10 @@
 #define DUCKDB_MAJOR_VERSION 2
 #endif
 #ifndef DUCKDB_VERSION
-#define DUCKDB_VERSION "v2.0.0-alpha36812"
+#define DUCKDB_VERSION "v2.0.0-alpha37080"
 #endif
 #ifndef DUCKDB_SOURCE_ID
-#define DUCKDB_SOURCE_ID "193754bd44"
+#define DUCKDB_SOURCE_ID "e85c4d27d7"
 #endif
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
@@ -30,7 +30,7 @@ struct PragmaVersionData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("library_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
@@ -114,7 +114,7 @@ struct PragmaPlatformData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaPlatformBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("platform");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
