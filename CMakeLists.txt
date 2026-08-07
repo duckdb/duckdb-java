@@ -451,6 +451,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_optimizer_join_order.cpp
   src/duckdb/ub_src_optimizer_pullup.cpp
   src/duckdb/ub_src_optimizer_pushdown.cpp
+  src/duckdb/ub_src_optimizer_relation_statistics.cpp
   src/duckdb/ub_src_optimizer_rule.cpp
   src/duckdb/ub_src_optimizer_statistics_expression.cpp
   src/duckdb/ub_src_optimizer_statistics_operator.cpp
