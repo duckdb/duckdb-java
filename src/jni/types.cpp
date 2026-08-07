@@ -153,10 +153,10 @@ static duckdb::Value create_value_from_struct(JNIEnv *env, jobject param, duckdb
 
 	for (int i = 0; i < size; i++) {
 		auto name = duckdb::StructType::GetChildName(type, i);
-
-		auto value = env->GetObjectArrayElement(jvalues, i);
-
-		values.emplace_back(name, to_duckdb_value(env, value, context));
+		auto jvalue = env->GetObjectArrayElement(jvalues, i);
+		auto value = to_duckdb_value(env, jvalue, context);
+		env->DeleteLocalRef(jvalue);
+		values.emplace_back(name, std::move(value));
 	}
 
 	return duckdb::Value::STRUCT(std::move(values));
@@ -175,9 +175,10 @@ static duckdb::Value create_value_from_array(JNIEnv *env, jobject param, duckdb:
 
 	duckdb::vector<duckdb::Value> values;
 	for (int i = 0; i < size; i++) {
-		auto value = env->GetObjectArrayElement(jvalues, i);
-
-		values.emplace_back(to_duckdb_value(env, value, context));
+		auto jvalue = env->GetObjectArrayElement(jvalues, i);
+		auto value = to_duckdb_value(env, jvalue, context);
+		env->DeleteLocalRef(jvalue);
+		values.emplace_back(std::move(value));
 	}
 
 	return (duckdb::Value::LIST(type, values));
