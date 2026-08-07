@@ -206,6 +206,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1struct_
 			return nullptr;
 		}
 		duckdb_logical_type lt = logical_type_buf_to_logical_type(env, lt_buf);
+		env->DeleteLocalRef(lt_buf);
 		if (env->ExceptionCheck()) {
 			return nullptr;
 		}
@@ -227,6 +228,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1struct_
 			return nullptr;
 		}
 		std::string str = jbyteArray_to_string(env, jba);
+		env->DeleteLocalRef(jba);
 		if (env->ExceptionCheck()) {
 			return nullptr;
 		}

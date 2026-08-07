@@ -296,6 +296,7 @@ static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, j
 		for (idx_t i = 0; i < param_len; i++) {
 			auto param = env->GetObjectArrayElement(params, i);
 			duckdb::Value val = to_duckdb_value(env, param, *context);
+			env->DeleteLocalRef(param);
 			duckdb_params.push_back(std::move(val));
 		}
 	}
