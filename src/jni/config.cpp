@@ -108,13 +108,16 @@ std::unique_ptr<duckdb::DBConfig> create_db_config(JNIEnv *env, jboolean read_on
 		check_java_exception_and_rethrow(env);
 
 		jstring key_jstr = reinterpret_cast<jstring>(env->CallObjectMethod(key, J_Object_toString));
+		env->DeleteLocalRef(key);
 		check_java_exception_and_rethrow(env);
 		std::string key_str = jstring_to_string(env, key_jstr);
+		env->DeleteLocalRef(key_jstr);
 
 		duckdb::Value dvalue = jobj_to_value(env, key_str, value);
+		env->DeleteLocalRef(value);
 
 		try {
-			config->SetOptionByName(key_str, dvalue);
+			config->SetOptionByName(duckdb::Identifier(key_str), dvalue);
 		} catch (const std::exception &e) {
 			duckdb::ErrorData error(e);
 			throw duckdb::CatalogException("Failed to set configuration option \"%s\", error: %s", key_str,
