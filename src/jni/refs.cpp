@@ -123,6 +123,7 @@ jmethodID J_DuckDBTableFunctionWrapper_executeBind;
 jmethodID J_DuckDBTableFunctionWrapper_executeGlobalInit;
 jmethodID J_DuckDBTableFunctionWrapper_executeLocalInit;
 jmethodID J_DuckDBTableFunctionWrapper_executeFunction;
+jmethodID J_DuckDBTableFunctionWrapper_closeTableFunctionState;
 
 static std::vector<jobject> global_refs;
 
@@ -318,6 +319,8 @@ void create_refs(JNIEnv *env) {
 	    get_method_id(env, J_DuckDBTableFunctionWrapper, "executeLocalInit", "(Ljava/nio/ByteBuffer;)V");
 	J_DuckDBTableFunctionWrapper_executeFunction = get_method_id(env, J_DuckDBTableFunctionWrapper, "executeFunction",
 	                                                             "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V");
+	J_DuckDBTableFunctionWrapper_closeTableFunctionState =
+	    get_static_method_id(env, J_DuckDBTableFunctionWrapper, "closeTableFunctionState", "(Ljava/lang/Object;)V");
 }
 
 void delete_global_refs(JNIEnv *env) noexcept {

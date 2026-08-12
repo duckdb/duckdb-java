@@ -13,6 +13,17 @@ class DuckDBTableFunctionWrapper {
         this.function = function;
     }
 
+    static void closeTableFunctionState(Object state) {
+        if (!(state instanceof DuckDBTableFunctionState)) {
+            return;
+        }
+        try {
+            ((DuckDBTableFunctionState) state).close();
+        } catch (Throwable ignored) {
+            // State cleanup is best effort because the query may already be finished.
+        }
+    }
+
     public void executeBind(ByteBuffer bindInfoRef) {
         try {
             DuckDBTableFunctionBindInfo bindInfo = new DuckDBTableFunctionBindInfo(bindInfoRef);
