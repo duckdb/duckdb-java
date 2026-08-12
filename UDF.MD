@@ -218,6 +218,38 @@ Table function callback must implement `DuckDBTableFunction` interface:
  - `localInit` (optional) - called once for every thread before the function execution, returns an object used to track thread-local state during function execution
  - `apply` - has access to bind data, global init data and local init date, writes results into output vectors, returns a number of written row, is called by the engine repeatedly until it return zero rows
 
+States that own resources can opt into deterministic cleanup by implementing
+`DuckDBTableFunctionState`:
+
+```java
+final class SourceState implements DuckDBTableFunctionState {
+    private final AutoCloseable resource;
+
+    SourceState(AutoCloseable resource) {
+        this.resource = resource;
+    }
+
+    @Override
+    public void close() throws Exception {
+        resource.close();
+    }
+}
+```
+
+After a state is successfully installed as bind, global-init, or local-init
+data, DuckDB owns its lifecycle and calls `close()` when that state is
+destroyed. This can happen after normal exhaustion, a `LIMIT`, an error,
+cancellation, or early JDBC result/statement/connection closure. Only objects
+implementing `DuckDBTableFunctionState` opt in; an object implementing only
+`AutoCloseable`, and `null`, are left unchanged.
+
+Cleanup can run on native worker threads. Local states can be closed
+concurrently, and no global ordering is guaranteed between bind, global-init,
+and local states. Make `close()` fast, idempotent, and thread-safe when it
+manages shared resources. It must not execute SQL or re-enter the same
+connection. Exceptions from `close()` are handled on a best-effort basis and
+are not propagated to the query, so record any diagnostics inside the state.
+
 To enable parallel function execution it is necessary to set desired number of threads using `info.setMaxThreads()` method during the global init call.
 Depending on the query it also may be necessary to set `preserve_insertion_order=FALSE` option ([reference](https://duckdb.org/docs/current/configuration/overview#global-configuration-options)) in connection string or in connection properties object.
 
@@ -272,4 +304,3 @@ try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement st
 ```sql
 FROM java_table_basic(42, param1='foobar')
 ```
-
