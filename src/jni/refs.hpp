@@ -125,6 +125,7 @@ extern jmethodID J_DuckDBTableFunctionWrapper_executeBind;
 extern jmethodID J_DuckDBTableFunctionWrapper_executeGlobalInit;
 extern jmethodID J_DuckDBTableFunctionWrapper_executeLocalInit;
 extern jmethodID J_DuckDBTableFunctionWrapper_executeFunction;
+extern jmethodID J_DuckDBTableFunctionWrapper_closeTableFunctionState;
 
 void create_refs(JNIEnv *env);
 

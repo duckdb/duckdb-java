@@ -11,12 +11,125 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.duckdb.DuckDBFunctions.FunctionException;
 
 public class TestTableFunctions {
+
+    private static final AtomicInteger LIFECYCLE_FUNCTION_ID = new AtomicInteger();
+
+    @SuppressWarnings("try")
+    private static final class TrackingState implements DuckDBTableFunctionState {
+        private final boolean throwOnClose;
+        private final AtomicInteger closeCalls = new AtomicInteger();
+
+        TrackingState(boolean throwOnClose) {
+            this.throwOnClose = throwOnClose;
+        }
+
+        @Override
+        public void close() throws Exception {
+            closeCalls.incrementAndGet();
+            if (throwOnClose) {
+                throw new Exception("table function state close failure");
+            }
+        }
+    }
+
+    private static final class LifecycleTracker {
+        final boolean failInApply;
+        final boolean parallel;
+        final long rows;
+        final boolean throwOnClose;
+        final AtomicLong remaining = new AtomicLong();
+        final ConcurrentLinkedQueue<TrackingState> bindStates = new ConcurrentLinkedQueue<>();
+        final ConcurrentLinkedQueue<TrackingState> globalStates = new ConcurrentLinkedQueue<>();
+        final ConcurrentLinkedQueue<TrackingState> localStates = new ConcurrentLinkedQueue<>();
+
+        LifecycleTracker(long rows, boolean failInApply, boolean throwOnClose, boolean parallel) {
+            this.rows = rows;
+            this.failInApply = failInApply;
+            this.throwOnClose = throwOnClose;
+            this.parallel = parallel;
+        }
+    }
+
+    private static final class PlainAutoCloseableState implements AutoCloseable {
+        final AtomicInteger closeCalls = new AtomicInteger();
+
+        @Override
+        public void close() {
+            closeCalls.incrementAndGet();
+        }
+    }
+
+    private static String registerLifecycleTableFunction(Connection conn, final LifecycleTracker tracker)
+        throws Exception {
+        String name = "java_table_function_state_" + LIFECYCLE_FUNCTION_ID.incrementAndGet();
+        DuckDBFunctions.tableFunction()
+            .withName(name)
+            .withFunction(new DuckDBTableFunction<TrackingState, TrackingState, TrackingState>() {
+                @Override
+                public TrackingState bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                    info.addResultColumn("value", Long.TYPE);
+                    TrackingState state = new TrackingState(tracker.throwOnClose);
+                    tracker.bindStates.add(state);
+                    return state;
+                }
+
+                @Override
+                public TrackingState init(DuckDBTableFunctionInitInfo info) throws Exception {
+                    info.setMaxThreads(tracker.parallel ? Runtime.getRuntime().availableProcessors() : 1);
+                    tracker.remaining.set(tracker.rows);
+                    TrackingState state = new TrackingState(tracker.throwOnClose);
+                    tracker.globalStates.add(state);
+                    return state;
+                }
+
+                @Override
+                public TrackingState localInit(DuckDBTableFunctionInitInfo info) throws Exception {
+                    TrackingState state = new TrackingState(tracker.throwOnClose);
+                    tracker.localStates.add(state);
+                    return state;
+                }
+
+                @Override
+                public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                    if (tracker.failInApply) {
+                        throw new Exception("table function apply failure");
+                    }
+                    long written = 0;
+                    while (written < output.capacity()) {
+                        long remaining = tracker.remaining.getAndDecrement();
+                        if (remaining <= 0) {
+                            break;
+                        }
+                        output.vector(0).setLong(written++, remaining);
+                    }
+                    return written;
+                }
+            })
+            .register(conn);
+        return name;
+    }
+
+    private static void assertLifecycleStatesClosed(LifecycleTracker tracker) throws Exception {
+        assertTrue(!tracker.bindStates.isEmpty());
+        assertTrue(!tracker.globalStates.isEmpty());
+        assertTrue(!tracker.localStates.isEmpty());
+        for (TrackingState state : tracker.bindStates) {
+            assertEquals(state.closeCalls.get(), 1);
+        }
+        for (TrackingState state : tracker.globalStates) {
+            assertEquals(state.closeCalls.get(), 1);
+        }
+        for (TrackingState state : tracker.localStates) {
+            assertEquals(state.closeCalls.get(), 1);
+        }
+    }
 
     public static void test_table_function_basic() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
@@ -395,5 +508,252 @@ public class TestTableFunctions {
             }
             assertEquals(threadsUsed.get(), Runtime.getRuntime().availableProcessors());
         }
+    }
+
+    public static void test_table_function_state_limit_cleanup() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(1 << 16, false, false, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        ResultSet rs = stmt.executeQuery("SELECT * FROM " + functionName + "() LIMIT 1");
+        assertTrue(rs.next());
+        rs.close();
+        rs.close();
+        stmt.close();
+        stmt.close();
+        assertTrue(tracker.remaining.get() > 0);
+        assertLifecycleStatesClosed(tracker);
+        conn.close();
+        conn.close();
+        assertLifecycleStatesClosed(tracker);
+    }
+
+    public static void test_table_function_state_normal_completion() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(17, false, false, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+            long rows = 0;
+            while (rs.next()) {
+                rows++;
+            }
+            assertEquals(rows, 17L);
+        }
+        stmt.close();
+        assertLifecycleStatesClosed(tracker);
+        conn.close();
+    }
+
+    public static void test_table_function_state_apply_error_cleanup() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(17, true, false, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        assertThrows(() -> {
+            try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+                rs.next();
+            }
+        }, java.sql.SQLException.class);
+        stmt.close();
+        assertLifecycleStatesClosed(tracker);
+        conn.close();
+    }
+
+    public static void test_table_function_state_connection_cleanup() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(1 << 16, false, false, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL + ";jdbc_stream_results=true");
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        ResultSet rs = stmt.executeQuery("SELECT * FROM " + functionName + "() LIMIT 1");
+        assertTrue(rs.next());
+        conn.close();
+        assertTrue(tracker.remaining.get() > 0);
+        assertLifecycleStatesClosed(tracker);
+    }
+
+    public static void test_table_function_state_close_exception_suppressed() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(1, false, true, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+            assertTrue(rs.next());
+            assertFalse(rs.next());
+        }
+        stmt.close();
+
+        try (Statement subsequent = conn.createStatement(); ResultSet rs = subsequent.executeQuery("SELECT 42")) {
+            assertTrue(rs.next());
+            assertEquals(rs.getInt(1), 42);
+            assertFalse(rs.next());
+        }
+        conn.close();
+        assertLifecycleStatesClosed(tracker);
+    }
+
+    public static void test_table_function_state_requires_marker() throws Exception {
+        PlainAutoCloseableState bindState = new PlainAutoCloseableState();
+        PlainAutoCloseableState globalState = new PlainAutoCloseableState();
+        PlainAutoCloseableState localState = new PlainAutoCloseableState();
+        String functionName = "java_table_function_plain_state_" + LIFECYCLE_FUNCTION_ID.incrementAndGet();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.tableFunction()
+                .withName(functionName)
+                .withFunction(new DuckDBTableFunction<PlainAutoCloseableState, PlainAutoCloseableState,
+                                                      PlainAutoCloseableState>() {
+                    @Override
+                    public PlainAutoCloseableState bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                        info.addResultColumn("value", Integer.TYPE);
+                        return bindState;
+                    }
+
+                    @Override
+                    public PlainAutoCloseableState init(DuckDBTableFunctionInitInfo info) throws Exception {
+                        info.setMaxThreads(1);
+                        return globalState;
+                    }
+
+                    @Override
+                    public PlainAutoCloseableState localInit(DuckDBTableFunctionInitInfo info) throws Exception {
+                        return localState;
+                    }
+
+                    @Override
+                    public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                        return 0;
+                    }
+                })
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+                assertFalse(rs.next());
+            }
+        }
+        assertEquals(bindState.closeCalls.get(), 0);
+        assertEquals(globalState.closeCalls.get(), 0);
+        assertEquals(localState.closeCalls.get(), 0);
+    }
+
+    public static void test_table_function_state_alias_closes_per_holder() throws Exception {
+        TrackingState alias = new TrackingState(false);
+        String functionName = "java_table_function_alias_state_" + LIFECYCLE_FUNCTION_ID.incrementAndGet();
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        DuckDBFunctions.tableFunction()
+            .withName(functionName)
+            .withFunction(new DuckDBTableFunction<TrackingState, TrackingState, Object>() {
+                @Override
+                public TrackingState bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                    info.addResultColumn("value", Integer.TYPE);
+                    return alias;
+                }
+
+                @Override
+                public TrackingState init(DuckDBTableFunctionInitInfo info) throws Exception {
+                    info.setMaxThreads(1);
+                    return alias;
+                }
+
+                @Override
+                public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                    return 0;
+                }
+            })
+            .register(conn);
+        try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+            assertFalse(rs.next());
+        }
+        stmt.close();
+        conn.close();
+        assertEquals(alias.closeCalls.get(), 2);
+    }
+
+    public static void test_table_function_state_null_and_common() throws Exception {
+        String nullFunctionName = "java_table_function_null_state_" + LIFECYCLE_FUNCTION_ID.incrementAndGet();
+        String commonFunctionName = "java_table_function_common_state_" + LIFECYCLE_FUNCTION_ID.incrementAndGet();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            registerObjectStateTableFunction(conn, nullFunctionName, null, null, null);
+            registerObjectStateTableFunction(conn, commonFunctionName, new Object(), new Object(), new Object());
+            try (ResultSet rs = stmt.executeQuery("FROM " + nullFunctionName + "()")) {
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("FROM " + commonFunctionName + "()")) {
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_state_streaming_result_close() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(1 << 16, false, false, false);
+        Connection conn = DriverManager.getConnection(JDBC_URL + ";jdbc_stream_results=true");
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        try (ResultSet rs = stmt.executeQuery("SELECT * FROM " + functionName + "() LIMIT 1")) {
+            assertTrue(rs.next());
+        }
+        stmt.close();
+        conn.close();
+        assertTrue(tracker.remaining.get() > 0);
+        assertLifecycleStatesClosed(tracker);
+    }
+
+    public static void test_table_function_state_repeated_cleanup() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(17, false, false, false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            String functionName = registerLifecycleTableFunction(conn, tracker);
+            for (int execution = 0; execution < 2; execution++) {
+                try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+                    while (rs.next()) {
+                        // Consume the result so every execution reaches normal exhaustion.
+                    }
+                }
+            }
+            assertLifecycleStatesClosed(tracker);
+        }
+    }
+
+    public static void test_table_function_state_local_parallel_cleanup() throws Exception {
+        LifecycleTracker tracker = new LifecycleTracker(1 << 16, false, false, true);
+        Connection conn = DriverManager.getConnection(JDBC_URL + ";preserve_insertion_order=false");
+        Statement stmt = conn.createStatement();
+        String functionName = registerLifecycleTableFunction(conn, tracker);
+        try (ResultSet rs = stmt.executeQuery("FROM " + functionName + "()")) {
+            while (rs.next()) {
+                // Consume all rows to let every worker finish.
+            }
+        }
+        stmt.close();
+        assertLifecycleStatesClosed(tracker);
+        conn.close();
+    }
+
+    private static void registerObjectStateTableFunction(Connection conn, String functionName, Object bindState,
+                                                         Object globalState, Object localState) throws Exception {
+        DuckDBFunctions.tableFunction()
+            .withName(functionName)
+            .withFunction(new DuckDBTableFunction<Object, Object, Object>() {
+                @Override
+                public Object bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                    info.addResultColumn("value", Integer.TYPE);
+                    return bindState;
+                }
+
+                @Override
+                public Object init(DuckDBTableFunctionInitInfo info) throws Exception {
+                    info.setMaxThreads(1);
+                    return globalState;
+                }
+
+                @Override
+                public Object localInit(DuckDBTableFunctionInitInfo info) throws Exception {
+                    return localState;
+                }
+
+                @Override
+                public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                    return 0;
+                }
+            })
+            .register(conn);
     }
 }

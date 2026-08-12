@@ -80,6 +80,7 @@ struct GlobalRefHolder {
 	void detach_current_thread();
 
 	static void destroy(void *holder_in) noexcept;
+	static void destroy_table_function_state(void *holder_in) noexcept;
 };
 
 struct LocalRefHolder {

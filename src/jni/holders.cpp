@@ -113,6 +113,57 @@ void GlobalRefHolder::destroy(void *holder_in) noexcept {
 	delete holder;
 }
 
+void GlobalRefHolder::destroy_table_function_state(void *holder_in) noexcept {
+	auto holder = reinterpret_cast<GlobalRefHolder *>(holder_in);
+	if (holder == nullptr) {
+		return;
+	}
+
+	try {
+		AttachedJNIEnv attached = holder->attach_current_thread();
+		if (attached.env != nullptr) {
+			try {
+				attached.env->CallStaticVoidMethod(J_DuckDBTableFunctionWrapper,
+				                                   J_DuckDBTableFunctionWrapper_closeTableFunctionState,
+				                                   holder->global_ref);
+			} catch (...) {
+				// Teardown must not allow a C++ exception to escape a native destructor.
+			}
+			try {
+				if (attached.env->ExceptionCheck()) {
+					attached.env->ExceptionClear();
+				}
+			} catch (...) {
+				// JNI cleanup is best effort; the holder is still deleted below.
+			}
+			// Keep the callback's attachment alive through reference deletion and holder destruction.
+			try {
+				if (holder->global_ref != nullptr) {
+					jobject global_ref = holder->global_ref;
+					holder->global_ref = nullptr;
+					attached.env->DeleteGlobalRef(global_ref);
+				}
+			} catch (...) {
+				// The reference was cleared before the JNI call, so the holder destructor cannot
+				// redundantly attempt another attach if the call fails unexpectedly.
+			}
+			delete holder;
+			return;
+		}
+
+		// attach_current_thread already attempted the only safe cleanup path. Without a valid
+		// JNIEnv, JNI does not permit DeleteGlobalRef; clear the reference so the holder destructor
+		// does not redundantly attempt another attach.
+		holder->global_ref = nullptr;
+	} catch (...) {
+		// A failed attach or unexpected JNI failure must not skip holder deletion or trigger a
+		// second attach from the holder destructor.
+		holder->global_ref = nullptr;
+	}
+
+	delete holder;
+}
+
 LocalRefHolder::LocalRefHolder(JNIEnv *env_in, jobject local_ref_in) : env(env_in), local_ref(local_ref_in) {
 }
 
