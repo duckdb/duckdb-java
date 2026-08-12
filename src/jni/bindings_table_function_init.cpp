@@ -60,7 +60,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1init_1d
 		return;
 	}
 
-	duckdb_init_set_init_data(ii, init_data_holder.release(), GlobalRefHolder::destroy);
+	duckdb_init_set_init_data(ii, init_data_holder.release(), GlobalRefHolder::destroy_table_function_state);
 }
 
 /*
