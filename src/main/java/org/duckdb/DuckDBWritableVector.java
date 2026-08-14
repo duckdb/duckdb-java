@@ -7,6 +7,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,6 +32,8 @@ public final class DuckDBWritableVector {
     private final DuckDBVectorTypeInfo typeInfo;
     private final ByteBuffer data;
     private final ByteBuffer validity;
+    private byte[] batchPayload;
+    private CharsetEncoder utf8Encoder;
 
     DuckDBWritableVector(ByteBuffer vectorRef, long rowCount) {
         if (vectorRef == null) {
@@ -480,6 +487,162 @@ public final class DuckDBWritableVector {
             vectorRefLock.unlock();
         }
         markValid(row);
+    }
+
+    /**
+     * Batch variant of {@link #setString(long, String)}: writes {@code values.length} VARCHAR
+     * elements starting at {@code rowOffset} using a single JNI call and a single lock, with
+     * all values UTF-8 encoded into one reusable buffer first. A null element marks the
+     * corresponding row as NULL. Semantics are identical to calling
+     * {@code setString(rowOffset + i, values[i])} for every element.
+     */
+    public void setStrings(long rowOffset, String[] values) {
+        if (values == null) {
+            throw new FunctionException("Values array must not be null");
+        }
+        if (rowOffset < 0 || rowOffset > rowCount - values.length) {
+            throw new IndexOutOfBoundsException("Row index out of bounds: " + rowOffset + " + " + values.length +
+                                                " > " + rowCount);
+        }
+        String typeError = typeMismatchMessage(DuckDBColumnType.VARCHAR);
+        if (typeError != null) {
+            throw new FunctionException(typeError);
+        }
+        if (values.length == 0) {
+            return;
+        }
+        checkOpen();
+        long[] lengths = new long[values.length];
+        long requiredBytes = 0;
+        for (String value : values) {
+            requiredBytes += value == null ? 0 : 4L * value.length();
+        }
+        if (requiredBytes == 0) {
+            requiredBytes = 1;
+        }
+        vectorRefLock.lock();
+        try {
+            checkOpen();
+            if (batchPayload == null || batchPayload.length < requiredBytes) {
+                int capacity = (int) Math.min(
+                    Integer.MAX_VALUE, Math.max(requiredBytes, batchPayload == null ? 0 : 2L * batchPayload.length));
+                batchPayload = new byte[capacity];
+            }
+            int position = 0;
+            for (int i = 0; i < values.length; i++) {
+                String value = values[i];
+                if (value == null) {
+                    lengths[i] = -1;
+                    continue;
+                }
+                int start = position;
+                position = encodeUtf8(batchPayload, position, value);
+                lengths[i] = position - start;
+            }
+            duckdb_vector_assign_string_elements(vectorRef, rowOffset, batchPayload, lengths, values.length, position);
+        } finally {
+            vectorRefLock.unlock();
+        }
+    }
+
+    /**
+     * Batch variant for producers that already own UTF-8 encoded values. Each non-null element must contain valid
+     * UTF-8 bytes; null elements become SQL NULL and empty arrays become empty strings. The arrays are flattened into
+     * one payload before a single JNI call, so this method does not cross JNI once per byte array.
+     */
+    public void setStringUtf8Batch(long rowOffset, byte[][] values) {
+        if (values == null) {
+            throw new FunctionException("Values array must not be null");
+        }
+        if (rowOffset < 0 || rowOffset > rowCount - values.length) {
+            throw new IndexOutOfBoundsException("Row index out of bounds: " + rowOffset + " + " + values.length +
+                                                " > " + rowCount);
+        }
+        String typeError = typeMismatchMessage(DuckDBColumnType.VARCHAR);
+        if (typeError != null) {
+            throw new FunctionException(typeError);
+        }
+        if (values.length == 0) {
+            return;
+        }
+        checkOpen();
+        long[] lengths = new long[values.length];
+        long requiredBytes = 0;
+        for (byte[] value : values) {
+            requiredBytes += value == null ? 0 : value.length;
+        }
+        if (requiredBytes == 0) {
+            requiredBytes = 1;
+        }
+        vectorRefLock.lock();
+        try {
+            checkOpen();
+            if (batchPayload == null || batchPayload.length < requiredBytes) {
+                int capacity = (int) Math.min(
+                    Integer.MAX_VALUE, Math.max(requiredBytes, batchPayload == null ? 0 : 2L * batchPayload.length));
+                batchPayload = new byte[capacity];
+            }
+            int position = 0;
+            for (int i = 0; i < values.length; i++) {
+                byte[] value = values[i];
+                if (value == null) {
+                    lengths[i] = -1;
+                    continue;
+                }
+                System.arraycopy(value, 0, batchPayload, position, value.length);
+                position += value.length;
+                lengths[i] = value.length;
+            }
+            duckdb_vector_assign_string_elements(vectorRef, rowOffset, batchPayload, lengths, values.length, position);
+        } finally {
+            vectorRefLock.unlock();
+        }
+    }
+
+    private int encodeUtf8(byte[] target, int position, String value) {
+        int length = value.length();
+        int i = 0;
+        for (; i < length; i++) {
+            char c = value.charAt(i);
+            if (c > 0x7F) {
+                break;
+            }
+            target[position + i] = (byte) c;
+        }
+        position += i;
+        if (i < length) {
+            CharsetEncoder encoder = utf8Encoder();
+            encoder.reset();
+            ByteBuffer out = ByteBuffer.wrap(target, position, target.length - position);
+            CharBuffer source = CharBuffer.wrap(value, i, length);
+            try {
+                CoderResult result = encoder.encode(source, out, true);
+                if (result.isOverflow()) {
+                    throw new IllegalStateException("UTF-8 batch buffer too small");
+                }
+                throwIfCodingError(result);
+                throwIfCodingError(encoder.flush(out));
+            } catch (CharacterCodingException e) {
+                throw new FunctionException("Failed to encode string to UTF-8", e);
+            }
+            position = out.position();
+        }
+        return position;
+    }
+
+    private CharsetEncoder utf8Encoder() {
+        if (utf8Encoder == null) {
+            utf8Encoder = UTF_8.newEncoder()
+                              .onMalformedInput(CodingErrorAction.REPLACE)
+                              .onUnmappableCharacter(CodingErrorAction.REPLACE);
+        }
+        return utf8Encoder;
+    }
+
+    private static void throwIfCodingError(CoderResult result) throws CharacterCodingException {
+        if (result.isError()) {
+            result.throwException();
+        }
     }
 
     private void markValid(long row) {

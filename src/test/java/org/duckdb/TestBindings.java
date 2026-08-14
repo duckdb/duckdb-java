@@ -216,6 +216,70 @@ public class TestBindings {
         duckdb_destroy_logical_type(lt);
     }
 
+    public static void test_bindings_writable_vector_string_batch() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+        try {
+            long rowCount = duckdb_vector_size();
+            assertTrue(rowCount >= 70);
+            DuckDBWritableVector writable = new DuckDBWritableVector(vec, rowCount);
+            String longValue = new String(new char[8192]).replace('\0', 'x');
+
+            writable.setStrings(62, new String[] {"before", null, "Acentuação Ω", "", null});
+            writable.setStrings(10, new String[] {null, null});
+            writable.setStrings(20, new String[] {"short"});
+            writable.setStrings(21, new String[] {longValue});
+            writable.setStrings(22, new String[] {"reused"});
+
+            DuckDBReadableVector readable = new DuckDBReadableVector(vec, null, rowCount);
+            assertEquals(readable.getString(62), "before");
+            assertNull(readable.getString(63));
+            assertEquals(readable.getString(64), "Acentuação Ω");
+            assertEquals(readable.getString(65), "");
+            assertNull(readable.getString(66));
+            assertNull(readable.getString(10));
+            assertNull(readable.getString(11));
+            assertEquals(readable.getString(20), "short");
+            assertEquals(readable.getString(21), longValue);
+            assertEquals(readable.getString(22), "reused");
+        } finally {
+            duckdb_destroy_vector(vec);
+            duckdb_destroy_logical_type(lt);
+        }
+    }
+
+    public static void test_bindings_writable_vector_string_batch_validation() throws Exception {
+        ByteBuffer varcharType = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
+        ByteBuffer varcharVec = duckdb_create_vector(varcharType);
+        try {
+            long rowCount = duckdb_vector_size();
+            DuckDBWritableVector writable = new DuckDBWritableVector(varcharVec, rowCount);
+            assertThrows(() -> writable.setStrings(0, null), DuckDBFunctions.FunctionException.class);
+            assertThrows(() -> writable.setStrings(-1, new String[] {"value"}), IndexOutOfBoundsException.class);
+            assertThrows(() -> writable.setStrings(rowCount, new String[] {"value"}), IndexOutOfBoundsException.class);
+            assertThrows(
+                () -> writable.setStrings(rowCount - 1, new String[] {"one", "two"}), IndexOutOfBoundsException.class);
+            assertThrows(() -> writable.setStrings(0, new String[(int) rowCount + 1]), IndexOutOfBoundsException.class);
+            writable.setStrings(rowCount, new String[0]);
+            writable.close();
+            assertThrows(() -> writable.setStrings(0, new String[] {"closed"}), IllegalStateException.class);
+        } finally {
+            duckdb_destroy_vector(varcharVec);
+            duckdb_destroy_logical_type(varcharType);
+        }
+
+        ByteBuffer integerType = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
+        ByteBuffer integerVec = duckdb_create_vector(integerType);
+        try {
+            DuckDBWritableVector writable = new DuckDBWritableVector(integerVec, duckdb_vector_size());
+            assertThrows(
+                () -> writable.setStrings(0, new String[] {"wrong type"}), DuckDBFunctions.FunctionException.class);
+        } finally {
+            duckdb_destroy_vector(integerVec);
+            duckdb_destroy_logical_type(integerType);
+        }
+    }
+
     public static void test_bindings_vector_ubigint_native_endian_roundtrip() throws Exception {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);

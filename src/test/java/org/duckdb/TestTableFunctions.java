@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
@@ -755,5 +756,290 @@ public class TestTableFunctions {
                 }
             })
             .register(conn);
+    }
+
+    private static String[] batchTestValues() {
+        String longAscii = new String(new char[8192]).replace('\0', 'x');
+        String longUnicode = "Acentuação Ω " + repeat("äöüß€", 256);
+        return new String[] {"January", "",          "Mês", "Acentuação Ω", "日本語",
+                             longAscii, longUnicode, null,  "trailing",     "\uD800"};
+    }
+
+    private static String repeat(String value, int count) {
+        StringBuilder result = new StringBuilder(value.length() * count);
+        for (int i = 0; i < count; i++) {
+            result.append(value);
+        }
+        return result.toString();
+    }
+
+    private static void registerBatchVsCellFunctions(Connection conn, String batchName, String cellName, long rows)
+        throws Exception {
+        for (int variant = 0; variant < 2; variant++) {
+            final boolean batch = variant == 0;
+            DuckDBFunctions.tableFunction()
+                .withName(batch ? batchName : cellName)
+                .withParameter(long.class)
+                .withFunction(new DuckDBTableFunction<Long, AtomicLong, Object>() {
+                    @Override
+                    public Long bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                        info.addResultColumn("col", String.class);
+                        return info.getParameter(0).getLong();
+                    }
+
+                    @Override
+                    public AtomicLong init(DuckDBTableFunctionInitInfo info) throws Exception {
+                        info.setMaxThreads(1);
+                        return new AtomicLong(info.getBindData());
+                    }
+
+                    @Override
+                    public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                        AtomicLong remaining = info.getInitData();
+                        long left = remaining.get();
+                        if (left <= 0) {
+                            return 0;
+                        }
+                        long totalRows = info.getBindData();
+                        long limit = Math.min(left, output.capacity());
+                        long baseRow = totalRows - left;
+                        String[] values = batchTestValues();
+                        DuckDBWritableVector vec = output.vector(0);
+                        if (batch) {
+                            String[] batchValues = new String[Math.toIntExact(limit)];
+                            for (int i = 0; i < batchValues.length; i++) {
+                                batchValues[i] = values[(int) ((baseRow + i) % values.length)];
+                            }
+                            vec.setStrings(0, batchValues);
+                        } else {
+                            for (long row = 0; row < limit; row++) {
+                                vec.setString(row, values[(int) ((baseRow + row) % values.length)]);
+                            }
+                        }
+                        remaining.set(left - limit);
+                        return limit;
+                    }
+                })
+                .register(conn);
+        }
+    }
+
+    private static byte[][] encodeUtf8Values(String[] values) {
+        byte[][] encoded = new byte[values.length][];
+        for (int row = 0; row < values.length; row++) {
+            encoded[row] = values[row] == null ? null : values[row].getBytes(UTF_8);
+        }
+        return encoded;
+    }
+
+    private static void registerUtf8ByteBatchVsCellFunctions(Connection conn, String batchName, String cellName,
+                                                             long rows) throws Exception {
+        DuckDBFunctions.tableFunction()
+            .withName(batchName)
+            .withParameter(long.class)
+            .withFunction(new DuckDBTableFunction<Long, AtomicLong, Object>() {
+                @Override
+                public Long bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                    info.addResultColumn("col", String.class);
+                    return info.getParameter(0).getLong();
+                }
+
+                @Override
+                public AtomicLong init(DuckDBTableFunctionInitInfo info) throws Exception {
+                    info.setMaxThreads(1);
+                    return new AtomicLong(info.getBindData());
+                }
+
+                @Override
+                public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                    AtomicLong remaining = info.getInitData();
+                    long left = remaining.get();
+                    if (left <= 0) {
+                        return 0;
+                    }
+                    long totalRows = info.getBindData();
+                    int count = Math.toIntExact(Math.min(left, output.capacity()));
+                    long baseRow = totalRows - left;
+                    String[] source = batchTestValues();
+                    String[] values = new String[count];
+                    for (int row = 0; row < count; row++) {
+                        values[row] = source[(int) ((baseRow + row) % source.length)];
+                    }
+                    output.vector(0).setStringUtf8Batch(0, encodeUtf8Values(values));
+                    remaining.addAndGet(-count);
+                    return count;
+                }
+            })
+            .register(conn);
+
+        DuckDBFunctions.tableFunction()
+            .withName(cellName)
+            .withParameter(long.class)
+            .withFunction(new DuckDBTableFunction<Long, AtomicLong, Object>() {
+                @Override
+                public Long bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                    info.addResultColumn("col", String.class);
+                    return info.getParameter(0).getLong();
+                }
+
+                @Override
+                public AtomicLong init(DuckDBTableFunctionInitInfo info) throws Exception {
+                    info.setMaxThreads(1);
+                    return new AtomicLong(info.getBindData());
+                }
+
+                @Override
+                public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                    AtomicLong remaining = info.getInitData();
+                    long left = remaining.get();
+                    if (left <= 0) {
+                        return 0;
+                    }
+                    long totalRows = info.getBindData();
+                    int count = Math.toIntExact(Math.min(left, output.capacity()));
+                    long baseRow = totalRows - left;
+                    String[] source = batchTestValues();
+                    DuckDBWritableVector vector = output.vector(0);
+                    for (int row = 0; row < count; row++) {
+                        vector.setString(row, source[(int) ((baseRow + row) % source.length)]);
+                    }
+                    remaining.addAndGet(-count);
+                    return count;
+                }
+            })
+            .register(conn);
+    }
+
+    public static void test_table_function_string_batch_equivalence() throws Exception {
+        // rows chosen so the final chunk is partial: capacity is 2048
+        long rows = 3L * 2048 + 7;
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            registerBatchVsCellFunctions(conn, "java_table_string_batch_eq", "java_table_string_cell_eq", rows);
+            String sql = "SELECT COUNT(*) FROM ("
+                         + "(SELECT col FROM java_table_string_batch_eq(" + rows + ") EXCEPT ALL "
+                         + "SELECT col FROM java_table_string_cell_eq(" + rows + "))"
+                         + "UNION ALL "
+                         + "(SELECT col FROM java_table_string_cell_eq(" + rows + ") EXCEPT ALL "
+                         + "SELECT col FROM java_table_string_batch_eq(" + rows + "))"
+                         + ")";
+            try (ResultSet rs = stmt.executeQuery(sql)) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 0L);
+            }
+            // nulls are the values with global row index congruent to 7 modulo 10
+            long expectedNulls = (rows + 2) / 10;
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*), COUNT(*) FILTER (WHERE col IS NULL), "
+                                                  + "SUM(length(col)) FROM java_table_string_batch_eq(" + rows + ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), rows);
+                assertEquals(rs.getLong(2), expectedNulls);
+                assertTrue(rs.getLong(3) > 0);
+            }
+        }
+    }
+
+    public static void test_table_function_string_batch_offset_and_edges() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.tableFunction()
+                .withName("java_table_string_batch_edges")
+                .withFunction(new DuckDBTableFunction<Object, AtomicBoolean, Object>() {
+                    @Override
+                    public Object bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                        info.addResultColumn("col", String.class);
+                        return null;
+                    }
+
+                    @Override
+                    public AtomicBoolean init(DuckDBTableFunctionInitInfo info) throws Exception {
+                        info.setMaxThreads(1);
+                        return new AtomicBoolean(false);
+                    }
+
+                    @Override
+                    public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                        AtomicBoolean done = info.getInitData();
+                        if (done.getAndSet(true)) {
+                            return 0;
+                        }
+                        DuckDBWritableVector vec = output.vector(0);
+                        vec.setString(0, "cell");
+                        vec.setStrings(1, new String[] {null, "", "Acentuação Ω", "Mês"});
+                        vec.setString(5, "tail");
+                        return 6;
+                    }
+                })
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery("SELECT col, col IS NULL FROM java_table_string_batch_edges()")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "cell");
+                assertTrue(rs.next());
+                assertTrue(rs.getBoolean(2));
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "Acentuação Ω");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "Mês");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "tail");
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_table_function_string_utf8_byte_batch_equivalence() throws Exception {
+        long rows = 3L * 2048 + 7;
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            registerUtf8ByteBatchVsCellFunctions(conn, "java_table_string_utf8_bytes", "java_table_string_utf8_cell",
+                                                 rows);
+            String sql = "SELECT COUNT(*) FROM ("
+                         + "(SELECT col FROM java_table_string_utf8_bytes(" + rows + ") EXCEPT ALL "
+                         + "SELECT col FROM java_table_string_utf8_cell(" + rows + "))"
+                         + "UNION ALL "
+                         + "(SELECT col FROM java_table_string_utf8_cell(" + rows + ") EXCEPT ALL "
+                         + "SELECT col FROM java_table_string_utf8_bytes(" + rows + "))"
+                         + ")";
+            try (ResultSet rs = stmt.executeQuery(sql)) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 0L);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*), COUNT(*) FILTER (WHERE col IS NULL) FROM "
+                                                  + "java_table_string_utf8_bytes(" + rows + ")")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), rows);
+                assertEquals(rs.getLong(2), (rows + 2) / 10);
+            }
+
+            DuckDBFunctions.tableFunction()
+                .withName("java_table_string_utf8_bytes_invalid")
+                .withFunction(new DuckDBTableFunction<Object, AtomicBoolean, Object>() {
+                    @Override
+                    public Object bind(DuckDBTableFunctionBindInfo info) throws Exception {
+                        info.addResultColumn("col", String.class);
+                        return null;
+                    }
+
+                    @Override
+                    public AtomicBoolean init(DuckDBTableFunctionInitInfo info) throws Exception {
+                        info.setMaxThreads(1);
+                        return new AtomicBoolean(false);
+                    }
+
+                    @Override
+                    public long apply(DuckDBTableFunctionCallInfo info, DuckDBDataChunkWriter output) throws Exception {
+                        if (info.<AtomicBoolean>getInitData().getAndSet(true)) {
+                            return 0;
+                        }
+                        output.vector(0).setStringUtf8Batch(0, new byte[][] {{(byte) 0xC3}});
+                        return 1;
+                    }
+                })
+                .register(conn);
+            assertThrows(() -> {
+                try (ResultSet ignored = stmt.executeQuery("FROM java_table_string_utf8_bytes_invalid()")) {
+                    ignored.next();
+                }
+            }, java.sql.SQLException.class);
+        }
     }
 }
