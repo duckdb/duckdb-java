@@ -2098,7 +2098,7 @@ public class TestDuckDBJDBC {
             ExecutorService executorService = Executors.newSingleThreadExecutor();
             Future<QueryProgress> future = executorService.submit(() -> {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(4000);
                     QueryProgress qp = stmt.getQueryProgress();
                     stmt.cancel();
                     return qp;
