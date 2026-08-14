@@ -1001,25 +1001,6 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(Identifier(name), true, true);
 }
 
-void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {
-
-	auto connection = get_connection(env, conn_buf);
-	if (!connection) {
-		return;
-	}
-
-	auto &db_instance = DatabaseInstance::GetDatabase(*connection->context);
-	ExtensionLoader loader(db_instance, "jdbc");
-	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
-	auto hello_world_type = LogicalType::STRUCT(children);
-	hello_world_type.SetAlias("test_type");
-	loader.RegisterType("test_type", hello_world_type);
-
-	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
-	byte_test_type_type.SetAlias("byte_test_type");
-	loader.RegisterType("byte_test_type", byte_test_type_type);
-}
-
 static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
 	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);
 	check_java_exception_and_rethrow(env);

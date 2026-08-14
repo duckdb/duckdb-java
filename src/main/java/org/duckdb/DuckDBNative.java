@@ -240,13 +240,7 @@ final class DuckDBNative {
 
     static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
 
-    static native void duckdb_jdbc_create_extension_type(ByteBuffer conn_ref) throws SQLException;
-
     protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
                                                                          ProfilerPrintFormat format)
         throws SQLException;
-
-    public static void duckdb_jdbc_create_extension_type(DuckDBConnection conn) throws SQLException {
-        duckdb_jdbc_create_extension_type(conn.connRef);
-    }
 }

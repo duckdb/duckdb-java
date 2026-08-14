@@ -483,16 +483,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	}
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv * env, jclass param0, jobject param1) {
-	try {
-		return _duckdb_jdbc_create_extension_type(env, param0, param1);
-	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
-
-	}
-}
-
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information(JNIEnv * env, jclass param0, jobject param1, jobject param2) {
 	try {
 		return _duckdb_jdbc_get_profiling_information(env, param0, param1, param2);
