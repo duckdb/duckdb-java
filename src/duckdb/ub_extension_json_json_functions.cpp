@@ -12,6 +12,8 @@
 
 #include "extension/json/json_functions/json_extract.cpp"
 
+#include "extension/json/json_functions/json_geojson.cpp"
+
 #include "extension/json/json_functions/json_keys.cpp"
 
 #include "extension/json/json_functions/json_merge_patch.cpp"
