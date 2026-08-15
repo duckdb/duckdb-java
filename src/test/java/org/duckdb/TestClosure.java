@@ -539,7 +539,7 @@ public class TestClosure {
                 assertThrows(() -> {
                     while (rs.nextChunk()) {
                         resultsCount[0] += rs.chunk().rowCount();
-                        Thread.sleep(50);
+                        Thread.sleep(5);
                     }
                 }, IllegalStateException.class);
                 assertTrue(resultsCount[0] > 0);
