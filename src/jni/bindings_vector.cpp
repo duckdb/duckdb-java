@@ -210,7 +210,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1st
 /*
  * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_vector_assign_string_elements
- * Signature: (Ljava/nio/ByteBuffer;J[B[JII)V
+ * Signature: (Ljava/nio/ByteBuffer;J[B[JI)V
  *
  * Batch variant of duckdb_vector_assign_string_element_len: assigns count
  * concatenated UTF-8 strings starting at row index, in a single JNI call.
@@ -219,8 +219,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1st
  * the unsafe assignment primitive for each valid element.
  */
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1string_1elements(
-    JNIEnv *env, jclass, jobject vector, jlong index, jbyteArray data, jlongArray lengths, jint count,
-    jint data_length) {
+    JNIEnv *env, jclass, jobject vector, jlong index, jbyteArray data, jlongArray lengths, jint data_length) {
 
 	duckdb_vector vec = vector_buf_to_vector(env, vector);
 	if (env->ExceptionCheck()) {
@@ -230,10 +229,11 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1st
 	if (env->ExceptionCheck()) {
 		return;
 	}
-	if (count < 0 || data_length < 0 || data_length > env->GetArrayLength(data)) {
+	if (lengths == nullptr || data_length < 0 || data_length > env->GetArrayLength(data)) {
 		env->ThrowNew(J_SQLException, "Invalid string batch length");
 		return;
 	}
+	jint count = env->GetArrayLength(lengths);
 	idx_t row_idx = jlong_to_idx(env, index);
 	if (env->ExceptionCheck()) {
 		return;

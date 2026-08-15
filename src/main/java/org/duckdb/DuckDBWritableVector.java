@@ -32,8 +32,10 @@ public final class DuckDBWritableVector {
     private final DuckDBVectorTypeInfo typeInfo;
     private final ByteBuffer data;
     private final ByteBuffer validity;
-    private byte[] batchPayload;
-    private CharsetEncoder utf8Encoder;
+    private static final class StringBatchState {
+        byte[] payload;
+        CharsetEncoder encoder;
+    }
 
     DuckDBWritableVector(ByteBuffer vectorRef, long rowCount) {
         if (vectorRef == null) {
@@ -492,13 +494,20 @@ public final class DuckDBWritableVector {
     /**
      * Batch variant of {@link #setString(long, String)}: writes {@code values.length} VARCHAR
      * elements starting at {@code rowOffset} using a single JNI call and a single lock, with
-     * all values UTF-8 encoded into one reusable buffer first. A null element marks the
+     * all values UTF-8 encoded into one payload first. A null element marks the
      * corresponding row as NULL. Semantics are identical to calling
      * {@code setString(rowOffset + i, values[i])} for every element.
      */
     public void setStrings(long rowOffset, String[] values) {
+        setStringsWithState(rowOffset, values, new StringBatchState());
+    }
+
+    private void setStringsWithState(long rowOffset, String[] values, StringBatchState state) {
         if (values == null) {
             throw new FunctionException("Values array must not be null");
+        }
+        if (state == null) {
+            throw new FunctionException("String batch state must not be null");
         }
         if (rowOffset < 0 || rowOffset > rowCount - values.length) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + rowOffset + " + " + values.length +
@@ -523,10 +532,10 @@ public final class DuckDBWritableVector {
         vectorRefLock.lock();
         try {
             checkOpen();
-            if (batchPayload == null || batchPayload.length < requiredBytes) {
+            if (state.payload == null || state.payload.length < requiredBytes) {
                 int capacity = (int) Math.min(
-                    Integer.MAX_VALUE, Math.max(requiredBytes, batchPayload == null ? 0 : 2L * batchPayload.length));
-                batchPayload = new byte[capacity];
+                    Integer.MAX_VALUE, Math.max(requiredBytes, state.payload == null ? 0 : 2L * state.payload.length));
+                state.payload = new byte[capacity];
             }
             int position = 0;
             for (int i = 0; i < values.length; i++) {
@@ -536,10 +545,14 @@ public final class DuckDBWritableVector {
                     continue;
                 }
                 int start = position;
-                position = encodeUtf8(batchPayload, position, value);
+                position = encodeUtf8(state, position, value);
                 lengths[i] = position - start;
             }
-            duckdb_vector_assign_string_elements(vectorRef, rowOffset, batchPayload, lengths, values.length, position);
+            try {
+                duckdb_vector_assign_string_elements(vectorRef, rowOffset, state.payload, lengths, position);
+            } catch (Exception exception) {
+                throw new FunctionException("Failed to assign string batch", exception);
+            }
         } finally {
             vectorRefLock.unlock();
         }
@@ -551,8 +564,15 @@ public final class DuckDBWritableVector {
      * one payload before a single JNI call, so this method does not cross JNI once per byte array.
      */
     public void setStringUtf8Batch(long rowOffset, byte[][] values) {
+        setStringUtf8BatchWithState(rowOffset, values, new StringBatchState());
+    }
+
+    private void setStringUtf8BatchWithState(long rowOffset, byte[][] values, StringBatchState state) {
         if (values == null) {
             throw new FunctionException("Values array must not be null");
+        }
+        if (state == null) {
+            throw new FunctionException("String batch state must not be null");
         }
         if (rowOffset < 0 || rowOffset > rowCount - values.length) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + rowOffset + " + " + values.length +
@@ -577,10 +597,10 @@ public final class DuckDBWritableVector {
         vectorRefLock.lock();
         try {
             checkOpen();
-            if (batchPayload == null || batchPayload.length < requiredBytes) {
+            if (state.payload == null || state.payload.length < requiredBytes) {
                 int capacity = (int) Math.min(
-                    Integer.MAX_VALUE, Math.max(requiredBytes, batchPayload == null ? 0 : 2L * batchPayload.length));
-                batchPayload = new byte[capacity];
+                    Integer.MAX_VALUE, Math.max(requiredBytes, state.payload == null ? 0 : 2L * state.payload.length));
+                state.payload = new byte[capacity];
             }
             int position = 0;
             for (int i = 0; i < values.length; i++) {
@@ -589,17 +609,22 @@ public final class DuckDBWritableVector {
                     lengths[i] = -1;
                     continue;
                 }
-                System.arraycopy(value, 0, batchPayload, position, value.length);
+                System.arraycopy(value, 0, state.payload, position, value.length);
                 position += value.length;
                 lengths[i] = value.length;
             }
-            duckdb_vector_assign_string_elements(vectorRef, rowOffset, batchPayload, lengths, values.length, position);
+            try {
+                duckdb_vector_assign_string_elements(vectorRef, rowOffset, state.payload, lengths, position);
+            } catch (Exception exception) {
+                throw new FunctionException("Failed to assign UTF-8 string batch", exception);
+            }
         } finally {
             vectorRefLock.unlock();
         }
     }
 
-    private int encodeUtf8(byte[] target, int position, String value) {
+    private int encodeUtf8(StringBatchState state, int position, String value) {
+        byte[] target = state.payload;
         int length = value.length();
         int i = 0;
         for (; i < length; i++) {
@@ -611,7 +636,7 @@ public final class DuckDBWritableVector {
         }
         position += i;
         if (i < length) {
-            CharsetEncoder encoder = utf8Encoder();
+            CharsetEncoder encoder = utf8Encoder(state);
             encoder.reset();
             ByteBuffer out = ByteBuffer.wrap(target, position, target.length - position);
             CharBuffer source = CharBuffer.wrap(value, i, length);
@@ -630,13 +655,13 @@ public final class DuckDBWritableVector {
         return position;
     }
 
-    private CharsetEncoder utf8Encoder() {
-        if (utf8Encoder == null) {
-            utf8Encoder = UTF_8.newEncoder()
-                              .onMalformedInput(CodingErrorAction.REPLACE)
-                              .onUnmappableCharacter(CodingErrorAction.REPLACE);
+    private CharsetEncoder utf8Encoder(StringBatchState state) {
+        if (state.encoder == null) {
+            state.encoder = UTF_8.newEncoder()
+                                .onMalformedInput(CodingErrorAction.REPLACE)
+                                .onUnmappableCharacter(CodingErrorAction.REPLACE);
         }
-        return utf8Encoder;
+        return state.encoder;
     }
 
     private static void throwIfCodingError(CoderResult result) throws CharacterCodingException {

@@ -162,7 +162,7 @@ public class DuckDBBindings {
     static native void duckdb_vector_assign_string_element_len(ByteBuffer vector, long index, byte[] str);
 
     static native void duckdb_vector_assign_string_elements(ByteBuffer vector, long index, byte[] data, long[] lengths,
-                                                            int count, int dataLength);
+                                                            int dataLength);
 
     static native byte[] duckdb_vector_get_string(ByteBuffer vectorData, long row);
 

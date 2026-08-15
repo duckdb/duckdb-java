@@ -260,6 +260,9 @@ public class TestBindings {
             assertThrows(
                 () -> writable.setStrings(rowCount - 1, new String[] {"one", "two"}), IndexOutOfBoundsException.class);
             assertThrows(() -> writable.setStrings(0, new String[(int) rowCount + 1]), IndexOutOfBoundsException.class);
+            assertThrows(()
+                             -> writable.setStringUtf8Batch(0, new byte[][] {{(byte) 0xC3}}),
+                         DuckDBFunctions.FunctionException.class);
             writable.setStrings(rowCount, new String[0]);
             writable.close();
             assertThrows(() -> writable.setStrings(0, new String[] {"closed"}), IllegalStateException.class);
