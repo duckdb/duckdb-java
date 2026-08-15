@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.nio.ByteBuffer;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -33,6 +34,9 @@ public class DuckDBChunkedResult implements AutoCloseable {
             return true;
         } finally {
             resultRefLock.unlock();
+            // parent connection may have been interrupted, in this case
+            // duckdb_fetch_chunk may or may not throw
+            checkParentConnOpen();
         }
     }
 
@@ -121,6 +125,21 @@ public class DuckDBChunkedResult implements AutoCloseable {
     private void checkOpen() {
         if (isClosed()) {
             throw new IllegalStateException("Result was closed");
+        }
+    }
+
+    private void checkParentConnOpen() {
+        try {
+            Connection conn = stmt.getConnection();
+            if (null == conn) {
+                throw new IllegalStateException("Connection was closed");
+            }
+            DuckDBConnection dconn = conn.unwrap(DuckDBConnection.class);
+            if (dconn.isClosed() || dconn.closing) {
+                throw new IllegalStateException("Connection was closed");
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
         }
     }
 
