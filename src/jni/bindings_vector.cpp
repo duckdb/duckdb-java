@@ -209,6 +209,88 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1st
 
 /*
  * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_vector_assign_string_elements
+ * Signature: (Ljava/nio/ByteBuffer;J[B[JI)V
+ *
+ * Batch variant of duckdb_vector_assign_string_element_len: assigns count
+ * concatenated UTF-8 strings starting at row index, in a single JNI call.
+ * lengths[i] >= 0 marks the byte length of element i, a negative length marks
+ * a NULL element. The complete payload is validated once before the loop uses
+ * the unsafe assignment primitive for each valid element.
+ */
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1string_1elements(
+    JNIEnv *env, jclass, jobject vector, jlong index, jbyteArray data, jlongArray lengths, jint data_length) {
+
+	duckdb_vector vec = vector_buf_to_vector(env, vector);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	auto payload = make_jbyteArray_ptr(env, data);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	if (lengths == nullptr || data_length < 0 || data_length > env->GetArrayLength(data)) {
+		env->ThrowNew(J_SQLException, "Invalid string batch length");
+		return;
+	}
+	jint count = env->GetArrayLength(lengths);
+	idx_t row_idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	jlong *lens = env->GetLongArrayElements(lengths, nullptr);
+	if (lens == nullptr) {
+		return;
+	}
+	jlong payload_length = 0;
+	for (jint i = 0; i < count; i++) {
+		jlong len = lens[i];
+		if (len < 0 || len <= data_length - payload_length) {
+			if (len >= 0) {
+				payload_length += len;
+			}
+			continue;
+		}
+		env->ReleaseLongArrayElements(lengths, lens, JNI_ABORT);
+		env->ThrowNew(J_SQLException, "Invalid string batch lengths");
+		return;
+	}
+	if (payload_length != data_length) {
+		env->ReleaseLongArrayElements(lengths, lens, JNI_ABORT);
+		env->ThrowNew(J_SQLException, "String batch length does not match payload");
+		return;
+	}
+	auto error = duckdb_valid_utf8_check(payload.get(), static_cast<idx_t>(payload_length));
+	if (error != nullptr) {
+		duckdb_destroy_error_data(&error);
+		env->ReleaseLongArrayElements(lengths, lens, JNI_ABORT);
+		env->ThrowNew(J_SQLException, "Invalid UTF-8 string batch");
+		return;
+	}
+	duckdb_vector_ensure_validity_writable(vec);
+	uint64_t *validity = duckdb_vector_get_validity(vec);
+	if (validity == nullptr) {
+		env->ReleaseLongArrayElements(lengths, lens, JNI_ABORT);
+		env->ThrowNew(J_SQLException, "Invalid validity mask");
+		return;
+	}
+	const char *p = payload.get();
+	for (jint i = 0; i < count; i++) {
+		jlong len = lens[i];
+		idx_t row = row_idx + static_cast<idx_t>(i);
+		if (len < 0) {
+			duckdb_validity_set_row_validity(validity, row, false);
+			continue;
+		}
+		duckdb_unsafe_vector_assign_string_element_len(vec, row, p, static_cast<idx_t>(len));
+		p += len;
+		duckdb_validity_set_row_validity(validity, row, true);
+	}
+	env->ReleaseLongArrayElements(lengths, lens, JNI_ABORT);
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_list_vector_get_child
  * Signature: (Ljava/nio/ByteBuffer;)Ljava/nio/ByteBuffer;
  */

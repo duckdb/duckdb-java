@@ -1,4 +1,4 @@
-.PHONY: build test clean
+.PHONY: build test stress clean
 
 SEP=
 JARS=
@@ -22,6 +22,9 @@ ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
 	OS_ARCH_OVERRIDE=-DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
 endif
 
+PERF_ROWS?=2000000
+PERF_SAMPLES?=5
+
 
 GENERATOR=
 ifeq ($(GEN),ninja)
@@ -35,6 +38,10 @@ CP=$(JAR)$(SEP)$(TEST_JAR)
 
 test: 
 	java -cp $(CP) org.duckdb.TestDuckDBJDBC
+
+stress:
+	java -Dduckdb.perf.rows=$(PERF_ROWS) -Dduckdb.perf.samples=$(PERF_SAMPLES) \
+		-Dduckdb.perf.assert=true -cp $(CP) org.duckdb.TestDuckDBJDBC TestStringWritePerformance
 
 debug:
 	mkdir -p build/debug
