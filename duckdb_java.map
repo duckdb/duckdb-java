@@ -89,6 +89,7 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1validity;
     Java_org_duckdb_DuckDBBindings_duckdb_1vector_1ensure_1validity_1writable;
     Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1string_1element_1len;
+    Java_org_duckdb_DuckDBBindings_duckdb_1vector_1assign_1string_1elements;
     Java_org_duckdb_DuckDBBindings_duckdb_1validity_1row_1is_1valid;
     Java_org_duckdb_DuckDBBindings_duckdb_1validity_1set_1row_1validity;
     Java_org_duckdb_DuckDBBindings_duckdb_1list_1vector_1get_1child;
