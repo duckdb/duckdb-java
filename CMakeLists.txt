@@ -172,6 +172,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/common/vector_operations/is_distinct_from.cpp
   src/duckdb/src/common/vector_operations/null_operations.cpp
   src/duckdb/src/common/vector_operations/numeric_inplace_operators.cpp
+  src/duckdb/src/common/vector_operations/scalar_executor.cpp
   src/duckdb/src/common/vector_operations/vector_cast.cpp
   src/duckdb/src/common/vector_operations/vector_copy.cpp
   src/duckdb/src/common/vector_operations/vector_hash.cpp
