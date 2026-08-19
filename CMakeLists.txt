@@ -226,6 +226,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_loader.cpp
   src/duckdb/src/main/http/http_util.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
+  src/duckdb/src/parser/peg/keyword_helper/duckdb_keyword_helper.cpp
   src/duckdb/third_party/brotli/common/constants.cpp
   src/duckdb/third_party/brotli/common/context.cpp
   src/duckdb/third_party/brotli/common/dictionary.cpp
