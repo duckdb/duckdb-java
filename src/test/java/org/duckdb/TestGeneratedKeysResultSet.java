@@ -15,13 +15,13 @@ public class TestGeneratedKeysResultSet {
         for (int i = 0; i < columnNames.length; i++) {
             columnTypes[i] = "VARCHAR";
         }
-        return new DuckDBResultSetMetaData(
-            0, columnNames.length, columnNames, columnTypes, columnTypes, "NOTHING", new String[0], new String[0]);
+        return new DuckDBResultSetMetaData(0, columnNames.length, columnNames, columnTypes, columnTypes, "NOTHING",
+                                           new String[0], new String[0]);
     }
 
     public static void test_generated_keys_resultset_navigation() throws Exception {
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("id"), new Object[][] {
-            {1L}, {2L}, {3L}});
+        DuckDBGeneratedKeysResultSet rs =
+            new DuckDBGeneratedKeysResultSet(meta("id"), new Object[][] {{1L}, {2L}, {3L}});
 
         assertTrue(rs.isBeforeFirst());
         assertFalse(rs.isFirst());
@@ -73,8 +73,8 @@ public class TestGeneratedKeysResultSet {
     }
 
     public static void test_generated_keys_resultset_absolute_relative() throws Exception {
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("id"), new Object[][] {
-            {10L}, {20L}, {30L}});
+        DuckDBGeneratedKeysResultSet rs =
+            new DuckDBGeneratedKeysResultSet(meta("id"), new Object[][] {{10L}, {20L}, {30L}});
 
         assertTrue(rs.absolute(2));
         assertEquals(rs.getLong(1), 20L);
@@ -93,11 +93,10 @@ public class TestGeneratedKeysResultSet {
     }
 
     public static void test_generated_keys_resultset_typed_getters() throws Exception {
-        Object[][] rows = {
-            {1L, "duck", true, 4.5d, BigDecimal.valueOf(12, 1)},
-            {2L, "goose", false, 9.5d, BigDecimal.valueOf(34, 1)}};
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("id", "name", "flag", "ratio", "dec"),
-                                                                           rows);
+        Object[][] rows = {{1L, "duck", true, 4.5d, BigDecimal.valueOf(12, 1)},
+                           {2L, "goose", false, 9.5d, BigDecimal.valueOf(34, 1)}};
+        DuckDBGeneratedKeysResultSet rs =
+            new DuckDBGeneratedKeysResultSet(meta("id", "name", "flag", "ratio", "dec"), rows);
 
         assertTrue(rs.next());
         assertEquals(rs.getLong(1), 1L);
@@ -124,8 +123,8 @@ public class TestGeneratedKeysResultSet {
     }
 
     public static void test_generated_keys_resultset_null_handling() throws Exception {
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("id", "name"),
-                                                                           new Object[][] {new Object[] {null, "duck"}});
+        DuckDBGeneratedKeysResultSet rs =
+            new DuckDBGeneratedKeysResultSet(meta("id", "name"), new Object[][] {new Object[] {null, "duck"}});
 
         assertTrue(rs.next());
         assertNull(rs.getObject(1));
@@ -139,8 +138,8 @@ public class TestGeneratedKeysResultSet {
     }
 
     public static void test_generated_keys_resultset_coercion() throws Exception {
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("a", "b", "c", "d"),
-                                                                           new Object[][] {new Object[] {1.0d, 2.0f, 3, "true"}});
+        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(
+            meta("a", "b", "c", "d"), new Object[][] {new Object[] {1.0d, 2.0f, 3, "true"}});
 
         assertTrue(rs.next());
         // getBoolean from a Number
@@ -155,8 +154,8 @@ public class TestGeneratedKeysResultSet {
     }
 
     public static void test_generated_keys_resultset_metadata_and_findcolumn() throws Exception {
-        DuckDBGeneratedKeysResultSet rs = new DuckDBGeneratedKeysResultSet(meta("id", "name"),
-                                                                           new Object[][] {{1L, "duck"}});
+        DuckDBGeneratedKeysResultSet rs =
+            new DuckDBGeneratedKeysResultSet(meta("id", "name"), new Object[][] {{1L, "duck"}});
 
         assertEquals(rs.getMetaData().getColumnCount(), 2);
         assertEquals(rs.getMetaData().getColumnName(1), "id");
