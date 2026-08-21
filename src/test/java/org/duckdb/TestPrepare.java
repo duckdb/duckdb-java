@@ -338,6 +338,303 @@ public class TestPrepare {
         }
     }
 
+    public static void test_prepare_autogen_keys() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE tab2 (col1 INT)");
+
+            String sql = "INSERT INTO tab2 VALUES (42)";
+
+            // NO_GENERATED_KEYS should transparently fall through to the plain overload
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.NO_GENERATED_KEYS)) {
+                assertEquals(ps.executeUpdate(), 1);
+                assertEquals(ps.executeLargeUpdate(), 1L);
+            }
+
+            // RETURN_GENERATED_KEYS on a table without generated columns yields an empty result set
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_prepare_return_generated_keys() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            // A table with a sequence-backed auto-increment identifier
+            stmt.execute(
+                "CREATE SEQUENCE seq_return_tab START 5");
+            stmt.execute(
+                "CREATE TABLE return_tab (id BIGINT DEFAULT nextval('seq_return_tab') PRIMARY KEY, name VARCHAR)");
+
+            String sql = "INSERT INTO return_tab (name) VALUES ('duck')";
+
+            // prepareStatement(sql, RETURN_GENERATED_KEYS) + executeUpdate + getGeneratedKeys
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 5L);
+                    assertFalse(keys.next());
+                }
+            }
+
+            // execute(sql, RETURN_GENERATED_KEYS)
+            try (
+                Statement s = conn.createStatement()) {
+                assertTrue(s.execute("INSERT INTO return_tab (name) VALUES ('goose')", Statement.RETURN_GENERATED_KEYS));
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 6L);
+                }
+            }
+        }
+    }
+
+    public static void test_prepare_return_generated_keys_cols() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SEQUENCE seq_generated_cols START WITH 10");
+            stmt.execute(
+                "CREATE TABLE return_cols (id BIGINT DEFAULT nextval('seq_generated_cols'), name VARCHAR, val INT)");
+
+            String sql = "INSERT INTO return_cols (name, val) VALUES ('duck', 42)";
+
+            // column names overload
+            try (PreparedStatement ps = conn.prepareStatement(sql, new String[] {"id"})) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 10L);
+                    assertFalse(keys.next());
+                }
+            }
+
+            // column indexes overload (id is column 1)
+            try (PreparedStatement ps = conn.prepareStatement(sql, new int[] {1})) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 11L);
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_execute_update_generated_keys() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SEQUENCE seq_update_gen START WITH 1");
+            stmt.execute(
+                "CREATE TABLE update_gen (id BIGINT DEFAULT nextval('seq_update_gen'), payload VARCHAR)");
+
+            String sql = "INSERT INTO update_gen (payload) VALUES ('x')";
+
+            // executeLargeUpdate(sql, RETURN_GENERATED_KEYS)
+            try (Statement s = conn.createStatement()) {
+                assertEquals(s.executeLargeUpdate(sql, Statement.RETURN_GENERATED_KEYS), 1L);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 1L);
+                }
+            }
+
+            // executeUpdate(sql, int[]) and executeUpdate(sql, String[])
+            try (Statement s = conn.createStatement()) {
+                assertEquals(s.executeUpdate(sql, new int[] {1}), 1);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 2L);
+                }
+                assertEquals(s.executeUpdate(sql, new String[] {"id"}), 1);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 3L);
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_multiple_rows() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SEQUENCE seq_multiple START WITH 1");
+            stmt.execute("CREATE TABLE multiple_gen (id BIGINT DEFAULT nextval('seq_multiple'), payload VARCHAR)");
+
+            String sql = "INSERT INTO multiple_gen (payload) SELECT 'a' UNION ALL SELECT 'b' UNION ALL SELECT 'c'";
+
+            try (Statement s = conn.createStatement()) {
+                assertEquals(s.executeLargeUpdate(sql, Statement.RETURN_GENERATED_KEYS), 3L);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    for (long i = 1; i <= 3; i++) {
+                        assertTrue(keys.next());
+                        assertEquals(keys.getLong(1), i);
+                    }
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_update_and_delete() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE upd_del (id BIGINT, payload VARCHAR, flag INT)");
+            stmt.execute("INSERT INTO upd_del VALUES (1, 'a', 0), (2, 'b', 0), (3, 'c', 1)");
+
+            // UPDATE ... RETURNING id uses an explicit column selector
+            try (Statement s = conn.createStatement()) {
+                String sql = "UPDATE upd_del SET flag = 1 WHERE id = 1";
+                assertEquals(s.executeUpdate(sql, new String[] {"id"}), 1);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 1L);
+                    assertFalse(keys.next());
+                }
+            }
+
+            // DELETE ... RETURNING id uses an explicit column selector
+            try (Statement s = conn.createStatement()) {
+                String sql = "DELETE FROM upd_del WHERE id = 2";
+                assertEquals(s.executeLargeUpdate(sql, new int[] {1}), 1L);
+                try (ResultSet keys = s.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 2L);
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_non_dml() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            // SELECT with RETURN_GENERATED_KEYS must not be rewritten and must yield empty keys
+            assertTrue(stmt.execute("SELECT 1", Statement.RETURN_GENERATED_KEYS));
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                assertFalse(keys.next());
+            }
+
+            // DDL with RETURN_GENERATED_KEYS must not fail and must yield empty keys
+            stmt.execute("CREATE TABLE non_dml (id INT)", Statement.RETURN_GENERATED_KEYS);
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                assertFalse(keys.next());
+            }
+        }
+    }
+
+    public static void test_generated_keys_schema_qualified() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SEQUENCE seq_schema START WITH 7");
+            stmt.execute("CREATE TABLE \"QualifiedTable\" (\"Id\" BIGINT DEFAULT nextval('seq_schema'), name VARCHAR)");
+
+            String sql = "INSERT INTO main.\"QualifiedTable\" (name) VALUES ('duck')";
+
+            // auto-detect on a schema-qualified, quoted identifier
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 7L);
+                    assertFalse(keys.next());
+                }
+            }
+
+            // quoted column name selector
+            try (PreparedStatement ps = conn.prepareStatement(sql, new String[] {"id"})) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getLong(1), 8L);
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_int_array_multi() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE multi_idx (a INT, b INT, c INT)");
+
+            String sql = "INSERT INTO multi_idx VALUES (1, 2, 3)";
+
+            // two columns, plus an out-of-range index that should be skipped
+            try (PreparedStatement ps = conn.prepareStatement(sql, new int[] {2, 99, 1})) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getInt(1), 2);
+                    assertEquals(keys.getInt(2), 1);
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_string_array_missing() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE missing_str (id INT, name VARCHAR)");
+
+            String sql = "INSERT INTO missing_str VALUES (1, 'x')";
+
+            // requesting a non-existent column from RETURNING is rejected by the engine during prepare
+            assertThrows(
+                () -> conn.prepareStatement(sql, new String[] {"does_not_exist"}), SQLException.class);
+        }
+    }
+
+    public static void test_generated_keys_before_execute() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE before_exec (id INT)");
+
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO before_exec VALUES (1)")) {
+                // getGeneratedKeys before any execution returns an empty result set
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_typed_values() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE typed_keys (id BIGINT, ratio DOUBLE, label VARCHAR)");
+
+            String sql = "INSERT INTO typed_keys VALUES (1, 3.5, 'duck')";
+
+            try (PreparedStatement ps = conn.prepareStatement(sql, new String[] {"ratio", "label"})) {
+                assertEquals(ps.executeUpdate(), 1);
+                try (ResultSet keys = ps.getGeneratedKeys()) {
+                    assertTrue(keys.next());
+                    assertEquals(keys.getDouble(1), 3.5, 0.0001);
+                    assertEquals(keys.getString(2), "duck");
+                    assertFalse(keys.next());
+                }
+            }
+        }
+    }
+
+    public static void test_generated_keys_invalid_flag_value() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertThrows(
+                () -> conn.prepareStatement("INSERT INTO t VALUES (1)", 42), SQLFeatureNotSupportedException.class);
+
+            try (Statement s = conn.createStatement()) {
+                assertThrows(
+                        () -> s.execute("INSERT INTO t VALUES (1)", 42), SQLFeatureNotSupportedException.class);
+
+                assertThrows(
+                        () -> s.executeUpdate("INSERT INTO t VALUES (1)", 42),
+                        SQLFeatureNotSupportedException.class);
+            }
+        }
+    }
+
+    public static void test_generated_keys_invalid_flag_value_message() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
+            String msg = assertThrows(
+                    () -> conn.prepareStatement("INSERT INTO t VALUES (1)", 42), SQLFeatureNotSupportedException.class);
+            assertTrue(msg.contains("autoGeneratedKeys="), "message should report the value but was: " + msg);
+        }
+    }
+
     public static void test_max_rows() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              Statement stmt = connection.createStatement()) {

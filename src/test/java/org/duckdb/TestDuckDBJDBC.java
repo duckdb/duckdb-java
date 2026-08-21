@@ -2330,7 +2330,7 @@ public class TestDuckDBJDBC {
                 runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
                          TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
                          TestBatch.class, TestBindings.class, TestChunkedResult.class, TestClosure.class,
-                         TestJfrEvents.class, TestMetadata.class, TestNoLib.class, TestSpatial.class,
+                         TestGeneratedKeysResultSet.class, TestJfrEvents.class, TestMetadata.class, TestNoLib.class, TestSpatial.class,
                          TestParameterMetadata.class, TestPrepare.class, TestResults.class, TestScalarFunctions.class,
                          TestSessionInit.class, TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
         }
