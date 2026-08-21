@@ -61,6 +61,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private boolean returnsChangedRows = false;
     private boolean returnsNothing = false;
     private boolean returnsResultSet = false;
+    private boolean returningGeneratedKeys = false;
+    private boolean dmlReturningApplied = false;
+    private int[] generatedKeyColumnIndexes = null;
+    private String[] generatedKeyColumnNames = null;
+    private DuckDBGeneratedKeysResultSet generatedKeysResult = null;
     private Object[] params = new Object[0];
     private DuckDBResultSetMetaData meta = null;
     private final List<Object[]> batchedParams = new ArrayList<>();
@@ -79,6 +84,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     public DuckDBPreparedStatement(DuckDBConnection conn, String sql) throws SQLException {
+        this(conn, sql, false, null, null);
+    }
+
+    DuckDBPreparedStatement(DuckDBConnection conn, String sql, boolean returningGeneratedKeys, int[] columnIndexes,
+                            String[] columnNames) throws SQLException {
         if (conn == null) {
             throw new SQLException("connection parameter cannot be null");
         }
@@ -87,6 +97,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
         this.conn = conn;
         this.isPreparedStatement = true;
+        this.returningGeneratedKeys = returningGeneratedKeys;
+        this.generatedKeyColumnIndexes = columnIndexes;
+        this.generatedKeyColumnNames = columnNames;
         prepare(sql);
     }
 
@@ -127,6 +140,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             return;
         }
 
+        String preparedSql = this.returningGeneratedKeys ? rewriteForReturning(sql) : sql;
+
         stmtRefLock.lock();
         try {
             checkOpen();
@@ -152,7 +167,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                     startTransaction();
                 }
 
-                stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, sql.getBytes(UTF_8));
+                stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, preparedSql.getBytes(UTF_8));
                 // Track prepared statement inside the parent connection
                 conn.preparedStatements.add(this);
             } finally {
@@ -261,9 +276,32 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                 updateResult = selectResult.getLong(1);
             }
             selectResult.close();
+        } else if (returningGeneratedKeys && returnsResultSet && dmlReturningApplied) {
+            materializeGeneratedKeys();
         }
 
         return returnsResultSet;
+    }
+
+    /**
+     * Buffers the rows returned by a rewritten {@code ... RETURNING} statement into an in-memory
+     * result set (exposed through {@link #getGeneratedKeys()}) and records the row count as the
+     * update count.
+     */
+    private void materializeGeneratedKeys() throws SQLException {
+        DuckDBResultSetMetaData resultMeta = (DuckDBResultSetMetaData) selectResult.getMetaData();
+        int columnCount = resultMeta.getColumnCount();
+        List<Object[]> rows = new ArrayList<>();
+        while (selectResult.next()) {
+            Object[] row = new Object[columnCount];
+            for (int c = 1; c <= columnCount; c++) {
+                row[c - 1] = selectResult.getObject(c);
+            }
+            rows.add(row);
+        }
+        selectResult.close();
+        generatedKeysResult = new DuckDBGeneratedKeysResultSet(resultMeta, rows.toArray(new Object[0][]));
+        updateResult = rows.size();
     }
 
     public DuckDBChunkedResult query() throws SQLException {
@@ -331,7 +369,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public long executeLargeUpdate() throws SQLException {
         requireNonBatch();
         execute();
-        if (!(returnsChangedRows || returnsNothing)) {
+        if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
+              returnsNothing)) {
             throw new SQLException(
                 "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
         }
@@ -628,6 +667,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             return -1;
         }
 
+        if (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) {
+            // A rewritten ... RETURNING statement reports the number of returned rows as the update count
+            return updateResult;
+        }
+
         if (returnsResultSet || returnsNothing || selectResult.isFinished()) {
             return -1;
         }
@@ -806,7 +850,19 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public ResultSet getGeneratedKeys() throws SQLException {
         checkOpen();
-        throw new SQLFeatureNotSupportedException("getGeneratedKeys");
+        if (generatedKeysResult == null) {
+            return new DuckDBGeneratedKeysResultSet(newEmptyMeta(), new Object[0][]);
+        }
+        generatedKeysResult.beforeFirst();
+        return generatedKeysResult;
+    }
+
+    /**
+     * Builds an empty metadata object (zero columns) used for an empty generated-keys result set.
+     */
+    private DuckDBResultSetMetaData newEmptyMeta() {
+        return new DuckDBResultSetMetaData(0, 0, new String[0], new String[0], new String[0], "NOTHING", new String[0],
+                                           new String[0]);
     }
 
     @Override
@@ -820,7 +876,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (NO_GENERATED_KEYS == autoGeneratedKeys) {
             return executeLargeUpdate(sql);
         }
-        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int autoGeneratedKeys)");
+        if (RETURN_GENERATED_KEYS == autoGeneratedKeys) {
+            return executeLargeUpdateWithKeys(sql, null, null);
+        }
+        throw new SQLFeatureNotSupportedException(
+            "executeUpdate(String sql, int autoGeneratedKeys=" + autoGeneratedKeys + ")");
     }
 
     @Override
@@ -834,7 +894,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (columnIndexes == null || columnIndexes.length == 0) {
             return executeLargeUpdate(sql);
         }
-        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, int[] columnIndexes)");
+        return executeLargeUpdateWithKeys(sql, columnIndexes, null);
     }
 
     @Override
@@ -848,7 +908,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (columnNames == null || columnNames.length == 0) {
             return executeUpdate(sql);
         }
-        throw new SQLFeatureNotSupportedException("executeUpdate(String sql, String[] columnNames)");
+        return executeLargeUpdateWithKeys(sql, null, columnNames);
     }
 
     @Override
@@ -856,7 +916,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (NO_GENERATED_KEYS == autoGeneratedKeys) {
             return execute(sql);
         }
-        throw new SQLFeatureNotSupportedException("execute(String sql, int autoGeneratedKeys)");
+        if (RETURN_GENERATED_KEYS == autoGeneratedKeys) {
+            return executeWithKeys(sql, null, null);
+        }
+        throw new SQLFeatureNotSupportedException("execute(String sql, int autoGeneratedKeys=" + autoGeneratedKeys +
+                                                  ")");
     }
 
     @Override
@@ -864,7 +928,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (columnIndexes == null || columnIndexes.length == 0) {
             return execute(sql);
         }
-        throw new SQLFeatureNotSupportedException("execute(String sql, int[] columnIndexes)");
+        return executeWithKeys(sql, columnIndexes, null);
     }
 
     @Override
@@ -872,7 +936,30 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (columnNames == null || columnNames.length == 0) {
             return execute(sql);
         }
-        throw new SQLFeatureNotSupportedException("execute(String sql, String[] columnNames)");
+        return executeWithKeys(sql, null, columnNames);
+    }
+
+    private boolean executeWithKeys(String sql, int[] columnIndexes, String[] columnNames) throws SQLException {
+        requireNonBatch();
+        this.returningGeneratedKeys = true;
+        this.generatedKeyColumnIndexes = columnIndexes;
+        this.generatedKeyColumnNames = columnNames;
+        if (isPreparedStatement) {
+            prepare(sql);
+        } else {
+            prepare(rewriteForReturning(sql));
+        }
+        return execute();
+    }
+
+    private long executeLargeUpdateWithKeys(String sql, int[] columnIndexes, String[] columnNames) throws SQLException {
+        executeWithKeys(sql, columnIndexes, columnNames);
+        if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
+              returnsNothing)) {
+            throw new SQLException(
+                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
+        }
+        return getUpdateCountInternal();
     }
 
     @Override
@@ -1381,6 +1468,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             chunkedResult.close();
             chunkedResult = null;
         }
+        generatedKeysResult = null;
     }
 
     private void cleanupCancelQueryTask() {
@@ -1425,5 +1513,261 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             this.resultRef = resultRef;
             this.pendingQuery = pendingQuery;
         }
+    }
+
+    /**
+     * Rewrites a DML statement ({@code INSERT}/{@code UPDATE}/{@code DELETE}) to append a
+     * {@code RETURNING <columns>} clause so that generated keys can be captured. If the statement
+     * cannot be reliably rewritten, or it already has a {@code RETURNING} clause, the original SQL is
+     * returned unchanged.
+     */
+    private String rewriteForReturning(String sql) throws SQLException {
+        this.dmlReturningApplied = false;
+        String trimmed = sql.trim();
+        if (trimmed.endsWith(";")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1).trim();
+        }
+        if (hasReturningClause(trimmed)) {
+            return sql;
+        }
+        if (!trimmed.regionMatches(true, 0, "INSERT", 0, 6) && !trimmed.regionMatches(true, 0, "UPDATE", 0, 6) &&
+            !trimmed.regionMatches(true, 0, "DELETE", 0, 6)) {
+            // Only DML statements support RETURNING; other statements cannot produce generated keys
+            return sql;
+        }
+
+        String columns = delegatingReturningColumns(trimmed);
+        if (columns == null) {
+            // Unable to determine the target table or generated columns; fall back to the original SQL
+            return sql;
+        }
+        this.dmlReturningApplied = true;
+        return trimmed + " RETURNING " + columns;
+    }
+
+    private boolean hasReturningClause(String sql) {
+        int depth = 0;
+        boolean inString = false;
+        char quoteChar = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (inString) {
+                if (c == quoteChar) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                inString = true;
+                quoteChar = c;
+            } else if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if (depth == 0 && (c == 'R' || c == 'r') && i + "RETURNING".length() <= sql.length() &&
+                       sql.regionMatches(true, i, "RETURNING", 0, "RETURNING".length())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determines the {@code RETURNING} column list. Returns {@code null} if the target table cannot be
+     * identified or no generated columns could be found.
+     */
+    private String delegatingReturningColumns(String sql) throws SQLException {
+        String table = extractTargetTable(sql);
+        if (table == null) {
+            return null;
+        }
+
+        if (this.generatedKeyColumnNames != null && this.generatedKeyColumnNames.length > 0) {
+            StringBuilder sb = new StringBuilder();
+            for (String name : this.generatedKeyColumnNames) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append(quoteIdentifier(name));
+            }
+            return sb.length() == 0 ? null : sb.toString();
+        }
+
+        if (this.generatedKeyColumnIndexes != null && this.generatedKeyColumnIndexes.length > 0) {
+            return columnsByIndex(table, this.generatedKeyColumnIndexes);
+        }
+
+        return autoDetectGeneratedColumns(table);
+    }
+
+    /**
+     * Extracts the (schema-qualified) target table name from a DML statement, quoted/unquoted.
+     */
+    private String extractTargetTable(String sql) {
+        String lowercase = sql;
+        if (lowercase.regionMatches(true, 0, "INSERT", 0, 6)) {
+            return parseAfterKeyword(lowercase, "INTO");
+        }
+        if (lowercase.regionMatches(true, 0, "DELETE", 0, 6)) {
+            String from = parseAfterKeyword(lowercase, "FROM");
+            return from == null ? parseAfterKeyword(lowercase, "DELETE") : from;
+        }
+        // UPDATE table SET...
+        return parseAfterKeyword(lowercase, "UPDATE");
+    }
+
+    private String parseAfterKeyword(String sql, String keyword) {
+        int idx = indexOfKeyword(sql, keyword, 0);
+        if (idx < 0) {
+            return null;
+        }
+        int start = idx + keyword.length();
+        while (start < sql.length() && Character.isWhitespace(sql.charAt(start))) {
+            start++;
+        }
+        StringBuilder table = new StringBuilder();
+        int i = start;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '(' || Character.isWhitespace(c)) {
+                break;
+            }
+            table.append(c);
+            i++;
+        }
+        return table.length() == 0 || !isValidIdentifier(table.toString()) ? null : table.toString();
+    }
+
+    private int indexOfKeyword(String sql, String keyword, int from) {
+        int i = from;
+        while (i <= sql.length() - keyword.length()) {
+            int idx = sql.regionMatches(true, i, keyword, 0, keyword.length()) ? i : -1;
+            if (idx >= 0) {
+                boolean prevOk = idx == 0 || !Character.isJavaIdentifierPart(sql.charAt(idx - 1));
+                boolean nextOk = idx + keyword.length() == sql.length() ||
+                                 !Character.isJavaIdentifierPart(sql.charAt(idx + keyword.length()));
+                if (prevOk && nextOk) {
+                    return idx;
+                }
+            }
+            i++;
+        }
+        return -1;
+    }
+
+    private boolean isValidIdentifier(String name) {
+        if (name.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!(Character.isJavaIdentifierPart(c) || c == '.' || c == '"')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String quoteIdentifier(String name) {
+        String trimmed = name.trim();
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            return trimmed;
+        }
+        return "\"" + trimmed.replace("\"", "\"\"") + "\"";
+    }
+
+    /**
+     * Resolves the column names for the given (1-based) column indexes by querying the table metadata.
+     */
+    private String columnsByIndex(String table, int[] columnIndexes) throws SQLException {
+        List<String> names = queryColumnNames(table);
+        StringBuilder sb = new StringBuilder();
+        for (int index : columnIndexes) {
+            if (index < 1 || index > names.size()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(quoteIdentifier(names.get(index - 1)));
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * Auto-detects the generated columns (those with a non-null default, e.g. sequence-backed or
+     * derived defaults) of the target table and returns them as a {@code RETURNING} column list.
+     * Returns {@code null} if no such columns exist.
+     */
+    private String autoDetectGeneratedColumns(String table) throws SQLException {
+        List<String> names = queryGeneratedColumnNames(table);
+        if (names.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String name : names) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(quoteIdentifier(name));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Returns the names of columns of the given table whose {@code column_default} is not null,
+     * ordered by their column index.
+     */
+    private List<String> queryGeneratedColumnNames(String table) throws SQLException {
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT column_name AS col FROM duckdb_columns() WHERE column_default IS NOT NULL");
+        appendTableFilter(query, table);
+        query.append(" ORDER BY column_index");
+        return runForColumnNames(query.toString());
+    }
+
+    private List<String> queryColumnNames(String table) throws SQLException {
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT column_name AS col FROM duckdb_columns() WHERE TRUE");
+        appendTableFilter(query, table);
+        query.append(" ORDER BY column_index");
+        return runForColumnNames(query.toString());
+    }
+
+    private void appendTableFilter(StringBuilder query, String table) {
+        int dot = table.indexOf('.');
+        if (dot > 0) {
+            String schema = unquoteIdentifier(table.substring(0, dot));
+            String name = unquoteIdentifier(table.substring(dot + 1));
+            query.append(" AND schema_name = ").append(quoteStringLiteral(schema));
+            query.append(" AND table_name = ").append(quoteStringLiteral(name));
+        } else {
+            query.append(" AND table_name = ").append(quoteStringLiteral(unquoteIdentifier(table)));
+        }
+    }
+
+    private String unquoteIdentifier(String identifier) {
+        String trimmed = identifier == null ? null : identifier.trim();
+        if (trimmed != null && trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1).replace("\"\"", "\"");
+        }
+        return trimmed;
+    }
+
+    private String quoteStringLiteral(String value) {
+        return "'" + value.replace("'", "''") + "'";
+    }
+
+    private List<String> runForColumnNames(String query) throws SQLException {
+        List<String> result = new ArrayList<>();
+        try (DuckDBPreparedStatement ps = new DuckDBPreparedStatement(conn)) {
+            ps.query = query;
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rs.getString(1));
+                }
+            }
+        }
+        return result;
     }
 }
