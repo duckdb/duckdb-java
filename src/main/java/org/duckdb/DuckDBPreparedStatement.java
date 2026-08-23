@@ -1545,7 +1545,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return trimmed + " RETURNING " + columns;
     }
 
-    private boolean hasReturningClause(String sql) {
+    private static boolean hasReturningClause(String sql) {
         int depth = 0;
         boolean inString = false;
         char quoteChar = 0;
@@ -1603,20 +1603,19 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     /**
      * Extracts the (schema-qualified) target table name from a DML statement, quoted/unquoted.
      */
-    private String extractTargetTable(String sql) {
-        String lowercase = sql;
-        if (lowercase.regionMatches(true, 0, "INSERT", 0, 6)) {
-            return parseAfterKeyword(lowercase, "INTO");
+    private static String extractTargetTable(String sql) {
+        if (sql.regionMatches(true, 0, "INSERT", 0, 6)) {
+            return parseAfterKeyword(sql, "INTO");
         }
-        if (lowercase.regionMatches(true, 0, "DELETE", 0, 6)) {
-            String from = parseAfterKeyword(lowercase, "FROM");
-            return from == null ? parseAfterKeyword(lowercase, "DELETE") : from;
+        if (sql.regionMatches(true, 0, "DELETE", 0, 6)) {
+            String from = parseAfterKeyword(sql, "FROM");
+            return from == null ? parseAfterKeyword(sql, "DELETE") : from;
         }
         // UPDATE table SET...
-        return parseAfterKeyword(lowercase, "UPDATE");
+        return parseAfterKeyword(sql, "UPDATE");
     }
 
-    private String parseAfterKeyword(String sql, String keyword) {
+    private static String parseAfterKeyword(String sql, String keyword) {
         int idx = indexOfKeyword(sql, keyword, 0);
         if (idx < 0) {
             return null;
@@ -1638,7 +1637,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return table.length() == 0 || !isValidIdentifier(table.toString()) ? null : table.toString();
     }
 
-    private int indexOfKeyword(String sql, String keyword, int from) {
+    private static int indexOfKeyword(String sql, String keyword, int from) {
         int i = from;
         while (i <= sql.length() - keyword.length()) {
             int idx = sql.regionMatches(true, i, keyword, 0, keyword.length()) ? i : -1;
@@ -1655,7 +1654,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return -1;
     }
 
-    private boolean isValidIdentifier(String name) {
+    private static boolean isValidIdentifier(String name) {
         if (name.isEmpty()) {
             return false;
         }
@@ -1668,7 +1667,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return true;
     }
 
-    private String quoteIdentifier(String name) {
+    private static String quoteIdentifier(String name) {
         String trimmed = name.trim();
         if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
             return trimmed;
@@ -1734,7 +1733,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return runForColumnNames(query.toString());
     }
 
-    private void appendTableFilter(StringBuilder query, String table) {
+    private static void appendTableFilter(StringBuilder query, String table) {
         int dot = table.indexOf('.');
         if (dot > 0) {
             String schema = unquoteIdentifier(table.substring(0, dot));
@@ -1746,7 +1745,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         }
     }
 
-    private String unquoteIdentifier(String identifier) {
+    private static String unquoteIdentifier(String identifier) {
         String trimmed = identifier == null ? null : identifier.trim();
         if (trimmed != null && trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
             trimmed = trimmed.substring(1, trimmed.length() - 1).replace("\"\"", "\"");
@@ -1754,7 +1753,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return trimmed;
     }
 
-    private String quoteStringLiteral(String value) {
+    private static String quoteStringLiteral(String value) {
         return "'" + value.replace("'", "''") + "'";
     }
 
