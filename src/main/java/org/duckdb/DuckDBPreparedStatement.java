@@ -77,7 +77,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
         if (conn == null) {
-            throw JdbcUtils.createSQLException("connection parameter cannot be null" , ErrorCode.PREPARED_CONNECTION_NULL);
+            throw JdbcUtils.createSQLException("connection parameter cannot be null",
+                                               ErrorCode.PREPARED_CONNECTION_NULL);
         }
         this.conn = conn;
         this.isPreparedStatement = false;
@@ -90,10 +91,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     DuckDBPreparedStatement(DuckDBConnection conn, String sql, boolean returningGeneratedKeys, int[] columnIndexes,
                             String[] columnNames) throws SQLException {
         if (conn == null) {
-            throw JdbcUtils.createSQLException("connection parameter cannot be null" , ErrorCode.PREPARED_CONNECTION_NULL);
+            throw JdbcUtils.createSQLException("connection parameter cannot be null",
+                                               ErrorCode.PREPARED_CONNECTION_NULL);
         }
         if (sql == null) {
-            throw JdbcUtils.createSQLException("sql query parameter cannot be null" , ErrorCode.PREPARED_SQL_NULL);
+            throw JdbcUtils.createSQLException("sql query parameter cannot be null", ErrorCode.PREPARED_SQL_NULL);
         }
         this.conn = conn;
         this.isPreparedStatement = true;
@@ -132,7 +134,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     private void prepare(String sql) throws SQLException {
         checkOpen();
         if (sql == null) {
-            throw JdbcUtils.createSQLException("sql query parameter cannot be null" , ErrorCode.PREPARED_SQL_NULL);
+            throw JdbcUtils.createSQLException("sql query parameter cannot be null", ErrorCode.PREPARED_SQL_NULL);
         }
 
         if (!this.isPreparedStatement) {
@@ -201,7 +203,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         pending.pendingRefLock.lock();
         try {
             if (pending.pendingRef == null) {
-                throw JdbcUtils.createSQLException("Connection was closed" , ErrorCode.PREPARED_CONN_CLOSED);
+                throw JdbcUtils.createSQLException("Connection was closed", ErrorCode.PREPARED_CONN_CLOSED);
             }
             ByteBuffer resultRef = DuckDBNative.duckdb_jdbc_execute_pending(pending.pendingRef);
             return new DirectQueryResult(resultRef, pending);
@@ -307,7 +309,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public DuckDBChunkedResult query() throws SQLException {
         checkOpen();
         if (!isPreparedStatement) {
-            throw JdbcUtils.createSQLException("Data Chunk interface can only be used with prepared statements" , ErrorCode.PREPARED_CHUNK_INTERFACE);
+            throw JdbcUtils.createSQLException("Data Chunk interface can only be used with prepared statements",
+                                               ErrorCode.PREPARED_CHUNK_INTERFACE);
         }
 
         // Wait with dispatching a new query if connection is locked by cancel() call
@@ -354,7 +357,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         requireNonBatch();
         execute();
         if (!returnsResultSet) {
-            throw JdbcUtils.createSQLException("executeQuery() can only be used with queries that return a ResultSet" , ErrorCode.PREPARED_NO_RESULT_SET);
+            throw JdbcUtils.createSQLException("executeQuery() can only be used with queries that return a ResultSet",
+                                               ErrorCode.PREPARED_NO_RESULT_SET);
         }
         return selectResult;
     }
@@ -372,7 +376,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
               returnsNothing)) {
             throw JdbcUtils.createSQLException(
-                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows" , ErrorCode.PREPARED_NO_RESULT_SET);
+                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows",
+                ErrorCode.PREPARED_NO_RESULT_SET);
         }
         return getUpdateCountInternal();
     }
@@ -421,7 +426,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         checkOpen();
         int paramsCount = getParameterMetaData().getParameterCount();
         if (parameterIndex < 1 || parameterIndex > paramsCount) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds" , ErrorCode.PREPARED_PARAM_OOB);
+            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PREPARED_PARAM_OOB);
         }
         if (params.length == 0) {
             params = new Object[paramsCount];
@@ -579,7 +584,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public void setQueryTimeout(int seconds) throws SQLException {
         checkOpen();
         if (seconds < 0) {
-            throw JdbcUtils.createSQLException("Invalid negative timeout value: " + seconds , ErrorCode.PREPARED_NEG_TIMEOUT);
+            throw JdbcUtils.createSQLException("Invalid negative timeout value: " + seconds,
+                                               ErrorCode.PREPARED_NEG_TIMEOUT);
         }
         this.queryTimeoutSeconds = seconds;
     }
@@ -645,7 +651,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public ResultSet getResultSet() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException("Statement was closed" , ErrorCode.PREPARED_IS_CLOSED);
+            throw JdbcUtils.createSQLException("Statement was closed", ErrorCode.PREPARED_IS_CLOSED);
         }
 
         if (!returnsResultSet || selectResultReturned) {
@@ -659,7 +665,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     private long getUpdateCountInternal() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException("Statement was closed" , ErrorCode.PREPARED_IS_CLOSED);
+            throw JdbcUtils.createSQLException("Statement was closed", ErrorCode.PREPARED_IS_CLOSED);
         }
         if (selectResult == null) {
             // It is not required by JDBC spec to return anything in this case,
@@ -957,7 +963,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
               returnsNothing)) {
             throw JdbcUtils.createSQLException(
-                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows" , ErrorCode.PREPARED_NO_RESULT_SET);
+                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows",
+                ErrorCode.PREPARED_NO_RESULT_SET);
         }
         return getUpdateCountInternal();
     }
@@ -1056,7 +1063,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof String) {
                 setObject(parameterIndex, Boolean.parseBoolean((String) x));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to boolean " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to boolean " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.TINYINT:
@@ -1069,7 +1077,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, (byte) (((Boolean) x) ? 1 : 0));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to byte " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to byte " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.SMALLINT:
@@ -1082,7 +1091,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, (short) (((Boolean) x) ? 1 : 0));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to short " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to short " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.INTEGER:
@@ -1095,7 +1105,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, ((Boolean) x) ? 1 : 0);
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to int " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to int " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.BIGINT:
@@ -1108,7 +1119,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, (long) (((Boolean) x) ? 1 : 0));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to long " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to long " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.REAL:
@@ -1122,7 +1134,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, (float) (((Boolean) x) ? 1 : 0));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to float " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to float " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.DECIMAL:
@@ -1133,7 +1146,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof String) {
                 setObject(parameterIndex, new BigDecimal((String) x));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to double " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to double " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.NUMERIC:
@@ -1147,7 +1161,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof Boolean) {
                 setObject(parameterIndex, (double) (((Boolean) x) ? 1 : 0));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to double " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to double " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.CHAR:
@@ -1168,18 +1183,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } else if (x instanceof OffsetDateTime) {
                 setObject(parameterIndex, x);
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to timestamp " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to timestamp " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         case Types.ARRAY:
             if (x instanceof DuckDBUserArray) {
                 setArray(parameterIndex, (Array) x);
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to array " + x.getClass().toString() , ErrorCode.PREPARED_CONVERSION);
+                throw JdbcUtils.createSQLException("Can't convert value to array " + x.getClass().toString(),
+                                                   ErrorCode.PREPARED_CONVERSION);
             }
             break;
         default:
-            throw JdbcUtils.createSQLException("Unknown target type " + targetSqlType , ErrorCode.PREPARED_UNKNOWN_TYPE);
+            throw JdbcUtils.createSQLException("Unknown target type " + targetSqlType, ErrorCode.PREPARED_UNKNOWN_TYPE);
         }
     }
 
@@ -1391,29 +1408,31 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     private void requireNonBatch() throws SQLException {
         if (this.isBatch) {
-            throw JdbcUtils.createSQLException("Batched queries must be executed with executeBatch." , ErrorCode.PREPARED_BATCH_MISUSE);
+            throw JdbcUtils.createSQLException("Batched queries must be executed with executeBatch.",
+                                               ErrorCode.PREPARED_BATCH_MISUSE);
         }
     }
 
     private void requireNonPreparedStatement() throws SQLException {
         if (this.isPreparedStatement) {
-            throw JdbcUtils.createSQLException("Cannot add batched SQL statement to PreparedStatement" , ErrorCode.PREPARED_BATCH_MISUSE);
+            throw JdbcUtils.createSQLException("Cannot add batched SQL statement to PreparedStatement",
+                                               ErrorCode.PREPARED_BATCH_MISUSE);
         }
     }
 
     private void checkOpen() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException("Statement was closed" , ErrorCode.PREPARED_IS_CLOSED);
+            throw JdbcUtils.createSQLException("Statement was closed", ErrorCode.PREPARED_IS_CLOSED);
         }
     }
 
     private void checkPrepared() throws SQLException {
         if (isPreparedStatement) {
             if (stmtRef == null) {
-                throw JdbcUtils.createSQLException("Prepare something first" , ErrorCode.PREPARED_NO_QUERY);
+                throw JdbcUtils.createSQLException("Prepare something first", ErrorCode.PREPARED_NO_QUERY);
             }
         } else if (query == null) {
-            throw JdbcUtils.createSQLException("Query to execute was not specified" , ErrorCode.PREPARED_NO_QUERY);
+            throw JdbcUtils.createSQLException("Query to execute was not specified", ErrorCode.PREPARED_NO_QUERY);
         }
     }
 

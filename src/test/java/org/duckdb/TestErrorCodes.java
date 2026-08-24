@@ -66,8 +66,7 @@ public class TestErrorCodes {
     // ---- closed result set ----------------------------------------------------
 
     public static void test_result_set_closed_state() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             Statement stmt = conn.createStatement();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT 42 as a")) {
             rs.next();
             rs.close();
@@ -83,8 +82,7 @@ public class TestErrorCodes {
     // ---- column index out of bounds -------------------------------------------
 
     public static void test_meta_column_oob_state() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             Statement stmt = conn.createStatement();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT 42 as a")) {
             ResultSetMetaData meta = rs.getMetaData();
             try {
@@ -99,8 +97,7 @@ public class TestErrorCodes {
     // ---- type conversion ------------------------------------------------------
 
     public static void test_conversion_state() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             Statement stmt = conn.createStatement();
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT 'hello' as v")) {
             rs.next();
             try {
@@ -120,13 +117,15 @@ public class TestErrorCodes {
         // Parser prefix maps to the syntax-error class.
         assertEquals("42000", JdbcUtils.nativeState("Parser Error: syntax error at or near \"bogus\"").getCode());
         // Conversion prefix maps to the invalid-character-for-cast class.
-        assertEquals("22018", JdbcUtils.nativeState("Conversion Error: could not convert string 'x' to INTEGER").getCode());
+        assertEquals("22018",
+                     JdbcUtils.nativeState("Conversion Error: could not convert string 'x' to INTEGER").getCode());
         // Unknown prefix falls back to HY000.
         assertEquals("HY000", JdbcUtils.nativeState("Oops: something odd happened").getCode());
 
         // A native error surfaced via createSQLExceptionFromNativeError carries the parsed state and the
         // NATIVE_UNDECODED vendor code, preserving the message verbatim.
-        SQLException e = JdbcUtils.createSQLExceptionFromNativeError("Catalog Error: Table with name foo does not exist!");
+        SQLException e =
+            JdbcUtils.createSQLExceptionFromNativeError("Catalog Error: Table with name foo does not exist!");
         assertEquals(e.getErrorCode(), ErrorCode.NATIVE_UNDECODED.getCode(), "error code");
         assertEquals(e.getSQLState(), "42S02", "SQLState");
         assertTrue(e.getMessage().startsWith("Catalog Error:"), "message must be preserved");

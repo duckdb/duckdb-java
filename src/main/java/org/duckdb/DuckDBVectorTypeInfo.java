@@ -82,7 +82,8 @@ final class DuckDBVectorTypeInfo {
                                                 (int) internalType.widthBytes, decimalMeta);
             }
             default:
-                throw JdbcUtils.createSQLException("Unsupported scalar function vector type: " + capiType, ErrorCode.VECTOR_TYPE_UNSUPPORTED);
+                throw JdbcUtils.createSQLException("Unsupported scalar function vector type: " + capiType,
+                                                   ErrorCode.VECTOR_TYPE_UNSUPPORTED);
             }
         } finally {
             duckdb_destroy_logical_type(logicalType);

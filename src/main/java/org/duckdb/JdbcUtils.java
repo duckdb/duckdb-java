@@ -16,7 +16,8 @@ final class JdbcUtils {
     @SuppressWarnings("unchecked")
     static <T> T unwrap(Object obj, Class<T> iface) throws SQLException {
         if (!iface.isInstance(obj)) {
-            throw createSQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName(), ErrorCode.UNWRAP_FAILED);
+            throw createSQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName(),
+                                     ErrorCode.UNWRAP_FAILED);
         }
         return (T) obj;
     }
@@ -162,19 +163,19 @@ final class JdbcUtils {
         if (contains(m, "parser error") || contains(m, "syntax error") || contains(m, "parse error")) {
             return SQLState.SYNTAX_ERROR;
         }
-        if (contains(m, "binder error") || contains(m, "catalog error") || contains(m, "invalid catalog")
-            || contains(m, "table with name") || contains(m, "table \"") || contains(m, "does not exist")) {
+        if (contains(m, "binder error") || contains(m, "catalog error") || contains(m, "invalid catalog") ||
+            contains(m, "table with name") || contains(m, "table \"") || contains(m, "does not exist")) {
             return SQLState.TABLE_NOT_FOUND;
         }
-        if (contains(m, "conversion error") || contains(m, "cast error") || contains(m, "invalid type")
-            || contains(m, "failed to cast")) {
+        if (contains(m, "conversion error") || contains(m, "cast error") || contains(m, "invalid type") ||
+            contains(m, "failed to cast")) {
             return SQLState.INVALID_CHARACTER_VALUE_FOR_CAST;
         }
         if (contains(m, "out of range") || contains(m, "overflow") || contains(m, "too large")) {
             return SQLState.NUMERIC_VALUE_OUT_OF_RANGE;
         }
-        if (contains(m, "constraint error") || contains(m, "duplicate key") || contains(m, "not null constraint")
-            || contains(m, "unique constraint")) {
+        if (contains(m, "constraint error") || contains(m, "duplicate key") || contains(m, "not null constraint") ||
+            contains(m, "unique constraint")) {
             return SQLState.INTEGRITY_CONSTRAINT;
         }
         if (contains(m, "connection error")) {

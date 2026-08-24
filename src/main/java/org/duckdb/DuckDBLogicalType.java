@@ -64,16 +64,19 @@ public final class DuckDBLogicalType implements AutoCloseable {
         case TIMESTAMP_WITH_TIME_ZONE:
             return createPrimitive(DUCKDB_TYPE_TIMESTAMP_TZ);
         default:
-            throw JdbcUtils.createSQLException("Unsupported logical type for UDF registration: " + type, ErrorCode.LOGICAL_TYPE_UDF);
+            throw JdbcUtils.createSQLException("Unsupported logical type for UDF registration: " + type,
+                                               ErrorCode.LOGICAL_TYPE_UDF);
         }
     }
 
     public static DuckDBLogicalType decimal(int width, int scale) throws SQLException {
         if (width < 1 || width > 38) {
-            throw JdbcUtils.createSQLException("DECIMAL width must be between 1 and 38, got: " + width, ErrorCode.LOGICAL_TYPE_DECIMAL_WIDTH);
+            throw JdbcUtils.createSQLException("DECIMAL width must be between 1 and 38, got: " + width,
+                                               ErrorCode.LOGICAL_TYPE_DECIMAL_WIDTH);
         }
         if (scale < 0 || scale > width) {
-            throw JdbcUtils.createSQLException("DECIMAL scale must be between 0 and width, got: " + scale, ErrorCode.LOGICAL_TYPE_DECIMAL_SCALE);
+            throw JdbcUtils.createSQLException("DECIMAL scale must be between 0 and width, got: " + scale,
+                                               ErrorCode.LOGICAL_TYPE_DECIMAL_SCALE);
         }
         return new DuckDBLogicalType(duckdb_create_decimal_type(width, scale));
     }

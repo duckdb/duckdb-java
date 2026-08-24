@@ -132,7 +132,7 @@ public class DuckDBAppender implements AutoCloseable {
             if (null != appenderRef) {
                 duckdb_appender_destroy(appenderRef);
             }
-            throw JdbcUtils.createSQLException(createErrMsg(e.getMessage()) , ErrorCode.APPENDER_CONVERSION, e);
+            throw JdbcUtils.createSQLException(createErrMsg(e.getMessage()), ErrorCode.APPENDER_CONVERSION, e);
         }
 
         this.appenderRef = appenderRef;
@@ -143,10 +143,12 @@ public class DuckDBAppender implements AutoCloseable {
     public DuckDBAppender beginRow() throws SQLException {
         checkOpen();
         if (!readyForANewRowInvariant()) {
-            throw JdbcUtils.createSQLException(createErrMsg("'endRow' must be called before calling 'beginRow' again") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("'endRow' must be called before calling 'beginRow' again"),
+                                               ErrorCode.APPENDER_SEQUENCE);
         }
         if (null == columns || 0 == columns.size()) {
-            throw JdbcUtils.createSQLException(createErrMsg("no columns found to append to") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("no columns found to append to"),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         this.currentColumn = columns.get(0);
         return this;
@@ -159,10 +161,13 @@ public class DuckDBAppender implements AutoCloseable {
             if (null != topCol) {
                 throw JdbcUtils.createSQLException(
                     createErrMsg("all columns must be appended to before calling 'endRow', expected columns count: " +
-                                 columns.size() + ", actual: " + (topCol.idx + 1)) , ErrorCode.APPENDER_SEQUENCE);
+                                 columns.size() + ", actual: " + (topCol.idx + 1)),
+                    ErrorCode.APPENDER_SEQUENCE);
             } else {
-                throw JdbcUtils.createSQLException(createErrMsg(
-                    "calls to 'beginRow' and 'endRow' must be paired and cannot be interleaved with other 'begin*' and 'end*' calls") , ErrorCode.APPENDER_SEQUENCE);
+                throw JdbcUtils.createSQLException(
+                    createErrMsg(
+                        "calls to 'beginRow' and 'endRow' must be paired and cannot be interleaved with other 'begin*' and 'end*' calls"),
+                    ErrorCode.APPENDER_SEQUENCE);
             }
         }
 
@@ -185,7 +190,8 @@ public class DuckDBAppender implements AutoCloseable {
     public DuckDBAppender beginStruct() throws SQLException {
         checkOpen();
         if (!rowBegunInvariant()) {
-            throw JdbcUtils.createSQLException(createErrMsg("'beginRow' must be called before calling 'beginStruct'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("'beginRow' must be called before calling 'beginStruct'"),
+                                               ErrorCode.APPENDER_SEQUENCE);
         }
         checkCurrentColumnType(DUCKDB_TYPE_STRUCT);
         //        if (structBegunInvariant()) {
@@ -193,7 +199,7 @@ public class DuckDBAppender implements AutoCloseable {
         //            again"));
         //        }
         if (0 == currentColumn.children.size()) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid empty struct") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid empty struct"), ErrorCode.APPENDER_SEQUENCE);
         }
         this.currentColumn = currentColumn.children.get(0);
         return this;
@@ -203,11 +209,15 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!structCompletedInvariant()) {
             if (structBegunInvariant()) {
-                throw JdbcUtils.createSQLException(createErrMsg(
-                    "all struct fields must be appended to before calling 'endStruct', expected fields count: " +
-                    currentColumn.parent.children.size() + ", actual: " + (currentColumn.idx + 1)) , ErrorCode.APPENDER_SEQUENCE);
+                throw JdbcUtils.createSQLException(
+                    createErrMsg(
+                        "all struct fields must be appended to before calling 'endStruct', expected fields count: " +
+                        currentColumn.parent.children.size() + ", actual: " + (currentColumn.idx + 1)),
+                    ErrorCode.APPENDER_SEQUENCE);
             }
-            throw JdbcUtils.createSQLException(createErrMsg("all struct fields must be appended to before calling 'endStruct'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("all struct fields must be appended to before calling 'endStruct'"),
+                ErrorCode.APPENDER_SEQUENCE);
         }
         this.prevColumn = this.prevColumn.parent;
         return this;
@@ -216,7 +226,8 @@ public class DuckDBAppender implements AutoCloseable {
     public DuckDBAppender beginUnion(String tag) throws SQLException {
         checkOpen();
         if (!rowBegunInvariant()) {
-            throw JdbcUtils.createSQLException(createErrMsg("'beginRow' must be called before calling 'beginUnion'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("'beginRow' must be called before calling 'beginUnion'"),
+                                               ErrorCode.APPENDER_SEQUENCE);
         }
         Column col = currentColumn(DUCKDB_TYPE_UNION);
         this.currentColumn = putUnionTag(col, rowIdx, tag);
@@ -226,7 +237,9 @@ public class DuckDBAppender implements AutoCloseable {
     public DuckDBAppender endUnion() throws SQLException {
         checkOpen();
         if (!unionCompletedInvariant()) {
-            throw JdbcUtils.createSQLException(createErrMsg("union column must be appended to before calling 'endUnion'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("union column must be appended to before calling 'endUnion'"),
+                ErrorCode.APPENDER_SEQUENCE);
         }
         this.prevColumn = this.prevColumn.parent;
         return this;
@@ -235,7 +248,8 @@ public class DuckDBAppender implements AutoCloseable {
     public long flush() throws SQLException {
         checkOpen();
         if (!readyForANewRowInvariant()) {
-            throw JdbcUtils.createSQLException(createErrMsg("'endRow' must be called before calling 'flush'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("'endRow' must be called before calling 'flush'"),
+                                               ErrorCode.APPENDER_SEQUENCE);
         }
 
         if (0 == rowIdx) {
@@ -268,7 +282,7 @@ public class DuckDBAppender implements AutoCloseable {
                     col.reset();
                 }
             } catch (SQLException e) {
-                throw JdbcUtils.createSQLException(createErrMsg(e.getMessage()) , ErrorCode.APPENDER_CONVERSION, e);
+                throw JdbcUtils.createSQLException(createErrMsg(e.getMessage()), ErrorCode.APPENDER_CONVERSION, e);
             }
 
             long ret = rowIdx;
@@ -764,7 +778,8 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("Invalid type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("Invalid type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
 
         moveToNextColumn();
@@ -917,7 +932,9 @@ public class DuckDBAppender implements AutoCloseable {
     public DuckDBAppender append(Iterator<?> iter, int count) throws SQLException {
         Column parentCol = currentColumn(collectionTypes);
         if (parentCol.colType != DUCKDB_TYPE_ARRAY && parentCol.colType != DUCKDB_TYPE_LIST) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: '" + parentCol.colType + "'") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("invalid array/list column type: '" + parentCol.colType + "'"),
+                ErrorCode.APPENDER_CONVERSION);
         }
         if (iter == null) {
             return appendNull();
@@ -1027,16 +1044,18 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void checkOpen() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException(createErrMsg("appender was closed") , ErrorCode.APPENDER_IS_CLOSED);
+            throw JdbcUtils.createSQLException(createErrMsg("appender was closed"), ErrorCode.APPENDER_IS_CLOSED);
         }
         if (ownerThreadId != 0 && ownerThreadId != currentThread().getId()) {
-            throw JdbcUtils.createSQLException(createErrMsg(
-                "detected the usage of the same Appender instance from multiple threads,"
-                + " owner thread ID: " + ownerThreadId + ", current thread ID: " + currentThread().getId() + ";"
-                + " 'append()' and 'flush()' operations cannot be called concurrently;"
-                + " when it is necessary to use the same Appender instance from multiple threads,"
-                + " call 'appender.unsafeBreakThreadConfinement()' method and use the 'Lock' instance"
-                + " obtained from there to synchronize the calls to the Appender.") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("detected the usage of the same Appender instance from multiple threads,"
+                             + " owner thread ID: " + ownerThreadId +
+                             ", current thread ID: " + currentThread().getId() + ";"
+                             + " 'append()' and 'flush()' operations cannot be called concurrently;"
+                             + " when it is necessary to use the same Appender instance from multiple threads,"
+                             + " call 'appender.unsafeBreakThreadConfinement()' method and use the 'Lock' instance"
+                             + " obtained from there to synchronize the calls to the Appender."),
+                ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1059,13 +1078,15 @@ public class DuckDBAppender implements AutoCloseable {
                 return;
             }
         }
-        throw JdbcUtils.createSQLException(createErrMsg("invalid column type, expected one of: '" + Arrays.toString(ctypes) +
-                                            "', actual: '" + col.colType + "'") , ErrorCode.APPENDER_CONVERSION);
+        throw JdbcUtils.createSQLException(createErrMsg("invalid column type, expected one of: '" +
+                                                        Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"),
+                                           ErrorCode.APPENDER_CONVERSION);
     }
 
     private void checkArrayLength(Column col, long length) throws SQLException {
         if (null == col.parent) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified"),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         switch (col.parent.colType) {
         case DUCKDB_TYPE_LIST:
@@ -1073,18 +1094,22 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_ARRAY:
             break;
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         if (col.arraySize != length) {
             throw JdbcUtils.createSQLException(
-                createErrMsg("invalid array size, expected: " + col.arraySize + ", actual: " + length) , ErrorCode.APPENDER_CONVERSION);
+                createErrMsg("invalid array size, expected: " + col.arraySize + ", actual: " + length),
+                ErrorCode.APPENDER_CONVERSION);
         }
     }
 
     private void checkDecimalType(Column col, CAPIType decimalInternalType) throws SQLException {
         if (col.decimalInternalType != decimalInternalType) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid decimal internal type, expected: '" + col.decimalInternalType +
-                                                "', actual: '" + decimalInternalType + "'") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid decimal internal type, expected: '" +
+                                                            col.decimalInternalType + "', actual: '" +
+                                                            decimalInternalType + "'"),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1092,8 +1117,9 @@ public class DuckDBAppender implements AutoCloseable {
         throws SQLException {
         if (value.precision() > maxPrecision) {
             throw JdbcUtils.createSQLException(createErrMsg("invalid decimal precision, value: " + value.precision() +
-                                                ", max value: " + maxPrecision +
-                                                ", decimal internal type: " + decimalInternalType) , ErrorCode.APPENDER_CONVERSION);
+                                                            ", max value: " + maxPrecision +
+                                                            ", decimal internal type: " + decimalInternalType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1103,7 +1129,9 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
 
         if (null == currentColumn) {
-            throw JdbcUtils.createSQLException(createErrMsg("current column not found, columns count: " + columns.size()) , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("current column not found, columns count: " + columns.size()),
+                ErrorCode.APPENDER_SEQUENCE);
         }
 
         return currentColumn;
@@ -1125,7 +1153,9 @@ public class DuckDBAppender implements AutoCloseable {
 
     private Column arrayInnerColumn(Column arrayCol, CAPIType[] ctypes) throws SQLException {
         if (arrayCol.colType != DUCKDB_TYPE_ARRAY && arrayCol.colType != DUCKDB_TYPE_LIST) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: '" + arrayCol.colType + "'") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("invalid array/list column type: '" + arrayCol.colType + "'"),
+                ErrorCode.APPENDER_CONVERSION);
         }
 
         Column col = arrayCol.children.get(0);
@@ -1135,7 +1165,8 @@ public class DuckDBAppender implements AutoCloseable {
             }
         }
         throw JdbcUtils.createSQLException(createErrMsg("invalid array/list inner column type, expected one of: '" +
-                                            Arrays.toString(ctypes) + "', actual: '" + col.colType + "'") , ErrorCode.APPENDER_CONVERSION);
+                                                        Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"),
+                                           ErrorCode.APPENDER_CONVERSION);
     }
 
     private Column currentTopLevelColumn() {
@@ -1153,7 +1184,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void setNullMask(Column col, long vectorIdx, boolean[] nullMask, int elementsCount) throws SQLException {
         if (null == col.parent) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified"),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         switch (col.parent.colType) {
         case DUCKDB_TYPE_ARRAY:
@@ -1165,7 +1197,8 @@ public class DuckDBAppender implements AutoCloseable {
             setListNullMask(col, nullMask, elementsCount);
             return;
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1176,7 +1209,8 @@ public class DuckDBAppender implements AutoCloseable {
         }
         if (nullMask.length != elementsCount) {
             throw JdbcUtils.createSQLException(
-                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length) , ErrorCode.APPENDER_CONVERSION);
+                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length),
+                ErrorCode.APPENDER_CONVERSION);
         }
         for (int i = 0; i < nullMask.length; i++) {
             if (nullMask[i]) {
@@ -1191,11 +1225,13 @@ public class DuckDBAppender implements AutoCloseable {
         }
         if (nullMask.length != elementsCount) {
             throw JdbcUtils.createSQLException(
-                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length) , ErrorCode.APPENDER_CONVERSION);
+                createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length),
+                ErrorCode.APPENDER_CONVERSION);
         }
         if (col.listSize < elementsCount) {
             throw JdbcUtils.createSQLException(
-                createErrMsg("invalid list state, list size: " + col.listSize + ", elements count: " + elementsCount) , ErrorCode.APPENDER_CONVERSION);
+                createErrMsg("invalid list state, list size: " + col.listSize + ", elements count: " + elementsCount),
+                ErrorCode.APPENDER_CONVERSION);
         }
         for (int i = 0; i < nullMask.length; i++) {
             if (nullMask[i]) {
@@ -1252,7 +1288,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void putBigInteger(Column col, long vectorIdx, BigInteger value) throws SQLException {
         if (value.compareTo(HUGE_INT_MIN) < 0 || value.compareTo(HUGE_INT_MAX) > 0) {
-            throw JdbcUtils.createSQLException("Specified BigInteger value is out of range for HUGEINT field" , ErrorCode.APPENDER_HUGEINT_RANGE);
+            throw JdbcUtils.createSQLException("Specified BigInteger value is out of range for HUGEINT field",
+                                               ErrorCode.APPENDER_HUGEINT_RANGE);
         }
         long lower = value.longValue();
         long upper = value.shiftRight(64).longValue();
@@ -1286,12 +1323,14 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void putDecimal(Column col, long vectorIdx, BigDecimal value) throws SQLException {
         if (value.precision() > col.decimalPrecision) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid decimal precision, max expected: " + col.decimalPrecision +
-                                                ", actual: " + value.precision()) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid decimal precision, max expected: " +
+                                                            col.decimalPrecision + ", actual: " + value.precision()),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         if (col.decimalScale != value.scale()) {
             throw JdbcUtils.createSQLException(
-                createErrMsg("invalid decimal scale, expected: " + col.decimalScale + ", actual: " + value.scale()) , ErrorCode.APPENDER_CONVERSION);
+                createErrMsg("invalid decimal scale, expected: " + col.decimalScale + ", actual: " + value.scale()),
+                ErrorCode.APPENDER_CONVERSION);
         }
 
         switch (col.decimalInternalType) {
@@ -1322,7 +1361,9 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid decimal internal type: '" + col.decimalInternalType + "'") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("invalid decimal internal type: '" + col.decimalInternalType + "'"),
+                ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1362,7 +1403,9 @@ public class DuckDBAppender implements AutoCloseable {
     private void putLocalDate(Column col, long vectorIdx, LocalDate date) throws SQLException {
         long days = date.toEpochDay();
         if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
-            throw JdbcUtils.createSQLException(createErrMsg("unsupported number of days: " + days + ", must fit into 'int32_t'") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("unsupported number of days: " + days + ", must fit into 'int32_t'"),
+                ErrorCode.APPENDER_CONVERSION);
         }
         putEpochDays(col, vectorIdx, (int) days);
     }
@@ -1414,7 +1457,8 @@ public class DuckDBAppender implements AutoCloseable {
             moment = EPOCH_DATE_TIME.until(value, NANOS);
             break;
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid column type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid column type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         putEpochMoment(col, vectorIdx, moment);
     }
@@ -1438,7 +1482,8 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid column type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid column type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         putEpochMoment(col, vectorIdx, moment);
     }
@@ -1790,7 +1835,8 @@ public class DuckDBAppender implements AutoCloseable {
         for (long i = 0; i < count; i++) {
             if (!iter.hasNext()) {
                 throw JdbcUtils.createSQLException(
-                    createErrMsg("invalid iterator elements count, expected: " + count + ", actual" + i) , ErrorCode.APPENDER_CONVERSION);
+                    createErrMsg("invalid iterator elements count, expected: " + count + ", actual" + i),
+                    ErrorCode.APPENDER_CONVERSION);
             }
 
             Object value = iter.next();
@@ -1920,9 +1966,11 @@ public class DuckDBAppender implements AutoCloseable {
                 Date dt = (Date) value;
                 putDate(col, vectorIdx, dt);
             } else {
-                throw JdbcUtils.createSQLException(createErrMsg("invalid object type for timestamp column, expected one of: [" +
-                                                    LocalDateTime.class.getName() + ", " + Date.class.getName() +
-                                                    "], actual: [" + value.getClass().getName() + "]") , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException(
+                    createErrMsg("invalid object type for timestamp column, expected one of: [" +
+                                 LocalDateTime.class.getName() + ", " + Date.class.getName() + "], actual: [" +
+                                 value.getClass().getName() + "]"),
+                    ErrorCode.APPENDER_CONVERSION);
             }
             break;
         case DUCKDB_TYPE_TIMESTAMP_TZ: {
@@ -1936,7 +1984,7 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_LIST: {
             Collection<?> collection = (Collection<?>) value;
             if (col.children.size() != 1) {
-                throw JdbcUtils.createSQLException(createErrMsg("invalid list column") , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException(createErrMsg("invalid list column"), ErrorCode.APPENDER_CONVERSION);
             }
             Column innerCol = col.children.get(0);
             putObjectArrayOrList(innerCol, vectorIdx, collection.iterator(), collection.size());
@@ -1945,7 +1993,7 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_MAP: {
             Map<?, ?> map = (Map<?, ?>) value;
             if (col.children.size() != 1) {
-                throw JdbcUtils.createSQLException(createErrMsg("invalid map column") , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException(createErrMsg("invalid map column"), ErrorCode.APPENDER_CONVERSION);
             }
             Column innerCol = col.children.get(0);
             putMap(innerCol, vectorIdx, map);
@@ -1960,13 +2008,14 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("unsupported composite column, inner type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("unsupported composite column, inner type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
     private void putCompositeElementArray(Column col, long vectorIdx, Object value) throws SQLException {
         if (col.children.size() != 1) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array column") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array column"), ErrorCode.APPENDER_CONVERSION);
         }
         Column innerCol = col.children.get(0);
         switch (innerCol.colType) {
@@ -2028,12 +2077,15 @@ public class DuckDBAppender implements AutoCloseable {
                 double[][] arr = (double[][]) value;
                 putDoubleArray2D(col, vectorIdx, arr);
             } else {
-                throw JdbcUtils.createSQLException(createErrMsg("unsupported 2D array type: " + value.getClass().getName()) , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException(
+                    createErrMsg("unsupported 2D array type: " + value.getClass().getName()),
+                    ErrorCode.APPENDER_CONVERSION);
             }
             break;
         }
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("unsupported array type: " + innerCol.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("unsupported array type: " + innerCol.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -2044,17 +2096,21 @@ public class DuckDBAppender implements AutoCloseable {
                 LinkedHashMap<?, ?> map = (LinkedHashMap<?, ?>) structValue;
                 collection = map.values();
             } else {
-                throw JdbcUtils.createSQLException(createErrMsg(
-                    "struct values must be specified as an instance of a 'java.util.LinkedHashMap' or as a collection of objects, actual class: " +
-                    structValue.getClass().getName()) , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException(
+                    createErrMsg(
+                        "struct values must be specified as an instance of a 'java.util.LinkedHashMap' or as a collection of objects, actual class: " +
+                        structValue.getClass().getName()),
+                    ErrorCode.APPENDER_CONVERSION);
             }
         } else {
             collection = (Collection<?>) structValue;
         }
 
         if (structCol.children.size() != collection.size()) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid struct object specified, expected fields count: " +
-                                                structCol.children.size() + ", actual: " + collection.size()) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg("invalid struct object specified, expected fields count: " + structCol.children.size() +
+                             ", actual: " + collection.size()),
+                ErrorCode.APPENDER_CONVERSION);
         }
 
         int i = 0;
@@ -2067,9 +2123,11 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void putCompositeElementUnion(Column unionCol, long vectorIdx, Object unionValue) throws SQLException {
         if (!(unionValue instanceof AbstractMap.SimpleEntry)) {
-            throw JdbcUtils.createSQLException(createErrMsg(
-                "union values must be specified as an instance of 'java.util.AbstractMap.SimpleEntry<String, Object>', actual type: " +
-                unionValue.getClass().getName()) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(
+                createErrMsg(
+                    "union values must be specified as an instance of 'java.util.AbstractMap.SimpleEntry<String, Object>', actual type: " +
+                    unionValue.getClass().getName()),
+                ErrorCode.APPENDER_CONVERSION);
         }
         AbstractMap.SimpleEntry<?, ?> entry = (AbstractMap.SimpleEntry<?, ?>) unionValue;
         String tag = String.valueOf(entry.getKey());
@@ -2086,7 +2144,8 @@ public class DuckDBAppender implements AutoCloseable {
             }
         }
         if (0 == fieldWithTag) {
-            throw JdbcUtils.createSQLException(createErrMsg("specified union field not found, value: '" + tag + "'") , ErrorCode.APPENDER_SEQUENCE);
+            throw JdbcUtils.createSQLException(createErrMsg("specified union field not found, value: '" + tag + "'"),
+                                               ErrorCode.APPENDER_SEQUENCE);
         }
 
         // set tag
@@ -2107,7 +2166,8 @@ public class DuckDBAppender implements AutoCloseable {
         Integer numValueNullable = col.enumDict.get(value);
         if (null == numValueNullable) {
             throw JdbcUtils.createSQLException(createErrMsg("invalid ENUM value specified: '" + value +
-                                                "', expected one of: " + col.enumDict.keySet()) , ErrorCode.APPENDER_CONVERSION);
+                                                            "', expected one of: " + col.enumDict.keySet()),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
 
         int pos = (int) (vectorIdx * col.enumInternalType.widthBytes);
@@ -2124,7 +2184,8 @@ public class DuckDBAppender implements AutoCloseable {
             col.data.putInt(numValueNullable.intValue());
             return;
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid ENUM internal type: " + col.enumInternalType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid ENUM internal type: " + col.enumInternalType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -2160,7 +2221,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private int prepareListColumn(Column innerCol, long vectorIdx, long listElementsCount) throws SQLException {
         if (null == innerCol.parent) {
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified") , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column specified"),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         Column col = innerCol.parent;
         switch (col.colType) {
@@ -2170,7 +2232,8 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_MAP:
             break;
         default:
-            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType) , ErrorCode.APPENDER_CONVERSION);
+            throw JdbcUtils.createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
+                                               ErrorCode.APPENDER_CONVERSION);
         }
         appenderRefLock.lock();
         try {
@@ -2185,13 +2248,15 @@ public class DuckDBAppender implements AutoCloseable {
             int reserveStatus = duckdb_list_vector_reserve(col.vectorRef, listSize);
             if (0 != reserveStatus) {
                 throw JdbcUtils.createSQLException(
-                    createErrMsg("'duckdb_list_vector_reserve' call failed, list size: " + listSize) , ErrorCode.APPENDER_CONVERSION);
+                    createErrMsg("'duckdb_list_vector_reserve' call failed, list size: " + listSize),
+                    ErrorCode.APPENDER_CONVERSION);
             }
             innerCol.reset(listSize);
             int setStatus = duckdb_list_vector_set_size(col.vectorRef, listSize);
             if (0 != setStatus) {
                 throw JdbcUtils.createSQLException(
-                    createErrMsg("'duckdb_list_vector_set_size' call failed, list size: " + listSize) , ErrorCode.APPENDER_CONVERSION);
+                    createErrMsg("'duckdb_list_vector_set_size' call failed, list size: " + listSize),
+                    ErrorCode.APPENDER_CONVERSION);
             }
             return (int) offset;
         } finally {
@@ -2226,7 +2291,7 @@ public class DuckDBAppender implements AutoCloseable {
             ByteBuffer[] out = new ByteBuffer[1];
             int state = duckdb_appender_create_ext(conn.connRef, utf8(catalog), utf8(schema), utf8(table), out);
             if (0 != state) {
-                throw JdbcUtils.createSQLException("duckdb_appender_create_ext error" , ErrorCode.APPENDER_RAW_ERROR);
+                throw JdbcUtils.createSQLException("duckdb_appender_create_ext error", ErrorCode.APPENDER_RAW_ERROR);
             }
             return out[0];
         } finally {
@@ -2237,7 +2302,7 @@ public class DuckDBAppender implements AutoCloseable {
     private static ByteBuffer[] readTableTypes(ByteBuffer appenderRef) throws SQLException {
         long colCountLong = duckdb_appender_column_count(appenderRef);
         if (colCountLong > Integer.MAX_VALUE || colCountLong < 0) {
-            throw JdbcUtils.createSQLException("invalid columns count: " + colCountLong , ErrorCode.APPENDER_PARAM);
+            throw JdbcUtils.createSQLException("invalid columns count: " + colCountLong, ErrorCode.APPENDER_PARAM);
         }
         int colCount = (int) colCountLong;
 
@@ -2246,7 +2311,8 @@ public class DuckDBAppender implements AutoCloseable {
         for (int i = 0; i < colCount; i++) {
             ByteBuffer colType = duckdb_appender_column_type(appenderRef, i);
             if (null == colType) {
-                throw JdbcUtils.createSQLException("cannot get logical type for column: " + i , ErrorCode.APPENDER_CHUNK);
+                throw JdbcUtils.createSQLException("cannot get logical type for column: " + i,
+                                                   ErrorCode.APPENDER_CHUNK);
             }
             int typeId = duckdb_get_type_id(colType);
             if (!supportedTypes.contains(typeId)) {
@@ -2255,7 +2321,7 @@ public class DuckDBAppender implements AutoCloseable {
                         duckdb_destroy_logical_type(lt);
                     }
                 }
-                throw JdbcUtils.createSQLException("unsupported C API type: " + typeId , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException("unsupported C API type: " + typeId, ErrorCode.APPENDER_CONVERSION);
             }
             res[i] = colType;
         }
@@ -2266,7 +2332,7 @@ public class DuckDBAppender implements AutoCloseable {
     private static ByteBuffer createChunk(ByteBuffer[] colTypes) throws SQLException {
         ByteBuffer chunkRef = duckdb_create_data_chunk(colTypes);
         if (null == chunkRef) {
-            throw JdbcUtils.createSQLException("cannot create data chunk" , ErrorCode.APPENDER_CHUNK);
+            throw JdbcUtils.createSQLException("cannot create data chunk", ErrorCode.APPENDER_CHUNK);
         }
         return chunkRef;
     }
@@ -2360,13 +2426,14 @@ public class DuckDBAppender implements AutoCloseable {
             this.idx = idx;
 
             if (null == vector) {
-                throw JdbcUtils.createSQLException("cannot initialize data chunk vector" , ErrorCode.APPENDER_CHUNK);
+                throw JdbcUtils.createSQLException("cannot initialize data chunk vector", ErrorCode.APPENDER_CHUNK);
             }
 
             if (null == colTypeRef) {
                 this.colTypeRef = duckdb_vector_get_column_type(vector);
                 if (null == this.colTypeRef) {
-                    throw JdbcUtils.createSQLException("cannot initialize data chunk vector type" , ErrorCode.APPENDER_CHUNK);
+                    throw JdbcUtils.createSQLException("cannot initialize data chunk vector type",
+                                                       ErrorCode.APPENDER_CHUNK);
                 }
             } else {
                 this.colTypeRef = colTypeRef;
@@ -2415,7 +2482,8 @@ public class DuckDBAppender implements AutoCloseable {
                 long vectorSizeBytes = maxElems * widthBytes();
                 this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
-                    throw JdbcUtils.createSQLException("cannot initialize data chunk vector data" , ErrorCode.APPENDER_CHUNK);
+                    throw JdbcUtils.createSQLException("cannot initialize data chunk vector data",
+                                                       ErrorCode.APPENDER_CHUNK);
                 }
             } else {
                 this.data = null;
@@ -2424,7 +2492,8 @@ public class DuckDBAppender implements AutoCloseable {
             duckdb_vector_ensure_validity_writable(vectorRef);
             this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
-                throw JdbcUtils.createSQLException("cannot initialize data chunk vector validity" , ErrorCode.APPENDER_CHUNK);
+                throw JdbcUtils.createSQLException("cannot initialize data chunk vector validity",
+                                                   ErrorCode.APPENDER_CHUNK);
             }
 
             // last call in constructor
@@ -2433,7 +2502,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         void reset(long listSize) throws SQLException {
             if (null == parent || !(parent.colType == DUCKDB_TYPE_LIST || parent.colType == DUCKDB_TYPE_MAP)) {
-                throw JdbcUtils.createSQLException("invalid list column" , ErrorCode.APPENDER_CONVERSION);
+                throw JdbcUtils.createSQLException("invalid list column", ErrorCode.APPENDER_CONVERSION);
             }
             this.listSize = listSize;
             reset();
@@ -2446,14 +2515,14 @@ public class DuckDBAppender implements AutoCloseable {
                 long vectorSizeBytes = maxElems * widthBytes();
                 this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
-                    throw JdbcUtils.createSQLException("cannot reset data chunk vector data" , ErrorCode.APPENDER_CHUNK);
+                    throw JdbcUtils.createSQLException("cannot reset data chunk vector data", ErrorCode.APPENDER_CHUNK);
                 }
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
             this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
-                throw JdbcUtils.createSQLException("cannot reset data chunk vector validity" , ErrorCode.APPENDER_CHUNK);
+                throw JdbcUtils.createSQLException("cannot reset data chunk vector validity", ErrorCode.APPENDER_CHUNK);
             }
 
             for (Column col : children) {

@@ -20,8 +20,8 @@ public class IOUtils {
             }
             return out.toByteArray();
         } catch (IOException e) {
-            throw new SQLException(e.getMessage(),
-                                  ErrorCode.IO_ERROR.getSQLState().getCode(), ErrorCode.IO_ERROR.getCode(), e);
+            throw new SQLException(e.getMessage(), ErrorCode.IO_ERROR.getSQLState().getCode(),
+                                   ErrorCode.IO_ERROR.getCode(), e);
         }
     }
 
@@ -35,8 +35,8 @@ public class IOUtils {
             }
             return sb.toString();
         } catch (IOException e) {
-            throw new SQLException(e.getMessage(),
-                                  ErrorCode.IO_STREAM_ERROR.getSQLState().getCode(), ErrorCode.IO_STREAM_ERROR.getCode(), e);
+            throw new SQLException(e.getMessage(), ErrorCode.IO_STREAM_ERROR.getSQLState().getCode(),
+                                   ErrorCode.IO_STREAM_ERROR.getCode(), e);
         }
     }
 

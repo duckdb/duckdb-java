@@ -48,7 +48,8 @@ public class DuckDBArrayResultSet implements ResultSet {
                 ErrorCode.ARRAY_RS_NUMERIC_GETTER);
         }
         if (columnIndex != 2) {
-            throw JdbcUtils.createSQLException("Array-backed ResultSet can only have two columns", ErrorCode.ARRAY_RS_COLUMN_COUNT);
+            throw JdbcUtils.createSQLException("Array-backed ResultSet can only have two columns",
+                                               ErrorCode.ARRAY_RS_COLUMN_COUNT);
         }
         T value = getter.getValue(offset + currentValueIndex);
 
@@ -284,7 +285,8 @@ public class DuckDBArrayResultSet implements ResultSet {
         if ("VALUE".equalsIgnoreCase(columnLabel)) {
             return 2;
         }
-        throw JdbcUtils.createSQLException("Could not find column with label " + columnLabel, ErrorCode.ARRAY_RS_COLUMN_LABEL);
+        throw JdbcUtils.createSQLException("Could not find column with label " + columnLabel,
+                                           ErrorCode.ARRAY_RS_COLUMN_LABEL);
     }
 
     @Override
