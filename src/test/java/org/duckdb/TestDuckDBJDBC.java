@@ -2315,13 +2315,14 @@ public class TestDuckDBJDBC {
             Class<?> clazz = Class.forName("org.duckdb." + arg1);
             statusCode = runTests(new String[0], clazz);
         } else {
-            statusCode = runTests(
-                args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
-                TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
-                TestBatch.class, TestBindings.class, TestChunkedResult.class, TestClosure.class,
-                TestExtensionTypes.class, TestJfrEvents.class, TestMetadata.class, TestNoLib.class, TestSpatial.class,
-                TestParameterMetadata.class, TestPrepare.class, TestResults.class, TestScalarFunctions.class,
-                TestSessionInit.class, TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
+            statusCode =
+                runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
+                         TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
+                         TestBatch.class, TestBindings.class, TestChunkedResult.class, TestClosure.class,
+                         TestGeneratedKeysResultSet.class, TestExtensionTypes.class, TestJfrEvents.class,
+                         TestMetadata.class, TestNoLib.class, TestSpatial.class, TestParameterMetadata.class,
+                         TestPrepare.class, TestResults.class, TestScalarFunctions.class, TestSessionInit.class,
+                         TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
         }
         System.exit(statusCode);
     }
