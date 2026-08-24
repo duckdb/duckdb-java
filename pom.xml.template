@@ -1,0 +1,93 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.duckdb</groupId>
+  <artifactId>duckdb_jdbc</artifactId>
+  <version>${VERSION}</version>
+  <packaging>jar</packaging>
+  <name>DuckDB JDBC Driver</name>
+  <description>A JDBC-Compliant driver for the DuckDB data management system</description>
+  <url>https://www.duckdb.org</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Mark Raasveldt</name>
+      <email>mark@duckdblabs.com</email>
+      <organization>DuckDB Labs</organization>
+      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
+    </developer>
+    <developer>
+      <name>Hannes Muehleisen</name>
+      <email>hannes@duckdblabs.com</email>
+      <organization>DuckDB Labs</organization>
+      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/duckdb/duckdb-java.git</connection>
+    <developerConnection>scm:git:ssh://github.com:duckdb/duckdb-java.git</developerConnection>
+    <url>http://github.com/duckdb/duckdb-java/tree/main</url>
+  </scm>
+
+  <!--
+    This POM is only used to declare the runtime dependency graph and publish the
+    driver. It cannot build the JDBC driver itself (that is done by CMake).
+
+    This artifact (duckdb_jdbc) is the backward-compatible aggregate: it ships an
+    empty JAR and, through this thin POM, transitively pulls in the Java artifact
+    and the four core platform native artifacts for every platform (no OS/arch
+    profile activation, so a single dependency gives you all of them). The driver
+    loader picks the matching native library at runtime by filename.
+
+    Native libraries are each a first-class artifact:
+      - org.duckdb:duckdb_jdbc_java            - Java classes only (no native)
+      - org.duckdb:duckdb_jdbc_linux_amd64     - Linux x86_64 (glibc)
+      - org.duckdb:duckdb_jdbc_linux_arm64     - Linux ARM64 (glibc)
+      - org.duckdb:duckdb_jdbc_macos_universal - macOS (x86_64 + ARM64)
+      - org.duckdb:duckdb_jdbc_windows_amd64   - Windows x86_64
+      - org.duckdb:duckdb_jdbc_linux_amd64_musl   - Linux x86_64 (musl, opt-in)
+      - org.duckdb:duckdb_jdbc_linux_arm64_musl   - Linux ARM64 (musl, opt-in)
+      - org.duckdb:duckdb_jdbc_windows_arm64      - Windows ARM64 (opt-in)
+
+    The musl and Windows ARM64 variants are published but NOT part of this aggregate:
+    declare them explicitly to override/select a specific native library, and use
+    duckdb_jdbc_java directly when you want to pin the native artifact yourself.
+  -->
+  <dependencies>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc_java</artifactId>
+      <version>${VERSION}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc_linux_amd64</artifactId>
+      <version>${VERSION}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc_linux_arm64</artifactId>
+      <version>${VERSION}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc_macos_universal</artifactId>
+      <version>${VERSION}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc_windows_amd64</artifactId>
+      <version>${VERSION}</version>
+    </dependency>
+  </dependencies>
+</project>

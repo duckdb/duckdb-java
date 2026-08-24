@@ -1,0 +1,26 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.duckdb</groupId>
+  <artifactId>${ARTIFACT_ID}</artifactId>
+  <version>${VERSION}</version>
+  <packaging>jar</packaging>
+  <name>DuckDB JDBC Driver - ${CLASSIFIER} native library</name>
+  <description>Native library for the DuckDB JDBC driver on the ${CLASSIFIER} platform</description>
+  <url>https://www.duckdb.org</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <scm>
+    <connection>scm:git:git://github.com/duckdb/duckdb.git</connection>
+    <developerConnection>scm:git:ssh://github.com:duckdb/duckdb.git</developerConnection>
+    <url>http://github.com/duckdb/duckdb/tree/main</url>
+  </scm>
+</project>

@@ -712,14 +712,32 @@ set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
 
 # JAR packing
+#
+# Two artifacts are produced per build:
+#   - duckdb_jdbc.jar: pure-Java artifact (no native library). Native libraries are
+#     published as separate, OS/arch-classified JARs pulled in as Maven dependencies.
+#   - duckdb_jdbc_native_<OS_NAME>_<OS_ARCH>[<libc suffix>].jar: contains only the native
+#     library (libduckdb_java.so_<OS_NAME>_<OS_ARCH>) at its root, one per platform.
+#
+# glibc and musl produce binaries with the SAME .so filename, so the libc toolchain is
+# reflected in the outer native JAR classifier: musl builds set OVERRIDE_JDBC_LIBC
+# to "musl" giving e.g. duckdb_jdbc_native_linux_amd64_musl.jar.
+
+if(OVERRIDE_JDBC_LIBC)
+  set(NATIVE_CLASSIFIER "${OS_NAME}_${OS_ARCH}_${OVERRIDE_JDBC_LIBC}")
+else()
+  set(NATIVE_CLASSIFIER "${OS_NAME}_${OS_ARCH}")
+endif()
+set(NATIVE_JAR duckdb_jdbc_native_${NATIVE_CLASSIFIER}.jar)
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc_nolib duckdb_jdbc_tests
+  COMMENT "Packaging pure-Java and native DuckDB JDBC JARs"
   COMMAND ${CMAKE_COMMAND} -E copy
           duckdb_jdbc_nolib.jar
           duckdb_jdbc.jar
-  COMMAND ${Java_JAR_EXECUTABLE} uf duckdb_jdbc.jar -C
+  COMMAND ${Java_JAR_EXECUTABLE} cf ${NATIVE_JAR} -C
           $<TARGET_FILE_DIR:duckdb_java> $<TARGET_FILE_NAME:duckdb_java>)
 
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)

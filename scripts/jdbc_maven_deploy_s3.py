@@ -14,31 +14,25 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
-import re
-import base64
 import hashlib
 from os import path
 
 script_dir = path.dirname(path.abspath(__file__))
 project_dir = path.dirname(script_dir)
 
-# Mapping of build directories to Maven classifiers.
-# These architecture-specific JARs contain native libraries for a single platform only,
-# useful for reducing deployment size when the target platform is known.
+# Per CI build directory: (Maven classifier, name of the native JAR produced by CMake).
+# Each native JAR contains the native library for a single platform (libduckdb_java.so_
+# <os>_<arch>[<libc>]) at its root. glibc and musl share the same .so name, so the libc
+# is reflected in both the CMake native JAR name and the published classifier.
 arch_builds = {
-    'java-linux-amd64': 'linux_amd64',
-    'java-linux-aarch64': 'linux_arm64',
-    'java-linux-amd64-musl': 'linux_amd64_musl',    # Alpine Linux
-    'java-linux-aarch64-musl': 'linux_arm64_musl',  # Alpine Linux ARM
-    'java-osx-universal': 'macos_universal',        # Intel + Apple Silicon
-    'java-windows-amd64': 'windows_amd64',
-    'java-windows-aarch64': 'windows_arm64',
+    'java-linux-amd64': ('linux_amd64', 'duckdb_jdbc_native_linux_amd64.jar'),
+    'java-linux-aarch64': ('linux_arm64', 'duckdb_jdbc_native_linux_arm64.jar'),
+    'java-linux-amd64-musl': ('linux_amd64_musl', 'duckdb_jdbc_native_linux_amd64_musl.jar'),    # Alpine Linux
+    'java-linux-aarch64-musl': ('linux_arm64_musl', 'duckdb_jdbc_native_linux_arm64_musl.jar'),  # Alpine Linux ARM
+    'java-osx-universal': ('macos_universal', 'duckdb_jdbc_native_osx_universal.jar'),        # Intel + Apple Silicon
+    'java-windows-amd64': ('windows_amd64', 'duckdb_jdbc_native_windows_amd64.jar'),
+    'java-windows-aarch64': ('windows_arm64', 'duckdb_jdbc_native_windows_arm64.jar'),
 }
-
-# Builds to combine into the main (fat) JAR.
-# The main JAR includes natives for all major platforms for convenience.
-combine_builds = ['java-linux-amd64', 'java-osx-universal', 'java-windows-amd64', 'java-linux-aarch64']
 
 def run_cmd(cmd, check=True, cwd=project_dir):
     """Execute a command and return output."""
@@ -60,111 +54,32 @@ def get_snapshot_version(external_version):
         prefix = prefix[1:]
     return f"{prefix}-{commit_hash}"
 
-def create_combined_jar(artifact_dir, bundle_dir, version):
-    """Create a fat JAR combining native libraries from multiple platforms."""
-    combined_jar = os.path.join(bundle_dir, f'duckdb_jdbc-{version}.jar')
-    base_jar = os.path.join(artifact_dir, 'java-linux-amd64', 'duckdb_jdbc.jar')
+def create_pom(version):
+    """Create the aggregate duckdb_jdbc (thin) POM declaring the 4 core OS natives."""
+    pom_template = pathlib.Path(project_dir, "pom.xml.template").read_text()
+    return pom_template.replace("${VERSION}", version)
 
-    with zipfile.ZipFile(combined_jar, 'w') as dst:
-        # Copy base jar excluding native libs
-        with zipfile.ZipFile(base_jar) as src:
-            for item in src.infolist():
-                if not item.filename.startswith('libduckdb_java.so'):
-                    dst.writestr(item, src.read(item.filename))
-
-        # Add native libraries from all platforms
-        for build in combine_builds:
-            build_jar = os.path.join(artifact_dir, build, 'duckdb_jdbc.jar')
-            with zipfile.ZipFile(build_jar) as src:
-                for item in src.infolist():
-                    if item.filename.startswith('libduckdb_java.so'):
-                        dst.writestr(item, src.read(item.filename))
-
-    return combined_jar
-
-def create_nolib_jar(artifact_dir, bundle_dir, version):
-    """
-    Create a JAR without native libraries (nolib classifier).
-
-    This variant contains only Java classes without any bundled native libraries.
-    Useful for:
-    - Custom native library management (loading from system path or custom location)
-    - Platforms not covered by pre-built natives (users compile their own)
-    - Smaller artifact size when natives are managed separately
-    - Container/deployment scenarios where natives are provided at infrastructure level
-    """
-    nolib_jar = os.path.join(bundle_dir, f'duckdb_jdbc-{version}-nolib.jar')
-    base_jar = os.path.join(artifact_dir, 'java-linux-amd64', 'duckdb_jdbc.jar')
-
-    with zipfile.ZipFile(base_jar) as src:
-        with zipfile.ZipFile(nolib_jar, 'w') as dst:
-            for item in src.infolist():
-                if not item.filename.startswith('libduckdb_java.so'):
-                    dst.writestr(item, src.read(item.filename))
-
-    return nolib_jar
-
-def create_pom(bundle_dir, version):
-    """Create POM file for the artifact."""
-    pom_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<project>
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>org.duckdb</groupId>
-  <artifactId>duckdb_jdbc</artifactId>
-  <version>{version}</version>
-  <packaging>jar</packaging>
-  <name>DuckDB JDBC Driver</name>
-  <description>A JDBC-Compliant driver for the DuckDB data management system</description>
-  <url>https://www.duckdb.org</url>
-
-  <licenses>
-    <license>
-      <name>MIT License</name>
-      <url>https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
-
-  <developers>
-    <developer>
-      <name>Mark Raasveldt</name>
-      <email>mark@duckdblabs.com</email>
-      <organization>DuckDB Labs</organization>
-      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
-    </developer>
-    <developer>
-      <name>Hannes Muehleisen</name>
-      <email>hannes@duckdblabs.com</email>
-      <organization>DuckDB Labs</organization>
-      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
-    </developer>
-  </developers>
-
-  <scm>
-    <connection>scm:git:git://github.com/duckdb/duckdb-java.git</connection>
-    <developerConnection>scm:git:ssh://github.com:duckdb/duckdb-java.git</developerConnection>
-    <url>https://github.com/duckdb/duckdb-java</url>
-  </scm>
-</project>
-"""
-    pom_path = os.path.join(bundle_dir, f'duckdb_jdbc-{version}.pom')
-    pathlib.Path(pom_path).write_text(pom_content)
-    return pom_path
-
+def create_module_pom(version, artifact_id, classifier):
+    """Create the minimal POM for a first-class module artifact (java or native)."""
+    module_template = pathlib.Path(project_dir, "classifier-pom.xml.template").read_text()
+    return module_template\
+        .replace("${ARTIFACT_ID}", artifact_id)\
+        .replace("${VERSION}", version)\
+        .replace("${CLASSIFIER}", classifier)
 
 def create_sources_jar(jdbc_root, bundle_dir, version):
-    """Create sources JAR."""
-    sources_jar = os.path.join(bundle_dir, f'duckdb_jdbc-{version}-sources.jar')
+    """Create sources JAR (attached to duckdb_jdbc_java)."""
+    sources_jar = os.path.join(bundle_dir, f'duckdb_jdbc_java-{version}-sources.jar')
     run_cmd(f'jar -cvf {sources_jar} -C {jdbc_root}/src/main/java org')
     return sources_jar
 
 
 def create_javadoc_jar(jdbc_root, bundle_dir, version):
-    """Create javadoc JAR."""
+    """Create javadoc JAR (attached to duckdb_jdbc_java)."""
     javadoc_dir = tempfile.mkdtemp()
     try:
         run_cmd(f'javadoc -Xdoclint:-reference -d {javadoc_dir} -sourcepath {jdbc_root}/src/main/java org.duckdb')
-        javadoc_jar = os.path.join(bundle_dir, f'duckdb_jdbc-{version}-javadoc.jar')
+        javadoc_jar = os.path.join(bundle_dir, f'duckdb_jdbc_java-{version}-javadoc.jar')
         run_cmd(f'jar -cvf {javadoc_jar} -C {javadoc_dir} .')
         return javadoc_jar
     finally:
@@ -191,42 +106,53 @@ print(f"Deploying SNAPSHOT version: {version}")
 
 staging_dir = tempfile.mkdtemp()
 
-bundle_dir = path.join(staging_dir, version)
-os.mkdir(bundle_dir)
+# bundle is laid out as the Maven repo it will be uploaded to:
+#   org/duckdb/<artifactId>/<version>/<files>
+maven_root = path.join(staging_dir, "org", "duckdb")
+def artifact_dir_for(artifact_id):
+    return path.join(maven_root, artifact_id, version)
 
-pom = create_pom(bundle_dir, version)
-combined_jar = create_combined_jar(artifact_dir, bundle_dir, version)
-sources_jar = create_sources_jar(project_dir, bundle_dir, version)
-javadoc_jar = create_javadoc_jar(project_dir, bundle_dir, version)
-nolib_jar = create_nolib_jar(artifact_dir, bundle_dir, version)
-arch_specific_jars = []
+# aggregate: empty JAR (backward-compat shell) + thin POM
+aggregate_dir = artifact_dir_for("duckdb_jdbc")
+os.makedirs(aggregate_dir)
+aggregate_jar = path.join(aggregate_dir, f'duckdb_jdbc-{version}.jar')
+aggregate_manifest = os.path.join(staging_dir, "aggregate-manifest")
+pathlib.Path(aggregate_manifest).write_text("Manifest-Version: 1.0\nCreated-By: duckdb-java\n\n")
+run_cmd(f"jar -cfm {aggregate_jar} {aggregate_manifest}")
+pathlib.Path(aggregate_dir, f'duckdb_jdbc-{version}.pom').write_text(create_pom(version))
 
-for build_name, classifier in arch_builds.items():
-    src_jar = path.join(artifact_dir, build_name, 'duckdb_jdbc.jar')
-    dest_jar = path.join(bundle_dir, f'duckdb_jdbc-{version}-{classifier}.jar')
-    shutil.copyfile(src_jar, dest_jar)
-    arch_specific_jars.append(dest_jar)
+# java artifact: classes + sources + javadoc + minimal POM
+java_dir = artifact_dir_for("duckdb_jdbc_java")
+os.makedirs(java_dir)
+run_cmd(f'cp {path.join(artifact_dir, "java-linux-amd64", "duckdb_jdbc.jar")} {path.join(java_dir, f"duckdb_jdbc_java-{version}.jar")}')
+pathlib.Path(java_dir, f'duckdb_jdbc_java-{version}.pom').write_text(create_module_pom(version, "duckdb_jdbc_java", "java"))
+create_sources_jar(project_dir, java_dir, version)
+create_javadoc_jar(project_dir, java_dir, version)
 
-files_to_deploy = [
-  combined_jar,
-  sources_jar,
-  javadoc_jar,
-  nolib_jar,
-  pom
-]
-for jar in arch_specific_jars:
-  files_to_deploy.append(jar)
+# native artifacts: one first-class GAV per classifier
+for build_name, (classifier, native_jar) in arch_builds.items():
+    native_dir = artifact_dir_for("duckdb_jdbc_%s" % classifier)
+    os.makedirs(native_dir)
+    run_cmd(f'cp {path.join(artifact_dir, build_name, native_jar)} {path.join(native_dir, f"duckdb_jdbc_{classifier}-{version}.jar")}')
+    pathlib.Path(native_dir, f'duckdb_jdbc_{classifier}-{version}.pom').write_text(
+        create_module_pom(version, "duckdb_jdbc_%s" % classifier, classifier))
+
+files_to_deploy = []
+for root, dirs, files in os.walk(maven_root):
+    for f in files:
+        files_to_deploy.append(os.path.join(root, f))
 
 # make sure all files exist before continuing
 for file in files_to_deploy:
   if not path.isfile(file):
     raise ValueError(f"Could not create all required files: {file}")
 
-# now sign all files 
+# now sign all files
 
 for file in files_to_deploy:
+  file_dir = path.dirname(file)
   file_name = path.basename(file)
-  run_cmd(f"gpg --sign -ab {file_name}", cwd=bundle_dir)
+  run_cmd(f"gpg --sign -ab {file_name}", cwd=file_dir)
   with open(file, "rb") as fd:
     file_bytes = fd.read()
   for alg in ["md5", "sha1", "sha256"]:
@@ -235,7 +161,7 @@ for file in files_to_deploy:
     hashsum = digest.hexdigest()
     with open(f"{file}.{alg}", "w") as fd:
       fd.write(hashsum)
-subprocess.run(["ls", "-laR", bundle_dir])
+subprocess.run(["find", maven_root, "-type", "f"])
 
 # upload files to s3
 
@@ -245,7 +171,8 @@ if not ("AWS_ENDPOINT_URL" in os.environ and
         "AWS_SECRET_ACCESS_KEY" in os.environ):
   dry_run = "--dryrun"
 
-run_cmd(f"aws s3 cp {bundle_dir} s3://duckdb-staging/duckdb/duckdb-java/maven/org/duckdb/duckdb_jdbc/{version}/ {dry_run} --recursive", cwd=staging_dir)
+# upload the org/duckdb/... tree to the maven repository root
+run_cmd(f"aws s3 cp {maven_root} s3://duckdb-staging/duckdb/duckdb-java/maven/org/duckdb/ {dry_run} --recursive", cwd=staging_dir)
 
 print(f"""
 <dependency>

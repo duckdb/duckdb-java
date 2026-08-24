@@ -18,6 +18,7 @@ runs:
           -e CC='ccache gcc'                       \
           -e CXX='ccache g++'                      \
           -e CCACHE_DIR=/duckdb/ccache             \
+          -e OVERRIDE_JDBC_LIBC=musl               \
           -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
           ${{ inputs.docker_image }}                  \
           sh -c "

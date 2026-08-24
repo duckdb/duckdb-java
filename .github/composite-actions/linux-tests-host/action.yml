@@ -1,6 +1,12 @@
 name: 'Linux Tests Host'
 description: 'Linux test run in host OS'
 
+inputs:
+  native-jar:
+    description: 'Name of the platform-native JAR produced by CMake (duckdb_jdbc_native_<os>_<arch>.jar)'
+    required: true
+    default: 'duckdb_jdbc_native_linux_amd64.jar'
+
 runs:
   using: "composite"
   steps:
@@ -16,5 +22,5 @@ runs:
         cat /etc/os-release
         java -version
         java                                                \
-          -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
+          -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar:./build/release/${{ inputs.native-jar }} \
           org.duckdb.TestDuckDBJDBC

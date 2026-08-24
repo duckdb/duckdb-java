@@ -91,16 +91,20 @@ jobs:
         uses: ./.github/composite-actions/linux-tests-docker
         with:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
+          native-jar: 'duckdb_jdbc_native_linux_amd64.jar'
 
       - name: JDBC Tests
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
+        with:
+          native-jar: 'duckdb_jdbc_native_linux_amd64.jar'
 
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-amd64
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_linux_amd64.jar
 
   java-linux-amd64-tck:
     name: Linux TCK (amd64)
@@ -153,7 +157,7 @@ jobs:
           docker run                                           \
           -v.:/duckdb                                          \
           -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk         \
-          -e DUCKDB_JAR=/duckdb/build/release/duckdb_jdbc.jar  \
+          -e DUCKDB_JAR=/duckdb/build/release/duckdb_jdbc.jar:/duckdb/build/release/duckdb_jdbc_native_linux_amd64.jar  \
           -e PLATFORM_TCK_DIR=/duckdb/platform-tck             \
           ${{ env.MANYLINUX_IMAGE }}                           \
           bash -c "
@@ -170,7 +174,7 @@ jobs:
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
-      DUCKDB_JDBC_JAR: ${{ github.workspace }}/build/release/duckdb_jdbc.jar
+      DUCKDB_JDBC_JAR: ${{ github.workspace }}/build/release/duckdb_jdbc.jar${{ ':' }}${{ github.workspace }}/build/release/duckdb_jdbc_native_linux_amd64.jar
       SPARK_SQL_EXE: ${{ github.workspace }}/sparktest/spark-3.5.3-bin-hadoop3/bin/spark-sql
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: 5432
@@ -418,7 +422,13 @@ jobs:
           mvn -B -ntp install:install-file \
             -Dfile=${{ github.workspace }}/build/release/duckdb_jdbc.jar \
             -DgroupId=org.duckdb \
-            -DartifactId=duckdb_jdbc \
+            -DartifactId=duckdb_jdbc_java \
+            -Dversion=1-jepsen \
+            -Dpackaging=jar
+          mvn -B -ntp install:install-file \
+            -Dfile=${{ github.workspace }}/build/release/duckdb_jdbc_native_linux_amd64.jar \
+            -DgroupId=org.duckdb \
+            -DartifactId=duckdb_jdbc_linux_amd64 \
             -Dversion=1-jepsen \
             -Dpackaging=jar
 
@@ -497,16 +507,20 @@ jobs:
         uses: ./.github/composite-actions/linux-tests-docker
         with:
           docker_image: '${{ env.MANYLINUX_IMAGE }}'
+          native-jar: 'duckdb_jdbc_native_linux_arm64.jar'
 
       - name: JDBC Tests
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-host
+        with:
+          native-jar: 'duckdb_jdbc_native_linux_arm64.jar'
 
       - uses: actions/upload-artifact@v4
         with:
           name: java-linux-aarch64
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_linux_arm64.jar
 
   java-linux-amd64-musl:
     name: Linux (amd64-musl)
@@ -558,6 +572,7 @@ jobs:
           name: java-linux-amd64-musl
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_linux_amd64_musl.jar
 
   java-linux-aarch64-musl:
     name: Linux (aarch64-musl)
@@ -609,6 +624,7 @@ jobs:
           name: java-linux-aarch64-musl
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_linux_arm64_musl.jar
 
   java-windows-amd64:
     name: Windows (amd64)
@@ -681,6 +697,7 @@ jobs:
           name: java-windows-amd64
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_windows_amd64.jar
 
   java-windows-aarch64:
     name: Windows (aarch64)
@@ -757,6 +774,7 @@ jobs:
           name: java-windows-aarch64
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_windows_arm64.jar
 
   java-osx-universal:
     name: macOS (Universal)
@@ -823,6 +841,7 @@ jobs:
           name: java-osx-universal
           path: |
             build/release/duckdb_jdbc.jar
+            build/release/duckdb_jdbc_native_osx_universal.jar
 
   maven-deploy:
     if: ${{ github.repository == 'duckdb/duckdb-java' && startsWith(github.ref, 'refs/tags/') }}

@@ -15,6 +15,7 @@ runs:
         docker run                                 \
           -v.:/duckdb                              \
           -e GEN=ninja                             \
+          -e OVERRIDE_JDBC_LIBC=musl               \
           -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
           ${{ inputs.docker_image }}               \
           sh -c "
