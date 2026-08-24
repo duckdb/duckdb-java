@@ -68,7 +68,7 @@ class DuckDBVector {
     }
 
     Object getObject(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         switch (duckdb_type) {
@@ -138,7 +138,7 @@ class DuckDBVector {
     }
 
     LocalTime getLocalTime(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -170,7 +170,7 @@ class DuckDBVector {
     }
 
     LocalDate getLocalDate(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -203,7 +203,7 @@ class DuckDBVector {
     }
 
     BigDecimal getBigDecimal(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         if (isType(DuckDBColumnType.DECIMAL)) {
@@ -229,7 +229,7 @@ class DuckDBVector {
     }
 
     OffsetDateTime getOffsetDateTime(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -259,7 +259,7 @@ class DuckDBVector {
     }
 
     UUID getUuid(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -277,14 +277,14 @@ class DuckDBVector {
     }
 
     String getLazyString(int idx) {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         return varlen_data[idx].toString();
     }
 
     Array getArray(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         if (isType(DuckDBColumnType.LIST) || isType(DuckDBColumnType.ARRAY)) {
@@ -294,7 +294,7 @@ class DuckDBVector {
     }
 
     Map<Object, Object> getMap(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         if (!isType(DuckDBColumnType.MAP)) {
@@ -313,7 +313,7 @@ class DuckDBVector {
     }
 
     Blob getBlob(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         if (isType(DuckDBColumnType.BLOB) || isType(DuckDBColumnType.GEOMETRY)) {
@@ -324,7 +324,7 @@ class DuckDBVector {
     }
 
     byte[] getBytes(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -336,7 +336,7 @@ class DuckDBVector {
     }
 
     JsonNode getJsonObject(int idx) {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         String result = getLazyString(idx);
@@ -344,7 +344,7 @@ class DuckDBVector {
     }
 
     Date getDate(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -371,7 +371,7 @@ class DuckDBVector {
     }
 
     OffsetTime getOffsetTime(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -407,7 +407,7 @@ class DuckDBVector {
     }
 
     Time getTime(int idx, Calendar cal) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
 
@@ -441,7 +441,7 @@ class DuckDBVector {
     }
 
     Boolean getBoolean(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return false;
         }
         if (isType(DuckDBColumnType.BOOLEAN)) {
@@ -467,12 +467,12 @@ class DuckDBVector {
         return buf.getLong();
     }
 
-    protected boolean check_and_null(int idx) {
+    boolean isNull(int idx) {
         return nullmask[idx];
     }
 
     long getLong(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.BIGINT) || isType(DuckDBColumnType.TIMESTAMP) ||
@@ -487,7 +487,7 @@ class DuckDBVector {
     }
 
     int getInt(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.INTEGER)) {
@@ -501,7 +501,7 @@ class DuckDBVector {
     }
 
     short getUint8(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.UTINYINT)) {
@@ -511,7 +511,7 @@ class DuckDBVector {
     }
 
     long getUint32(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.UINTEGER)) {
@@ -521,7 +521,7 @@ class DuckDBVector {
     }
 
     int getUint16(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.USMALLINT)) {
@@ -531,7 +531,7 @@ class DuckDBVector {
     }
 
     BigInteger getUint64(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.UBIGINT)) {
@@ -544,7 +544,7 @@ class DuckDBVector {
     }
 
     double getDouble(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return Double.NaN;
         }
         if (isType(DuckDBColumnType.DOUBLE)) {
@@ -558,7 +558,7 @@ class DuckDBVector {
     }
 
     byte getByte(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.TINYINT)) {
@@ -572,7 +572,7 @@ class DuckDBVector {
     }
 
     short getShort(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return 0;
         }
         if (isType(DuckDBColumnType.SMALLINT)) {
@@ -586,7 +586,7 @@ class DuckDBVector {
     }
 
     BigInteger getHugeint(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.HUGEINT)) {
@@ -602,7 +602,7 @@ class DuckDBVector {
     }
 
     BigInteger getUhugeint(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return BigInteger.ZERO;
         }
         if (isType(DuckDBColumnType.UHUGEINT)) {
@@ -618,7 +618,7 @@ class DuckDBVector {
     }
 
     float getFloat(int idx) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return Float.NaN;
         }
         if (isType(DuckDBColumnType.FLOAT)) {
@@ -644,7 +644,7 @@ class DuckDBVector {
     }
 
     Timestamp getTimestamp(int idx, Calendar calNullable) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         final LocalDateTime ldt;
@@ -681,7 +681,7 @@ class DuckDBVector {
     }
 
     private LocalDateTime getLocalDateTimeFromTimestamp(int idx, Calendar calNullable) throws SQLException {
-        if (check_and_null(idx)) {
+        if (isNull(idx)) {
             return null;
         }
         ZoneId zoneIdNullable = calNullable != null ? calNullable.getTimeZone().toZoneId() : null;
@@ -702,11 +702,11 @@ class DuckDBVector {
     }
 
     Struct getStruct(int idx) {
-        return check_and_null(idx) ? null : (Struct) varlen_data[idx];
+        return isNull(idx) ? null : (Struct) varlen_data[idx];
     }
 
     Object getUnion(int idx) throws SQLException {
-        if (check_and_null(idx))
+        if (isNull(idx))
             return null;
 
         Struct struct = getStruct(idx);
