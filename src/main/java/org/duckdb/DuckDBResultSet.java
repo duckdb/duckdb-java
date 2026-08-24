@@ -180,7 +180,7 @@ public class DuckDBResultSet implements ResultSet {
     private boolean checkAndNull(int columnIndex) throws SQLException {
         check(columnIndex);
         try {
-            wasNull = currentChunk[columnIndex - 1].check_and_null(chunkIdx - 1);
+            wasNull = currentChunk[columnIndex - 1].isNull(chunkIdx - 1);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new SQLException("No row in context", e);
         }
