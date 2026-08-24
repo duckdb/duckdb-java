@@ -50,7 +50,7 @@ public class DuckDBTimestamp {
             return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
         }
         default:
-            throw new SQLException("Unsupported unit type: [" + unit + "]");
+            throw JdbcUtils.createSQLException("Unsupported unit type: [" + unit + "]", ErrorCode.TIMESTAMP_UNSUPPORTED_UNIT);
         }
     }
 

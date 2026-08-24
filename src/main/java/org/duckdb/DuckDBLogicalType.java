@@ -11,14 +11,14 @@ public final class DuckDBLogicalType implements AutoCloseable {
 
     private DuckDBLogicalType(ByteBuffer logicalTypeRef) throws SQLException {
         if (logicalTypeRef == null) {
-            throw new SQLException("Failed to create logical type");
+            throw JdbcUtils.createSQLException("Failed to create logical type", ErrorCode.LOGICAL_TYPE_CREATE);
         }
         this.logicalTypeRef = logicalTypeRef;
     }
 
     public static DuckDBLogicalType of(DuckDBColumnType type) throws SQLException {
         if (type == null) {
-            throw new SQLException("Logical type cannot be null");
+            throw JdbcUtils.createSQLException("Logical type cannot be null", ErrorCode.LOGICAL_TYPE_NULL);
         }
         switch (type) {
         case BOOLEAN:
@@ -64,23 +64,23 @@ public final class DuckDBLogicalType implements AutoCloseable {
         case TIMESTAMP_WITH_TIME_ZONE:
             return createPrimitive(DUCKDB_TYPE_TIMESTAMP_TZ);
         default:
-            throw new SQLException("Unsupported logical type for UDF registration: " + type);
+            throw JdbcUtils.createSQLException("Unsupported logical type for UDF registration: " + type, ErrorCode.LOGICAL_TYPE_UDF);
         }
     }
 
     public static DuckDBLogicalType decimal(int width, int scale) throws SQLException {
         if (width < 1 || width > 38) {
-            throw new SQLException("DECIMAL width must be between 1 and 38, got: " + width);
+            throw JdbcUtils.createSQLException("DECIMAL width must be between 1 and 38, got: " + width, ErrorCode.LOGICAL_TYPE_DECIMAL_WIDTH);
         }
         if (scale < 0 || scale > width) {
-            throw new SQLException("DECIMAL scale must be between 0 and width, got: " + scale);
+            throw JdbcUtils.createSQLException("DECIMAL scale must be between 0 and width, got: " + scale, ErrorCode.LOGICAL_TYPE_DECIMAL_SCALE);
         }
         return new DuckDBLogicalType(duckdb_create_decimal_type(width, scale));
     }
 
     ByteBuffer logicalTypeRef() throws SQLException {
         if (logicalTypeRef == null) {
-            throw new SQLException("Logical type is already closed");
+            throw JdbcUtils.createSQLException("Logical type is already closed", ErrorCode.LOGICAL_TYPE_CLOSED);
         }
         return logicalTypeRef;
     }

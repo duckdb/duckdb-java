@@ -115,7 +115,7 @@ public class DuckDBChunkedResult implements AutoCloseable {
             byte[] error = duckdb_result_error(resultRef);
             if (error != null) {
                 String errorStr = new String(error, UTF_8);
-                throw new SQLException("Query failed: " + errorStr);
+                throw JdbcUtils.createSQLExceptionFromNativeError(errorStr);
             }
         } finally {
             resultRefLock.unlock();

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.sql.SQLException;
+import org.duckdb.ErrorCode;
+import org.duckdb.SQLState;
 
 public class IOUtils {
 
@@ -18,7 +20,8 @@ public class IOUtils {
             }
             return out.toByteArray();
         } catch (IOException e) {
-            throw new SQLException(e);
+            throw new SQLException(e.getMessage(),
+                                  ErrorCode.IO_ERROR.getSQLState().getCode(), ErrorCode.IO_ERROR.getCode(), e);
         }
     }
 
@@ -32,7 +35,8 @@ public class IOUtils {
             }
             return sb.toString();
         } catch (IOException e) {
-            throw new SQLException();
+            throw new SQLException(e.getMessage(),
+                                  ErrorCode.IO_STREAM_ERROR.getSQLState().getCode(), ErrorCode.IO_STREAM_ERROR.getCode(), e);
         }
     }
 

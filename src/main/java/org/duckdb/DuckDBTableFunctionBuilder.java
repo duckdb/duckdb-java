@@ -17,14 +17,14 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     DuckDBTableFunctionBuilder() throws SQLException {
         this.tableFunctionRef = duckdb_create_table_function();
         if (tableFunctionRef == null) {
-            throw new SQLException("Failed to create table function");
+            throw JdbcUtils.createSQLException("Failed to create table function" , ErrorCode.TABLE_FUNCTION_CREATE);
         }
     }
 
     public DuckDBTableFunctionBuilder withName(String name) throws SQLException {
         ensureNotFinalized();
         if (name == null || name.trim().isEmpty()) {
-            throw new SQLException("Function name cannot be null or empty");
+            throw JdbcUtils.createSQLException("Function name cannot be null or empty" , ErrorCode.TABLE_FUNCTION_NAME_EMPTY);
         }
         this.functionName = name;
         duckdb_table_function_set_name(tableFunctionRef, name.getBytes(UTF_8));
@@ -34,7 +34,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameter(Class<?> parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         DuckDBColumnType mappedType = DuckDBScalarFunctionAdapter.mapJavaClassToDuckDBType(parameterType);
         return withParameter(mappedType);
@@ -43,7 +43,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameter(DuckDBColumnType parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         try (DuckDBLogicalType logicalType = DuckDBLogicalType.of(parameterType)) {
             return withParameter(logicalType);
@@ -53,7 +53,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameter(DuckDBLogicalType parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         duckdb_table_function_add_parameter(tableFunctionRef, parameterType.logicalTypeRef());
         return this;
@@ -62,7 +62,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameters(Class<?>... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw new SQLException("Parameter types cannot be null");
+            throw JdbcUtils.createSQLException("Parameter types cannot be null" , ErrorCode.TABLE_FUNCTION_PARAMS_NULL);
         }
         for (Class<?> parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -73,7 +73,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameters(DuckDBColumnType... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw new SQLException("Parameter types cannot be null");
+            throw JdbcUtils.createSQLException("Parameter types cannot be null" , ErrorCode.TABLE_FUNCTION_PARAMS_NULL);
         }
         for (DuckDBColumnType parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -84,7 +84,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withParameters(DuckDBLogicalType... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw new SQLException("Parameter types cannot be null");
+            throw JdbcUtils.createSQLException("Parameter types cannot be null" , ErrorCode.TABLE_FUNCTION_PARAMS_NULL);
         }
         for (DuckDBLogicalType parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -95,7 +95,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withNamedParameter(String name, Class<?> parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         DuckDBColumnType mappedType = DuckDBScalarFunctionAdapter.mapJavaClassToDuckDBType(parameterType);
         return withNamedParameter(name, mappedType);
@@ -105,7 +105,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
         throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         try (DuckDBLogicalType logicalType = DuckDBLogicalType.of(parameterType)) {
             return withNamedParameter(name, logicalType);
@@ -116,10 +116,10 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
         throws SQLException {
         ensureNotFinalized();
         if (name == null || name.trim().isEmpty()) {
-            throw new SQLException("Parameter name cannot be empty");
+            throw JdbcUtils.createSQLException("Parameter name cannot be empty" , ErrorCode.TABLE_FUNCTION_PARAM_NAME_EMPTY);
         }
         if (parameterType == null) {
-            throw new SQLException("Parameter type cannot be null");
+            throw JdbcUtils.createSQLException("Parameter type cannot be null" , ErrorCode.TABLE_FUNCTION_PARAM_NULL);
         }
         byte[] nameBytes = name.getBytes(UTF_8);
         duckdb_table_function_add_named_parameter(tableFunctionRef, nameBytes, parameterType.logicalTypeRef());
@@ -135,7 +135,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBTableFunctionBuilder withFunction(DuckDBTableFunction<?, ?, ?> function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw new SQLException("Table function object cannot be null");
+            throw JdbcUtils.createSQLException("Table function object cannot be null" , ErrorCode.TABLE_FUNCTION_OBJECT_NULL);
         }
         this.function = function;
         return this;
@@ -144,13 +144,13 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
     public DuckDBFunctions.RegisteredFunction register(Connection connection) throws SQLException {
         ensureNotFinalized();
         if (connection == null) {
-            throw new SQLException("Connection cannot be null");
+            throw JdbcUtils.createSQLException("Connection cannot be null" , ErrorCode.TABLE_FUNCTION_CONNECTION_NULL);
         }
         if (functionName == null) {
-            throw new SQLException("Function name must be defined");
+            throw JdbcUtils.createSQLException("Function name must be defined" , ErrorCode.TABLE_FUNCTION_NO_NAME);
         }
         if (function == null) {
-            throw new SQLException("Table function callback must be defined");
+            throw JdbcUtils.createSQLException("Table function callback must be defined" , ErrorCode.TABLE_FUNCTION_NO_CALLBACK);
         }
 
         DuckDBTableFunctionWrapper wrapper = new DuckDBTableFunctionWrapper(function);
@@ -167,7 +167,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
             duckConnection.checkOpen();
             int status = duckdb_register_table_function(duckConnection.connRef, tableFunctionRef);
             if (status != 0) {
-                throw new SQLException("Failed to register table function '" + functionName + "'");
+                throw JdbcUtils.createSQLException("Failed to register table function '" + functionName + "'" , ErrorCode.TABLE_FUNCTION_REGISTER_NATIVE);
             }
             return DuckDBDriver.registerFunction(functionName, DuckDBFunctions.Kind.TABLE);
         } finally {
@@ -190,7 +190,7 @@ public class DuckDBTableFunctionBuilder implements AutoCloseable {
 
     private void ensureNotFinalized() throws SQLException {
         if (finalized || tableFunctionRef == null) {
-            throw new SQLException("Table function builder is already finalized");
+            throw JdbcUtils.createSQLException("Table function builder is already finalized" , ErrorCode.TABLE_FUNCTION_FINALIZED);
         }
     }
 }

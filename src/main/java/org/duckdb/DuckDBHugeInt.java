@@ -22,10 +22,10 @@ class DuckDBHugeInt {
 
     DuckDBHugeInt(BigInteger bi) throws SQLException {
         if (null == bi) {
-            throw new SQLException("Specified BigInteger instance is null");
+            throw JdbcUtils.createSQLException("Specified BigInteger instance is null", ErrorCode.HUGEINT_NULL);
         }
         if (bi.compareTo(HUGE_INT_MIN) < 0 || bi.compareTo(HUGE_INT_MAX) > 0) {
-            throw new SQLException("Specified BigInteger value is out of range for HUGEINT field");
+            throw JdbcUtils.createSQLException("Specified BigInteger value is out of range for HUGEINT field", ErrorCode.HUGEINT_RANGE);
         }
         this.lower = bi.longValue();
         this.upper = bi.shiftRight(64).longValue();

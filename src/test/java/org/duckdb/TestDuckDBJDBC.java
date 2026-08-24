@@ -2333,7 +2333,7 @@ public class TestDuckDBJDBC {
                          TestGeneratedKeysResultSet.class, TestJfrEvents.class, TestMetadata.class, TestNoLib.class,
                          TestSpatial.class, TestParameterMetadata.class, TestPrepare.class, TestResults.class,
                          TestScalarFunctions.class, TestSessionInit.class, TestTableFunctions.class,
-                         TestTimestamp.class, TestVariant.class);
+                         TestTimestamp.class, TestVariant.class, TestErrorCodes.class);
         }
         System.exit(statusCode);
     }
