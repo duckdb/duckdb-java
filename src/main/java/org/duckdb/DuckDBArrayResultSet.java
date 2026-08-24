@@ -49,9 +49,14 @@ public class DuckDBArrayResultSet implements ResultSet {
         if (columnIndex != 2) {
             throw new SQLException("Array-backed ResultSet can only have two columns");
         }
-        T value = getter.getValue(offset + currentValueIndex);
 
-        wasNull = value == null;
+        int idx = offset + currentValueIndex;
+        this.wasNull = vector.isNull(idx);
+        T value = getter.getValue(idx);
+
+        if (value == null) {
+            this.wasNull = true;
+        }
         return value;
     }
 
