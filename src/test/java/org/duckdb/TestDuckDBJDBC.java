@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.lang.Float.NaN;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
@@ -1246,7 +1247,7 @@ public class TestDuckDBJDBC {
     public static void test_array_resultset() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              Statement statement = connection.createStatement()) {
-            try (ResultSet rs = statement.executeQuery("select [42, 69]")) {
+            try (ResultSet rs = statement.executeQuery("select [42, 69, NULL]")) {
                 assertTrue(rs.next());
                 ResultSet arrayResultSet = rs.getArray(1).getResultSet();
                 assertTrue(arrayResultSet.next());
@@ -1265,6 +1266,23 @@ public class TestDuckDBJDBC {
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 2);
                 assertEquals(arrayResultSet.getInt(2), 69);
+                assertFalse(arrayResultSet.wasNull());
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 3);
+                assertEquals(arrayResultSet.getInt(2), 0);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getByte(2), (byte) 0);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getShort(2), (short) 0);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getLong(2), (long) 0);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getFloat(2), NaN);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getDouble(2), (double) NaN);
+                assertTrue(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getBigDecimal(2), null);
+                assertTrue(arrayResultSet.wasNull());
                 assertFalse(arrayResultSet.next());
             }
 
@@ -2315,13 +2333,14 @@ public class TestDuckDBJDBC {
             Class<?> clazz = Class.forName("org.duckdb." + arg1);
             statusCode = runTests(new String[0], clazz);
         } else {
-            statusCode = runTests(
-                args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
-                TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
-                TestBatch.class, TestBindings.class, TestChunkedResult.class, TestClosure.class,
-                TestExtensionTypes.class, TestJfrEvents.class, TestMetadata.class, TestNoLib.class, TestSpatial.class,
-                TestParameterMetadata.class, TestPrepare.class, TestResults.class, TestScalarFunctions.class,
-                TestSessionInit.class, TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
+            statusCode =
+                runTests(args, TestDuckDBJDBC.class, TestAppender.class, TestAppenderCollection.class,
+                         TestAppenderCollection2D.class, TestAppenderComposite.class, TestSingleValueAppender.class,
+                         TestBatch.class, TestBindings.class, TestChunkedResult.class, TestClosure.class,
+                         TestGeneratedKeysResultSet.class, TestExtensionTypes.class, TestJfrEvents.class,
+                         TestMetadata.class, TestNoLib.class, TestSpatial.class, TestParameterMetadata.class,
+                         TestPrepare.class, TestResults.class, TestScalarFunctions.class, TestSessionInit.class,
+                         TestTableFunctions.class, TestTimestamp.class, TestVariant.class);
         }
         System.exit(statusCode);
     }

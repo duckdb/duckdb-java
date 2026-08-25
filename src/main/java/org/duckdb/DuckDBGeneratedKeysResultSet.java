@@ -5,30 +5,41 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.Calendar;
 import java.util.Map;
 
-public class DuckDBArrayResultSet implements ResultSet {
+/**
+ * An in-memory, read-only {@link ResultSet} that holds the rows returned by a rewritten
+ * {@code INSERT/UPDATE/DELETE ... RETURNING} statement. It is used to expose the generated keys
+ * from {@link DuckDBPreparedStatement#getGeneratedKeys()} after execution.
+ */
+public class DuckDBGeneratedKeysResultSet implements ResultSet {
 
-    private DuckDBVector vector;
-    int offset, length;
+    private final DuckDBResultSetMetaData meta;
+    private final String[] columnNames;
+    private final Object[][] rows;
+    private int currentRow = -1;
+    private boolean wasNull = false;
+    private boolean closed = false;
 
-    int currentValueIndex = -1;
-    boolean closed = false;
-    boolean wasNull = false;
-
-    public DuckDBArrayResultSet(DuckDBVector vector, int offset, int length) {
-        this.vector = vector;
-        this.offset = offset;
-        this.length = length;
+    public DuckDBGeneratedKeysResultSet(DuckDBResultSetMetaData meta, Object[][] rows) {
+        this.meta = meta;
+        this.columnNames = meta.column_names;
+        this.rows = rows;
     }
 
     @Override
-    public boolean next() {
-        ++currentValueIndex;
-        boolean hasNext = currentValueIndex >= 0 && currentValueIndex < length;
-        checkBounds();
-        return hasNext;
+    public boolean next() throws SQLException {
+        checkOpen();
+        if (currentRow >= rows.length - 1) {
+            currentRow = rows.length;
+            return false;
+        }
+        currentRow++;
+        return true;
     }
 
     @Override
@@ -38,118 +49,196 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public boolean wasNull() throws SQLException {
+        checkOpen();
         return wasNull;
     }
 
-    private <T> T getValue(int columnIndex, SqlValueGetter<T> getter) throws SQLException {
-        if (columnIndex == 1) {
-            throw new SQLException(
-                "The first element of Array-backed ResultSet can only be retrieved with numeric getters");
+    private void checkOpen() throws SQLException {
+        if (closed) {
+            throw new SQLException("ResultSet was closed");
         }
-        if (columnIndex != 2) {
-            throw new SQLException("Array-backed ResultSet can only have two columns");
-        }
+    }
 
-        int idx = offset + currentValueIndex;
-        this.wasNull = vector.isNull(idx);
-        T value = getter.getValue(idx);
-
-        if (value == null) {
-            this.wasNull = true;
+    private void checkRow() throws SQLException {
+        checkOpen();
+        if (currentRow < 0 || currentRow >= rows.length) {
+            throw new SQLException("No row in context");
         }
+    }
+
+    private Object getRaw(int columnIndex) throws SQLException {
+        checkRow();
+        if (columnIndex < 1 || columnIndex > columnNames.length) {
+            throw new SQLException("Column index out of bounds");
+        }
+        Object value = rows[currentRow][columnIndex - 1];
+        wasNull = value == null;
         return value;
     }
 
-    private int getIndexColumnValue() {
-        wasNull = false;
-        return currentValueIndex + 1;
+    private int findColumnIndex(String columnLabel) throws SQLException {
+        for (int i = 0; i < columnNames.length; i++) {
+            if (columnNames[i].equals(columnLabel)) {
+                return i + 1;
+            }
+        }
+        throw new SQLException("Could not find column with label " + columnLabel);
     }
 
     @Override
     public String getString(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getLazyString);
+        Object value = getRaw(columnIndex);
+        return value == null ? null : value.toString();
     }
 
     @Override
     public boolean getBoolean(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getBoolean);
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).byteValue() != 0;
+        }
+        return Boolean.parseBoolean(value.toString());
     }
 
     @Override
     public byte getByte(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return (byte) getIndexColumnValue();
-        }
-        return getValue(columnIndex, vector::getByte);
+        return numberValue(columnIndex).byteValue();
     }
 
     @Override
     public short getShort(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return (short) getIndexColumnValue();
-        }
-        return getValue(columnIndex, vector::getShort);
+        return numberValue(columnIndex).shortValue();
     }
 
     @Override
     public int getInt(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return getIndexColumnValue();
-        }
-        return getValue(columnIndex, vector::getInt);
+        return numberValue(columnIndex).intValue();
     }
 
     @Override
     public long getLong(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return getIndexColumnValue();
-        }
-        return getValue(columnIndex, vector::getLong);
+        return numberValue(columnIndex).longValue();
     }
 
     @Override
     public float getFloat(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return getIndexColumnValue();
-        }
-        return getValue(columnIndex, vector::getFloat);
+        return numberValue(columnIndex).floatValue();
     }
 
     @Override
     public double getDouble(int columnIndex) throws SQLException {
-        if (columnIndex == 1) {
-            return getIndexColumnValue();
+        return numberValue(columnIndex).doubleValue();
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
         }
-        return getValue(columnIndex, vector::getDouble);
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        return new BigDecimal(value.toString());
+    }
+
+    private Number numberValue(int columnIndex) throws SQLException {
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number) {
+            return (Number) value;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        throw new SQLException("Can't convert value to number " + value.getClass().toString());
     }
 
     @Override
     @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
-        if (columnIndex == 1) {
-            return BigDecimal.valueOf(getIndexColumnValue());
-        }
-        return getValue(columnIndex, vector::getBigDecimal);
+        return getBigDecimal(columnIndex);
     }
 
     @Override
     public byte[] getBytes(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getBytes");
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof byte[]) {
+            return (byte[]) value;
+        }
+        return value.toString().getBytes();
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public Date getDate(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getDate);
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Date) {
+            return (Date) value;
+        }
+        if (value instanceof java.time.LocalDate) {
+            return Date.valueOf((LocalDate) value);
+        }
+        if (value instanceof Timestamp) {
+            return new Date(((Timestamp) value).getTime());
+        }
+        throw new SQLException("Can't convert value to date " + value.getClass().toString());
     }
 
     @Override
     public Time getTime(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getTime);
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Time) {
+            return (Time) value;
+        }
+        if (value instanceof LocalTime) {
+            return Time.valueOf((LocalTime) value);
+        }
+        if (value instanceof Timestamp) {
+            return new Time(((Timestamp) value).getTime());
+        }
+        throw new SQLException("Can't convert value to time " + value.getClass().toString());
     }
 
     @Override
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getTimestamp);
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Timestamp) {
+            return (Timestamp) value;
+        }
+        if (value instanceof java.time.LocalDateTime) {
+            return Timestamp.valueOf((java.time.LocalDateTime) value);
+        }
+        if (value instanceof OffsetDateTime) {
+            return Timestamp.from(((OffsetDateTime) value).toInstant());
+        }
+        if (value instanceof Date) {
+            return new Timestamp(((Date) value).getTime());
+        }
+        throw new SQLException("Can't convert value to timestamp " + value.getClass().toString());
     }
 
     @Override
@@ -170,68 +259,69 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public String getString(String columnLabel) throws SQLException {
-        return getString(findColumn(columnLabel));
+        return getString(findColumnIndex(columnLabel));
     }
 
     @Override
     public boolean getBoolean(String columnLabel) throws SQLException {
-        return getBoolean(findColumn(columnLabel));
+        return getBoolean(findColumnIndex(columnLabel));
     }
 
     @Override
     public byte getByte(String columnLabel) throws SQLException {
-        return getByte(findColumn(columnLabel));
+        return getByte(findColumnIndex(columnLabel));
     }
 
     @Override
     public short getShort(String columnLabel) throws SQLException {
-        return getShort(findColumn(columnLabel));
+        return getShort(findColumnIndex(columnLabel));
     }
 
     @Override
     public int getInt(String columnLabel) throws SQLException {
-        return getInt(findColumn(columnLabel));
+        return getInt(findColumnIndex(columnLabel));
     }
 
     @Override
     public long getLong(String columnLabel) throws SQLException {
-        return getLong(findColumn(columnLabel));
+        return getLong(findColumnIndex(columnLabel));
     }
 
     @Override
     public float getFloat(String columnLabel) throws SQLException {
-        return getFloat(findColumn(columnLabel));
+        return getFloat(findColumnIndex(columnLabel));
     }
 
     @Override
     public double getDouble(String columnLabel) throws SQLException {
-        return getDouble(findColumn(columnLabel));
+        return getDouble(findColumnIndex(columnLabel));
     }
 
     @Override
     @SuppressWarnings("deprecation")
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
-        return getBigDecimal(findColumn(columnLabel), scale);
+        return getBigDecimal(findColumnIndex(columnLabel));
     }
 
     @Override
     public byte[] getBytes(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getBytes");
+        return getBytes(findColumnIndex(columnLabel));
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public Date getDate(String columnLabel) throws SQLException {
-        return getDate(findColumn(columnLabel));
+        return getDate(findColumnIndex(columnLabel));
     }
 
     @Override
     public Time getTime(String columnLabel) throws SQLException {
-        return getTime(findColumn(columnLabel));
+        return getTime(findColumnIndex(columnLabel));
     }
 
     @Override
     public Timestamp getTimestamp(String columnLabel) throws SQLException {
-        return getTimestamp(findColumn(columnLabel));
+        return getTimestamp(findColumnIndex(columnLabel));
     }
 
     @Override
@@ -257,7 +347,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public void clearWarnings() throws SQLException {
-        // do nothing
+        // no-op
     }
 
     @Override
@@ -267,28 +357,23 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getMetaData");
+        checkOpen();
+        return meta;
     }
 
     @Override
     public Object getObject(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getObject);
+        return getRaw(columnIndex);
     }
 
     @Override
     public Object getObject(String columnLabel) throws SQLException {
-        return getObject(findColumn(columnLabel));
+        return getObject(findColumnIndex(columnLabel));
     }
 
     @Override
     public int findColumn(String columnLabel) throws SQLException {
-        if ("INDEX".equalsIgnoreCase(columnLabel)) {
-            return 1;
-        }
-        if ("VALUE".equalsIgnoreCase(columnLabel)) {
-            return 2;
-        }
-        throw new SQLException("Could not find column with label " + columnLabel);
+        return findColumnIndex(columnLabel);
     }
 
     @Override
@@ -302,49 +387,47 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
-    public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getBigDecimal);
-    }
-
-    @Override
     public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
-        return getBigDecimal(findColumn(columnLabel));
+        return getBigDecimal(findColumnIndex(columnLabel));
     }
 
     @Override
     public boolean isBeforeFirst() throws SQLException {
-        return currentValueIndex < 0;
+        return currentRow < 0;
     }
 
     @Override
     public boolean isAfterLast() throws SQLException {
-        return currentValueIndex >= length;
+        return currentRow >= rows.length;
     }
 
     @Override
     public boolean isFirst() throws SQLException {
-        return currentValueIndex == 0;
+        return currentRow == 0;
     }
 
     @Override
     public boolean isLast() throws SQLException {
-        return currentValueIndex == length - 1;
+        return currentRow == rows.length - 1;
     }
 
     @Override
     public void beforeFirst() throws SQLException {
-        currentValueIndex = -1;
+        checkOpen();
+        currentRow = -1;
     }
 
     @Override
     public void afterLast() throws SQLException {
-        currentValueIndex = length;
+        checkOpen();
+        currentRow = rows.length;
     }
 
     @Override
     public boolean first() throws SQLException {
-        if (length > 0) {
-            currentValueIndex = 0;
+        checkOpen();
+        if (rows.length > 0) {
+            currentRow = 0;
             return true;
         }
         return false;
@@ -352,8 +435,9 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public boolean last() throws SQLException {
-        if (length > 0) {
-            currentValueIndex = length - 1;
+        checkOpen();
+        if (rows.length > 0) {
+            currentRow = rows.length - 1;
             return true;
         }
         return false;
@@ -361,46 +445,50 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public int getRow() throws SQLException {
-        return currentValueIndex + 1;
+        checkOpen();
+        return currentRow + 1;
     }
 
     @Override
     public boolean absolute(int row) throws SQLException {
+        checkOpen();
         if (row >= 0) {
-            currentValueIndex = row - 1;
+            currentRow = row - 1;
         } else {
-            currentValueIndex = length + row;
+            currentRow = rows.length + row;
         }
-
-        return checkBounds();
-    }
-
-    private boolean checkBounds() {
-        if (currentValueIndex < -1) {
-            currentValueIndex = -1;
+        if (currentRow < -1) {
+            currentRow = -1;
             return false;
         }
-        if (currentValueIndex > length) {
-            currentValueIndex = length;
+        if (currentRow > rows.length) {
+            currentRow = rows.length;
             return false;
         }
-        return true;
+        return currentRow >= 0 && currentRow < rows.length;
     }
+
     @Override
-    public boolean relative(int rows) throws SQLException {
-        currentValueIndex += rows;
-        return checkBounds();
+    public boolean relative(int rowsOffset) throws SQLException {
+        checkOpen();
+        currentRow += rowsOffset;
+        return absolute(currentRow + 1);
     }
 
     @Override
     public boolean previous() throws SQLException {
-        --currentValueIndex;
-        return checkBounds();
+        checkOpen();
+        if (currentRow <= -1) {
+            currentRow = -1;
+            return false;
+        }
+        currentRow--;
+        return currentRow >= 0;
     }
 
     @Override
     public void setFetchDirection(int direction) throws SQLException {
-        // do nothing
+        // no-op
     }
 
     @Override
@@ -409,8 +497,8 @@ public class DuckDBArrayResultSet implements ResultSet {
     }
 
     @Override
-    public void setFetchSize(int rows) throws SQLException {
-        // do nothing
+    public void setFetchSize(int rowsFetch) throws SQLException {
+        // no-op
     }
 
     @Override
@@ -695,12 +783,12 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Array getArray(int columnIndex) throws SQLException {
-        return getValue(columnIndex, vector::getArray);
+        throw new SQLFeatureNotSupportedException("getArray");
     }
 
     @Override
     public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
-        return getObject(findColumn(columnLabel));
+        throw new SQLFeatureNotSupportedException("getObject");
     }
 
     @Override
@@ -720,7 +808,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public Array getArray(String columnLabel) throws SQLException {
-        return getArray(findColumn(columnLabel));
+        throw new SQLFeatureNotSupportedException("getArray");
     }
 
     @Override
@@ -825,7 +913,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public int getHoldability() throws SQLException {
-        throw new SQLFeatureNotSupportedException("getHoldability");
+        return ResultSet.HOLD_CURSORS_OVER_COMMIT;
     }
 
     @Override
@@ -855,12 +943,12 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public NClob getNClob(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException("updateNClob");
+        throw new SQLFeatureNotSupportedException("getNClob");
     }
 
     @Override
     public NClob getNClob(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException("updateNClob");
+        throw new SQLFeatureNotSupportedException("getNClob");
     }
 
     @Override
@@ -885,12 +973,12 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public String getNString(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getNString");
+        return getString(columnIndex);
     }
 
     @Override
     public String getNString(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getNString");
+        return getString(columnLabel);
     }
 
     @Override
@@ -1045,12 +1133,19 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getObject");
+        if (type == null) {
+            throw new SQLException("Type argument cannot be null");
+        }
+        Object value = getRaw(columnIndex);
+        if (value == null) {
+            return null;
+        }
+        return type.cast(value);
     }
 
     @Override
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getObject");
+        return getObject(findColumnIndex(columnLabel), type);
     }
 
     @Override
@@ -1062,13 +1157,4 @@ public class DuckDBArrayResultSet implements ResultSet {
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
         return iface.isInstance(this);
     }
-}
-
-/**
- * Extracts a value of requested type given a column index.
- * IntFunction unsuitable because of the checked exception.
- * @param <T> Type of value to extract
- */
-interface SqlValueGetter<T> {
-    T getValue(int index) throws SQLException;
 }
