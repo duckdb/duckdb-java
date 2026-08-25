@@ -1,4 +1,4 @@
-package org.duckdb.io;
+package org.duckdb;
 
 import java.io.IOException;
 import java.io.Reader;

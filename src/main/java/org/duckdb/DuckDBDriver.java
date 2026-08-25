@@ -2,8 +2,8 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.READ;
+import static org.duckdb.IOUtils.readToString;
 import static org.duckdb.JdbcUtils.*;
-import static org.duckdb.io.IOUtils.readToString;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -17,7 +17,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 import org.duckdb.DuckDBFunctions.RegisteredFunction;
-import org.duckdb.io.LimitedInputStream;
+import org.duckdb.LimitedInputStream;
 
 public class DuckDBDriver implements java.sql.Driver {
 

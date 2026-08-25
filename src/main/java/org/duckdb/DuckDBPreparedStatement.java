@@ -3,8 +3,8 @@ package org.duckdb;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.duckdb.IOUtils.*;
 import static org.duckdb.StatementReturnType.*;
-import static org.duckdb.io.IOUtils.*;
 
 import java.io.*;
 import java.io.InputStream;
@@ -375,9 +375,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         execute();
         if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
               returnsNothing)) {
-            throw JdbcUtils.createSQLException(
-                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows",
-                ErrorCode.PREPARED_NO_RESULT_SET);
+            throw JdbcUtils.createSQLException("executeUpdate() can only be used with queries that return nothing " +
+                                               "(eg, a DDL statement), or update rows",
+                                               ErrorCode.PREPARED_NO_RESULT_SET);
         }
         return getUpdateCountInternal();
     }
@@ -962,9 +962,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         executeWithKeys(sql, columnIndexes, columnNames);
         if (!(returnsChangedRows || (returningGeneratedKeys && dmlReturningApplied && returnsResultSet) ||
               returnsNothing)) {
-            throw JdbcUtils.createSQLException(
-                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows",
-                ErrorCode.PREPARED_NO_RESULT_SET);
+            throw JdbcUtils.createSQLException("executeUpdate() can only be used with queries that return nothing " +
+                                               "(eg, a DDL statement), or update rows",
+                                               ErrorCode.PREPARED_NO_RESULT_SET);
         }
         return getUpdateCountInternal();
     }

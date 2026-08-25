@@ -8,7 +8,7 @@ import java.io.StringWriter;
 import java.sql.SQLException;
 import java.util.Properties;
 
-public final class JdbcUtils {
+final class JdbcUtils {
 
     private JdbcUtils() {
     }
@@ -128,16 +128,6 @@ public final class JdbcUtils {
     /** {@link #createSQLException(String, ErrorCode)} with a cause. */
     static SQLException createSQLException(String message, ErrorCode code, Throwable cause) {
         return new SQLException(message, code.getSQLState().getCode(), code.getCode(), cause);
-    }
-
-    /** Categorized I/O error used by the {@code org.duckdb.io} helpers. */
-    public static SQLException ioError(String message, Throwable cause) {
-        return createSQLException(message, ErrorCode.IO_ERROR, cause);
-    }
-
-    /** Categorized I/O stream error used by the {@code org.duckdb.io} helpers. */
-    public static SQLException ioStreamError(String message, Throwable cause) {
-        return createSQLException(message, ErrorCode.IO_STREAM_ERROR, cause);
     }
 
     /** {@link #createSQLException(String, ErrorCode)} with an explicit SQLState override and cause. */
