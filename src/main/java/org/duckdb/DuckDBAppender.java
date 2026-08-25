@@ -165,10 +165,9 @@ public class DuckDBAppender implements AutoCloseable {
                                  columns.size() + ", actual: " + (topCol.idx + 1)),
                     ErrorCode.APPENDER_SEQUENCE);
             } else {
-                throw createSQLException(
-                    createErrMsg(
-                        "calls to 'beginRow' and 'endRow' must be paired and cannot be interleaved with other 'begin*' and 'end*' calls"),
-                    ErrorCode.APPENDER_SEQUENCE);
+                throw createSQLException(createErrMsg("calls to 'beginRow' and 'endRow' must be paired and cannot be "
+                                                      + "interleaved with other 'begin*' and 'end*' calls"),
+                                         ErrorCode.APPENDER_SEQUENCE);
             }
         }
 
@@ -2091,9 +2090,8 @@ public class DuckDBAppender implements AutoCloseable {
                 collection = map.values();
             } else {
                 throw createSQLException(
-                    createErrMsg(
-                        "struct values must be specified as an instance of a 'java.util.LinkedHashMap' or as a collection of objects, actual class: " +
-                        structValue.getClass().getName()),
+                    createErrMsg("struct values must be specified as an instance of a 'java.util.LinkedHashMap' or "
+                                 + "as a collection of objects, actual class: " + structValue.getClass().getName()),
                     ErrorCode.APPENDER_CONVERSION);
             }
         } else {
@@ -2116,11 +2114,11 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void putCompositeElementUnion(Column unionCol, long vectorIdx, Object unionValue) throws SQLException {
         if (!(unionValue instanceof AbstractMap.SimpleEntry)) {
-            throw createSQLException(
-                createErrMsg(
-                    "union values must be specified as an instance of 'java.util.AbstractMap.SimpleEntry<String, Object>', actual type: " +
-                    unionValue.getClass().getName()),
-                ErrorCode.APPENDER_CONVERSION);
+            throw createSQLException(createErrMsg("union values must be specified as an instance of "
+                                                  +
+                                                  "'java.util.AbstractMap.SimpleEntry<String, Object>', actual type: " +
+                                                  unionValue.getClass().getName()),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         AbstractMap.SimpleEntry<?, ?> entry = (AbstractMap.SimpleEntry<?, ?>) unionValue;
         String tag = String.valueOf(entry.getKey());

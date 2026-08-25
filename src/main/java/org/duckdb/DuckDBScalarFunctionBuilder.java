@@ -420,7 +420,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     }
 
     private Class<?>[] effectiveFixedParameterJavaTypes() {
-        return parameterJavaTypes.toArray(new Class<?>[0]);
+        return parameterJavaTypes.toArray(new Class<?>[ 0 ]);
     }
 
     private DuckDBScalarFunctionBuilder setMappedReturnType(DuckDBColumnType mappedType, Class<?> javaType)
@@ -456,8 +456,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
 
     private void ensurePrimitiveCallbackCompatible(String callbackMethodName) throws SQLException {
         if (varArgType != null) {
-            throw createSQLException(callbackMethodName +
-                                         " does not support varargs; use withVarArgsFunction instead",
+            throw createSQLException(callbackMethodName + " does not support varargs; use withVarArgsFunction instead",
                                      ErrorCode.FUNCTION_VARARGS_MISUSE);
         }
     }

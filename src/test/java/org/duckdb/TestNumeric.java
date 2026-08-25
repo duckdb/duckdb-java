@@ -11,8 +11,8 @@ public class TestNumeric {
 
     public static void test_bigdecimal() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
-            stmt.execute(
-                "CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+            stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 "
+                         + "DECIMAL(18,7), dec128 DECIMAL(38,10))");
 
             try (PreparedStatement ps1 =
                      conn.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)")) {
@@ -199,10 +199,10 @@ public class TestNumeric {
     }
 
     public static void test_hugeint() throws Exception {
-        try (
-            Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(
-                "SELECT 42::hugeint hi1, -42::hugeint hi2, 454564646545646546545646545::hugeint hi3, -454564646545646546545646545::hugeint hi4")) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs =
+                 stmt.executeQuery("SELECT 42::hugeint hi1, -42::hugeint hi2, 454564646545646546545646545::hugeint "
+                                   + "hi3, -454564646545646546545646545::hugeint hi4")) {
             assertTrue(rs.next());
             assertEquals(rs.getObject("hi1"), new BigInteger("42"));
             assertEquals(rs.getObject("hi2"), new BigInteger("-42"));
@@ -222,9 +222,9 @@ public class TestNumeric {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger uint32, 18446744073709551615::ubigint uint64")) {
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger "
+                                       + "uint32, 18446744073709551615::ubigint uint64")) {
                 assertTrue(rs.next());
 
                 assertEquals(rs.getShort("uint8"), (short) 201);
@@ -241,9 +241,8 @@ public class TestNumeric {
                 assertEquals(rs.getObject("uint64"), new BigInteger("18446744073709551615"));
             }
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT NULL::utinyint uint8, NULL::usmallint uint16, NULL::uinteger uint32, NULL::ubigint uint64")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT NULL::utinyint uint8, NULL::usmallint uint16, "
+                                                  + "NULL::uinteger uint32, NULL::ubigint uint64")) {
                 assertTrue(rs.next());
 
                 rs.getObject(1);
