@@ -11,7 +11,7 @@ package org.duckdb;
  * the {@code 22xxx} class, parameter problems map into {@code 0700x}, and everything else that has no
  * precise SQL class defaults to {@link #HY000}.
  */
-public enum SQLState {
+enum SQLState {
     /** Connection closed / server rejected the connection ({@code 08001}). */
     CONNECTION_REJECTED("08001"),
     /** Connection closed / client could not be established ({@code 08S01}). */
@@ -77,7 +77,7 @@ public enum SQLState {
     }
 
     /** The five-character SQLSTATE string. */
-    public String getCode() {
+    String getCode() {
         return code;
     }
 

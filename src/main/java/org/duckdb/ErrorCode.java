@@ -3,6 +3,7 @@ package org.duckdb;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.sql.SQLException;
 
 /**
  * Unique vendor error code plus its categorized {@link SQLState} for every {@link java.sql.SQLException}
@@ -21,7 +22,7 @@ import java.util.Map;
  *
  * <p>This enum is the documented source of truth for error codes; see also {@code SQL_ERRORS.md}.
  */
-public enum ErrorCode {
+enum ErrorCode {
 
     // ------------------------------------------------------------------
     // GENERAL / housekeeping (running general number, state HY000 unless
@@ -211,15 +212,17 @@ public enum ErrorCode {
     /** Fallback for a native DuckDB error whose text prefix could not be classified. */
     NATIVE_UNDECODED("duckdb.native", SQLState.HY000, "Undecoded native DuckDB error");
 
-    private static final Map<Integer, String> CODES = new LinkedHashMap<>();
+    /** Code-to-name lookup pre-filled in {@link #allocateCodes()}. */
+    private static final Map<Integer, String> CODES = allocateCodes();
 
-    static {
+    private static Map<Integer, String> allocateCodes() {
         // Allocate a deterministic, stable numeric code per constant. Each distinct origin is assigned a
         // 100-wide block (1000, 1100, 1200, ...) in order of first appearance; within a block the code
         // increments by declaration order. Codes are therefore non-negative, grouped by origin, and stable
-        // as long as the enumeration order is not changed. Uniqueness is enforced below.
+        // as long as the enumeration order is not changed. Uniqueness and non-negativity are enforced below.
         Map<String, Integer> blockByOrigin = new LinkedHashMap<>();
         Map<String, Integer> seqByOrigin = new LinkedHashMap<>();
+        Map<Integer, String> codes = new LinkedHashMap<>();
         for (ErrorCode ec : values()) {
             Integer block = blockByOrigin.get(ec.origin);
             if (block == null) {
@@ -230,14 +233,12 @@ public enum ErrorCode {
             int seq = seqByOrigin.get(ec.origin);
             int code = block + seq;
             seqByOrigin.put(ec.origin, seq + 1);
-            if (CODES.put(code, ec.name()) != null) {
-                throw new ExceptionInInitializerError("Duplicate error code " + code + " for " + ec);
-            }
-            if (code < 0) {
-                throw new ExceptionInInitializerError("Negative error code for " + ec);
+            if (code < 0 || codes.put(code, ec.name()) != null) {
+                throw new ExceptionInInitializerError("Duplicate or negative error code " + code + " for " + ec);
             }
             ec.code = code;
         }
+        return codes;
     }
 
     private final String origin;
@@ -252,39 +253,37 @@ public enum ErrorCode {
     }
 
     /** The unique, stable vendor error code. Unique across every constant. */
-    public int getCode() {
+    int getCode() {
         return code;
     }
 
     /** The categorized SQLState assigned to this error origin. */
-    public SQLState getSQLState() {
+    SQLState getSQLState() {
         return state;
     }
 
     /** The driver class (last component) that throws this error. */
-    public String getOrigin() {
+    String getOrigin() {
         return origin;
     }
 
     /** Short human-readable description of the failure. */
-    public String getDescription() {
+    String getDescription() {
         return description;
     }
 
-    /** Builds a fully-populated {@link java.sql.SQLException} for this code. */
-    public java.sql.SQLException asException() {
-        return new java.sql.SQLException(description, state.getCode(), code);
+    /** Builds a fully-populated {@link SQLException} for this code. */
+    SQLException asException() {
+        return new SQLException(description, state.getCode(), code);
     }
 
-    /**
-     * @return the number of distinct error codes (useful for the uniqueness invariant test).
-     */
-    public static int count() {
+    /** @return the number of distinct error codes (useful for the uniqueness invariant test). */
+    static int count() {
         return values().length;
     }
 
     /** @return true if {@code code} was assigned to exactly one enum constant. */
-    public static boolean isUnique(int code) {
+    static boolean isUnique(int code) {
         long matches = Arrays.stream(values()).filter(ec -> ec.code == code).count();
         return matches == 1;
     }
