@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
 import static org.duckdb.test.Assertions.assertEquals;
 import static org.duckdb.test.Assertions.assertThrows;
 import static org.duckdb.test.Assertions.assertTrue;
@@ -122,10 +123,9 @@ public class TestErrorCodes {
         // Unknown prefix falls back to HY000.
         assertEquals("HY000", JdbcUtils.nativeState("Oops: something odd happened").getCode());
 
-        // A native error surfaced via createSQLExceptionFromNativeError carries the parsed state and the
-        // NATIVE_UNDECODED vendor code, preserving the message verbatim.
-        SQLException e =
-            JdbcUtils.createSQLExceptionFromNativeError("Catalog Error: Table with name foo does not exist!");
+        // A native error surfaced through createSQLException with a null ErrorCode carries the parsed state
+        // and the NATIVE_UNDECODED vendor code, preserving the message verbatim.
+        SQLException e = createSQLException("Catalog Error: Table with name foo does not exist!", null, null);
         assertEquals(e.getErrorCode(), ErrorCode.NATIVE_UNDECODED.getCode(), "error code");
         assertEquals(e.getSQLState(), "42S02", "SQLState");
         assertTrue(e.getMessage().startsWith("Catalog Error:"), "message must be preserved");

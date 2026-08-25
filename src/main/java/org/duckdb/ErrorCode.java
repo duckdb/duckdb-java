@@ -15,8 +15,8 @@ import java.util.Arrays;
  * {@code getOrigin()} identifies the throwing class.
  *
  * <p>Native DuckDB errors (returned as free text by the C API) are wrapped by
- * {@link JdbcUtils#createSQLExceptionFromNativeError(String, Throwable)} and receive
- * {@link #NATIVE_UNDECODED}; their SQLState is derived from the error text prefix, see
+ * {@link JdbcUtils#createSQLException(String, ErrorCode, Throwable)} with a {@code null} {@code ErrorCode}
+ * and receive {@link #NATIVE_UNDECODED}; their SQLState is derived from the error text prefix, see
  * {@link JdbcUtils#nativeState(String)}.
  *
  * <p>This enum is the documented source of truth for error codes; see also {@code SQL_ERRORS.md}.

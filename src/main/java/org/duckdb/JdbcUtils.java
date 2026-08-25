@@ -17,7 +17,7 @@ final class JdbcUtils {
     static <T> T unwrap(Object obj, Class<T> iface) throws SQLException {
         if (!iface.isInstance(obj)) {
             throw createSQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName(),
-                                     ErrorCode.UNWRAP_FAILED);
+                                     ErrorCode.UNWRAP_FAILED, null);
         }
         return (T) obj;
     }
@@ -60,15 +60,15 @@ final class JdbcUtils {
         if (valLower.equals("false") || valLower.equals("0") || valLower.equals("no") || valLower.equals("off")) {
             return false;
         }
-        throw createSQLException("Invalid boolean option value: " + val, ErrorCode.BOOLEAN_OPTION_INVALID);
+        throw createSQLException("Invalid boolean option value: " + val, ErrorCode.BOOLEAN_OPTION_INVALID, null);
     }
 
     static String dbNameFromUrl(String url) throws SQLException {
         if (null == url) {
-            throw createSQLException("Invalid null URL specified", ErrorCode.URL_NULL);
+            throw createSQLException("Invalid null URL specified", ErrorCode.URL_NULL, null);
         }
         if (!url.startsWith(DUCKDB_URL_PREFIX)) {
-            throw createSQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'", ErrorCode.URL_PREFIX);
+            throw createSQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'", ErrorCode.URL_PREFIX, null);
         }
         final String shortUrl;
         if (url.contains(";")) {
@@ -117,37 +117,20 @@ final class JdbcUtils {
     }
 
     /**
-     * Builds a {@link SQLException} carrying the given message with a categorized {@link SQLState} and
-     * a unique, per-call-site {@link ErrorCode}. The message string is used verbatim so that existing
-     * callers that match on {@code getMessage()} keep working.
+     * Single factory for building a {@link SQLException} carrying the given message with a categorized
+     * {@link SQLState} and a unique, per-call-site {@link ErrorCode}. When {@code code} is {@code null}
+     * the error is treated as a native DuckDB error surfaced as free text (e.g. from
+     * {@code duckdb_result_error} or {@code duckdb_appender_error}): the SQLState is derived from the
+     * message prefix via {@link #nativeState(String)} and the error code falls back to
+     * {@link ErrorCode#NATIVE_UNDECODED}. A {@code null} {@code cause} is simply ignored. The message
+     * string is used verbatim so that existing callers that match on {@code getMessage()} keep working.
      */
-    static SQLException createSQLException(String message, ErrorCode code) {
-        return createSQLException(message, code, null);
-    }
-
-    /** {@link #createSQLException(String, ErrorCode)} with a cause. */
     static SQLException createSQLException(String message, ErrorCode code, Throwable cause) {
-        return new SQLException(message, code.getSQLState().getCode(), code.getCode(), cause);
-    }
-
-    /** {@link #createSQLException(String, ErrorCode)} with an explicit SQLState override and cause. */
-    static SQLException createSQLException(String message, SQLState state, int code, Throwable cause) {
-        return new SQLException(message, state.getCode(), code, cause);
-    }
-
-    /**
-     * Builds a {@link SQLException} for a native DuckDB error surfaced as free text (e.g. from
-     * {@code duckdb_result_error} or {@code duckdb_appender_error}). The SQLState is derived from the
-     * error prefix via {@link #nativeState(String)}; the message is preserved verbatim.
-     */
-    static SQLException createSQLExceptionFromNativeError(String nativeMessage) {
-        return createSQLExceptionFromNativeError(nativeMessage, null);
-    }
-
-    /** {@link #createSQLExceptionFromNativeError(String)} with a cause. */
-    static SQLException createSQLExceptionFromNativeError(String nativeMessage, Throwable cause) {
-        String message = nativeMessage == null ? "" : nativeMessage;
-        return createSQLException(message, nativeState(message), ErrorCode.NATIVE_UNDECODED.getCode(), cause);
+        String m = message == null ? "" : message;
+        if (code == null) {
+            return new SQLException(m, nativeState(m).getCode(), ErrorCode.NATIVE_UNDECODED.getCode(), cause);
+        }
+        return new SQLException(m, code.getSQLState().getCode(), code.getCode(), cause);
     }
 
     /**

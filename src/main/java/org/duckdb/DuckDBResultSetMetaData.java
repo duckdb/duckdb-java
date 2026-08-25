@@ -116,7 +116,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     public String getColumnName(int column) throws SQLException {
         if (column > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
         return column_names[column - 1];
     }
@@ -178,14 +178,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     public int getColumnType(int column) throws SQLException {
         if (column > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
         return type_to_int(column_types[column - 1]);
     }
 
     public String getColumnClassName(int column) throws SQLException {
         if (column > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
         return type_to_javaString(column_types[column - 1]);
     }
@@ -250,7 +250,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     public String getColumnTypeName(int column) throws SQLException {
         if (column > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
         return column_types_string[column - 1];
     }
@@ -293,7 +293,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     public boolean isSigned(int column) throws SQLException {
         if (column > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
         return is_signed(column_types[column - 1]);
     }
@@ -398,7 +398,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
     private void checkColumn(int columnIndex) throws SQLException {
         if (columnIndex > column_count) {
-            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.META_COLUMN_OOB, null);
         }
     }
 }

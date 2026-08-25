@@ -329,7 +329,7 @@ final class DuckDBScalarFunctionAdapter {
 
     static DuckDBColumnType mapJavaClassToDuckDBType(Class<?> javaType) throws SQLException {
         if (javaType == null) {
-            throw createSQLException("Java type cannot be null", ErrorCode.ADAPTER_JAVA_TYPE_NULL);
+            throw createSQLException("Java type cannot be null", ErrorCode.ADAPTER_JAVA_TYPE_NULL, null);
         }
         Class<?> normalizedClass = normalizeJavaClass(javaType);
         DuckDBColumnType mappedType = DUCKDB_TYPE_BY_JAVA_CLASS.get(normalizedClass);
@@ -337,12 +337,12 @@ final class DuckDBScalarFunctionAdapter {
             return mappedType;
         }
         throw createSQLException("Unsupported Java type for scalar function mapping: " + javaType.getName(),
-                                 ErrorCode.ADAPTER_JAVA_TYPE_UNSUPPORTED);
+                                 ErrorCode.ADAPTER_JAVA_TYPE_UNSUPPORTED, null);
     }
 
     static DuckDBColumnType mapLogicalTypeToDuckDBType(DuckDBLogicalType logicalType) throws SQLException {
         if (logicalType == null) {
-            throw createSQLException("Logical type cannot be null", ErrorCode.ADAPTER_LOGICAL_TYPE_NULL);
+            throw createSQLException("Logical type cannot be null", ErrorCode.ADAPTER_LOGICAL_TYPE_NULL, null);
         }
         DuckDBBindings.CAPIType type =
             DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_get_type_id(logicalType.logicalTypeRef()));
@@ -391,7 +391,7 @@ final class DuckDBScalarFunctionAdapter {
             return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
         default:
             throw createSQLException("Unsupported logical type for Function/BiFunction mapping: " + type,
-                                     ErrorCode.ADAPTER_LOGICAL_TYPE_UNSUPPORTED);
+                                     ErrorCode.ADAPTER_LOGICAL_TYPE_UNSUPPORTED, null);
         }
     }
 
@@ -401,7 +401,7 @@ final class DuckDBScalarFunctionAdapter {
             return codec;
         }
         throw createSQLException("Unsupported DuckDB type for Function/BiFunction mapping: " + type,
-                                 ErrorCode.ADAPTER_DUCKDB_TYPE_UNSUPPORTED);
+                                 ErrorCode.ADAPTER_DUCKDB_TYPE_UNSUPPORTED, null);
     }
 
     private static TypeCodec codecFor(DuckDBColumnType type, Class<?> declaredJavaType) throws SQLException {
@@ -442,7 +442,7 @@ final class DuckDBScalarFunctionAdapter {
         }
         throw createSQLException("Unsupported Java type " + normalizedClass.getName() + " for DuckDB type " + type +
                                      " in functional scalar function mapping",
-                                 ErrorCode.ADAPTER_JAVA_TYPE_UNSUPPORTED);
+                                 ErrorCode.ADAPTER_JAVA_TYPE_UNSUPPORTED, null);
     }
 
     private static <T> void register(DuckDBColumnType type, Class<T> javaType, Reader<T> reader, Writer<T> writer) {

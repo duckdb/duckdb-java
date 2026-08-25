@@ -38,14 +38,14 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     DuckDBScalarFunctionBuilder() throws SQLException {
         this.scalarFunctionRef = duckdb_create_scalar_function();
         if (scalarFunctionRef == null) {
-            throw createSQLException("Failed to create scalar function", ErrorCode.FUNCTION_CREATE);
+            throw createSQLException("Failed to create scalar function", ErrorCode.FUNCTION_CREATE, null);
         }
     }
 
     public DuckDBScalarFunctionBuilder withName(String name) throws SQLException {
         ensureNotFinalized();
         if (name == null || name.trim().isEmpty()) {
-            throw createSQLException("Function name cannot be null or empty", ErrorCode.FUNCTION_NAME_EMPTY);
+            throw createSQLException("Function name cannot be null or empty", ErrorCode.FUNCTION_NAME_EMPTY, null);
         }
         this.functionName = name;
         duckdb_scalar_function_set_name(scalarFunctionRef, name.getBytes(UTF_8));
@@ -55,7 +55,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameter(Class<?> parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL);
+            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL, null);
         }
         DuckDBColumnType mappedType = DuckDBScalarFunctionAdapter.mapJavaClassToDuckDBType(parameterType);
         return addMappedParameterType(mappedType, parameterType);
@@ -64,7 +64,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameter(DuckDBColumnType parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL);
+            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL, null);
         }
         return addMappedParameterType(parameterType, null);
     }
@@ -72,7 +72,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameter(DuckDBLogicalType parameterType) throws SQLException {
         ensureNotFinalized();
         if (parameterType == null) {
-            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL);
+            throw createSQLException("Parameter type cannot be null", ErrorCode.FUNCTION_PARAM_NULL, null);
         }
         parameterTypes.add(parameterType);
         parameterColumnTypes.add(null);
@@ -84,7 +84,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameters(Class<?>... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL);
+            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL, null);
         }
         for (Class<?> parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -95,7 +95,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameters(DuckDBColumnType... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL);
+            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL, null);
         }
         for (DuckDBColumnType parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -106,7 +106,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withParameters(DuckDBLogicalType... parameterTypes) throws SQLException {
         ensureNotFinalized();
         if (parameterTypes == null) {
-            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL);
+            throw createSQLException("Parameter types cannot be null", ErrorCode.FUNCTION_PARAMS_NULL, null);
         }
         for (DuckDBLogicalType parameterType : parameterTypes) {
             withParameter(parameterType);
@@ -117,7 +117,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withReturnType(Class<?> returnType) throws SQLException {
         ensureNotFinalized();
         if (returnType == null) {
-            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL);
+            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL, null);
         }
         DuckDBColumnType mappedType = DuckDBScalarFunctionAdapter.mapJavaClassToDuckDBType(returnType);
         return setMappedReturnType(mappedType, returnType);
@@ -126,7 +126,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withReturnType(DuckDBColumnType returnType) throws SQLException {
         ensureNotFinalized();
         if (returnType == null) {
-            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL);
+            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL, null);
         }
         return setMappedReturnType(returnType, null);
     }
@@ -134,7 +134,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withReturnType(DuckDBLogicalType returnType) throws SQLException {
         ensureNotFinalized();
         if (returnType == null) {
-            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL);
+            throw createSQLException("Return type cannot be null", ErrorCode.FUNCTION_RETURN_NULL, null);
         }
         this.returnType = returnType;
         this.returnColumnType = null;
@@ -146,7 +146,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withVectorizedFunction(DuckDBScalarFunction function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         return setCallback(function, false);
     }
@@ -154,7 +154,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withIntFunction(IntUnaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withIntFunction");
@@ -165,7 +165,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withIntFunction(IntBinaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withIntFunction");
@@ -176,7 +176,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withDoubleFunction(DoubleUnaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withDoubleFunction");
@@ -187,7 +187,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withDoubleFunction(DoubleBinaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withDoubleFunction");
@@ -198,7 +198,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withLongFunction(LongUnaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withLongFunction");
@@ -209,7 +209,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withLongFunction(LongBinaryOperator function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         enablePrimitiveNullPropagation();
         ensurePrimitiveCallbackCompatible("withLongFunction");
@@ -221,15 +221,15 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         if (varArgType != null) {
             throw createSQLException("Function callback does not support varargs; use withVarArgsFunction instead",
-                                     ErrorCode.FUNCTION_VARARGS_MISUSE);
+                                     ErrorCode.FUNCTION_VARARGS_MISUSE, null);
         }
         if (parameterTypes.size() != 1) {
             throw createSQLException("Function callback requires exactly 1 declared parameter",
-                                     ErrorCode.FUNCTION_PARAM_COUNT);
+                                     ErrorCode.FUNCTION_PARAM_COUNT, null);
         }
         DuckDBColumnType parameterType = effectiveParameterType(0);
         Class<?> parameterJavaType = effectiveParameterJavaType(0);
@@ -243,15 +243,15 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         if (varArgType != null) {
             throw createSQLException("BiFunction callback does not support varargs; use withVarArgsFunction instead",
-                                     ErrorCode.FUNCTION_VARARGS_MISUSE);
+                                     ErrorCode.FUNCTION_VARARGS_MISUSE, null);
         }
         if (parameterTypes.size() != 2) {
             throw createSQLException("BiFunction callback requires exactly 2 declared parameters",
-                                     ErrorCode.FUNCTION_PARAM_COUNT);
+                                     ErrorCode.FUNCTION_PARAM_COUNT, null);
         }
         DuckDBColumnType leftType = effectiveParameterType(0);
         Class<?> leftJavaType = effectiveParameterJavaType(0);
@@ -266,14 +266,15 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public <OUTPUT> DuckDBScalarFunctionBuilder withFunction(Supplier<OUTPUT> function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         if (!parameterTypes.isEmpty()) {
             throw createSQLException("Supplier callback requires zero declared parameters",
-                                     ErrorCode.FUNCTION_PARAM_COUNT);
+                                     ErrorCode.FUNCTION_PARAM_COUNT, null);
         }
         if (varArgType != null) {
-            throw createSQLException("Supplier callback does not support varargs", ErrorCode.FUNCTION_VARARGS_MISUSE);
+            throw createSQLException("Supplier callback does not support varargs", ErrorCode.FUNCTION_VARARGS_MISUSE,
+                                     null);
         }
         DuckDBColumnType resolvedReturnType = effectiveReturnType();
         Class<?> resolvedReturnJavaType = effectiveReturnJavaType();
@@ -284,11 +285,11 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withVarArgsFunction(Function<Object[], ?> function) throws SQLException {
         ensureNotFinalized();
         if (function == null) {
-            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL);
+            throw createSQLException("Scalar function callback cannot be null", ErrorCode.FUNCTION_CALLBACK_NULL, null);
         }
         if (varArgType == null) {
             throw createSQLException("Varargs functional callback requires withVarArgs(...) declaration",
-                                     ErrorCode.FUNCTION_VARARGS_MISUSE);
+                                     ErrorCode.FUNCTION_VARARGS_MISUSE, null);
         }
         DuckDBColumnType[] fixedTypes = effectiveFixedParameterTypes();
         Class<?>[] fixedJavaTypes = effectiveFixedParameterJavaTypes();
@@ -302,7 +303,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public DuckDBScalarFunctionBuilder withVarArgs(DuckDBLogicalType varArgType) throws SQLException {
         ensureNotFinalized();
         if (varArgType == null) {
-            throw createSQLException("Varargs type cannot be null", ErrorCode.FUNCTION_VARARGS_TYPE_NULL);
+            throw createSQLException("Varargs type cannot be null", ErrorCode.FUNCTION_VARARGS_TYPE_NULL, null);
         }
         this.varArgType = varArgType;
         duckdb_scalar_function_set_varargs(scalarFunctionRef, varArgType.logicalTypeRef());
@@ -324,16 +325,16 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     public RegisteredFunction register(Connection connection) throws SQLException {
         ensureNotFinalized();
         if (connection == null) {
-            throw createSQLException("Connection cannot be null", ErrorCode.FUNCTION_CONNECTION_NULL);
+            throw createSQLException("Connection cannot be null", ErrorCode.FUNCTION_CONNECTION_NULL, null);
         }
         if (functionName == null) {
-            throw createSQLException("Function name must be defined", ErrorCode.FUNCTION_NO_NAME);
+            throw createSQLException("Function name must be defined", ErrorCode.FUNCTION_NO_NAME, null);
         }
         if (returnType == null && returnColumnType == null) {
-            throw createSQLException("Return type must be defined", ErrorCode.FUNCTION_NO_RETURN);
+            throw createSQLException("Return type must be defined", ErrorCode.FUNCTION_NO_RETURN, null);
         }
         if (callback == null) {
-            throw createSQLException("Scalar function callback must be defined", ErrorCode.FUNCTION_NO_CALLBACK);
+            throw createSQLException("Scalar function callback must be defined", ErrorCode.FUNCTION_NO_CALLBACK, null);
         }
         if (!nullInNullOutFlag) {
             duckdb_scalar_function_set_special_handling(scalarFunctionRef);
@@ -346,7 +347,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
             int status = duckdb_register_scalar_function(duckConnection.connRef, scalarFunctionRef);
             if (status != 0) {
                 throw createSQLException("Failed to register scalar function '" + functionName + "'",
-                                         ErrorCode.FUNCTION_REGISTER_NATIVE);
+                                         ErrorCode.FUNCTION_REGISTER_NATIVE, null);
             }
             return DuckDBDriver.registerFunction(functionName, DuckDBFunctions.Kind.SCALAR);
         } finally {
@@ -379,7 +380,8 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
 
     private void ensureNotFinalized() throws SQLException {
         if (finalized || scalarFunctionRef == null) {
-            throw createSQLException("Scalar function builder is already finalized", ErrorCode.FUNCTION_FINALIZED);
+            throw createSQLException("Scalar function builder is already finalized", ErrorCode.FUNCTION_FINALIZED,
+                                     null);
         }
     }
 
@@ -399,8 +401,8 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (returnType != null) {
             return DuckDBScalarFunctionAdapter.mapLogicalTypeToDuckDBType(returnType);
         }
-        throw createSQLException("Return type must be defined before functional callback",
-                                 ErrorCode.FUNCTION_NO_RETURN);
+        throw createSQLException("Return type must be defined before functional callback", ErrorCode.FUNCTION_NO_RETURN,
+                                 null);
     }
 
     private Class<?> effectiveParameterJavaType(int index) {
@@ -457,7 +459,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
     private void ensurePrimitiveCallbackCompatible(String callbackMethodName) throws SQLException {
         if (varArgType != null) {
             throw createSQLException(callbackMethodName + " does not support varargs; use withVarArgsFunction instead",
-                                     ErrorCode.FUNCTION_VARARGS_MISUSE);
+                                     ErrorCode.FUNCTION_VARARGS_MISUSE, null);
         }
     }
 
@@ -469,7 +471,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         if (parameterTypes.size() != 1) {
             throw createSQLException(callbackMethodName + " requires exactly 1 declared parameter",
-                                     ErrorCode.FUNCTION_PARAM_COUNT);
+                                     ErrorCode.FUNCTION_PARAM_COUNT, null);
         }
         ensurePrimitiveParameterType(0, expectedType, callbackMethodName);
         ensurePrimitiveReturnType(expectedType, callbackMethodName);
@@ -479,7 +481,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         throws SQLException {
         if (parameterTypes.size() != 2) {
             throw createSQLException(callbackMethodName + " requires exactly 2 declared parameters",
-                                     ErrorCode.FUNCTION_PARAM_COUNT);
+                                     ErrorCode.FUNCTION_PARAM_COUNT, null);
         }
         ensurePrimitiveParameterType(0, expectedType, callbackMethodName);
         ensurePrimitiveParameterType(1, expectedType, callbackMethodName);
@@ -492,7 +494,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (actualType != expectedType) {
             throw createSQLException(callbackMethodName + " requires parameter " + index + " to be " + expectedType +
                                          ", got " + actualType,
-                                     ErrorCode.FUNCTION_TYPE_MISMATCH);
+                                     ErrorCode.FUNCTION_TYPE_MISMATCH, null);
         }
     }
 
@@ -502,7 +504,7 @@ public final class DuckDBScalarFunctionBuilder implements AutoCloseable {
         if (actualType != expectedType) {
             throw createSQLException(callbackMethodName + " requires return type " + expectedType + ", got " +
                                          actualType,
-                                     ErrorCode.FUNCTION_TYPE_MISMATCH);
+                                     ErrorCode.FUNCTION_TYPE_MISMATCH, null);
         }
     }
 
