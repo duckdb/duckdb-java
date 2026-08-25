@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -55,21 +57,21 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
 
     private void checkOpen() throws SQLException {
         if (closed) {
-            throw JdbcUtils.createSQLException("ResultSet was closed", ErrorCode.GENERATED_KEYS_IS_CLOSED);
+            throw createSQLException("ResultSet was closed", ErrorCode.GENERATED_KEYS_IS_CLOSED);
         }
     }
 
     private void checkRow() throws SQLException {
         checkOpen();
         if (currentRow < 0 || currentRow >= rows.length) {
-            throw JdbcUtils.createSQLException("No row in context", ErrorCode.GENERATED_KEYS_NO_ROW);
+            throw createSQLException("No row in context", ErrorCode.GENERATED_KEYS_NO_ROW);
         }
     }
 
     private Object getRaw(int columnIndex) throws SQLException {
         checkRow();
         if (columnIndex < 1 || columnIndex > columnNames.length) {
-            throw JdbcUtils.createSQLException("Column index out of bounds", ErrorCode.GENERATED_KEYS_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.GENERATED_KEYS_COLUMN_OOB);
         }
         Object value = rows[currentRow][columnIndex - 1];
         wasNull = value == null;
@@ -82,8 +84,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
                 return i + 1;
             }
         }
-        throw JdbcUtils.createSQLException("Could not find column with label " + columnLabel,
-                                           ErrorCode.GENERATED_KEYS_COLUMN_LABEL);
+        throw createSQLException("Could not find column with label " + columnLabel,
+                                 ErrorCode.GENERATED_KEYS_COLUMN_LABEL);
     }
 
     @Override
@@ -163,8 +165,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof BigDecimal) {
             return (BigDecimal) value;
         }
-        throw JdbcUtils.createSQLException("Can't convert value to number " + value.getClass().toString(),
-                                           ErrorCode.GENERATED_KEYS_CONVERSION);
+        throw createSQLException("Can't convert value to number " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION);
     }
 
     @Override
@@ -201,8 +203,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Timestamp) {
             return new Date(((Timestamp) value).getTime());
         }
-        throw JdbcUtils.createSQLException("Can't convert value to date " + value.getClass().toString(),
-                                           ErrorCode.GENERATED_KEYS_CONVERSION);
+        throw createSQLException("Can't convert value to date " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION);
     }
 
     @Override
@@ -220,8 +222,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Timestamp) {
             return new Time(((Timestamp) value).getTime());
         }
-        throw JdbcUtils.createSQLException("Can't convert value to time " + value.getClass().toString(),
-                                           ErrorCode.GENERATED_KEYS_CONVERSION);
+        throw createSQLException("Can't convert value to time " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION);
     }
 
     @Override
@@ -242,8 +244,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Date) {
             return new Timestamp(((Date) value).getTime());
         }
-        throw JdbcUtils.createSQLException("Can't convert value to timestamp " + value.getClass().toString(),
-                                           ErrorCode.GENERATED_KEYS_CONVERSION);
+        throw createSQLException("Can't convert value to timestamp " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION);
     }
 
     @Override
@@ -1139,7 +1141,7 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
     @Override
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
         if (type == null) {
-            throw JdbcUtils.createSQLException("Type argument cannot be null", ErrorCode.GENERATED_KEYS_NULL_TYPE);
+            throw createSQLException("Type argument cannot be null", ErrorCode.GENERATED_KEYS_NULL_TYPE);
         }
         Object value = getRaw(columnIndex);
         if (value == null) {

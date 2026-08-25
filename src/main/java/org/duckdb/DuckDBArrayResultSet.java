@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -43,13 +45,13 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     private <T> T getValue(int columnIndex, SqlValueGetter<T> getter) throws SQLException {
         if (columnIndex == 1) {
-            throw JdbcUtils.createSQLException(
+            throw createSQLException(
                 "The first element of Array-backed ResultSet can only be retrieved with numeric getters",
                 ErrorCode.ARRAY_RS_NUMERIC_GETTER);
         }
         if (columnIndex != 2) {
-            throw JdbcUtils.createSQLException("Array-backed ResultSet can only have two columns",
-                                               ErrorCode.ARRAY_RS_COLUMN_COUNT);
+            throw createSQLException("Array-backed ResultSet can only have two columns",
+                                     ErrorCode.ARRAY_RS_COLUMN_COUNT);
         }
         T value = getter.getValue(offset + currentValueIndex);
 
@@ -285,8 +287,7 @@ public class DuckDBArrayResultSet implements ResultSet {
         if ("VALUE".equalsIgnoreCase(columnLabel)) {
             return 2;
         }
-        throw JdbcUtils.createSQLException("Could not find column with label " + columnLabel,
-                                           ErrorCode.ARRAY_RS_COLUMN_LABEL);
+        throw createSQLException("Could not find column with label " + columnLabel, ErrorCode.ARRAY_RS_COLUMN_LABEL);
     }
 
     @Override

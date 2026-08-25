@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -410,8 +412,7 @@ public class DuckDBBindings {
             if (typeId >= 0 && typeId < BY_TYPE_ID.length && BY_TYPE_ID[typeId] != null) {
                 return BY_TYPE_ID[typeId];
             }
-            throw JdbcUtils.createSQLException("Invalid unknown ID not found: " + typeId,
-                                               ErrorCode.BINDINGS_UNKNOWN_ID);
+            throw createSQLException("Invalid unknown ID not found: " + typeId, ErrorCode.BINDINGS_UNKNOWN_ID);
         }
     }
 }

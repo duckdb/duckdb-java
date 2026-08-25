@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.sql.ParameterMetaData;
 import java.sql.SQLException;
 
@@ -41,7 +43,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public boolean isSigned(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         return DuckDBResultSetMetaData.is_signed(param_types[param - 1]);
     }
@@ -49,7 +51,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public int getPrecision(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         DuckDBColumnTypeMetaData typeMetaData = param_types_meta[param - 1];
         if (typeMetaData == null) {
@@ -62,7 +64,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public int getScale(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         DuckDBColumnTypeMetaData typeMetaData = param_types_meta[param - 1];
         if (typeMetaData == null) {
@@ -75,7 +77,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public int getParameterType(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         return DuckDBResultSetMetaData.type_to_int(param_types[param - 1]);
     }
@@ -83,7 +85,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public String getParameterTypeName(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         return param_types_string[param - 1];
     }
@@ -91,7 +93,7 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
     @Override
     public String getParameterClassName(int param) throws SQLException {
         if (param > param_count) {
-            throw JdbcUtils.createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
+            throw createSQLException("Parameter index out of bounds", ErrorCode.PARAM_META_INDEX_OOB);
         }
         return DuckDBResultSetMetaData.type_to_javaString(param_types[param - 1]);
     }

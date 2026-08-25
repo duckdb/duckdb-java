@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -56,7 +58,7 @@ public class DuckDBResultSet implements ResultSet {
             this.resultRef = Objects.requireNonNull(resultRef);
             this.meta = Objects.requireNonNull(meta);
         } catch (NullPointerException e) {
-            throw JdbcUtils.createSQLException(e.getMessage(), ErrorCode.RESULT_SET_NATIVE_WRAP, e);
+            throw createSQLException(e.getMessage(), ErrorCode.RESULT_SET_NATIVE_WRAP, e);
         }
     }
 
@@ -117,7 +119,7 @@ public class DuckDBResultSet implements ResultSet {
     private void check(int columnIndex) throws SQLException {
         checkOpen();
         if (columnIndex < 1 || columnIndex > meta.column_count) {
-            throw JdbcUtils.createSQLException("Column index out of bounds", ErrorCode.RESULT_SET_COLUMN_OOB);
+            throw createSQLException("Column index out of bounds", ErrorCode.RESULT_SET_COLUMN_OOB);
         }
     }
 
@@ -172,7 +174,7 @@ public class DuckDBResultSet implements ResultSet {
 
     public boolean wasNull() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException("ResultSet was closed", ErrorCode.RESULT_SET_IS_CLOSED);
+            throw createSQLException("ResultSet was closed", ErrorCode.RESULT_SET_IS_CLOSED);
         }
         return wasNull;
     }
@@ -182,7 +184,7 @@ public class DuckDBResultSet implements ResultSet {
         try {
             wasNull = currentChunk[columnIndex - 1].check_and_null(chunkIdx - 1);
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw JdbcUtils.createSQLException("No row in context", ErrorCode.RESULT_SET_NO_ROW, e);
+            throw createSQLException("No row in context", ErrorCode.RESULT_SET_NO_ROW, e);
         }
         return wasNull;
     }
@@ -343,8 +345,7 @@ public class DuckDBResultSet implements ResultSet {
                 return col_idx + 1;
             }
         }
-        throw JdbcUtils.createSQLException("Could not find column with label " + columnLabel,
-                                           ErrorCode.RESULT_SET_COLUMN_LABEL);
+        throw createSQLException("Could not find column with label " + columnLabel, ErrorCode.RESULT_SET_COLUMN_LABEL);
     }
 
     public String getString(String columnLabel) throws SQLException {
@@ -481,7 +482,7 @@ public class DuckDBResultSet implements ResultSet {
         @Override
         public byte[] getBytes(long pos, int length) throws SQLException {
             if (pos < 1 || length < 0) {
-                throw JdbcUtils.createSQLException("Invalid position or length", ErrorCode.RESULT_SET_INVALID_POS_LEN);
+                throw createSQLException("Invalid position or length", ErrorCode.RESULT_SET_INVALID_POS_LEN);
             }
             byte[] bytes = new byte[length];
             buffer.position((int) pos - 1);
@@ -701,7 +702,7 @@ public class DuckDBResultSet implements ResultSet {
     public void setFetchSize(int rows) throws SQLException {
         checkOpen();
         if (rows < 0) {
-            throw JdbcUtils.createSQLException("Fetch size has to be >= 0", ErrorCode.RESULT_SET_BAD_FETCH_SIZE);
+            throw createSQLException("Fetch size has to be >= 0", ErrorCode.RESULT_SET_BAD_FETCH_SIZE);
         }
     }
 
@@ -1215,7 +1216,7 @@ public class DuckDBResultSet implements ResultSet {
         checkOpen();
 
         if (type == null) {
-            throw JdbcUtils.createSQLException("type is null", ErrorCode.RESULT_SET_TYPE_NULL);
+            throw createSQLException("type is null", ErrorCode.RESULT_SET_TYPE_NULL);
         }
 
         if (checkAndNull(columnIndex)) {
@@ -1251,33 +1252,31 @@ public class DuckDBResultSet implements ResultSet {
             } else if (sqlType == DuckDBColumnType.UTINYINT) {
                 return type.cast(BigDecimal.valueOf(getUint8(columnIndex)));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to BigDecimal, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to BigDecimal, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == String.class) {
             if (sqlType == DuckDBColumnType.VARCHAR || sqlType == DuckDBColumnType.ENUM) {
                 return type.cast(getString(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to String, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to String, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Boolean.class) {
             if (sqlType == DuckDBColumnType.BOOLEAN) {
                 return type.cast(getBoolean(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Boolean, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Boolean, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Byte.class) {
             if (sqlType == DuckDBColumnType.TINYINT) {
                 return type.cast(getByte(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Byte, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Byte, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Short.class) {
             if (sqlType == DuckDBColumnType.SMALLINT) {
@@ -1287,9 +1286,8 @@ public class DuckDBResultSet implements ResultSet {
             } else if (sqlType == DuckDBColumnType.UTINYINT) {
                 return type.cast(getUint8(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Short, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Short, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Integer.class) {
             if (sqlType == DuckDBColumnType.INTEGER) {
@@ -1303,9 +1301,9 @@ public class DuckDBResultSet implements ResultSet {
             } else if (sqlType == DuckDBColumnType.UTINYINT) {
                 return type.cast((int) getUint8(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Integer, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Integer, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Long.class) {
             if (sqlType == DuckDBColumnType.BIGINT || isTimestamp(sqlType)) {
@@ -1323,59 +1321,54 @@ public class DuckDBResultSet implements ResultSet {
             } else if (sqlType == DuckDBColumnType.UTINYINT) {
                 return type.cast((long) getUint8(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Long, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Long, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Float.class) {
             if (sqlType == DuckDBColumnType.FLOAT) {
                 return type.cast(getFloat(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Float, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Float, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Double.class) {
             if (sqlType == DuckDBColumnType.DOUBLE) {
                 return type.cast(getDouble(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Double, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Double, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Date.class) {
             if (sqlType == DuckDBColumnType.DATE) {
                 return type.cast(getDate(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Date, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Date, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Time.class) {
             if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_NS ||
                 sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
                 return type.cast(getTime(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Time, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Time, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == LocalTime.class) {
             if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_NS ||
                 sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
                 return type.cast(getLocalTime(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to LocalTime, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to LocalTime, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Timestamp.class) {
             if (isTimestamp(sqlType)) {
                 return type.cast(getTimestamp(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Timestamp, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Timestamp, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == LocalDate.class) {
             if (sqlType == DuckDBColumnType.DATE) {
@@ -1385,17 +1378,17 @@ public class DuckDBResultSet implements ResultSet {
                 }
                 return type.cast(date.toLocalDate());
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to LocalDate, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to LocalDate, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == LocalDateTime.class) {
             if (isTimestamp(sqlType) || sqlType == DuckDBColumnType.DATE) {
                 return type.cast(getLocalDateTime(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to LocalDateTime, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to LocalDateTime, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == BigInteger.class) {
             if (sqlType == DuckDBColumnType.HUGEINT) {
@@ -1419,47 +1412,46 @@ public class DuckDBResultSet implements ResultSet {
             } else if (sqlType == DuckDBColumnType.UTINYINT) {
                 return type.cast(BigInteger.valueOf(getUint8(columnIndex)));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to BigInteger, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to BigInteger, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == OffsetDateTime.class) {
             if (sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
                 return type.cast(getOffsetDateTime(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to OffsetDateTime, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to OffsetDateTime, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == Blob.class) {
             if (sqlType == DuckDBColumnType.BLOB) {
-                throw JdbcUtils.createSQLException("Can't convert value to Blob, Java type: " + type +
-                                                       ", SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Blob, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
                 // return type.cast(getLocalDateTime(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to Blob, SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to Blob, SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else if (type == UUID.class) {
             if (sqlType == DuckDBColumnType.UUID || sqlType == DuckDBColumnType.VARCHAR) {
                 return type.cast(getUuid(columnIndex));
             } else {
-                throw JdbcUtils.createSQLException("Can't convert value to UUID, SQL type: " + sqlType,
-                                                   ErrorCode.RESULT_SET_CONVERSION);
+                throw createSQLException("Can't convert value to UUID, SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
             }
         } else {
-            throw JdbcUtils.createSQLException("Can't convert value to " + type + ", SQL type: " + sqlType,
-                                               ErrorCode.RESULT_SET_CONVERSION);
+            throw createSQLException("Can't convert value to " + type + ", SQL type: " + sqlType,
+                                     ErrorCode.RESULT_SET_CONVERSION);
         }
     }
 
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
         if (type == null) {
-            throw JdbcUtils.createSQLException("type is null", ErrorCode.RESULT_SET_TYPE_NULL);
+            throw createSQLException("type is null", ErrorCode.RESULT_SET_TYPE_NULL);
         }
         if (columnLabel == null || columnLabel.isEmpty()) {
-            throw JdbcUtils.createSQLException("columnLabel is null", ErrorCode.RESULT_SET_NULL_LABEL);
+            throw createSQLException("columnLabel is null", ErrorCode.RESULT_SET_NULL_LABEL);
         }
 
         int index = findColumn(columnLabel);
@@ -1482,7 +1474,7 @@ public class DuckDBResultSet implements ResultSet {
 
     private void checkOpen() throws SQLException {
         if (isClosed()) {
-            throw JdbcUtils.createSQLException("ResultSet was closed", ErrorCode.RESULT_SET_IS_CLOSED);
+            throw createSQLException("ResultSet was closed", ErrorCode.RESULT_SET_IS_CLOSED);
         }
     }
 
