@@ -1,4 +1,4 @@
-package org.duckdb;
+package org.duckdb.io;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -18,7 +18,7 @@ public class IOUtils {
             }
             return out.toByteArray();
         } catch (IOException e) {
-            throw ioError(ErrorCode.IO_ERROR, e.getMessage(), e);
+            throw new SQLException(e);
         }
     }
 
@@ -32,7 +32,7 @@ public class IOUtils {
             }
             return sb.toString();
         } catch (IOException e) {
-            throw ioError(ErrorCode.IO_STREAM_ERROR, e.getMessage(), e);
+            throw new SQLException();
         }
     }
 
@@ -48,9 +48,5 @@ public class IOUtils {
             return reader;
         }
         return new LimitedReader(reader, maxChars);
-    }
-
-    private static SQLException ioError(ErrorCode code, String message, IOException cause) {
-        return new SQLException(message, code.getSQLState().getCode(), code.getCode(), cause);
     }
 }
