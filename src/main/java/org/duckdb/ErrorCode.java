@@ -1,9 +1,9 @@
 package org.duckdb;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.sql.SQLException;
 
 /**
  * Unique vendor error code plus its categorized {@link SQLState} for every {@link java.sql.SQLException}
