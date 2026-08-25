@@ -12,7 +12,7 @@ index 89480ff..fdc1a64 100644
                   ; [org.duckdb/duckdb_jdbc "1.5.1.0-7e03e76d-SNAPSHOT"]
                   ; Fixes the data corruption issue we found with strings!
 diff --git a/local-node/src/jepsen/duckdb/local_node.clj b/local-node/src/jepsen/duckdb/local_node.clj
-index cbd66a3..bf0d35e 100644
+index cbd66a3..ba2c0c5 100644
 --- a/local-node/src/jepsen/duckdb/local_node.clj
 +++ b/local-node/src/jepsen/duckdb/local_node.clj
 @@ -164,7 +164,7 @@
@@ -20,7 +20,7 @@ index cbd66a3..bf0d35e 100644
        (info "Options are:\n" (with-out-str (pprint opts)))
        (setup! conn opts)
 -      (http/run-server (handler conn opts) (select-keys opts [:port]))
-+      (http/run-server (handler conn opts) {:port (:port opts) :reuse-address true})
++      (http/run-server (handler conn opts) {:port (:port opts) :reuse-address true :timeout 30000})
        (info "Waiting for HTTP requests on port" (:port opts))
        (while true
          (Thread/sleep 100000)))
@@ -38,17 +38,43 @@ index 8b280e7..9e85e33 100644
    :main jepsen.duckdb.cli
    :repl-options {:init-ns jepsen.duckdb.repl}
 diff --git a/src/jepsen/duckdb/client.clj b/src/jepsen/duckdb/client.clj
-index 718ec4c..1c0e7ee 100644
+index 718ec4c..3c6355f 100644
 --- a/src/jepsen/duckdb/client.clj
 +++ b/src/jepsen/duckdb/client.clj
-@@ -12,8 +12,8 @@
+@@ -5,15 +5,18 @@
+             [clojure [edn :as edn]]
+             [clojure.tools.logging :refer [info warn]])
+   (:import (java.net ConnectException
+-                     SocketException)
+-           (org.apache.http NoHttpResponseException)))
++                     SocketException
++                     SocketTimeoutException)
++           (org.apache.http NoHttpResponseException)
++           (org.apache.http.conn ConnectTimeoutException)))
+ 
+ 
  (def common-opts
    "Options we pass to every HTTP request"
-   {:content-type       "application/edn"
+-  {:content-type       "application/edn"
 -   :socket-timeout     5000
 -   :connection-timeout 1000})
-+   :socket-timeout     30000
-+   :connection-timeout 30000})
++  {:content-type         "application/edn"
++   :socket-timeout       30000 ; 30 seconds read timeout
++   :conn-timeout         30000 ; 30 seconds connection timeout
++   :conn-request-timeout 30000})
  
  (defn post
    "Wrapper for `clj-http.client/post`. Always hits localhost on the given port.
+@@ -38,8 +41,12 @@
+   `(try+ ~@body
+          (catch ConnectException e#
+            (assoc ~op :type :fail, :error :conn-refused))
++         (catch ConnectTimeoutException e#
++           (assoc ~op :type :info, :error [:socket (.getMessage e#)]))
+          (catch SocketException e#
+            (assoc ~op :type :info, :error [:socket (.getMessage e#)]))
++         (catch SocketTimeoutException e#
++           (assoc ~op :type :info, :error [:socket (.getMessage e#)]))
+          (catch NoHttpResponseException e#
+            (assoc ~op :type :info, :error :no-response))
+          (catch [:status 409] e#
