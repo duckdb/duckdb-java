@@ -38,15 +38,17 @@ index 8b280e7..9e85e33 100644
    :main jepsen.duckdb.cli
    :repl-options {:init-ns jepsen.duckdb.repl}
 diff --git a/src/jepsen/duckdb/client.clj b/src/jepsen/duckdb/client.clj
-index 718ec4c..61cc62a 100644
+index 718ec4c..1c0e7ee 100644
 --- a/src/jepsen/duckdb/client.clj
 +++ b/src/jepsen/duckdb/client.clj
-@@ -13,7 +13,7 @@
+@@ -12,8 +12,8 @@
+ (def common-opts
    "Options we pass to every HTTP request"
    {:content-type       "application/edn"
-    :socket-timeout     5000
+-   :socket-timeout     5000
 -   :connection-timeout 1000})
-+   :connection-timeout 10000})
++   :socket-timeout     30000
++   :connection-timeout 30000})
  
  (defn post
    "Wrapper for `clj-http.client/post`. Always hits localhost on the given port.
