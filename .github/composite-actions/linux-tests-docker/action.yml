@@ -12,13 +12,16 @@ runs:
     - name: Tests Docker
       shell: bash
       run: |
+        python ./scripts/retry.py --timeout 1m -- \
+          docker pull ${{ inputs.docker_image }}
         docker run                   \
           -v.:/duckdb                \
           ${{ inputs.docker_image }} \
           bash -c "
             set -e
             cat /etc/os-release
-            dnf install -y \
+            python3 /duckdb/scripts/retry.py --timeout 2m -- \
+              dnf install -y \
               java-1.8.0-openjdk
             /usr/lib/jvm/jre-1.8.0-openjdk/bin/java -version
             cd /duckdb

@@ -12,6 +12,8 @@ runs:
     - name: Tests Musl Docker
       shell: bash
       run: |
+        python ./scripts/retry.py --timeout 1m -- \
+          docker pull ${{ inputs.docker_image }}
         docker run                                 \
           -v.:/duckdb                              \
           -e GEN=ninja                             \
@@ -19,7 +21,9 @@ runs:
           ${{ inputs.docker_image }}               \
           sh -c "
             set -e
-            apk add        \
+            apk add python3
+            python3 /duckdb/scripts/retry.py --timeout 2m -- \
+              apk add        \
               cmake        \
               g++          \
               make         \
