@@ -38,7 +38,8 @@ jobs:
         with:
           fetch-depth: 0
       - run: |
-          python3 -m pip install --user clang_format==11.0.1
+          python ./scripts/retry.py --timeout 1m -- \
+            python -m pip install --user clang_format==11.0.1
           make format-check
 
   java-linux-amd64:
@@ -233,10 +234,12 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         working-directory: sparktest
         run: |
-          wget -nv https://dl.min.io/server/minio/release/linux-amd64/minio
+          python ../scripts/retry.py --timeout 1m -- \
+            wget -nv https://dl.min.io/server/minio/release/linux-amd64/minio
           chmod +x minio
           ./minio --version
-          wget -nv https://dl.min.io/client/mc/release/linux-amd64/mc
+          python ../scripts/retry.py --timeout 1m -- \
+            wget -nv https://dl.min.io/client/mc/release/linux-amd64/mc
           chmod +x mc
           ./mc --version
           java -version
@@ -247,7 +250,8 @@ jobs:
         working-directory: sparktest
         run: |
           cat ${{ env.SESSION_INIT_SQL_FILE }}
-          wget -nv https://github.com/pgjdbc/pgjdbc/releases/download/REL42.7.7/postgresql-42.7.7.jar
+          python ../scripts/retry.py --timeout 1m -- \
+            wget -nv https://github.com/pgjdbc/pgjdbc/releases/download/REL42.7.7/postgresql-42.7.7.jar
           java -version
           java -cp ${{ env.DUCKDB_JDBC_JAR }}:postgresql-42.7.7.jar ${{ github.workspace }}/src/test/external/SetupDuckLake.java
 
@@ -255,7 +259,8 @@ jobs:
         if: ${{ inputs.skip_tests != 'true' }}
         working-directory: sparktest
         run: |
-          wget -nv https://blobs.duckdb.org/ci/spark-3.5.3-bin-hadoop3.tgz
+          python ../scripts/retry.py --timeout 1m -- \
+            wget -nv https://blobs.duckdb.org/ci/spark-3.5.3-bin-hadoop3.tgz
           tar xf spark-3.5.3-bin-hadoop3.tgz
           cat spark-test.sql
           java -version
@@ -280,8 +285,10 @@ jobs:
         run: |
           echo "set man-db/auto-update false" | sudo debconf-communicate
           sudo dpkg-reconfigure man-db
-          sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
-          sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
+          python ./scripts/retry.py --timeout 2m -- \
+            sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
+          python ./scripts/retry.py --timeout 2m -- \
+            sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
             ccache \
             ninja-build
 
@@ -398,8 +405,10 @@ jobs:
         run: |
           echo "set man-db/auto-update false" | sudo debconf-communicate
           sudo dpkg-reconfigure man-db
-          sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
-          sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
+          python ./scripts/retry.py --timeout 1m -- \
+            sudo apt-get update -y -q -o=Dpkg::Use-Pty=0
+          python ./scripts/retry.py --timeout 1m -- \
+            sudo apt-get install -y -q -o=Dpkg::Use-Pty=0 \
             gnuplot \
             graphviz \
             leiningen
@@ -427,7 +436,8 @@ jobs:
         run: |
           patch -p1 < ${{ github.workspace }}/data/jepsen/jepsen.patch
           lein --version
-          lein run test \
+          python ../scripts/retry.py --timeout 5m -- \
+            lein run test \
             --time-limit 10 \
             --max-writes-per-key 8 \
             --concurrency 5 \
@@ -627,7 +637,8 @@ jobs:
       - name: Dependencies
         shell: bash
         run: |
-          choco install \
+          python ./scripts/retry.py --timeout 1m -- \
+            choco install \
             ccache \
             -y --force --no-progress
 
@@ -703,7 +714,8 @@ jobs:
       - name: Dependencies
         shell: bash
         run: |
-          choco install \
+          python ./scripts/retry.py --timeout 1m -- \
+            choco install \
             ccache \
             -y --force --no-progress
 
@@ -791,7 +803,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          brew install -q \
+          python3 ./scripts/retry.py --timeout 1m -- \
+            brew install -q \
             ccache \
             ninja
 
@@ -975,7 +988,8 @@ jobs:
           echo -e "passphrase asdf\npinentry-mode loopback\nno-tty\nbatch\n" > ~/.gnupg/gpg.conf
           echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
           gpg --batch --import maven_pgp_key
-          python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts ${{ inputs.pr_number }}
+          python ./scripts/retry.py --timeout 1m -- \
+            python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts ${{ inputs.pr_number }}
 
   java-finalize-vendoring:
     name: Finalize vendoring
@@ -1008,10 +1022,11 @@ jobs:
             BASE_BRANCH=$(gh pr view ${{ inputs.pr_number }} --json baseRefName --jq '.baseRefName')
             PR_TITLE=$(gh pr view ${{ inputs.pr_number }} --json title --jq '.title')
             echo "Merging PR number: ${{ inputs.pr_number }} with message: ${PR_TITLE}"
-            gh pr merge ${{ inputs.pr_number }} \
-             --rebase \
-             --subject "${PR_TITLE}" \
-             --body ""
+            python ./scripts/retry.py --timeout 1m -- \
+              gh pr merge ${{ inputs.pr_number }} \
+              --rebase \
+              --subject "${PR_TITLE}" \
+              --body ""
             echo "base_branch=${BASE_BRANCH}" >> "${GITHUB_OUTPUT}"
 
       - name: Update vendoring branch
@@ -1021,12 +1036,15 @@ jobs:
         run: |
             BASE_BRANCH="${{ steps.merge_vendoring_pr.outputs.base_branch }}"
             git checkout --track origin/${BASE_BRANCH}
-            git pull --ff-only
+            python ./scripts/retry.py --timeout 1m -- \
+              git pull --ff-only
             # Delete vendoring-${BASE_BRANCH} branch and re-create it for future PRs
-            git push --delete origin vendoring-${BASE_BRANCH}
+            python ./scripts/retry.py --timeout 1m -- \
+              git push --delete origin vendoring-${BASE_BRANCH}
             git branch -D vendoring-${BASE_BRANCH}
             git branch vendoring-${BASE_BRANCH}
-            git push origin vendoring-${BASE_BRANCH}
+            python ./scripts/retry.py --timeout 1m -- \
+              git push origin vendoring-${BASE_BRANCH}
 
       - name: Record client status
         if: always()

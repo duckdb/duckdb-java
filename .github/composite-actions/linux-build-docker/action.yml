@@ -12,6 +12,8 @@ runs:
     - name: Build
       shell: bash
       run: |
+        python ./scripts/retry.py --timeout 1m -- \
+          docker pull ${{ inputs.docker_image }}
         docker run                                   \
         -v.:/duckdb                                  \
         -e GEN=ninja                                 \
@@ -19,11 +21,12 @@ runs:
         -e CXX='ccache g++'                          \
         -e CCACHE_DIR=/duckdb/ccache                 \
         -e JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk \
-        ${{ inputs.docker_image }}                    \
+        ${{ inputs.docker_image }}                   \
         bash -c "
           set -e
           cat /etc/os-release
-          dnf install -y             \
+          python3 /duckdb/scripts/retry.py --timeout 2m -- \
+            dnf install -y           \
             ccache                   \
             java-1.8.0-openjdk-devel \
             ninja-build

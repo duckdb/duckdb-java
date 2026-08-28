@@ -12,6 +12,8 @@ runs:
     - name: Build
       shell: bash
       run: |
+        python ./scripts/retry.py --timeout 1m -- \
+          docker pull ${{ inputs.docker_image }}
         docker run                                 \
           -v.:/duckdb                              \
           -e GEN=ninja                             \
@@ -19,10 +21,12 @@ runs:
           -e CXX='ccache g++'                      \
           -e CCACHE_DIR=/duckdb/ccache             \
           -e JAVA_HOME=/usr/lib/jvm/java-8-openjdk \
-          ${{ inputs.docker_image }}                  \
+          ${{ inputs.docker_image }}               \
           sh -c "
             set -e
-            apk add        \
+            apk add python3
+            python /duckdb/scripts/retry.py --timeout 2m -- \
+              apk add      \
               ccache       \
               cmake        \
               g++          \
