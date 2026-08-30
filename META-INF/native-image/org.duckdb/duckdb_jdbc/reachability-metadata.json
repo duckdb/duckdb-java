@@ -448,6 +448,12 @@
           "parameterTypes": [
             "java.nio.ByteBuffer"
           ]
+        },
+        {
+          "name": "closeTableFunctionState",
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -526,6 +532,12 @@
         {
           "name": "QUERY_TREE_OPTIMIZER"
         }
+      ],
+      "methods": [
+        {
+          "name": "getName",
+          "parameterTypes": []
+        }
       ]
     },
     {
@@ -551,6 +563,10 @@
           "parameterTypes": []
         }
       ]
+    },
+    {
+      "type": "java.lang.RuntimeException",
+      "jniAccessible": true
     }
   ]
 }
