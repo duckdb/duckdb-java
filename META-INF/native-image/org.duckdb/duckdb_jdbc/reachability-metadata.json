@@ -1,0 +1,572 @@
+{
+  "reflection": [
+    {
+      "type": "byte[]",
+      "jniAccessible": true
+    },
+    {
+      "type": "byte[][]"
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "booleanValue",
+          "parameterTypes": []
+        },
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Byte",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "byteValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Double",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "doubleValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Float",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "floatValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Integer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "intValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Long",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "longValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Short",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "shortValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.String",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getBytes",
+          "parameterTypes": [
+            "java.nio.charset.Charset"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.Throwable",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getMessage",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.math.BigDecimal",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "longValue",
+          "parameterTypes": []
+        },
+        {
+          "name": "precision",
+          "parameterTypes": []
+        },
+        {
+          "name": "scale",
+          "parameterTypes": []
+        },
+        {
+          "name": "scaleByPowerOfTen",
+          "parameterTypes": [
+            "int"
+          ]
+        },
+        {
+          "name": "toPlainString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.ByteBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "order",
+          "parameterTypes": [
+            "java.nio.ByteOrder"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.nio.ByteOrder",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "nativeOrder",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.CharBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.charset.Charset",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "decode",
+          "parameterTypes": [
+            "java.nio.ByteBuffer"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.nio.charset.StandardCharsets",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "UTF_8"
+        }
+      ]
+    },
+    {
+      "type": "java.sql.Array",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getArray",
+          "parameterTypes": []
+        },
+        {
+          "name": "getBaseTypeName",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.sql.SQLException",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.sql.SQLTimeoutException",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.sql.Struct",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getAttributes",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSQLTypeName",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.Iterator",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "hasNext",
+          "parameterTypes": []
+        },
+        {
+          "name": "next",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.List",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "iterator",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.Map",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "entrySet",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.Map$Entry",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getKey",
+          "parameterTypes": []
+        },
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.Set",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "iterator",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.util.UUID",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getLeastSignificantBits",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMostSignificantBits",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBArray",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "org.duckdb.DuckDBVector",
+            "int",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBArray[]"
+    },
+    {
+      "type": "org.duckdb.DuckDBDate",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getDaysSinceEpoch",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBDriver"
+    },
+    {
+      "type": "org.duckdb.DuckDBHugeInt",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "lower"
+        },
+        {
+          "name": "upper"
+        }
+      ],
+      "methods": [
+        {
+          "name": "toBigDecimal",
+          "parameterTypes": [
+            "long",
+            "long",
+            "int"
+          ]
+        },
+        {
+          "name": "toBigInteger",
+          "parameterTypes": [
+            "long",
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBNative"
+    },
+    {
+      "type": "org.duckdb.DuckDBResultSetMetaData",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "int",
+            "int",
+            "java.lang.String[]",
+            "java.lang.String[]",
+            "java.lang.String[]",
+            "java.lang.String",
+            "java.lang.String[]",
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBScalarFunctionWrapper",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "execute",
+          "parameterTypes": [
+            "java.nio.ByteBuffer",
+            "java.nio.ByteBuffer",
+            "java.nio.ByteBuffer"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBStruct",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String[]",
+            "org.duckdb.DuckDBVector[]",
+            "int",
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBStruct[]"
+    },
+    {
+      "type": "org.duckdb.DuckDBTableFunctionWrapper",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "executeBind",
+          "parameterTypes": [
+            "java.nio.ByteBuffer"
+          ]
+        },
+        {
+          "name": "executeFunction",
+          "parameterTypes": [
+            "java.nio.ByteBuffer",
+            "java.nio.ByteBuffer"
+          ]
+        },
+        {
+          "name": "executeGlobalInit",
+          "parameterTypes": [
+            "java.nio.ByteBuffer"
+          ]
+        },
+        {
+          "name": "executeLocalInit",
+          "parameterTypes": [
+            "java.nio.ByteBuffer"
+          ]
+        },
+        {
+          "name": "closeTableFunctionState",
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBTime",
+      "jniAccessible": true
+    },
+    {
+      "type": "org.duckdb.DuckDBTimestamp",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getMicrosEpoch",
+          "parameterTypes": []
+        },
+        {
+          "name": "valueOf",
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBTimestampTZ",
+      "jniAccessible": true
+    },
+    {
+      "type": "org.duckdb.DuckDBVector",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "constlen_data"
+        },
+        {
+          "name": "varlen_data"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "int",
+            "boolean[]"
+          ]
+        },
+        {
+          "name": "retainConstlenData",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.DuckDBVector[]"
+    },
+    {
+      "type": "org.duckdb.ProfilerPrintFormat",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "GRAPHVIZ"
+        },
+        {
+          "name": "HTML"
+        },
+        {
+          "name": "JSON"
+        },
+        {
+          "name": "NO_OUTPUT"
+        },
+        {
+          "name": "QUERY_TREE"
+        },
+        {
+          "name": "QUERY_TREE_OPTIMIZER"
+        }
+      ],
+      "methods": [
+        {
+          "name": "getName",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.QueryProgress",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "double",
+            "long",
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.duckdb.user.DuckDBMap",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getSQLTypeName",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.RuntimeException",
+      "jniAccessible": true
+    }
+  ]
+}
