@@ -38,6 +38,8 @@
 
 #include "src/optimizer/filter_pushdown.cpp"
 
+#include "src/optimizer/filter_statistics.cpp"
+
 #include "src/optimizer/grouping_sets_optimizer.cpp"
 
 #include "src/optimizer/in_clause_rewriter.cpp"
@@ -77,6 +79,8 @@
 #include "src/optimizer/row_group_pruner.cpp"
 
 #include "src/optimizer/row_number_rewriter.cpp"
+
+#include "src/optimizer/runtime_filter_cast.cpp"
 
 #include "src/optimizer/sampling_pushdown.cpp"
 
