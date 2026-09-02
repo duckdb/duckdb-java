@@ -479,7 +479,13 @@
     },
     {
       "type": "org.duckdb.DuckDBTimestampTZ",
-      "jniAccessible": true
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getMicrosEpoch",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "org.duckdb.DuckDBVector",
