@@ -166,7 +166,7 @@ jobs:
           "
 
   java-linux-amd64-graal:
-    name: Linux GraalVM Native Image (amd64)
+    name: Linux Graal (amd64)
     runs-on: ubuntu-latest
     needs: java-linux-amd64
     env:
@@ -1036,7 +1036,7 @@ jobs:
           echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
           gpg --batch --import maven_pgp_key
           python ./scripts/retry.py --timeout 1m -- \
-            python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts ${{ inputs.pr_number }}
+            python ./scripts/jdbc_maven_deploy_s3.py jdbc-artifacts ${{ inputs.duckdb_version }} ${{ inputs.pr_number }}
 
   java-finalize-vendoring:
     name: Finalize vendoring
