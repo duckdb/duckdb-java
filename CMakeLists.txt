@@ -187,46 +187,46 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/function/scalar/sequence/nextval.cpp
   src/duckdb/src/function/table/version/pragma_version.cpp
   src/duckdb/src/function/variant/variant_shredding.cpp
-  src/duckdb/src/main/capi/aggregate_function-c.cpp
-  src/duckdb/src/main/capi/appender-c.cpp
-  src/duckdb/src/main/capi/arrow-c.cpp
-  src/duckdb/src/main/capi/cast/from_decimal-c.cpp
-  src/duckdb/src/main/capi/cast/utils-c.cpp
-  src/duckdb/src/main/capi/cast_function-c.cpp
-  src/duckdb/src/main/capi/catalog-c.cpp
-  src/duckdb/src/main/capi/config-c.cpp
-  src/duckdb/src/main/capi/config_options-c.cpp
-  src/duckdb/src/main/capi/copy_function-c.cpp
-  src/duckdb/src/main/capi/data_chunk-c.cpp
-  src/duckdb/src/main/capi/datetime-c.cpp
-  src/duckdb/src/main/capi/duckdb-c.cpp
-  src/duckdb/src/main/capi/duckdb_value-c.cpp
-  src/duckdb/src/main/capi/error_data-c.cpp
-  src/duckdb/src/main/capi/expression-c.cpp
-  src/duckdb/src/main/capi/file_system-c.cpp
-  src/duckdb/src/main/capi/helper-c.cpp
-  src/duckdb/src/main/capi/hugeint-c.cpp
-  src/duckdb/src/main/capi/logging-c.cpp
-  src/duckdb/src/main/capi/logical_types-c.cpp
-  src/duckdb/src/main/capi/pending-c.cpp
-  src/duckdb/src/main/capi/prepared-c.cpp
-  src/duckdb/src/main/capi/profiling_info-c.cpp
-  src/duckdb/src/main/capi/replacement_scan-c.cpp
-  src/duckdb/src/main/capi/result-c.cpp
-  src/duckdb/src/main/capi/scalar_function-c.cpp
-  src/duckdb/src/main/capi/stream-c.cpp
-  src/duckdb/src/main/capi/table_description-c.cpp
-  src/duckdb/src/main/capi/table_function-c.cpp
-  src/duckdb/src/main/capi/threading-c.cpp
-  src/duckdb/src/main/capi/value-c.cpp
+  src/duckdb/src/main/capi/v1/aggregate_function-c.cpp
+  src/duckdb/src/main/capi/v1/appender-c.cpp
+  src/duckdb/src/main/capi/v1/arrow-c.cpp
+  src/duckdb/src/main/capi/v1/cast/from_decimal-c.cpp
+  src/duckdb/src/main/capi/v1/cast/utils-c.cpp
+  src/duckdb/src/main/capi/v1/cast_function-c.cpp
+  src/duckdb/src/main/capi/v1/catalog-c.cpp
+  src/duckdb/src/main/capi/v1/config-c.cpp
+  src/duckdb/src/main/capi/v1/config_options-c.cpp
+  src/duckdb/src/main/capi/v1/copy_function-c.cpp
+  src/duckdb/src/main/capi/v1/data_chunk-c.cpp
+  src/duckdb/src/main/capi/v1/datetime-c.cpp
+  src/duckdb/src/main/capi/v1/duckdb-c.cpp
+  src/duckdb/src/main/capi/v1/duckdb_value-c.cpp
+  src/duckdb/src/main/capi/v1/error_data-c.cpp
+  src/duckdb/src/main/capi/v1/expression-c.cpp
+  src/duckdb/src/main/capi/v1/file_system-c.cpp
+  src/duckdb/src/main/capi/v1/helper-c.cpp
+  src/duckdb/src/main/capi/v1/hugeint-c.cpp
+  src/duckdb/src/main/capi/v1/logging-c.cpp
+  src/duckdb/src/main/capi/v1/logical_types-c.cpp
+  src/duckdb/src/main/capi/v1/pending-c.cpp
+  src/duckdb/src/main/capi/v1/prepared-c.cpp
+  src/duckdb/src/main/capi/v1/profiling_info-c.cpp
+  src/duckdb/src/main/capi/v1/replacement_scan-c.cpp
+  src/duckdb/src/main/capi/v1/result-c.cpp
+  src/duckdb/src/main/capi/v1/scalar_function-c.cpp
+  src/duckdb/src/main/capi/v1/stream-c.cpp
+  src/duckdb/src/main/capi/v1/table_description-c.cpp
+  src/duckdb/src/main/capi/v1/table_function-c.cpp
+  src/duckdb/src/main/capi/v1/threading-c.cpp
+  src/duckdb/src/main/capi/v1/value-c.cpp
   src/duckdb/src/main/extension/extension_alias.cpp
   src/duckdb/src/main/extension/extension_helper.cpp
   src/duckdb/src/main/extension/extension_install.cpp
   src/duckdb/src/main/extension/extension_load.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
+  src/duckdb/src/main/extension/extension_repository_manager.cpp
   src/duckdb/src/main/http/http_util.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
-  src/duckdb/src/parser/peg/keyword_helper/duckdb_keyword_helper.cpp
   src/duckdb/third_party/brotli/common/constants.cpp
   src/duckdb/third_party/brotli/common/context.cpp
   src/duckdb/third_party/brotli/common/dictionary.cpp
@@ -443,6 +443,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_logging.cpp
   src/duckdb/ub_src_main.cpp
   src/duckdb/ub_src_main_buffered_data.cpp
+  src/duckdb/ub_src_main_capi_v2.cpp
   src/duckdb/ub_src_main_chunk_scan_state.cpp
   src/duckdb/ub_src_main_profiler.cpp
   src/duckdb/ub_src_main_relation.cpp
@@ -463,6 +464,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_parser_expression.cpp
   src/duckdb/ub_src_parser_parsed_data.cpp
   src/duckdb/ub_src_parser_peg.cpp
+  src/duckdb/ub_src_parser_peg_keyword_helper.cpp
   src/duckdb/ub_src_parser_peg_tokenizer.cpp
   src/duckdb/ub_src_parser_peg_transformer.cpp
   src/duckdb/ub_src_parser_query_node.cpp
