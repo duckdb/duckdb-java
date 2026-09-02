@@ -50,15 +50,19 @@ def run_cmd(cmd, check=True, cwd=project_dir):
         raise RuntimeError(f"Command failed with code {result.returncode}")
     return result.stdout.strip()
 
-def get_snapshot_version(external_version):
+def get_snapshot_version(external_version_prefix, external_version_suffix):
     # Get short commit hash for traceability
-    commit_hash = run_cmd('git rev-parse --short=7 HEAD')
     prefix = "2.0.0-dev"
     if len(external_version) > 0:
         prefix = external_version
     if prefix[0] == "v":
         prefix = prefix[1:]
-    return f"{prefix}-{commit_hash}"
+    if len(external_version_suffix) > 0:
+        suffix = external_version_suffix
+    else:
+        commit_hash = run_cmd('git rev-parse --short=7 HEAD')
+        suffix = commit_hash
+    return f"{prefix}-{suffix}"
 
 def create_combined_jar(artifact_dir, bundle_dir, version):
     """Create a fat JAR combining native libraries from multiple platforms."""
@@ -173,15 +177,18 @@ def create_javadoc_jar(jdbc_root, bundle_dir, version):
 # main
 
 if len(sys.argv) < 2:
-    print("Usage: jdbc_maven_deploy_s3.py <artifact_dir> [external_version]")
+    print("Usage: jdbc_maven_deploy_s3.py <artifact_dir> [external_version_prefix] [external_version_suffix]")
     print("\nDeploys SNAPSHOT builds to S3.")
     sys.exit(1)
 
 artifact_dir = sys.argv[1]
-external_version = ""
-if len(sys.argv) == 3:
-    external_version = sys.argv[2]
-version = get_snapshot_version(external_version)
+external_version_prefix = ""
+if len(sys.argv) > 2:
+    external_version_prefix = sys.argv[2]
+external_version_suffix = ""
+if len(sys.argv) > 3:
+    external_version_suffix = sys.argv[3]
+version = get_snapshot_version(external_version_prefix, external_version_suffix)
 
 if not os.path.isdir(artifact_dir):
     print(f"Error: artifact_dir '{artifact_dir}' is not a directory")
