@@ -437,9 +437,13 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
+	for (auto &schema : reserved_schema_qualification) {
+		qualification.push_back(schema);
+	}
+	return QualifiedName(std::move(qualification), reserved_identifier_or_string_literal);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
@@ -1496,9 +1500,16 @@ PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer,
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
+                                                                   const optional<Identifier> &table_alias_colon,
                                                                    const optional<bool> &lateral,
                                                                    unique_ptr<TableRef> subquery_reference,
                                                                    const optional<TableAlias> &table_alias) {
+	if (table_alias_colon && table_alias) {
+		throw ParserException("Table reference %s cannot have two aliases", subquery_reference->ToString());
+	}
+	if (table_alias_colon) {
+		subquery_reference->alias = *table_alias_colon;
+	}
 	if (table_alias) {
 		subquery_reference->alias = table_alias->name;
 		subquery_reference->column_name_alias = table_alias->column_name_alias;
@@ -1537,9 +1548,16 @@ Identifier PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &trans
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer,
+                                                               const optional<Identifier> &table_alias_colon,
                                                                unique_ptr<SelectStatement> values_clause,
                                                                const optional<TableAlias> &table_alias) {
+	if (table_alias_colon && table_alias) {
+		throw ParserException("Table reference cannot have two aliases");
+	}
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(values_clause));
+	if (table_alias_colon) {
+		subquery_ref->alias = *table_alias_colon;
+	}
 	if (table_alias) {
 		subquery_ref->alias = table_alias->name;
 		subquery_ref->column_name_alias = table_alias->column_name_alias;
@@ -1637,23 +1655,29 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEG
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTable(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
-	const auto description =
-	    TableDescription(QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_table_name));
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_table_name) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
+	for (auto &schema : reserved_schema_qualification) {
+		qualification.push_back(schema);
+	}
+	const auto description = TableDescription(QualifiedName(std::move(qualification), reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
-                                                                     const optional<Identifier> &catalog_qualification,
-                                                                     const optional<Identifier> &schema_qualification,
-                                                                     const Identifier &table_function_name) {
-	Identifier catalog = catalog_qualification ? *catalog_qualification : Identifier();
-	Identifier schema = schema_qualification ? *schema_qualification : Identifier();
-	if (!catalog.empty() && schema.empty()) {
-		schema = std::move(catalog);
-		catalog = Identifier();
+QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(
+    PEGTransformer &transformer, const optional<Identifier> &catalog_qualification,
+    const optional<vector<Identifier>> &schema_qualification, const Identifier &table_function_name) {
+	vector<Identifier> qualification;
+	if (catalog_qualification) {
+		qualification.push_back(*catalog_qualification);
 	}
-	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
+	if (schema_qualification) {
+		for (auto &schema : *schema_qualification) {
+			qualification.push_back(schema);
+		}
+	}
+	return QualifiedName(std::move(qualification), table_function_name);
 }
 
 vector<FunctionArgument>
