@@ -2,8 +2,8 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.READ;
-import static org.duckdb.JdbcUtils.*;
 import static org.duckdb.io.IOUtils.readToString;
+import static org.duckdb.JdbcUtils.*;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -216,7 +216,7 @@ public class DuckDBDriver implements java.sql.Driver {
             }
             String[] kv = entry.split("=");
             if (2 != kv.length) {
-                throw new SQLException("Invalid URL entry: " + entry);
+                throw createSQLException("Invalid URL entry: " + entry, ErrorCode.DRIVER_URL_ENTRY, null);
             }
             String key = kv[0].trim();
             String value = kv[1].trim();
@@ -358,9 +358,11 @@ public class DuckDBDriver implements java.sql.Driver {
         if (null != accessMode) {
             boolean accessReadOnly = DUCKDB_ACCESS_MODE_READ_ONLY.equalsIgnoreCase(accessMode);
             if (null != readOnlyStr && readOnly != accessReadOnly) {
-                throw new SQLException(
+                throw createSQLException(
                     "Invalid options specified, values of 'access_mode' and 'duckdb.read_only'"
-                    + " properties does not match, use 'access_mode=READ_ONLY' to open connection in read-only mode");
+                        +
+                        " properties does not match, use 'access_mode=READ_ONLY' to open connection in read-only mode",
+                    ErrorCode.DRIVER_OPTION_DUP, null);
             }
             return accessReadOnly;
         }
@@ -375,13 +377,15 @@ public class DuckDBDriver implements java.sql.Driver {
         List<String> urlOptsList = new ArrayList<>(pp.props.keySet());
 
         if (!SESSION_INIT_SQL_FILE_OPTION.equals(urlOptsList.get(0))) {
-            throw new SQLException(
+            throw createSQLException(
                 "'session_init_sql_file' can only be specified as the first parameter in connection string,"
-                + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'");
+                    + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'",
+                ErrorCode.DRIVER_SESSION_FILE, null);
         }
         for (int i = 1; i < pp.origPropNames.size(); i++) {
             if (SESSION_INIT_SQL_FILE_OPTION.equalsIgnoreCase(pp.origPropNames.get(i))) {
-                throw new SQLException("'session_init_sql_file' option cannot be specified more than once");
+                throw createSQLException("'session_init_sql_file' option cannot be specified more than once",
+                                         ErrorCode.DRIVER_OPTION_DUP, null);
             }
         }
         String filePathStr = pp.props.remove(SESSION_INIT_SQL_FILE_OPTION);
@@ -389,13 +393,15 @@ public class DuckDBDriver implements java.sql.Driver {
         final String expectedSha256;
         if (pp.props.containsKey(SESSION_INIT_SQL_FILE_SHA256_OPTION)) {
             if (!SESSION_INIT_SQL_FILE_SHA256_OPTION.equals(urlOptsList.get(1))) {
-                throw new SQLException(
+                throw createSQLException(
                     "'session_init_sql_file_sha256' can only be specified as the second parameter in connection string,"
-                    + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'");
+                        + " example: '" + SESSION_INIT_SQL_FILE_URL_EXAMPLE + "'",
+                    ErrorCode.DRIVER_SESSION_FILE, null);
             }
             for (int i = 2; i < pp.origPropNames.size(); i++) {
                 if (SESSION_INIT_SQL_FILE_SHA256_OPTION.equalsIgnoreCase(pp.origPropNames.get(i))) {
-                    throw new SQLException("'session_init_sql_file_sha256' option cannot be specified more than once");
+                    throw createSQLException("'session_init_sql_file_sha256' option cannot be specified more than once",
+                                             ErrorCode.DRIVER_OPTION_DUP, null);
                 }
             }
             expectedSha256 = pp.props.remove(SESSION_INIT_SQL_FILE_SHA256_OPTION);
@@ -405,7 +411,8 @@ public class DuckDBDriver implements java.sql.Driver {
 
         Path filePath = Paths.get(filePathStr);
         if (!Files.exists(filePath)) {
-            throw new SQLException("Specified session init SQL file not found, path: " + filePath);
+            throw createSQLException("Specified session init SQL file not found, path: " + filePath,
+                                     ErrorCode.DRIVER_SESSION_FILE, null);
         }
 
         final String origFileText;
@@ -413,8 +420,9 @@ public class DuckDBDriver implements java.sql.Driver {
         try {
             long fileSize = Files.size(filePath);
             if (fileSize > SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES) {
-                throw new SQLException("Specified session init SQL file size: " + fileSize +
-                                       " exceeds max allowed size: " + SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES);
+                throw createSQLException("Specified session init SQL file size: " + fileSize +
+                                             " exceeds max allowed size: " + SESSION_INIT_SQL_FILE_MAX_SIZE_BYTES,
+                                         ErrorCode.DRIVER_SESSION_FILE, null);
             }
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             try (InputStream is = new DigestInputStream(
@@ -424,18 +432,20 @@ public class DuckDBDriver implements java.sql.Driver {
                 actualSha256 = bytesToHex(md.digest());
             }
         } catch (Exception e) {
-            throw new SQLException(e);
+            throw createSQLException(e.getMessage(), ErrorCode.DRIVER_NATIVE_WRAP, e);
         }
 
         if (!expectedSha256.isEmpty() && !expectedSha256.toLowerCase().equals(actualSha256)) {
-            throw new SQLException("Session init SQL file SHA-256 mismatch, expected: " + expectedSha256 +
-                                   ", actual: " + actualSha256);
+            throw createSQLException("Session init SQL file SHA-256 mismatch, expected: " + expectedSha256 +
+                                         ", actual: " + actualSha256,
+                                     ErrorCode.DRIVER_SESSION_HASH, null);
         }
 
         String[] parts = origFileText.split(SESSION_INIT_SQL_CONN_INIT_MARKER);
         if (parts.length > 2) {
-            throw new SQLException("Connection init marker: '" + SESSION_INIT_SQL_CONN_INIT_MARKER +
-                                   "' can only be specified once");
+            throw createSQLException("Connection init marker: '" + SESSION_INIT_SQL_CONN_INIT_MARKER +
+                                         "' can only be specified once",
+                                     ErrorCode.DRIVER_SESSION_MARKER, null);
         }
         if (1 == parts.length) {
             return new SessionInitSQLFile(origFileText, parts[0].trim());

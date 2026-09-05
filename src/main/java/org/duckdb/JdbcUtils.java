@@ -16,7 +16,8 @@ final class JdbcUtils {
     @SuppressWarnings("unchecked")
     static <T> T unwrap(Object obj, Class<T> iface) throws SQLException {
         if (!iface.isInstance(obj)) {
-            throw new SQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName());
+            throw createSQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName(),
+                                     ErrorCode.UNWRAP_FAILED, null);
         }
         return (T) obj;
     }
@@ -59,15 +60,15 @@ final class JdbcUtils {
         if (valLower.equals("false") || valLower.equals("0") || valLower.equals("no") || valLower.equals("off")) {
             return false;
         }
-        throw new SQLException("Invalid boolean option value: " + val);
+        throw createSQLException("Invalid boolean option value: " + val, ErrorCode.BOOLEAN_OPTION_INVALID, null);
     }
 
     static String dbNameFromUrl(String url) throws SQLException {
         if (null == url) {
-            throw new SQLException("Invalid null URL specified");
+            throw createSQLException("Invalid null URL specified", ErrorCode.URL_NULL, null);
         }
         if (!url.startsWith(DUCKDB_URL_PREFIX)) {
-            throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
+            throw createSQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'", ErrorCode.URL_PREFIX, null);
         }
         final String shortUrl;
         if (url.contains(";")) {
@@ -113,5 +114,63 @@ final class JdbcUtils {
         PrintWriter pw = new PrintWriter(sw);
         throwable.printStackTrace(pw);
         return sw.toString();
+    }
+
+    /**
+     * Single factory for building a {@link SQLException} carrying the given message with a categorized
+     * {@link SQLState} and a unique, per-call-site {@link ErrorCode}. When {@code code} is {@code null}
+     * the error is treated as a native DuckDB error surfaced as free text (e.g. from
+     * {@code duckdb_result_error} or {@code duckdb_appender_error}): the SQLState is derived from the
+     * message prefix via {@link #nativeState(String)} and the error code falls back to
+     * {@link ErrorCode#NATIVE_UNDECODED}. A {@code null} {@code cause} is simply ignored. The message
+     * string is used verbatim so that existing callers that match on {@code getMessage()} keep working.
+     */
+    static SQLException createSQLException(String message, ErrorCode code, Throwable cause) {
+        String m = message == null ? "" : message;
+        if (code == null) {
+            return new SQLException(m, nativeState(m).getCode(), ErrorCode.NATIVE_UNDECODED.getCode(), cause);
+        }
+        return new SQLException(m, code.getSQLState().getCode(), code.getCode(), cause);
+    }
+
+    /**
+     * Maps a DuckDB free-text error prefix to a categorized {@link SQLState}. Returns {@code HY000}
+     * when the prefix is not recognised. Prefix matching is case-insensitive and non-exclusive: the
+     * first matching rule wins.
+     */
+    static SQLState nativeState(String message) {
+        if (message == null) {
+            return SQLState.HY000;
+        }
+        String m = message.toLowerCase();
+        if (contains(m, "parser error") || contains(m, "syntax error") || contains(m, "parse error")) {
+            return SQLState.SYNTAX_ERROR;
+        }
+        if (contains(m, "binder error") || contains(m, "catalog error") || contains(m, "invalid catalog") ||
+            contains(m, "table with name") || contains(m, "table \"") || contains(m, "does not exist")) {
+            return SQLState.TABLE_NOT_FOUND;
+        }
+        if (contains(m, "conversion error") || contains(m, "cast error") || contains(m, "invalid type") ||
+            contains(m, "failed to cast")) {
+            return SQLState.INVALID_CHARACTER_VALUE_FOR_CAST;
+        }
+        if (contains(m, "out of range") || contains(m, "overflow") || contains(m, "too large")) {
+            return SQLState.NUMERIC_VALUE_OUT_OF_RANGE;
+        }
+        if (contains(m, "constraint error") || contains(m, "duplicate key") || contains(m, "not null constraint") ||
+            contains(m, "unique constraint")) {
+            return SQLState.INTEGRITY_CONSTRAINT;
+        }
+        if (contains(m, "connection error")) {
+            return SQLState.CONNECTION_REJECTED;
+        }
+        if (contains(m, "not supported")) {
+            return SQLState.NOT_SUPPORTED;
+        }
+        return SQLState.HY000;
+    }
+
+    private static boolean contains(String haystack, String needle) {
+        return haystack.contains(needle);
     }
 }

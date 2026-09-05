@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import static org.duckdb.DuckDBBindings.*;
+import static org.duckdb.JdbcUtils.createSQLException;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
@@ -25,7 +26,7 @@ final class DuckDBVectorTypeInfo {
     static DuckDBVectorTypeInfo fromVector(ByteBuffer vectorRef) throws SQLException {
         ByteBuffer logicalType = duckdb_vector_get_column_type(vectorRef);
         if (logicalType == null) {
-            throw new SQLException("Cannot read vector type");
+            throw createSQLException("Cannot read vector type", ErrorCode.VECTOR_TYPE_READ, null);
         }
 
         try {
@@ -82,7 +83,8 @@ final class DuckDBVectorTypeInfo {
                                                 (int) internalType.widthBytes, decimalMeta);
             }
             default:
-                throw new SQLException("Unsupported scalar function vector type: " + capiType);
+                throw createSQLException("Unsupported scalar function vector type: " + capiType,
+                                         ErrorCode.VECTOR_TYPE_UNSUPPORTED, null);
             }
         } finally {
             duckdb_destroy_logical_type(logicalType);

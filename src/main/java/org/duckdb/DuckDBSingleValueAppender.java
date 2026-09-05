@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -13,7 +15,7 @@ public class DuckDBSingleValueAppender implements AutoCloseable {
 
     public DuckDBSingleValueAppender(DuckDBConnection con, String schemaName, String tableName) throws SQLException {
         if (con == null) {
-            throw new SQLException("Invalid connection");
+            throw createSQLException("Invalid connection", ErrorCode.SINGLE_VALUE_BAD_CONNECTION, null);
         }
         appender_ref = DuckDBNative.duckdb_jdbc_create_appender(
             con.connRef, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));

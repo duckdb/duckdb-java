@@ -274,7 +274,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public void setAutoCommit(boolean autoCommit) throws SQLException {
         if (isClosed()) {
-            throw new SQLException("Connection was closed");
+            throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED, null);
         }
 
         if (this.autoCommit != autoCommit) {
@@ -293,7 +293,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public boolean getAutoCommit() throws SQLException {
         if (isClosed()) {
-            throw new SQLException("Connection was closed");
+            throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED, null);
         }
         return this.autoCommit;
 
@@ -405,14 +405,14 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public Map<String, Class<?>> getTypeMap() throws SQLException {
         if (isClosed()) {
-            throw new SQLException("Connection was closed");
+            throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED, null);
         }
         return new HashMap<>();
     }
 
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
         if (isClosed()) {
-            throw new SQLException("Connection was closed");
+            throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED, null);
         }
         if (map != null && (map instanceof java.util.HashMap)) {
             // we return an empty Hash map if the user gives this back make sure we accept it.
@@ -595,7 +595,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     void checkOpen() throws SQLException {
         if (isClosed()) {
-            throw new SQLException("Connection was closed");
+            throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED, null);
         }
     }
 
@@ -604,7 +604,7 @@ public final class DuckDBConnection implements java.sql.Connection {
      */
     void interrupt() throws SQLException {
         if (!connRefLock.isHeldByCurrentThread()) {
-            throw new SQLException("Connection lock state error");
+            throw createSQLException("Connection lock state error", ErrorCode.CONNECTION_LOCK_STATE, null);
         }
         checkOpen();
         DuckDBNative.duckdb_jdbc_interrupt(connRef);

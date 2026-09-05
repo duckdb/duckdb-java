@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import static org.duckdb.DuckDBVector.ULONG_MULTIPLIER;
+import static org.duckdb.JdbcUtils.createSQLException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -22,10 +23,11 @@ class DuckDBHugeInt {
 
     DuckDBHugeInt(BigInteger bi) throws SQLException {
         if (null == bi) {
-            throw new SQLException("Specified BigInteger instance is null");
+            throw createSQLException("Specified BigInteger instance is null", ErrorCode.HUGEINT_NULL, null);
         }
         if (bi.compareTo(HUGE_INT_MIN) < 0 || bi.compareTo(HUGE_INT_MAX) > 0) {
-            throw new SQLException("Specified BigInteger value is out of range for HUGEINT field");
+            throw createSQLException("Specified BigInteger value is out of range for HUGEINT field",
+                                     ErrorCode.HUGEINT_RANGE, null);
         }
         this.lower = bi.longValue();
         this.upper = bi.shiftRight(64).longValue();

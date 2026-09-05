@@ -15,10 +15,10 @@ public class TestPrepare {
     }
 
     public static void test_prepare_types() throws Exception {
-        try (
-            Connection conn = DriverManager.getConnection(JDBC_URL);
-            PreparedStatement ps = conn.prepareStatement(
-                "SELECT CAST(? AS BOOLEAN) c1, CAST(? AS TINYINT) c2, CAST(? AS SMALLINT) c3, CAST(? AS INTEGER) c4, CAST(? AS BIGINT) c5, CAST(? AS FLOAT) c6, CAST(? AS DOUBLE) c7, CAST(? AS STRING) c8")) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT CAST(? AS BOOLEAN) c1, CAST(? AS TINYINT) c2, CAST(? AS SMALLINT) c3, CAST(? AS INTEGER) "
+                 + "c4, CAST(? AS BIGINT) c5, CAST(? AS FLOAT) c6, CAST(? AS DOUBLE) c7, CAST(? AS STRING) c8")) {
 
             ps.setBoolean(1, true);
             ps.setByte(2, (byte) 42);
@@ -124,8 +124,8 @@ public class TestPrepare {
             }
 
             try (Statement stmt = conn.createStatement()) {
-                stmt.execute(
-                    "create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
+                stmt.execute("create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, "
+                             + "primary key(KEY_ID) )");
             }
 
             try (PreparedStatement pStmt = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)")) {

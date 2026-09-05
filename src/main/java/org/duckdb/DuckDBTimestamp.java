@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.sql.Date;
 import java.sql.SQLException;
 import java.sql.Time;
@@ -50,7 +52,8 @@ public class DuckDBTimestamp {
             return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
         }
         default:
-            throw new SQLException("Unsupported unit type: [" + unit + "]");
+            throw createSQLException("Unsupported unit type: [" + unit + "]", ErrorCode.TIMESTAMP_UNSUPPORTED_UNIT,
+                                     null);
         }
     }
 

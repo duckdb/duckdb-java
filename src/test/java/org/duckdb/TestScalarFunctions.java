@@ -542,9 +542,8 @@ public class TestScalarFunctions {
                 .withFunction((Integer x, Integer y) -> null != x && null != y ? x + y : null)
                 .register(conn);
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT java_add_int_bifunction(a, b) FROM (VALUES (1, 2), (NULL, 2), (39, 3), (5, NULL)) t(a, b)")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT java_add_int_bifunction(a, b) FROM (VALUES (1, 2), (NULL, "
+                                                  + "2), (39, 3), (5, NULL)) t(a, b)")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getObject(1, Integer.class), 3);
                 assertTrue(rs.next());
@@ -570,9 +569,8 @@ public class TestScalarFunctions {
                         (Integer left, Integer right) -> (left == null ? 0 : left) + (right == null ? 0 : right))
                     .register(conn);
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT java_add_int_bifunction_nullable(a, b) FROM (VALUES (1, 2), (NULL, 2), (39, NULL), (NULL, NULL)) t(a, b)")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT java_add_int_bifunction_nullable(a, b) FROM (VALUES (1, "
+                                                  + "2), (NULL, 2), (39, NULL), (NULL, NULL)) t(a, b)")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getObject(1, Integer.class), 3);
                 assertTrue(rs.next());
@@ -695,9 +693,8 @@ public class TestScalarFunctions {
                                               .withLongFunction(x -> x + 3)
                                               .register(conn);
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT java_add_long_with_long_function(v) FROM (VALUES (39::BIGINT), (NULL), (-5::BIGINT)) t(v)")) {
+            try (ResultSet rs = stmt.executeQuery("SELECT java_add_long_with_long_function(v) FROM (VALUES "
+                                                  + "(39::BIGINT), (NULL), (-5::BIGINT)) t(v)")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getObject(1, Long.class), 42L);
                 assertTrue(rs.next());
@@ -1193,31 +1190,32 @@ public class TestScalarFunctions {
             (left, right) -> left != null && right != null ? left + "_" + right : null;
         BiFunction<Double, Double, Double> sumDouble =
             (left, right) -> left != null && right != null ? Double.sum(left, right) : null;
-        assertBinaryJavaFunction(
-            "java_concat_varchar_bifunction", String.class, String.class, String.class, concatUnderscore,
-            "SELECT java_concat_varchar_bifunction(a, b) FROM (VALUES ('duck', 'db'), (NULL, 'x'), ('a', NULL)) t(a, b)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, String.class), "duck_db");
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertFalse(rs.next());
-            });
+        assertBinaryJavaFunction("java_concat_varchar_bifunction", String.class, String.class, String.class,
+                                 concatUnderscore,
+                                 "SELECT java_concat_varchar_bifunction(a, b) FROM (VALUES ('duck', 'db'), (NULL, "
+                                     + "'x'), ('a', NULL)) t(a, b)",
+                                 rs -> {
+                                     assertTrue(rs.next());
+                                     assertEquals(rs.getObject(1, String.class), "duck_db");
+                                     assertTrue(rs.next());
+                                     assertNullRow(rs);
+                                     assertTrue(rs.next());
+                                     assertNullRow(rs);
+                                     assertFalse(rs.next());
+                                 });
 
-        assertBinaryJavaFunction(
-            "java_add_double_bifunction", Double.class, Double.class, Double.class, sumDouble,
-            "SELECT java_add_double_bifunction(a, b) FROM (VALUES (10.5::DOUBLE, 31.5::DOUBLE), (NULL, 2::DOUBLE), (2::DOUBLE, NULL)) t(a, b)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1, Double.class), 42.0);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertTrue(rs.next());
-                assertNullRow(rs);
-                assertFalse(rs.next());
-            });
+        assertBinaryJavaFunction("java_add_double_bifunction", Double.class, Double.class, Double.class, sumDouble,
+                                 "SELECT java_add_double_bifunction(a, b) FROM (VALUES (10.5::DOUBLE, 31.5::DOUBLE), "
+                                     + "(NULL, 2::DOUBLE), (2::DOUBLE, NULL)) t(a, b)",
+                                 rs -> {
+                                     assertTrue(rs.next());
+                                     assertEquals(rs.getObject(1, Double.class), 42.0);
+                                     assertTrue(rs.next());
+                                     assertNullRow(rs);
+                                     assertTrue(rs.next());
+                                     assertNullRow(rs);
+                                     assertFalse(rs.next());
+                                 });
     }
 
     public static void test_register_scalar_function_typed_logical_type() throws Exception {
@@ -2256,21 +2254,22 @@ public class TestScalarFunctions {
     }
 
     public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_time() throws Exception {
-        assertUnaryScalarFunction(
-            "java_timestamp_from_util_sql_time", DuckDBColumnType.TIMESTAMP, DuckDBColumnType.TIMESTAMP,
-            (input, output)
-                -> {
-                input.stream().forEach(rowIndex -> {
-                    java.util.Date value = Time.valueOf("12:34:56");
-                    output.setTimestamp(rowIndex, value);
-                });
-            },
-            "SELECT epoch_ms(java_timestamp_from_util_sql_time(v)) FROM (VALUES (TIMESTAMP '2024-07-21 00:00:00')) t(v)",
-            rs -> {
-                assertTrue(rs.next());
-                assertEquals(rs.getLong(1), Time.valueOf("12:34:56").getTime());
-                assertFalse(rs.next());
-            });
+        assertUnaryScalarFunction("java_timestamp_from_util_sql_time", DuckDBColumnType.TIMESTAMP,
+                                  DuckDBColumnType.TIMESTAMP,
+                                  (input, output)
+                                      -> {
+                                      input.stream().forEach(rowIndex -> {
+                                          java.util.Date value = Time.valueOf("12:34:56");
+                                          output.setTimestamp(rowIndex, value);
+                                      });
+                                  },
+                                  "SELECT epoch_ms(java_timestamp_from_util_sql_time(v)) FROM (VALUES (TIMESTAMP "
+                                      + "'2024-07-21 00:00:00')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getLong(1), Time.valueOf("12:34:56").getTime());
+                                      assertFalse(rs.next());
+                                  });
     }
 
     public static void test_register_scalar_function_timestamp_from_local_date() throws Exception {

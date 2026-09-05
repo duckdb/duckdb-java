@@ -2,6 +2,7 @@ package org.duckdb;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
+import static org.duckdb.JdbcUtils.createSQLException;
 
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -115,7 +116,7 @@ public class DuckDBChunkedResult implements AutoCloseable {
             byte[] error = duckdb_result_error(resultRef);
             if (error != null) {
                 String errorStr = new String(error, UTF_8);
-                throw new SQLException("Query failed: " + errorStr);
+                throw createSQLException(errorStr, null, null);
             }
         } finally {
             resultRefLock.unlock();

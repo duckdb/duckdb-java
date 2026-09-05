@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import static org.duckdb.JdbcUtils.createSQLException;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -55,21 +57,21 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
 
     private void checkOpen() throws SQLException {
         if (closed) {
-            throw new SQLException("ResultSet was closed");
+            throw createSQLException("ResultSet was closed", ErrorCode.GENERATED_KEYS_IS_CLOSED, null);
         }
     }
 
     private void checkRow() throws SQLException {
         checkOpen();
         if (currentRow < 0 || currentRow >= rows.length) {
-            throw new SQLException("No row in context");
+            throw createSQLException("No row in context", ErrorCode.GENERATED_KEYS_NO_ROW, null);
         }
     }
 
     private Object getRaw(int columnIndex) throws SQLException {
         checkRow();
         if (columnIndex < 1 || columnIndex > columnNames.length) {
-            throw new SQLException("Column index out of bounds");
+            throw createSQLException("Column index out of bounds", ErrorCode.GENERATED_KEYS_COLUMN_OOB, null);
         }
         Object value = rows[currentRow][columnIndex - 1];
         wasNull = value == null;
@@ -82,7 +84,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
                 return i + 1;
             }
         }
-        throw new SQLException("Could not find column with label " + columnLabel);
+        throw createSQLException("Could not find column with label " + columnLabel,
+                                 ErrorCode.GENERATED_KEYS_COLUMN_LABEL, null);
     }
 
     @Override
@@ -162,7 +165,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof BigDecimal) {
             return (BigDecimal) value;
         }
-        throw new SQLException("Can't convert value to number " + value.getClass().toString());
+        throw createSQLException("Can't convert value to number " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION, null);
     }
 
     @Override
@@ -199,7 +203,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Timestamp) {
             return new Date(((Timestamp) value).getTime());
         }
-        throw new SQLException("Can't convert value to date " + value.getClass().toString());
+        throw createSQLException("Can't convert value to date " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION, null);
     }
 
     @Override
@@ -217,7 +222,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Timestamp) {
             return new Time(((Timestamp) value).getTime());
         }
-        throw new SQLException("Can't convert value to time " + value.getClass().toString());
+        throw createSQLException("Can't convert value to time " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION, null);
     }
 
     @Override
@@ -238,7 +244,8 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
         if (value instanceof Date) {
             return new Timestamp(((Date) value).getTime());
         }
-        throw new SQLException("Can't convert value to timestamp " + value.getClass().toString());
+        throw createSQLException("Can't convert value to timestamp " + value.getClass().toString(),
+                                 ErrorCode.GENERATED_KEYS_CONVERSION, null);
     }
 
     @Override
@@ -1134,7 +1141,7 @@ public class DuckDBGeneratedKeysResultSet implements ResultSet {
     @Override
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
         if (type == null) {
-            throw new SQLException("Type argument cannot be null");
+            throw createSQLException("Type argument cannot be null", ErrorCode.GENERATED_KEYS_NULL_TYPE, null);
         }
         Object value = getRaw(columnIndex);
         if (value == null) {
