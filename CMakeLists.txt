@@ -582,10 +582,20 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 
 # main shared lib compilation
 
+# Match ENABLE_JEMALLOC in duckdb/duckdb: 64-bit Linux only. On macOS jemalloc's src/zone.c
+# registers a malloc zone at dlopen time, aborting threads that free during the update.
+if(MSVC OR ZOS OR APPLE)
+  set(JEMALLOC_ENABLED FALSE)
+else()
+  set(JEMALLOC_ENABLED TRUE)
+endif()
+
 if(MSVC OR ZOS)
   list(APPEND DUCKDB_INCLUDE_DIRS src/stubs)
   list(APPEND DUCKDB_SRC_FILES duckdb_java.def)
-else()
+endif()
+
+if(JEMALLOC_ENABLED)
   list(APPEND DUCKDB_SRC_FILES ${JEMALLOC_SRC_FILES})
 endif()
 
@@ -616,7 +626,7 @@ target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH2}
   ${DUCKDB_INCLUDE_DIRS})
 
-if (NOT MSVC AND NOT ZOS)
+if(JEMALLOC_ENABLED)
   target_include_directories(duckdb_java PRIVATE
     ${JEMALLOC_INCLUDE_DIRS})
 endif()
@@ -647,7 +657,7 @@ target_compile_definitions(duckdb_java PRIVATE
   -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT
   -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT)
 
-if(NOT MSVC AND NOT ZOS)
+if(JEMALLOC_ENABLED)
   target_compile_definitions(duckdb_java PRIVATE
     -DDUCKDB_ENABLE_JEMALLOC)
 endif()
