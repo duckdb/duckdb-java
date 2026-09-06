@@ -76,6 +76,17 @@ if(WIN32)
 endif()
 if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
+  set(LINUX_MUSL FALSE)
+  execute_process(
+    COMMAND gcc -dumpmachine
+    OUTPUT_VARIABLE TARGET_TRIPLE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  message (STATUS "Compiler target: ${TARGET_TRIPLE}")
+  if(TARGET_TRIPLE MATCHES "-musl")
+    set(LINUX_MUSL TRUE)
+    message(STATUS "Using Linux musl libc")
+  endif()
 endif()
 
 if(OVERRIDE_JDBC_OS_NAME)
@@ -101,9 +112,9 @@ add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc_nolib)
 
 # main shared lib compilation
 
-# Match ENABLE_JEMALLOC in duckdb/duckdb: 64-bit Linux only. On macOS jemalloc's src/zone.c
+# Match ENABLE_JEMALLOC in duckdb/duckdb: 64-bit glibc Linux only. On macOS jemalloc's src/zone.c
 # registers a malloc zone at dlopen time, aborting threads that free during the update.
-if(MSVC OR ZOS OR APPLE)
+if(MSVC OR ZOS OR APPLE OR LINUX_MUSL)
   set(JEMALLOC_ENABLED FALSE)
 else()
   set(JEMALLOC_ENABLED TRUE)
