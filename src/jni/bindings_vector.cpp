@@ -2,6 +2,7 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstring>
 #include <vector>
 
 static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
@@ -132,6 +133,35 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1da
 	}
 
 	return nullptr;
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_vector_get_data_zeroed
+ * Signature: (Ljava/nio/ByteBuffer;J)Ljava/nio/ByteBuffer;
+ */
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1vector_1get_1data_1zeroed(JNIEnv *env, jclass,
+                                                                                           jobject vector,
+                                                                                           jlong size_bytes) {
+
+	duckdb_vector vec = vector_buf_to_vector(env, vector);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	idx_t vector_size = jlong_to_idx(env, size_bytes);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+
+	void *data = duckdb_vector_get_data(vec);
+
+	if (data == nullptr) {
+		return nullptr;
+	}
+
+	std::memset(data, '\0', vector_size);
+
+	return make_data_buf(env, data, vector_size);
 }
 
 /*
