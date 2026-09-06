@@ -48,8 +48,8 @@ public final class DuckDBWritableVector {
         } catch (java.sql.SQLException exception) {
             throw new FunctionException("Failed to resolve vector type info", exception);
         }
-        this.data =
-            duckdb_vector_get_data(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes)).order(NATIVE_ORDER);
+        this.data = duckdb_vector_get_data_zeroed(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes))
+                        .order(NATIVE_ORDER);
         duckdb_vector_ensure_validity_writable(vectorRef);
         this.validity = duckdb_vector_get_validity(vectorRef, rowCount);
         this.validity.order(NATIVE_ORDER);
