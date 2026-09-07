@@ -70,6 +70,10 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_amd64
 
+      - name: Check jemalloc
+        run: |
+          nm ./build/release/libduckdb_java.so_linux_amd64 | grep jemalloc || exit 1
+
       - name: Check Module Name
         run: |
           java \
@@ -482,6 +486,10 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_arm64
 
+      - name: Check jemalloc
+        run: |
+          nm ./build/release/libduckdb_java.so_linux_arm64 | grep jemalloc || exit 1
+
       - name: JDBC Tests EL8
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-docker
@@ -537,6 +545,10 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_amd64
 
+      - name: Check jemalloc
+        run: |
+          ! (nm ./build/release/libduckdb_java.so_linux_amd64 | grep jemalloc) || exit 1
+
       - name: JDBC Tests
         if: ${{ inputs.skip_tests != 'true' }}
         uses: ./.github/composite-actions/linux-tests-musl-docker
@@ -587,6 +599,10 @@ jobs:
       - name: List Symbols
         run: |
           nm -gU ./build/release/libduckdb_java.so_linux_arm64
+
+      - name: Check jemalloc
+        run: |
+          ! (nm ./build/release/libduckdb_java.so_linux_arm64 | grep jemalloc) || exit 1
 
       - name: JDBC Tests
         if: ${{ inputs.skip_tests != 'true' }}
@@ -799,14 +815,18 @@ jobs:
         run: |
           nm -gU ./build/release/libduckdb_java.so_osx_universal
 
-      - name: Java Tests
-        if: ${{ inputs.skip_tests != 'true' }}
-        shell: bash
-        run: make test
+      - name: Check jemalloc
+        run: |
+          ! (nm ./build/release/libduckdb_java.so_osx_universal | grep jemalloc) || exit 1
 
       - name: See if this actually universal
         shell: bash
         run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
+
+      - name: Java Tests
+        if: ${{ inputs.skip_tests != 'true' }}
+        shell: bash
+        run: make test
 
       - uses: actions/upload-artifact@v4
         with:
