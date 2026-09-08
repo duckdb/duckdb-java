@@ -2488,4 +2488,35 @@ public class TestScalarFunctions {
             }
         }
     }
+
+    public static void test_scalar_function_dirty_vector() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            DuckDBFunctions.scalarFunction()
+                .withName("gen_corrupted_string")
+                .withParameter(Long.class)
+                .withReturnType(String.class)
+                .withVectorizedFunction((input, output) -> {
+                    long firstNum = input.vector(0).getLong(0);
+                    if (firstNum == 42) {
+                        output.setString(0, String.valueOf(firstNum));
+                    }
+                })
+                .register(conn);
+            try (ResultSet rs = stmt.executeQuery("SELECT gen_corrupted_string(r) FROM range(42, 44) AS t(r)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "42");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "");
+                assertFalse(rs.next());
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT gen_corrupted_string(r) FROM range(43, 45) AS t(r)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "");
+                assertTrue(rs.next());
+                assertEquals(rs.getString(1), "");
+                assertFalse(rs.next());
+            }
+        }
+    }
 }
