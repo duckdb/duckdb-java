@@ -181,6 +181,11 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1
 	if (env->ExceptionCheck()) {
 		return static_cast<jint>(DuckDBError);
 	}
+
+	// TODO: use C API V2 for this
+	duckdb::ScalarFunction &sf = *reinterpret_cast<duckdb::ScalarFunction *>(function);
+	sf.SetFallible();
+
 	return static_cast<jint>(duckdb_register_scalar_function(conn, function));
 }
 
