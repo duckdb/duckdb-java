@@ -107,6 +107,40 @@ public class TestBindings {
         duckdb_destroy_logical_type(lt);
     }
 
+    public static void test_bindings_vector_data_writeable() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+        assertNotNull(vec);
+
+        {
+            ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 4);
+            assertNotNull(data);
+            assertEquals(data.capacity(), (int) duckdb_vector_size() * 4);
+            data.putLong(42L);
+        }
+        {
+            ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 4);
+            assertNotNull(data);
+            assertEquals(data.capacity(), (int) duckdb_vector_size() * 4);
+            assertEquals(data.getLong(), 42L);
+        }
+        {
+            ByteBuffer data = duckdb_vector_get_data_zeroed(vec, duckdb_vector_size() * 4);
+            assertNotNull(data);
+            assertEquals(data.capacity(), (int) duckdb_vector_size() * 4);
+            assertEquals(data.getLong(), 0L);
+        }
+        {
+            ByteBuffer data = duckdb_vector_get_data(vec, duckdb_vector_size() * 4);
+            assertNotNull(data);
+            assertEquals(data.capacity(), (int) duckdb_vector_size() * 4);
+            assertEquals(data.getLong(), 0L);
+        }
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
     private static void checkVectorInsertString(ByteBuffer vec) throws Exception {
         String str = "foo";
         int idx = 7;

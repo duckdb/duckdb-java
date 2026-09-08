@@ -2413,7 +2413,7 @@ public class DuckDBAppender implements AutoCloseable {
             long maxElems = maxElementsCount();
             if (colType.widthBytes > 0 || colType == DUCKDB_TYPE_DECIMAL || colType == DUCKDB_TYPE_ENUM) {
                 long vectorSizeBytes = maxElems * widthBytes();
-                this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
+                this.data = duckdb_vector_get_data_zeroed(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
                     throw new SQLException("cannot initialize data chunk vector data");
                 }
