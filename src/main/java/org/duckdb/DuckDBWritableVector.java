@@ -51,8 +51,13 @@ public final class DuckDBWritableVector {
         this.data = duckdb_vector_get_data_zeroed(vectorRef, Math.multiplyExact(rowCount, typeInfo.widthBytes))
                         .order(NATIVE_ORDER);
         duckdb_vector_ensure_validity_writable(vectorRef);
-        this.validity = duckdb_vector_get_validity(vectorRef, rowCount);
-        this.validity.order(NATIVE_ORDER);
+        ByteBuffer validity = duckdb_vector_get_validity(vectorRef, rowCount);
+        validity.order(NATIVE_ORDER);
+        while (validity.remaining() > 0) {
+            validity.putLong(0);
+        }
+        validity.clear();
+        this.validity = validity;
     }
 
     public DuckDBColumnType getType() {
