@@ -2508,14 +2508,17 @@ public class TestScalarFunctions {
                 assertTrue(rs.next());
                 assertEquals(rs.getString(1), "42");
                 assertTrue(rs.next());
-                assertEquals(rs.getString(1), "");
+                assertEquals(rs.getString(1), null);
+                assertTrue(rs.wasNull());
                 assertFalse(rs.next());
             }
             try (ResultSet rs = stmt.executeQuery("SELECT gen_corrupted_string(r) FROM range(43, 45) r")) {
                 assertTrue(rs.next());
-                assertEquals(rs.getString(1), "");
+                assertEquals(rs.getString(1), null);
+                assertTrue(rs.wasNull());
                 assertTrue(rs.next());
-                assertEquals(rs.getString(1), "");
+                assertEquals(rs.getString(1), null);
+                assertTrue(rs.wasNull());
                 assertFalse(rs.next());
             }
         }
