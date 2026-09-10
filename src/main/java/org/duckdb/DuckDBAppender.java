@@ -145,11 +145,10 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!readyForANewRowInvariant()) {
             throw createSQLException(createErrMsg("'endRow' must be called before calling 'beginRow' again"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
         if (null == columns || 0 == columns.size()) {
-            throw createSQLException(createErrMsg("no columns found to append to"), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("no columns found to append to"), ErrorCode.APPENDER_CONVERSION);
         }
         this.currentColumn = columns.get(0);
         return this;
@@ -163,11 +162,11 @@ public class DuckDBAppender implements AutoCloseable {
                 throw createSQLException(
                     createErrMsg("all columns must be appended to before calling 'endRow', expected columns count: " +
                                  columns.size() + ", actual: " + (topCol.idx + 1)),
-                    ErrorCode.APPENDER_SEQUENCE, null);
+                    ErrorCode.APPENDER_SEQUENCE);
             } else {
                 throw createSQLException(createErrMsg("calls to 'beginRow' and 'endRow' must be paired and cannot be "
                                                       + "interleaved with other 'begin*' and 'end*' calls"),
-                                         ErrorCode.APPENDER_SEQUENCE, null);
+                                         ErrorCode.APPENDER_SEQUENCE);
             }
         }
 
@@ -191,7 +190,7 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!rowBegunInvariant()) {
             throw createSQLException(createErrMsg("'beginRow' must be called before calling 'beginStruct'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
         checkCurrentColumnType(DUCKDB_TYPE_STRUCT);
         //        if (structBegunInvariant()) {
@@ -199,7 +198,7 @@ public class DuckDBAppender implements AutoCloseable {
         //            again"));
         //        }
         if (0 == currentColumn.children.size()) {
-            throw createSQLException(createErrMsg("invalid empty struct"), ErrorCode.APPENDER_SEQUENCE, null);
+            throw createSQLException(createErrMsg("invalid empty struct"), ErrorCode.APPENDER_SEQUENCE);
         }
         this.currentColumn = currentColumn.children.get(0);
         return this;
@@ -213,10 +212,10 @@ public class DuckDBAppender implements AutoCloseable {
                     createErrMsg(
                         "all struct fields must be appended to before calling 'endStruct', expected fields count: " +
                         currentColumn.parent.children.size() + ", actual: " + (currentColumn.idx + 1)),
-                    ErrorCode.APPENDER_SEQUENCE, null);
+                    ErrorCode.APPENDER_SEQUENCE);
             }
             throw createSQLException(createErrMsg("all struct fields must be appended to before calling 'endStruct'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
         this.prevColumn = this.prevColumn.parent;
         return this;
@@ -226,7 +225,7 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!rowBegunInvariant()) {
             throw createSQLException(createErrMsg("'beginRow' must be called before calling 'beginUnion'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
         Column col = currentColumn(DUCKDB_TYPE_UNION);
         this.currentColumn = putUnionTag(col, rowIdx, tag);
@@ -237,7 +236,7 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!unionCompletedInvariant()) {
             throw createSQLException(createErrMsg("union column must be appended to before calling 'endUnion'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
         this.prevColumn = this.prevColumn.parent;
         return this;
@@ -247,7 +246,7 @@ public class DuckDBAppender implements AutoCloseable {
         checkOpen();
         if (!readyForANewRowInvariant()) {
             throw createSQLException(createErrMsg("'endRow' must be called before calling 'flush'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
 
         if (0 == rowIdx) {
@@ -264,14 +263,14 @@ public class DuckDBAppender implements AutoCloseable {
             if (0 != appendState) {
                 byte[] errorUTF8 = duckdb_appender_error(appenderRef);
                 String error = strFromUTF8(errorUTF8);
-                throw createSQLException(error, null, null);
+                throw createSQLException(error, null);
             }
 
             int flushState = duckdb_appender_flush(appenderRef);
             if (0 != flushState) {
                 byte[] errorUTF8 = duckdb_appender_error(appenderRef);
                 String error = strFromUTF8(errorUTF8);
-                throw createSQLException(error, null, null);
+                throw createSQLException(error, null);
             }
 
             duckdb_data_chunk_reset(chunkRef);
@@ -776,7 +775,7 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw createSQLException(createErrMsg("Invalid type: " + col.colType), ErrorCode.APPENDER_CONVERSION, null);
+            throw createSQLException(createErrMsg("Invalid type: " + col.colType), ErrorCode.APPENDER_CONVERSION);
         }
 
         moveToNextColumn();
@@ -930,7 +929,7 @@ public class DuckDBAppender implements AutoCloseable {
         Column parentCol = currentColumn(collectionTypes);
         if (parentCol.colType != DUCKDB_TYPE_ARRAY && parentCol.colType != DUCKDB_TYPE_LIST) {
             throw createSQLException(createErrMsg("invalid array/list column type: '" + parentCol.colType + "'"),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         if (iter == null) {
             return appendNull();
@@ -1040,12 +1039,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void checkOpen() throws SQLException {
         if (isClosed()) {
-            throw createSQLException(createErrMsg("appender was closed"), ErrorCode.APPENDER_IS_CLOSED, null);
+            throw createSQLException(createErrMsg("appender was closed"), ErrorCode.APPENDER_IS_CLOSED);
         }
-        checkThreadConfinement();
-    }
-
-    private void checkThreadConfinement() throws SQLException {
         if (ownerThreadId != 0 && ownerThreadId != currentThread().getId()) {
             throw createSQLException(
                 createErrMsg("detected the usage of the same Appender instance from multiple threads,"
@@ -1055,7 +1050,7 @@ public class DuckDBAppender implements AutoCloseable {
                              + " when it is necessary to use the same Appender instance from multiple threads,"
                              + " call 'appender.unsafeBreakThreadConfinement()' method and use the 'Lock' instance"
                              + " obtained from there to synchronize the calls to the Appender."),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1080,13 +1075,13 @@ public class DuckDBAppender implements AutoCloseable {
         }
         throw createSQLException(createErrMsg("invalid column type, expected one of: '" + Arrays.toString(ctypes) +
                                               "', actual: '" + col.colType + "'"),
-                                 ErrorCode.APPENDER_CONVERSION, null);
+                                 ErrorCode.APPENDER_CONVERSION);
     }
 
     private void checkArrayLength(Column col, long length) throws SQLException {
         if (null == col.parent) {
-            throw createSQLException(createErrMsg("invalid array/list column specified"), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("invalid array/list column specified"),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         switch (col.parent.colType) {
         case DUCKDB_TYPE_LIST:
@@ -1095,12 +1090,12 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         default:
             throw createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         if (col.arraySize != length) {
             throw createSQLException(
                 createErrMsg("invalid array size, expected: " + col.arraySize + ", actual: " + length),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1108,7 +1103,7 @@ public class DuckDBAppender implements AutoCloseable {
         if (col.decimalInternalType != decimalInternalType) {
             throw createSQLException(createErrMsg("invalid decimal internal type, expected: '" +
                                                   col.decimalInternalType + "', actual: '" + decimalInternalType + "'"),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1118,7 +1113,7 @@ public class DuckDBAppender implements AutoCloseable {
             throw createSQLException(createErrMsg("invalid decimal precision, value: " + value.precision() +
                                                   ", max value: " + maxPrecision +
                                                   ", decimal internal type: " + decimalInternalType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1129,7 +1124,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         if (null == currentColumn) {
             throw createSQLException(createErrMsg("current column not found, columns count: " + columns.size()),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
 
         return currentColumn;
@@ -1152,7 +1147,7 @@ public class DuckDBAppender implements AutoCloseable {
     private Column arrayInnerColumn(Column arrayCol, CAPIType[] ctypes) throws SQLException {
         if (arrayCol.colType != DUCKDB_TYPE_ARRAY && arrayCol.colType != DUCKDB_TYPE_LIST) {
             throw createSQLException(createErrMsg("invalid array/list column type: '" + arrayCol.colType + "'"),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
 
         Column col = arrayCol.children.get(0);
@@ -1163,7 +1158,7 @@ public class DuckDBAppender implements AutoCloseable {
         }
         throw createSQLException(createErrMsg("invalid array/list inner column type, expected one of: '" +
                                               Arrays.toString(ctypes) + "', actual: '" + col.colType + "'"),
-                                 ErrorCode.APPENDER_CONVERSION, null);
+                                 ErrorCode.APPENDER_CONVERSION);
     }
 
     private Column currentTopLevelColumn() {
@@ -1181,8 +1176,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void setNullMask(Column col, long vectorIdx, boolean[] nullMask, int elementsCount) throws SQLException {
         if (null == col.parent) {
-            throw createSQLException(createErrMsg("invalid array/list column specified"), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("invalid array/list column specified"),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         switch (col.parent.colType) {
         case DUCKDB_TYPE_ARRAY:
@@ -1195,7 +1190,7 @@ public class DuckDBAppender implements AutoCloseable {
             return;
         default:
             throw createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1207,7 +1202,7 @@ public class DuckDBAppender implements AutoCloseable {
         if (nullMask.length != elementsCount) {
             throw createSQLException(
                 createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
         for (int i = 0; i < nullMask.length; i++) {
             if (nullMask[i]) {
@@ -1223,12 +1218,12 @@ public class DuckDBAppender implements AutoCloseable {
         if (nullMask.length != elementsCount) {
             throw createSQLException(
                 createErrMsg("invalid null mask size, expected: " + elementsCount + ", actual: " + nullMask.length),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
         if (col.listSize < elementsCount) {
             throw createSQLException(
                 createErrMsg("invalid list state, list size: " + col.listSize + ", elements count: " + elementsCount),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
         for (int i = 0; i < nullMask.length; i++) {
             if (nullMask[i]) {
@@ -1286,7 +1281,7 @@ public class DuckDBAppender implements AutoCloseable {
     private void putBigInteger(Column col, long vectorIdx, BigInteger value) throws SQLException {
         if (value.compareTo(HUGE_INT_MIN) < 0 || value.compareTo(HUGE_INT_MAX) > 0) {
             throw createSQLException("Specified BigInteger value is out of range for HUGEINT field",
-                                     ErrorCode.APPENDER_HUGEINT_RANGE, null);
+                                     ErrorCode.APPENDER_HUGEINT_RANGE);
         }
         long lower = value.longValue();
         long upper = value.shiftRight(64).longValue();
@@ -1322,12 +1317,12 @@ public class DuckDBAppender implements AutoCloseable {
         if (value.precision() > col.decimalPrecision) {
             throw createSQLException(createErrMsg("invalid decimal precision, max expected: " + col.decimalPrecision +
                                                   ", actual: " + value.precision()),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         if (col.decimalScale != value.scale()) {
             throw createSQLException(
                 createErrMsg("invalid decimal scale, expected: " + col.decimalScale + ", actual: " + value.scale()),
-                ErrorCode.APPENDER_CONVERSION, null);
+                ErrorCode.APPENDER_CONVERSION);
         }
 
         switch (col.decimalInternalType) {
@@ -1359,7 +1354,7 @@ public class DuckDBAppender implements AutoCloseable {
         }
         default:
             throw createSQLException(createErrMsg("invalid decimal internal type: '" + col.decimalInternalType + "'"),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -1400,7 +1395,7 @@ public class DuckDBAppender implements AutoCloseable {
         long days = date.toEpochDay();
         if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
             throw createSQLException(createErrMsg("unsupported number of days: " + days + ", must fit into 'int32_t'"),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         putEpochDays(col, vectorIdx, (int) days);
     }
@@ -1452,8 +1447,8 @@ public class DuckDBAppender implements AutoCloseable {
             moment = EPOCH_DATE_TIME.until(value, NANOS);
             break;
         default:
-            throw createSQLException(createErrMsg("invalid column type: " + col.colType), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("invalid column type: " + col.colType),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         putEpochMoment(col, vectorIdx, moment);
     }
@@ -1477,8 +1472,8 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         }
         default:
-            throw createSQLException(createErrMsg("invalid column type: " + col.colType), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("invalid column type: " + col.colType),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         putEpochMoment(col, vectorIdx, moment);
     }
@@ -1831,7 +1826,7 @@ public class DuckDBAppender implements AutoCloseable {
             if (!iter.hasNext()) {
                 throw createSQLException(
                     createErrMsg("invalid iterator elements count, expected: " + count + ", actual" + i),
-                    ErrorCode.APPENDER_CONVERSION, null);
+                    ErrorCode.APPENDER_CONVERSION);
             }
 
             Object value = iter.next();
@@ -1964,7 +1959,7 @@ public class DuckDBAppender implements AutoCloseable {
                 throw createSQLException(createErrMsg("invalid object type for timestamp column, expected one of: [" +
                                                       LocalDateTime.class.getName() + ", " + Date.class.getName() +
                                                       "], actual: [" + value.getClass().getName() + "]"),
-                                         ErrorCode.APPENDER_CONVERSION, null);
+                                         ErrorCode.APPENDER_CONVERSION);
             }
             break;
         case DUCKDB_TYPE_TIMESTAMP_TZ: {
@@ -1978,7 +1973,7 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_LIST: {
             Collection<?> collection = (Collection<?>) value;
             if (col.children.size() != 1) {
-                throw createSQLException(createErrMsg("invalid list column"), ErrorCode.APPENDER_CONVERSION, null);
+                throw createSQLException(createErrMsg("invalid list column"), ErrorCode.APPENDER_CONVERSION);
             }
             Column innerCol = col.children.get(0);
             putObjectArrayOrList(innerCol, vectorIdx, collection.iterator(), collection.size());
@@ -1987,7 +1982,7 @@ public class DuckDBAppender implements AutoCloseable {
         case DUCKDB_TYPE_MAP: {
             Map<?, ?> map = (Map<?, ?>) value;
             if (col.children.size() != 1) {
-                throw createSQLException(createErrMsg("invalid map column"), ErrorCode.APPENDER_CONVERSION, null);
+                throw createSQLException(createErrMsg("invalid map column"), ErrorCode.APPENDER_CONVERSION);
             }
             Column innerCol = col.children.get(0);
             putMap(innerCol, vectorIdx, map);
@@ -2003,13 +1998,13 @@ public class DuckDBAppender implements AutoCloseable {
         }
         default:
             throw createSQLException(createErrMsg("unsupported composite column, inner type: " + col.colType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
     private void putCompositeElementArray(Column col, long vectorIdx, Object value) throws SQLException {
         if (col.children.size() != 1) {
-            throw createSQLException(createErrMsg("invalid array column"), ErrorCode.APPENDER_CONVERSION, null);
+            throw createSQLException(createErrMsg("invalid array column"), ErrorCode.APPENDER_CONVERSION);
         }
         Column innerCol = col.children.get(0);
         switch (innerCol.colType) {
@@ -2072,13 +2067,13 @@ public class DuckDBAppender implements AutoCloseable {
                 putDoubleArray2D(col, vectorIdx, arr);
             } else {
                 throw createSQLException(createErrMsg("unsupported 2D array type: " + value.getClass().getName()),
-                                         ErrorCode.APPENDER_CONVERSION, null);
+                                         ErrorCode.APPENDER_CONVERSION);
             }
             break;
         }
         default:
             throw createSQLException(createErrMsg("unsupported array type: " + innerCol.colType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -2092,7 +2087,7 @@ public class DuckDBAppender implements AutoCloseable {
                 throw createSQLException(
                     createErrMsg("struct values must be specified as an instance of a 'java.util.LinkedHashMap' or "
                                  + "as a collection of objects, actual class: " + structValue.getClass().getName()),
-                    ErrorCode.APPENDER_CONVERSION, null);
+                    ErrorCode.APPENDER_CONVERSION);
             }
         } else {
             collection = (Collection<?>) structValue;
@@ -2101,7 +2096,7 @@ public class DuckDBAppender implements AutoCloseable {
         if (structCol.children.size() != collection.size()) {
             throw createSQLException(createErrMsg("invalid struct object specified, expected fields count: " +
                                                   structCol.children.size() + ", actual: " + collection.size()),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
 
         int i = 0;
@@ -2118,7 +2113,7 @@ public class DuckDBAppender implements AutoCloseable {
                                                   +
                                                   "'java.util.AbstractMap.SimpleEntry<String, Object>', actual type: " +
                                                   unionValue.getClass().getName()),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         AbstractMap.SimpleEntry<?, ?> entry = (AbstractMap.SimpleEntry<?, ?>) unionValue;
         String tag = String.valueOf(entry.getKey());
@@ -2136,7 +2131,7 @@ public class DuckDBAppender implements AutoCloseable {
         }
         if (0 == fieldWithTag) {
             throw createSQLException(createErrMsg("specified union field not found, value: '" + tag + "'"),
-                                     ErrorCode.APPENDER_SEQUENCE, null);
+                                     ErrorCode.APPENDER_SEQUENCE);
         }
 
         // set tag
@@ -2158,7 +2153,7 @@ public class DuckDBAppender implements AutoCloseable {
         if (null == numValueNullable) {
             throw createSQLException(createErrMsg("invalid ENUM value specified: '" + value +
                                                   "', expected one of: " + col.enumDict.keySet()),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
 
         int pos = (int) (vectorIdx * col.enumInternalType.widthBytes);
@@ -2176,7 +2171,7 @@ public class DuckDBAppender implements AutoCloseable {
             return;
         default:
             throw createSQLException(createErrMsg("invalid ENUM internal type: " + col.enumInternalType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
     }
 
@@ -2212,8 +2207,8 @@ public class DuckDBAppender implements AutoCloseable {
 
     private int prepareListColumn(Column innerCol, long vectorIdx, long listElementsCount) throws SQLException {
         if (null == innerCol.parent) {
-            throw createSQLException(createErrMsg("invalid array/list column specified"), ErrorCode.APPENDER_CONVERSION,
-                                     null);
+            throw createSQLException(createErrMsg("invalid array/list column specified"),
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         Column col = innerCol.parent;
         switch (col.colType) {
@@ -2224,7 +2219,7 @@ public class DuckDBAppender implements AutoCloseable {
             break;
         default:
             throw createSQLException(createErrMsg("invalid array/list column type: " + col.colType),
-                                     ErrorCode.APPENDER_CONVERSION, null);
+                                     ErrorCode.APPENDER_CONVERSION);
         }
         appenderRefLock.lock();
         try {
@@ -2240,14 +2235,14 @@ public class DuckDBAppender implements AutoCloseable {
             if (0 != reserveStatus) {
                 throw createSQLException(
                     createErrMsg("'duckdb_list_vector_reserve' call failed, list size: " + listSize),
-                    ErrorCode.APPENDER_CONVERSION, null);
+                    ErrorCode.APPENDER_CONVERSION);
             }
             innerCol.reset(listSize);
             int setStatus = duckdb_list_vector_set_size(col.vectorRef, listSize);
             if (0 != setStatus) {
                 throw createSQLException(
                     createErrMsg("'duckdb_list_vector_set_size' call failed, list size: " + listSize),
-                    ErrorCode.APPENDER_CONVERSION, null);
+                    ErrorCode.APPENDER_CONVERSION);
             }
             return (int) offset;
         } finally {
@@ -2282,7 +2277,7 @@ public class DuckDBAppender implements AutoCloseable {
             ByteBuffer[] out = new ByteBuffer[1];
             int state = duckdb_appender_create_ext(conn.connRef, utf8(catalog), utf8(schema), utf8(table), out);
             if (0 != state) {
-                throw createSQLException("duckdb_appender_create_ext error", ErrorCode.APPENDER_RAW_ERROR, null);
+                throw createSQLException("duckdb_appender_create_ext error", ErrorCode.APPENDER_RAW_ERROR);
             }
             return out[0];
         } finally {
@@ -2293,7 +2288,7 @@ public class DuckDBAppender implements AutoCloseable {
     private static ByteBuffer[] readTableTypes(ByteBuffer appenderRef) throws SQLException {
         long colCountLong = duckdb_appender_column_count(appenderRef);
         if (colCountLong > Integer.MAX_VALUE || colCountLong < 0) {
-            throw createSQLException("invalid columns count: " + colCountLong, ErrorCode.APPENDER_PARAM, null);
+            throw createSQLException("invalid columns count: " + colCountLong, ErrorCode.APPENDER_PARAM);
         }
         int colCount = (int) colCountLong;
 
@@ -2302,7 +2297,7 @@ public class DuckDBAppender implements AutoCloseable {
         for (int i = 0; i < colCount; i++) {
             ByteBuffer colType = duckdb_appender_column_type(appenderRef, i);
             if (null == colType) {
-                throw createSQLException("cannot get logical type for column: " + i, ErrorCode.APPENDER_CHUNK, null);
+                throw createSQLException("cannot get logical type for column: " + i, ErrorCode.APPENDER_CHUNK);
             }
             int typeId = duckdb_get_type_id(colType);
             if (!supportedTypes.contains(typeId)) {
@@ -2311,7 +2306,7 @@ public class DuckDBAppender implements AutoCloseable {
                         duckdb_destroy_logical_type(lt);
                     }
                 }
-                throw createSQLException("unsupported C API type: " + typeId, ErrorCode.APPENDER_CONVERSION, null);
+                throw createSQLException("unsupported C API type: " + typeId, ErrorCode.APPENDER_CONVERSION);
             }
             res[i] = colType;
         }
@@ -2322,7 +2317,7 @@ public class DuckDBAppender implements AutoCloseable {
     private static ByteBuffer createChunk(ByteBuffer[] colTypes) throws SQLException {
         ByteBuffer chunkRef = duckdb_create_data_chunk(colTypes);
         if (null == chunkRef) {
-            throw createSQLException("cannot create data chunk", ErrorCode.APPENDER_CHUNK, null);
+            throw createSQLException("cannot create data chunk", ErrorCode.APPENDER_CHUNK);
         }
         return chunkRef;
     }
@@ -2416,14 +2411,13 @@ public class DuckDBAppender implements AutoCloseable {
             this.idx = idx;
 
             if (null == vector) {
-                throw createSQLException("cannot initialize data chunk vector", ErrorCode.APPENDER_CHUNK, null);
+                throw createSQLException("cannot initialize data chunk vector", ErrorCode.APPENDER_CHUNK);
             }
 
             if (null == colTypeRef) {
                 this.colTypeRef = duckdb_vector_get_column_type(vector);
                 if (null == this.colTypeRef) {
-                    throw createSQLException("cannot initialize data chunk vector type", ErrorCode.APPENDER_CHUNK,
-                                             null);
+                    throw createSQLException("cannot initialize data chunk vector type", ErrorCode.APPENDER_CHUNK);
                 }
             } else {
                 this.colTypeRef = colTypeRef;
@@ -2472,8 +2466,7 @@ public class DuckDBAppender implements AutoCloseable {
                 long vectorSizeBytes = maxElems * widthBytes();
                 this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
-                    throw createSQLException("cannot initialize data chunk vector data", ErrorCode.APPENDER_CHUNK,
-                                             null);
+                    throw createSQLException("cannot initialize data chunk vector data", ErrorCode.APPENDER_CHUNK);
                 }
             } else {
                 this.data = null;
@@ -2482,8 +2475,7 @@ public class DuckDBAppender implements AutoCloseable {
             duckdb_vector_ensure_validity_writable(vectorRef);
             this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
-                throw createSQLException("cannot initialize data chunk vector validity", ErrorCode.APPENDER_CHUNK,
-                                         null);
+                throw createSQLException("cannot initialize data chunk vector validity", ErrorCode.APPENDER_CHUNK);
             }
 
             // last call in constructor
@@ -2492,7 +2484,7 @@ public class DuckDBAppender implements AutoCloseable {
 
         void reset(long listSize) throws SQLException {
             if (null == parent || !(parent.colType == DUCKDB_TYPE_LIST || parent.colType == DUCKDB_TYPE_MAP)) {
-                throw createSQLException("invalid list column", ErrorCode.APPENDER_CONVERSION, null);
+                throw createSQLException("invalid list column", ErrorCode.APPENDER_CONVERSION);
             }
             this.listSize = listSize;
             reset();
@@ -2505,14 +2497,14 @@ public class DuckDBAppender implements AutoCloseable {
                 long vectorSizeBytes = maxElems * widthBytes();
                 this.data = duckdb_vector_get_data(vectorRef, vectorSizeBytes);
                 if (null == this.data) {
-                    throw createSQLException("cannot reset data chunk vector data", ErrorCode.APPENDER_CHUNK, null);
+                    throw createSQLException("cannot reset data chunk vector data", ErrorCode.APPENDER_CHUNK);
                 }
             }
 
             duckdb_vector_ensure_validity_writable(vectorRef);
             this.validity = duckdb_vector_get_validity(vectorRef, maxElems);
             if (null == this.validity) {
-                throw createSQLException("cannot reset data chunk vector validity", ErrorCode.APPENDER_CHUNK, null);
+                throw createSQLException("cannot reset data chunk vector validity", ErrorCode.APPENDER_CHUNK);
             }
 
             for (Column col : children) {

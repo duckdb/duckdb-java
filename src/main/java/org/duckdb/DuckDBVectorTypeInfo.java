@@ -26,7 +26,7 @@ final class DuckDBVectorTypeInfo {
     static DuckDBVectorTypeInfo fromVector(ByteBuffer vectorRef) throws SQLException {
         ByteBuffer logicalType = duckdb_vector_get_column_type(vectorRef);
         if (logicalType == null) {
-            throw createSQLException("Cannot read vector type", ErrorCode.VECTOR_TYPE_READ, null);
+            throw createSQLException("Cannot read vector type", ErrorCode.VECTOR_TYPE_READ);
         }
 
         try {
@@ -84,7 +84,7 @@ final class DuckDBVectorTypeInfo {
             }
             default:
                 throw createSQLException("Unsupported scalar function vector type: " + capiType,
-                                         ErrorCode.VECTOR_TYPE_UNSUPPORTED, null);
+                                         ErrorCode.VECTOR_TYPE_UNSUPPORTED);
             }
         } finally {
             duckdb_destroy_logical_type(logicalType);

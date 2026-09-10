@@ -17,7 +17,7 @@ final class JdbcUtils {
     static <T> T unwrap(Object obj, Class<T> iface) throws SQLException {
         if (!iface.isInstance(obj)) {
             throw createSQLException(obj.getClass().getName() + " not unwrappable from " + iface.getName(),
-                                     ErrorCode.UNWRAP_FAILED, null);
+                                     ErrorCode.UNWRAP_FAILED);
         }
         return (T) obj;
     }
@@ -60,15 +60,15 @@ final class JdbcUtils {
         if (valLower.equals("false") || valLower.equals("0") || valLower.equals("no") || valLower.equals("off")) {
             return false;
         }
-        throw createSQLException("Invalid boolean option value: " + val, ErrorCode.BOOLEAN_OPTION_INVALID, null);
+        throw createSQLException("Invalid boolean option value: " + val, ErrorCode.BOOLEAN_OPTION_INVALID);
     }
 
     static String dbNameFromUrl(String url) throws SQLException {
         if (null == url) {
-            throw createSQLException("Invalid null URL specified", ErrorCode.URL_NULL, null);
+            throw createSQLException("Invalid null URL specified", ErrorCode.URL_NULL);
         }
         if (!url.startsWith(DUCKDB_URL_PREFIX)) {
-            throw createSQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'", ErrorCode.URL_PREFIX, null);
+            throw createSQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'", ErrorCode.URL_PREFIX);
         }
         final String shortUrl;
         if (url.contains(";")) {
@@ -125,6 +125,10 @@ final class JdbcUtils {
      * {@link ErrorCode#NATIVE_UNDECODED}. A {@code null} {@code cause} is simply ignored. The message
      * string is used verbatim so that existing callers that match on {@code getMessage()} keep working.
      */
+    static SQLException createSQLException(String message, ErrorCode code) {
+        return createSQLException(message, code, null);
+    }
+
     static SQLException createSQLException(String message, ErrorCode code, Throwable cause) {
         String m = message == null ? "" : message;
         if (code == null) {

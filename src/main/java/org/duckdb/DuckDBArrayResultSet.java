@@ -47,11 +47,11 @@ public class DuckDBArrayResultSet implements ResultSet {
         if (columnIndex == 1) {
             throw createSQLException(
                 "The first element of Array-backed ResultSet can only be retrieved with numeric getters",
-                ErrorCode.ARRAY_RS_NUMERIC_GETTER, null);
+                ErrorCode.ARRAY_RS_NUMERIC_GETTER);
         }
         if (columnIndex != 2) {
             throw createSQLException("Array-backed ResultSet can only have two columns",
-                                     ErrorCode.ARRAY_RS_COLUMN_COUNT, null);
+                                     ErrorCode.ARRAY_RS_COLUMN_COUNT);
         }
         T value = getter.getValue(offset + currentValueIndex);
 
@@ -287,8 +287,7 @@ public class DuckDBArrayResultSet implements ResultSet {
         if ("VALUE".equalsIgnoreCase(columnLabel)) {
             return 2;
         }
-        throw createSQLException("Could not find column with label " + columnLabel, ErrorCode.ARRAY_RS_COLUMN_LABEL,
-                                 null);
+        throw createSQLException("Could not find column with label " + columnLabel, ErrorCode.ARRAY_RS_COLUMN_LABEL);
     }
 
     @Override
