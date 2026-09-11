@@ -84,8 +84,8 @@ public class TestAppenderComposite {
     public static void test_appender_struct_nested() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            stmt.execute(
-                "CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 STRUCT(ns1 INTEGER, ns2 VARCHAR)), col3 VARCHAR)");
+            stmt.execute("CREATE TABLE tab1 (col1 INTEGER, col2 STRUCT(s1 INTEGER, s2 STRUCT(ns1 INTEGER, ns2 "
+                         + "VARCHAR)), col3 VARCHAR)");
 
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow()

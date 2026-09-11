@@ -102,13 +102,12 @@ public class TestResults {
                 + " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
                 + " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
                 + " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, uhin UHUGEINT, blo BLOB, uid UUID)");
-            stmt.execute(
-                "INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
-                +
-                " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
-                + " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, "
-                + " 170141183460469231731687303715884105728, 'yeah'::BLOB, "
-                + "'5b7bce70-4238-43d1-81d2-6e62f23bf9bd'::UUID)");
+            stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
+                         + " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, "
+                         + "111112222233333.44444, "
+                         + " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, "
+                         + " 170141183460469231731687303715884105728, 'yeah'::BLOB, "
+                         + "'5b7bce70-4238-43d1-81d2-6e62f23bf9bd'::UUID)");
 
             try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM b"); ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -168,9 +167,9 @@ public class TestResults {
                 stmt.execute("INSERT INTO a VALUES (" + i + ")");
             }
 
-            try (
-                ResultSet rs = stmt.executeQuery(
-                    "SELECT CAST(i AS SMALLINT), CAST(i AS INTEGER), CAST(i AS BIGINT), CAST(i AS FLOAT), CAST(i AS DOUBLE), CAST(i as STRING), NULL FROM a")) {
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT CAST(i AS SMALLINT), CAST(i AS INTEGER), CAST(i AS BIGINT), CAST(i AS "
+                                       + "FLOAT), CAST(i AS DOUBLE), CAST(i as STRING), NULL FROM a")) {
                 int count = 0;
                 while (rs.next()) {
                     for (int col = 1; col <= 6; col++) {

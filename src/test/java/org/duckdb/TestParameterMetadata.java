@@ -54,9 +54,9 @@ public class TestParameterMetadata {
                              + "dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), "
                              + "dec128 DECIMAL(38,10), int INTEGER, uint UINTEGER)");
             }
-            try (
-                PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO test_meta_decimal (id, dec16, dec32, dec64, dec128, int, uint) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+            try (PreparedStatement ps =
+                     conn.prepareStatement("INSERT INTO test_meta_decimal (id, dec16, dec32, dec64, dec128, int, "
+                                           + "uint) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
                 ParameterMetaData meta = ps.getParameterMetaData();
                 assertEquals(3, meta.getPrecision(1));
                 assertEquals(0, meta.getScale(1));
