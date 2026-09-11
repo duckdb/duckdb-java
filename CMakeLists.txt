@@ -137,7 +137,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/json/json_enums.cpp
   src/duckdb/extension/json/json_extension.cpp
   src/duckdb/extension/json/json_functions.cpp
-  src/duckdb/extension/json/json_multi_file_info.cpp
   src/duckdb/extension/json/json_reader.cpp
   src/duckdb/extension/json/json_scan.cpp
   src/duckdb/extension/json/json_serializer.cpp
@@ -225,7 +224,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_load.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
   src/duckdb/src/main/extension/extension_repository_manager.cpp
-  src/duckdb/src/main/http/http_util.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
   src/duckdb/third_party/brotli/common/constants.cpp
   src/duckdb/third_party/brotli/common/context.cpp
@@ -445,6 +443,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main_buffered_data.cpp
   src/duckdb/ub_src_main_capi_v2.cpp
   src/duckdb/ub_src_main_chunk_scan_state.cpp
+  src/duckdb/ub_src_main_http.cpp
   src/duckdb/ub_src_main_profiler.cpp
   src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
