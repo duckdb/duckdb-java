@@ -46,5 +46,5 @@
 
 #include "extension/json/json_functions/read_json.cpp"
 
-#include "extension/json/json_functions/read_json_objects.cpp"
+#include "extension/json/json_functions/read_single_json_file.cpp"
 
