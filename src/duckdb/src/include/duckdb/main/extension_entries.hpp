@@ -308,6 +308,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_aws_session_id", "aws", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"duckdb_encodings", "encodings", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_compiled_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -743,6 +744,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_ndjson_objects", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_parquet", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_postgres_binary", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"read_single_json_file", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_xlsx", "excel", CatalogType::TABLE_FUNCTION_ENTRY},
     {"reduce", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"reduce_sql_statement", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -765,6 +767,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"right", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"right_grapheme", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"round", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"round_even", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"roundbankers", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"row_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"rpad", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"rtree_index_dump", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1227,6 +1231,8 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>BIGINT"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMP]>TIMESTAMPTZ"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMPTZ]>TIMESTAMP"},
+    {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMPTZ_NS]>TIMESTAMP_NS"},
+    {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMESTAMP_NS]>TIMESTAMPTZ_NS"},
     {"timezone", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[VARCHAR,TIMETZ]>TIMETZ"},
     {"timezone_hour", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[DATE]>BIGINT"},
     {"timezone_hour", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[INTERVAL]>BIGINT"},
@@ -1301,8 +1307,10 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_global_s3_configuration", "httpfs"},
     {"enable_server_cert_verification", "httpfs"},
+    {"extra_http_headers", "httpfs"},
     {"force_download", "httpfs"},
     {"force_download_threshold", "httpfs"},
+    {"gcs_user_project", "httpfs"},
     {"geometry_always_xy", "spatial"},
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
@@ -1349,6 +1357,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
     {"pg_idle_in_transaction_timeout_millis", "postgres_scanner"},
     {"pg_null_byte_replacement", "postgres_scanner"},
+    {"pg_numeric_as_varchar", "postgres_scanner"},
+    {"pg_numeric_nan_as_null", "postgres_scanner"},
     {"pg_oauth_token", "postgres_scanner"},
     {"pg_order_pushdown", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
@@ -1398,8 +1408,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_session_token", "httpfs"},
     {"s3_uploader_max_filesize", "httpfs"},
     {"s3_uploader_max_parts_per_file", "httpfs"},
-    {"s3_uploader_thread_limit", "httpfs"},
     {"s3_url_compatibility_mode", "httpfs"},
+    {"s3_url_scheme_aliases", "httpfs"},
     {"s3_url_style", "httpfs"},
     {"s3_use_ssl", "httpfs"},
     {"s3_version_id_pinning", "httpfs"},
@@ -1520,6 +1530,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"bearer/config", "httpfs"},
     {"mysql/config", "mysql_scanner"},
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DuckLakeMetadata", "ducklake"},
+    {"Iceberg", "iceberg"},
+}; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete", "avro",       "aws",           "azure",   "core_functions",   "delta", "ducklake",
