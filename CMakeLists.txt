@@ -95,6 +95,7 @@ set(DUCKDB_DEFINITIONS
   -DDUCKDB_EXTENSION_JSON_LINKED)
 
 set(DUCKDB_SRC_FILES 
+  src/duckdb/extension/core_functions/aggregate/variant/variant_group_object.cpp
   src/duckdb/extension/core_functions/core_functions_extension.cpp
   src/duckdb/extension/core_functions/function_list.cpp
   src/duckdb/extension/core_functions/lambda_functions.cpp
