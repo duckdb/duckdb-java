@@ -284,11 +284,13 @@ jobs:
         working-directory: sparktest
         run: |
           python ../scripts/retry.py --timeout 1m -- \
-            wget -nv https://dl.min.io/server/minio/release/linux-amd64/minio
+            wget -nv https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z
+          mv minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z minio
           chmod +x minio
           ./minio --version
           python ../scripts/retry.py --timeout 1m -- \
-            wget -nv https://dl.min.io/client/mc/release/linux-amd64/mc
+            wget -nv https://github.com/minio/mc/releases/download/RELEASE.2025-08-13T08-35-41Z/mc.linux-amd64.RELEASE.2025-08-13T08-35-41Z
+          mv mc.linux-amd64.RELEASE.2025-08-13T08-35-41Z mc
           chmod +x mc
           ./mc --version
           java -version
