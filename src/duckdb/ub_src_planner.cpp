@@ -4,6 +4,8 @@
 
 #include "src/planner/binding_alias.cpp"
 
+#include "src/planner/bound_expression_sql_exporter.cpp"
+
 #include "src/planner/bound_parameter_map.cpp"
 
 #include "src/planner/bound_result_modifier.cpp"
@@ -31,6 +33,10 @@
 #include "src/planner/logical_operator_repeatability.cpp"
 
 #include "src/planner/logical_operator_visitor.cpp"
+
+#include "src/planner/logical_plan_verification_result.cpp"
+
+#include "src/planner/logical_plan_verifier.cpp"
 
 #include "src/planner/planner.cpp"
 
