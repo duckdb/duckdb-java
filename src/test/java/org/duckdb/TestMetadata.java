@@ -103,9 +103,15 @@ public class TestMetadata {
                 assertFalse(functions.next());
             }
 
-            // two items for two overloads?
+            // multiple items for multiple overloads?
             try (ResultSet functions =
                      conn.getMetaData().getFunctions(null, DuckDBConnection.DEFAULT_SCHEMA, "read_csv_auto")) {
+                assertTrue(functions.next());
+                assertNull(functions.getObject("FUNCTION_CAT"));
+                assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
+                assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
+                assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
+
                 assertTrue(functions.next());
                 assertNull(functions.getObject("FUNCTION_CAT"));
                 assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));

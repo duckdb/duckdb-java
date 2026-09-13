@@ -940,7 +940,7 @@ public class TestDuckDBJDBC {
 
     public static void test_valid_but_local_config_throws_exception() throws Exception {
         Properties info = new Properties();
-        info.put("custom_profiling_settings", "{}");
+        info.put("profiling_mode", "{}");
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
