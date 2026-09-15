@@ -774,7 +774,7 @@ void ManagedAsyncWriteQueue::ApplyBackpressure() {
 		idx_t current_pending_bytes;
 		{
 			lock_guard<mutex> guard(lock);
-			// external bytes a stream wrapper has not adopted yet are still pending
+			D_ASSERT(external_pending_bytes == 0);
 			current_pending_bytes = TotalPendingBytes();
 		}
 		if (current_pending_bytes <= BackpressureBudget()) {
