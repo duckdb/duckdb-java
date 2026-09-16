@@ -15,19 +15,14 @@
 
 namespace duckdb {
 
-enum class ConstraintTiming : uint8_t { DEFAULT, IMMEDIATE, DEFERRED };
-
 class UniqueConstraint : public Constraint {
 public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
-	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key);
+	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key);
 
 public:
 	DUCKDB_API string ToString() const override;
@@ -37,8 +32,6 @@ public:
 
 	//! Returns true, if the constraint is a PRIMARY KEY constraint.
 	bool IsPrimaryKey() const;
-	//! Returns true if the constraint was declared with the DEFERRED modifier.
-	bool IsDeferred() const;
 	//! Returns the index constraint type used to enforce this constraint.
 	IndexConstraintType GetIndexConstraintType() const;
 	//! Returns true, if the constraint is defined on a single column.
@@ -71,8 +64,6 @@ public:
 	vector<Identifier> columns;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
-	//! The declared constraint timing, or DEFAULT when no modifier was specified.
-	ConstraintTiming timing;
 };
 
 } // namespace duckdb

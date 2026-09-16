@@ -3096,48 +3096,14 @@ PEGTransformerFactory::TransformNotNullColumnConstraintInternal(PEGTransformer &
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUniqueConstraintInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	optional<ConstraintTiming> constraint_timing {};
-	auto &constraint_timing_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (constraint_timing_opt.HasResult()) {
-		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
-		constraint_timing = constraint_timing_value;
-	}
-	auto result = TransformUniqueConstraint(transformer, constraint_timing);
+	auto result = TransformUniqueConstraint(transformer);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformPrimaryKeyConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	optional<ConstraintTiming> constraint_timing {};
-	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
-	if (constraint_timing_opt.HasResult()) {
-		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
-		constraint_timing = constraint_timing_value;
-	}
-	auto result = TransformPrimaryKeyConstraint(transformer, constraint_timing);
+	auto result = TransformPrimaryKeyConstraint(transformer);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformConstraintTimingInternal(PEGTransformer &transformer,
-                                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<ConstraintTiming>(choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformImmediateConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto result = TransformImmediateConstraint(transformer);
-	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeferredConstraintInternal(PEGTransformer &transformer,
-                                                                                            ParseResult &parse_result) {
-	auto result = TransformDeferredConstraint(transformer);
-	return make_uniq<TypedTransformResult<ConstraintTiming>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDefaultValueInternal(PEGTransformer &transformer,
@@ -3304,13 +3270,7 @@ PEGTransformerFactory::TransformTopPrimaryKeyConstraintInternal(PEGTransformer &
                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_id_list = transformer.Transform<vector<string>>(list_pr.GetChild(2));
-	optional<ConstraintTiming> constraint_timing {};
-	auto &constraint_timing_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
-	if (constraint_timing_opt.HasResult()) {
-		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
-		constraint_timing = constraint_timing_value;
-	}
-	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list, constraint_timing);
+	auto result = TransformTopPrimaryKeyConstraint(transformer, column_id_list);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
@@ -3318,13 +3278,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformTopUniqueConstraintInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_id_list = transformer.Transform<vector<string>>(list_pr.GetChild(1));
-	optional<ConstraintTiming> constraint_timing {};
-	auto &constraint_timing_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
-	if (constraint_timing_opt.HasResult()) {
-		auto constraint_timing_value = transformer.Transform<ConstraintTiming>(constraint_timing_opt.GetResult());
-		constraint_timing = constraint_timing_value;
-	}
-	auto result = TransformTopUniqueConstraint(transformer, column_id_list, constraint_timing);
+	auto result = TransformTopUniqueConstraint(transformer, column_id_list);
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
@@ -7493,15 +7447,15 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformCreateExternalResourceStmtInternal(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
 	optional<Identifier> attach_alias {};
-	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &attach_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (attach_alias_opt.HasResult()) {
 		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
 		attach_alias = attach_alias_value;
 	}
 	optional<vector<GenericCopyOption>> external_resource_creation_options {};
-	auto &external_resource_creation_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	auto &external_resource_creation_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (external_resource_creation_options_opt.HasResult()) {
 		auto external_resource_creation_options_value =
 		    transformer.Transform<vector<GenericCopyOption>>(external_resource_creation_options_opt.GetResult());
@@ -7516,14 +7470,14 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformRegisterExternalResourceStmtInternal(PEGTransformer &transformer,
                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
 	optional<Identifier> attach_alias {};
-	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &attach_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (attach_alias_opt.HasResult()) {
 		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
 		attach_alias = attach_alias_value;
 	}
-	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(6));
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(5));
 	auto result =
 	    TransformRegisterExternalResourceStmt(transformer, string_literal, attach_alias, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
@@ -7533,7 +7487,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformDestroyExternalResourceStmtInternal(PEGTransformer &transformer,
                                                                     ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(3));
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(2));
 	auto result = TransformDestroyExternalResourceStmt(transformer, col_id);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -7565,6 +7519,72 @@ PEGTransformerFactory::TransformExternalResourceCreationOptionsInternal(PEGTrans
 	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.GetChild(0));
 	auto result = generic_copy_option_list;
 	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformAttachToExternalResourceInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto external_resource_source = transformer.Transform<unique_ptr<ExternalResourceOptions>>(list_pr.GetChild(2));
+	auto attach_alias = transformer.Transform<Identifier>(list_pr.GetChild(3));
+	optional<vector<GenericCopyOption>> attach_options {};
+	auto &attach_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		auto attach_options_value = transformer.Transform<vector<GenericCopyOption>>(attach_options_opt.GetResult());
+		attach_options = attach_options_value;
+	}
+	auto result = TransformAttachToExternalResource(transformer, std::move(external_resource_source), attach_alias,
+	                                                attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformConnectToExternalResourceInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto external_resource_source = transformer.Transform<unique_ptr<ExternalResourceOptions>>(list_pr.GetChild(2));
+	optional<vector<GenericCopyOption>> attach_options {};
+	auto &attach_options_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		auto attach_options_value = transformer.Transform<vector<GenericCopyOption>>(attach_options_opt.GetResult());
+		attach_options = attach_options_value;
+	}
+	auto result = TransformConnectToExternalResource(transformer, std::move(external_resource_source), attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExternalResourceSourceInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ExternalResourceOptions>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExternalResourceCreateClauseInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	optional<vector<GenericCopyOption>> external_resource_creation_options {};
+	auto &external_resource_creation_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (external_resource_creation_options_opt.HasResult()) {
+		auto external_resource_creation_options_value =
+		    transformer.Transform<vector<GenericCopyOption>>(external_resource_creation_options_opt.GetResult());
+		external_resource_creation_options = external_resource_creation_options_value;
+	}
+	auto result =
+	    TransformExternalResourceCreateClause(transformer, string_literal, external_resource_creation_options);
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExternalResourceReferenceClauseInternal(PEGTransformer &transformer,
+                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	auto result = TransformExternalResourceReferenceClause(transformer, col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertStatementInternal(PEGTransformer &transformer,
@@ -11357,9 +11377,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NotNullColumnConstraint", &PEGTransformerFactory::TransformNotNullColumnConstraintInternal},
 	    {"UniqueConstraint", &PEGTransformerFactory::TransformUniqueConstraintInternal},
 	    {"PrimaryKeyConstraint", &PEGTransformerFactory::TransformPrimaryKeyConstraintInternal},
-	    {"ConstraintTiming", &PEGTransformerFactory::TransformConstraintTimingInternal},
-	    {"ImmediateConstraint", &PEGTransformerFactory::TransformImmediateConstraintInternal},
-	    {"DeferredConstraint", &PEGTransformerFactory::TransformDeferredConstraintInternal},
 	    {"DefaultValue", &PEGTransformerFactory::TransformDefaultValueInternal},
 	    {"CheckConstraint", &PEGTransformerFactory::TransformCheckConstraintInternal},
 	    {"ForeignKeyConstraint", &PEGTransformerFactory::TransformForeignKeyConstraintInternal},
@@ -11770,6 +11787,11 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ShowExternalResourcesStmt", &PEGTransformerFactory::TransformShowExternalResourcesStmtInternal},
 	    {"ShowAllModifier", &PEGTransformerFactory::TransformShowAllModifierInternal},
 	    {"ExternalResourceCreationOptions", &PEGTransformerFactory::TransformExternalResourceCreationOptionsInternal},
+	    {"AttachToExternalResource", &PEGTransformerFactory::TransformAttachToExternalResourceInternal},
+	    {"ConnectToExternalResource", &PEGTransformerFactory::TransformConnectToExternalResourceInternal},
+	    {"ExternalResourceSource", &PEGTransformerFactory::TransformExternalResourceSourceInternal},
+	    {"ExternalResourceCreateClause", &PEGTransformerFactory::TransformExternalResourceCreateClauseInternal},
+	    {"ExternalResourceReferenceClause", &PEGTransformerFactory::TransformExternalResourceReferenceClauseInternal},
 	    {"InsertStatement", &PEGTransformerFactory::TransformInsertStatementInternal},
 	    {"OrAction", &PEGTransformerFactory::TransformOrActionInternal},
 	    {"InsertOrReplace", &PEGTransformerFactory::TransformInsertOrReplaceInternal},

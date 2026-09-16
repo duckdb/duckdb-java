@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -119,8 +118,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	logical_index_set_t not_null_columns;
-	logical_index_map_t<vector<ConstraintTiming>> unique_columns;
-	logical_index_map_t<vector<ConstraintTiming>> pk_columns;
+	logical_index_set_t unique_columns;
+	logical_index_set_t pk_columns;
 	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
@@ -132,9 +131,9 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			if (pk.HasIndex()) {
 				// no columns specified: single column constraint
 				if (pk.IsPrimaryKey()) {
-					pk_columns[pk.GetIndex()].push_back(pk.timing);
+					pk_columns.insert(pk.GetIndex());
 				} else {
-					unique_columns[pk.GetIndex()].push_back(pk.timing);
+					unique_columns.insert(pk.GetIndex());
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
@@ -172,21 +171,11 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		}
 		if (is_single_key_pk) {
 			// single column pk: insert constraint here
-			for (auto timing : pk_columns.at(column.Logical())) {
-				ss << " PRIMARY KEY";
-				if (timing != ConstraintTiming::DEFAULT) {
-					ss << " " << EnumUtil::ToString(timing);
-				}
-			}
+			ss << " PRIMARY KEY";
 		}
 		if (is_unique) {
 			// single column unique: insert constraint here
-			for (auto timing : unique_columns.at(column.Logical())) {
-				ss << " UNIQUE";
-				if (timing != ConstraintTiming::DEFAULT) {
-					ss << " " << EnumUtil::ToString(timing);
-				}
-			}
+			ss << " UNIQUE";
 		}
 	}
 	// print any extra constraints that still need to be printed
