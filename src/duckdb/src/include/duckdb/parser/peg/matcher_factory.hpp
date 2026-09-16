@@ -8,10 +8,8 @@
 namespace duckdb {
 struct CompiledGrammar;
 struct PEGExpression;
-class MatcherFactory;
-struct CompiledGrammarRule;
 
-using compiled_rules_map_t = case_insensitive_map_t<unique_ptr<CompiledGrammarRule>>;
+class MatcherFactory;
 
 //! Class for building matchers
 class MatcherFactory {
@@ -30,7 +28,7 @@ private:
 	};
 
 public:
-	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, const compiled_rules_map_t &rules,
+	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p,
 	               terminal_rule_overrides_t terminal_rule_overrides_p);
 	virtual ~MatcherFactory() = default;
 
@@ -39,7 +37,7 @@ public:
 	//! Look up a matcher for a rule that was built by CreateRootMatcher. Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
 
-protected:
+private:
 	// Base primitives
 	KeywordMatcher &Keyword(const string &keyword) const;
 	ListMatcher &List() const;
@@ -54,6 +52,8 @@ protected:
 	virtual unique_ptr<OptionalMatcher> CreateOptional(Matcher &matcher) const;
 	virtual unique_ptr<RepeatMatcher> CreateRepeat(Matcher &matcher) const;
 
+	void SetRuleOverrides();
+
 	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
 	void AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p);
 	void AddPackratMemoizedRule(const char *name);
@@ -64,12 +64,9 @@ protected:
 	                       vector<reference<Matcher>> &parameters);
 
 private:
-	optional_ptr<const CompiledGrammarRule> GetRule(const string &name) const;
-
-private:
 	MatcherAllocator &allocator;
 	const ParsedGrammar &grammar;
-	const compiled_rules_map_t &rules;
+	CompiledGrammar &compiled;
 	//! Keeps terminal rule names alive while the matcher graph is constructed.
 	terminal_rule_overrides_t terminal_rule_overrides;
 	string_map_t<reference<Matcher>> matchers;
