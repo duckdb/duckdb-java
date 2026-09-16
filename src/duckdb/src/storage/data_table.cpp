@@ -743,9 +743,9 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		if (!global_conflicts && !local_conflicts) {
 			conflict = 0;
 		} else if (!global_conflicts && local_conflicts) {
-			conflict = local_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
 		} else if (global_conflicts && !local_conflicts) {
-			conflict = global_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
 		} else {
 			auto &global_validity = global_conflict_manager.GetFirstValidity();
 			auto &local_validity = local_conflict_manager.GetFirstValidity();

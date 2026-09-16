@@ -13,7 +13,6 @@
 #include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
-#include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/statement_iterator.hpp"
@@ -340,18 +339,24 @@ shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> s
 }
 
 void Connection::BeginTransaction() {
-	TransactionInfo info(TransactionType::BEGIN_TRANSACTION);
-	context->RunTransactionStatement(info);
+	auto result = Query("BEGIN TRANSACTION");
+	if (result->HasError()) {
+		result->ThrowError();
+	}
 }
 
 void Connection::Commit() {
-	TransactionInfo info(TransactionType::COMMIT);
-	context->RunTransactionStatement(info);
+	auto result = Query("COMMIT");
+	if (result->HasError()) {
+		result->ThrowError();
+	}
 }
 
 void Connection::Rollback() {
-	TransactionInfo info(TransactionType::ROLLBACK);
-	context->RunTransactionStatement(info);
+	auto result = Query("ROLLBACK");
+	if (result->HasError()) {
+		result->ThrowError();
+	}
 }
 
 void Connection::SetAutoCommit(bool auto_commit) {
