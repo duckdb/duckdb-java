@@ -1,7 +1,6 @@
 #include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
-#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -806,15 +805,11 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
-	const bool track = track_io && context.GetClientContext();
-	const auto start = track ? TimePoint::Tick() : TimePoint();
 	// A sequential read can return fewer bytes than requested (e.g. at EOF), so track the bytes
 	// actually read rather than the requested amount.
 	auto bytes_read = file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
-	if (track) {
-		const auto elapsed_us = NumericCast<idx_t>(start.ElapsedMicros());
-		QueryProfiler::Get(*context.GetClientContext())
-		    .TrackBytesRead(UnsafeNumericCast<idx_t>(bytes_read), elapsed_us);
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(UnsafeNumericCast<idx_t>(bytes_read));
 	}
 
 	return bytes_read;
@@ -829,13 +824,9 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
-	const bool track = track_io && context.GetClientContext();
-	const auto start = track ? TimePoint::Tick() : TimePoint();
 	auto bytes_written = file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
-	if (bytes_written > 0 && track) {
-		const auto elapsed_us = NumericCast<idx_t>(start.ElapsedMicros());
-		QueryProfiler::Get(*context.GetClientContext())
-		    .TrackBytesWritten(UnsafeNumericCast<idx_t>(bytes_written), elapsed_us);
+	if (bytes_written > 0 && track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(UnsafeNumericCast<idx_t>(bytes_written));
 	}
 
 	return bytes_written;
@@ -846,23 +837,19 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	const bool track = track_io && context.GetClientContext();
-	const auto start = track ? TimePoint::Tick() : TimePoint();
-	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
-	if (track) {
-		const auto elapsed_us = NumericCast<idx_t>(start.ElapsedMicros());
-		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes, elapsed_us);
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
+
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	const bool track = track_io && context.GetClientContext();
-	const auto start = track ? TimePoint::Tick() : TimePoint();
-	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
-	if (track) {
-		const auto elapsed_us = NumericCast<idx_t>(start.ElapsedMicros());
-		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes, elapsed_us);
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
+
+	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Seek(idx_t location) {
