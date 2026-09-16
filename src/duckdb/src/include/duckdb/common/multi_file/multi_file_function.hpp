@@ -452,14 +452,9 @@ public:
 				reader_data.file_state = MultiFileFileState::OPENING;
 				{
 					MultiFileReaderData *reader_ptr = &reader_data;
-					read_ahead.ScheduleFileOpen(
-					    [&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
-						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
-					    },
-					    [&gstate]() {
-						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
-						    gstate.error_opening_file = true;
-					    });
+					read_ahead.ScheduleFileOpen([&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
+						OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					});
 				}
 				progress_guaranteed = true;
 				break;
@@ -646,10 +641,6 @@ public:
 
 		while (true) {
 			if (gstate.error_opening_file) {
-				// the flag only says a file failed, the error itself lives on the read-ahead - report before ending
-				if (gstate.read_ahead) {
-					gstate.read_ahead->ThrowIfError();
-				}
 				return MultiFileClaimResult::EXHAUSTED;
 			}
 
