@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/subquery/pair_dependent_full_outer_join.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -93,7 +92,7 @@ static void CollectPairDependentBindings(Expression &expression, const unordered
 
 static unique_ptr<LogicalOperator> AddRowIdentity(Binder &binder, unique_ptr<LogicalOperator> source) {
 	auto window = make_uniq<LogicalWindow>(binder.GenerateTableIndex());
-	auto row_number = GetBuiltinWindowFunction(binder.context, RowNumberFun::Name, {})->Bind(binder.context);
+	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
 	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	row_number->SetAlias("__duckdb_pair_rowid");

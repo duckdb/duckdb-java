@@ -546,11 +546,10 @@ struct CurrentDialectSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static bool OnLocalSet(ClientContext &context, const Value &input);
-	static bool OnLocalReset(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "duckdb";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct CurrentTransactionInvalidationPolicySetting {
@@ -781,6 +780,19 @@ struct ForceVariantShredding {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugForceWalFsyncFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_wal_fsync_failure";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugLocalFileSystemDelayMsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_local_file_system_delay_ms";
@@ -955,6 +967,19 @@ struct DebugVerifyVectorSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugWalFsyncSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_wal_fsync_sleep_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugWindowModeSetting {
@@ -1360,19 +1385,6 @@ struct EnabledLogTypes {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
-};
-
-struct ErrorOnDivisionByZeroSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "error_on_division_by_zero";
-	static constexpr const char *Description = "Throw an error instead of returning NULL when dividing by zero.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ErrorsAsJSONSetting {
@@ -1938,6 +1950,19 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct NullOnDivisionByZeroSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "null_on_division_by_zero";
+	static constexpr const char *Description = "Return NULL instead of throwing an error when dividing by zero.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct OldImplicitCastingSetting {

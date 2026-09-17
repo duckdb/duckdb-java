@@ -315,13 +315,6 @@ public:
 		max_pending_tasks = MaxValue<idx_t>(MIN_PENDING_TASKS, (async_threads + regular_threads) * 4);
 	}
 
-	~CopyFileLifecycleExecutor() {
-		// A queued task's Cancel reaches back into this object (GetError, FinishTask). Join here, while every
-		// member is still alive, rather than leaving it to ~TaskExecutor, which runs after error_lock and error
-		// have already been destroyed. CancelAndDrain does not throw.
-		executor.CancelAndDrain();
-	}
-
 public:
 	template <class FUNC>
 	void Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode, FUNC &&task);
@@ -330,8 +323,6 @@ public:
 	void WorkOnTaskOrYield();
 	void FinishTask();
 	void PushError(const std::exception_ptr &error);
-	//! The first error pushed by a task, if any
-	std::exception_ptr GetError();
 
 private:
 	bool WorkOnTask(bool throw_error = true);
@@ -350,7 +341,8 @@ private:
 
 class CopyFileLifecycleTaskFinishGuard {
 public:
-	explicit CopyFileLifecycleTaskFinishGuard(CopyFileLifecycleExecutor &lifecycle_p) : lifecycle(lifecycle_p) {
+	CopyFileLifecycleTaskFinishGuard(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p)
+	    : executor(executor_p), lifecycle(lifecycle_p) {
 	}
 
 	~CopyFileLifecycleTaskFinishGuard() {
@@ -360,39 +352,28 @@ public:
 	void Finish() {
 		if (!finished) {
 			lifecycle.FinishTask();
+			executor.FinishTask();
 			finished = true;
 		}
 	}
 
 private:
+	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	bool finished = false;
 };
 
 template <class FUNC>
-class CopyFileLifecycleTask : public BaseExecutorTask {
+class CopyFileLifecycleTask : public Task {
 public:
 	CopyFileLifecycleTask(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p,
 	                      shared_ptr<CopyFileLifecycleJob> job_p, FUNC task_p)
-	    : BaseExecutorTask(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
-	}
-
-	~CopyFileLifecycleTask() override {
-		// Neither ExecuteTask nor Cancel ran, because the executor could not take the task at all. The job
-		// waiter and pending_tasks still have to be settled, or a waiter spins with nothing left to run.
-		if (settled) {
-			return;
-		}
-		try {
-			Cancel();
-		} catch (...) { // NOLINT
-		}
+	    : executor(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
 	}
 
 public:
-	void ExecuteTask() override {
-		settled = true;
-		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
+	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		CopyFileLifecycleTaskFinishGuard finish_guard(executor, lifecycle);
 		try {
 			task();
 			if (!job->IsFinished()) {
@@ -403,20 +384,7 @@ public:
 			job->CompleteException(error);
 			lifecycle.PushError(error);
 		}
-	}
-
-	void Cancel() override {
-		// the task is retired without running - settle the job, WaitForJob spins until it is finished
-		settled = true;
-		CopyFileLifecycleTaskFinishGuard finish_guard(lifecycle);
-		if (job->IsFinished()) {
-			return;
-		}
-		auto error = lifecycle.GetError();
-		if (!error) {
-			error = std::make_exception_ptr(InternalException("COPY file task was cancelled before it could run"));
-		}
-		job->CompleteException(error);
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 	string TaskType() const override {
@@ -424,11 +392,10 @@ public:
 	}
 
 private:
+	TaskExecutor &executor;
 	CopyFileLifecycleExecutor &lifecycle;
 	shared_ptr<CopyFileLifecycleJob> job;
 	FUNC task;
-	//! Whether ExecuteTask or Cancel ran, so the destructor knows the job and the count are settled
-	bool settled = false;
 };
 
 template <class FUNC>
@@ -436,11 +403,14 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, C
                                          FUNC &&task) {
 	WaitForTaskSlot(mode);
 	auto job_ref = job;
-	using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
-	auto lifecycle_task = make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task));
-	// past this point the task settles pending_tasks itself, on the execute path and on the cancel path
 	++pending_tasks;
-	executor.ScheduleTask(std::move(lifecycle_task));
+	try {
+		using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
+		executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
+	} catch (...) {
+		--pending_tasks;
+		throw;
+	}
 	if (async_threads == 0) {
 		WaitForJob(*job_ref, mode);
 	}
@@ -824,7 +794,7 @@ public:
 
 	const vector<Value> &Values() const {
 		D_ASSERT(values);
-		return values.value();
+		return *values;
 	}
 
 	idx_t AddCollectionSlot(PartitionedCopyCollectionSchema schema, idx_t row_count) {
@@ -1347,6 +1317,7 @@ public:
 private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
 	void CreateNextState();
+	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
 	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
 	    DUCKDB_EXCLUDES(copy_gstate.lock);
@@ -1387,6 +1358,8 @@ public:
 	atomic<bool> flushing;
 	//! How many threads are active
 	atomic<idx_t> locals;
+	//! How many threads did a combine
+	atomic<idx_t> combined;
 	//! Whether Finalize has been called
 	atomic<bool> finalized;
 
@@ -1567,11 +1540,6 @@ void CopyFileLifecycleExecutor::PushError(const std::exception_ptr &error_p) {
 	if (!error) {
 		error = error_p;
 	}
-}
-
-std::exception_ptr CopyFileLifecycleExecutor::GetError() {
-	lock_guard<mutex> guard(error_lock);
-	return error;
 }
 
 bool CopyFileLifecycleExecutor::WorkOnTask(bool throw_error) {
@@ -2548,7 +2516,7 @@ vector<vector<Value>> PartitionedCopyState::FinishTask(const PartitionedCopyTask
 PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p,
                                  CopyToFileGlobalState &copy_gstate_p)
     : op(op_p), context(context_p), copy_gstate(copy_gstate_p), partition_writes(op_p, context_p),
-      sort_strategy(ConstructSortStrategy()), flushing(false), locals(0), finalized(false) {
+      sort_strategy(ConstructSortStrategy()), flushing(false), locals(0), combined(0), finalized(false) {
 	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
 	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
 		raw_columns.push_back(col_idx);
@@ -2565,8 +2533,10 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 		partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col], col));
 	}
 	vector<unique_ptr<BaseStatistics>> partition_stats;
+	OperatorPartitionInfo unpartitioned_info;
 
 	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats,
+	                             unpartitioned_info,
 	                             op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
 }
 
@@ -2575,6 +2545,11 @@ void PartitionedCopy::CreateNextState() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(!sinking_state);
 	sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
+}
+
+bool PartitionedCopy::ShouldStopFlushing() const {
+	return !finalized.load(std::memory_order_relaxed) &&
+	       locals.load(std::memory_order_relaxed) == combined.load(std::memory_order_relaxed);
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
@@ -2599,14 +2574,8 @@ void PartitionedCopy::InitializeFlush() {
 
 void PartitionedCopy::FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) {
 	D_ASSERT(state.combined == state.locals);
-	// a state is finalized exactly once, by whoever observes its last combine
-	D_ASSERT(!state.global_source_state);
 	OperatorSinkFinalizeInput sort_strategy_finalize_input {*state.global_sink_state, interrupt_state};
-	auto finalize_result = sort_strategy->Finalize(context, sort_strategy_finalize_input);
-	if (finalize_result == SinkFinalizeType::BLOCKED) {
-		// the flush runs the strategy's tasks itself, so there is nothing that could resume it
-		throw InternalException("PartitionedCopy cannot resume a blocked sort strategy finalize");
-	}
+	sort_strategy->Finalize(context, sort_strategy_finalize_input);
 	state.CreateTaskList();
 }
 
@@ -2621,7 +2590,9 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 				sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
 			}
 			lstate.current_state = sinking_state;
-			// count in under the global lock, so a flush cannot start between picking the state and counting
+		}
+
+		{
 			annotated_lock_guard<annotated_mutex> state_guard(lstate.current_state->lock);
 			lstate.current_state->locals++;
 		}
@@ -2833,8 +2804,15 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		D_ASSERT(flushing_state_copy->global_source_state);
 	}
 
+	if (ShouldStopFlushing()) {
+		return; // Avoid straggling threads during Combine
+	}
+
 	while (auto task = flushing_state_copy->TryAssignTask()) {
 		flushing_state_copy->ExecuteTask(execution_context, *task, interrupt_state);
+		if (ShouldStopFlushing()) {
+			break; // Avoid straggling threads during Combine
+		}
 	}
 
 	if (!flushing_state_copy->HasCompleted()) {

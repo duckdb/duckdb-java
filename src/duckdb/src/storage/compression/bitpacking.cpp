@@ -603,23 +603,20 @@ static T DeltaDecode(unsafe_array_ptr<T> values, T previous_value) {
 
 	// Use unsigned arithmetic to avoid signed overflow on corrupt data.
 	auto udata = reinterpret_cast<T_U *>(values.data());
-	udata[0] += static_cast<T_U>(previous_value);
+	T_U carry = static_cast<T_U>(previous_value);
 
 	auto count = values.size();
 	const size_t UnrollQty = 4;
-	const size_t sz0 = (count / UnrollQty) * UnrollQty; // equal to 0, if count < UnrollQty
-	size_t i = 1;
-	if (sz0 >= UnrollQty) {
-		T_U a = udata[0];
-		for (; i < sz0 - UnrollQty; i += UnrollQty) {
-			a = udata[i] += a;
-			a = udata[i + 1] += a;
-			a = udata[i + 2] += a;
-			a = udata[i + 3] += a;
-		}
+	const size_t sz0 = (count / UnrollQty) * UnrollQty;
+	size_t i = 0;
+	for (; i < sz0; i += UnrollQty) {
+		carry = udata[i] += carry;
+		carry = udata[i + 1] += carry;
+		carry = udata[i + 2] += carry;
+		carry = udata[i + 3] += carry;
 	}
-	for (; i != count; ++i) {
-		udata[i] += udata[i - 1];
+	for (; i < count; ++i) {
+		carry = udata[i] += carry;
 	}
 
 	return values[count - 1];
@@ -685,7 +682,7 @@ public:
 			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			D_ASSERT(algorithm_group_index < algorithm_group_count);
 			auto algorithm_group_offset = algorithm_group_index * algorithm_group_size;
-			return payload.value().SubArray(algorithm_group_offset, algorithm_group_size);
+			return payload->SubArray(algorithm_group_offset, algorithm_group_size);
 		}
 
 		//! Unpacks the algorithm group at the current row offset.
