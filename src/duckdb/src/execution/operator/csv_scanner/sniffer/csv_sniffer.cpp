@@ -106,10 +106,8 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
 	idx_t start_row = 0;
-	const bool should_skip_header =
-	    !options.dialect_options.header.IsSetByUser() || options.dialect_options.header.GetValue();
-	if (sniffed_column_counts.result_position > 1 && should_skip_header) {
-		// Skip the potential header when detecting types
+	if (sniffed_column_counts.result_position == 2) {
+		// If equal to two, we will only use the second row for type checking
 		start_row = 1;
 	}
 

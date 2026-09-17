@@ -36,7 +36,9 @@ enum class ARTConflictType : uint8_t;
 
 enum class ARTScanNodeResult : uint8_t;
 
-enum class ARTScanResult : uint8_t;
+enum class ARTScanProgress : uint8_t;
+
+enum class ARTSearchResult : uint8_t;
 
 enum class AccessMode : uint8_t;
 
@@ -149,6 +151,8 @@ enum class CompressionType : uint8_t;
 enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
+
+enum class ConstraintTiming : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
@@ -340,6 +344,14 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MatchMode : uint8_t;
 
+enum class MatchRecognizeAfterMatch : uint8_t;
+
+enum class MatchRecognizeClauseKind : uint8_t;
+
+enum class MatchRecognizePatternType : uint8_t;
+
+enum class MatchRecognizeRows : uint8_t;
+
 enum class MemoryTag : uint8_t;
 
 enum class MergeActionCondition : uint8_t;
@@ -408,6 +420,12 @@ enum class PartitionedTupleDataType : uint8_t;
 
 enum class PatternMatchType : uint8_t;
 
+enum class PatternMemo : uint8_t;
+
+enum class PatternOp : uint8_t;
+
+enum class PendingExecutionResult : uint8_t;
+
 enum class PhysicalOperatorType : uint8_t;
 
 enum class PhysicalTableScanExecutionStrategy : uint8_t;
@@ -448,7 +466,7 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultMemoryType : uint8_t;
 
-enum class QueryResultState : uint8_t;
+enum class QueryResultOutputType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
@@ -471,8 +489,6 @@ enum class RemoveUnusedColumnsMode : uint8_t;
 enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
-
-enum class ResultEagerness : uint8_t;
 
 enum class ResultLifetime : uint8_t;
 
@@ -557,6 +573,8 @@ enum class StorageIndexType : uint8_t;
 enum class StorageVersion : uint64_t;
 
 enum class StrTimeSpecifier : uint8_t;
+
+enum class StreamExecutionResult : uint8_t;
 
 enum class SubqueryType : uint8_t;
 
@@ -652,7 +670,10 @@ template<>
 const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
-const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+const char* EnumUtil::ToChars<ARTScanProgress>(ARTScanProgress value);
+
+template<>
+const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -821,6 +842,9 @@ const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
 
 template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
+
+template<>
+const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
@@ -1108,6 +1132,18 @@ template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
 
 template<>
+const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizePatternType>(MatchRecognizePatternType value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value);
+
+template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
@@ -1210,6 +1246,15 @@ template<>
 const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
 
 template<>
+const char* EnumUtil::ToChars<PatternMemo>(PatternMemo value);
+
+template<>
+const char* EnumUtil::ToChars<PatternOp>(PatternOp value);
+
+template<>
+const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
+
+template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
@@ -1270,7 +1315,7 @@ template<>
 const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value);
 
 template<>
-const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
@@ -1304,9 +1349,6 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
-
-template<>
-const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -1433,6 +1475,9 @@ const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
@@ -1571,7 +1616,10 @@ template<>
 ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
-ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+ARTScanProgress EnumUtil::FromString<ARTScanProgress>(const char *value);
+
+template<>
+ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -1740,6 +1788,9 @@ CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value)
 
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
+
+template<>
+ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value);
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
@@ -2027,6 +2078,18 @@ template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
 
 template<>
+MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const char *value);
+
+template<>
+MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value);
+
+template<>
+MatchRecognizePatternType EnumUtil::FromString<MatchRecognizePatternType>(const char *value);
+
+template<>
+MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value);
+
+template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
@@ -2129,6 +2192,15 @@ template<>
 PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
 
 template<>
+PatternMemo EnumUtil::FromString<PatternMemo>(const char *value);
+
+template<>
+PatternOp EnumUtil::FromString<PatternOp>(const char *value);
+
+template<>
+PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);
+
+template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
@@ -2189,7 +2261,7 @@ template<>
 QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value);
 
 template<>
-QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
@@ -2223,9 +2295,6 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
-
-template<>
-ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
@@ -2352,6 +2421,9 @@ StorageVersion EnumUtil::FromString<StorageVersion>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);

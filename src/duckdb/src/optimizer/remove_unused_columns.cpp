@@ -5,7 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
-#include "duckdb/function/builtin_function_lookup.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -619,13 +619,11 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			// need to implicitly reference everything.
 			break;
 		}
-		// Preserve all DISTINCT inputs without affecting sibling branches.
-		const auto previous_everything_referenced = everything_referenced;
+		// distinct, all projected columns are used for the DISTINCT computation
+		// mark all columns as used and continue to the children
+		// FIXME: DISTINCT with expression list does not implicitly reference everything
 		everything_referenced = true;
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		VisitPrunableChildren(op);
-		everything_referenced = previous_everything_referenced;
-		return;
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		if (analyze) {
@@ -1137,24 +1135,19 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
-	}
-	for (auto &filter_expression : filter_expressions) {
 		//! Now visit the filter to add to the 'column_references'
-		VisitExpression(&filter_expression);
+		VisitExpression(&filter_expressions.back());
 	}
-	//! The 'column_references' hold references to these expressions, so they have to stay alive
-	vector<unique_ptr<Expression>> multi_filter_columns;
 	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
 		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
 		for (const auto &filter_idx : expression_filter.column_indexes) {
 			const auto &col_id = get.GetColumnIndex(filter_idx);
 			auto column_type = get.GetColumnType(col_id);
 			ColumnBinding filter_binding(get.table_index, filter_idx);
-			multi_filter_columns.push_back(make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding));
+			unique_ptr<Expression> column_ref =
+			    make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
+			VisitExpression(&column_ref);
 		}
-	}
-	for (auto &column_ref : multi_filter_columns) {
-		VisitExpression(&column_ref);
 	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported

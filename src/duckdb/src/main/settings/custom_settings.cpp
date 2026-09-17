@@ -45,7 +45,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
-#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
 #include "mbedtls_wrapper.hpp"
@@ -1755,55 +1754,14 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
 
-void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!OnLocalSet(context, input)) {
-		return;
-	}
-	auto &client_config = ClientConfig::GetConfig(context);
-	auto &config = DatabaseInstance::GetDatabase(context).config;
-
+void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
-		client_config.current_dialect = std::nullopt;
-		return;
+		throw InvalidInputException("current_dialect setting cannot be NULL");
 	}
 	auto dialect_name = input.GetValue<string>();
-
-	auto dialect_extension_p = config.GetCallbackManager().GetDialectExtension(dialect_name);
-	if (!dialect_extension_p) {
+	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
 		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
 	}
-	auto &dialect_extension = *dialect_extension_p;
-	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
-	(void)dialect_extension.GetCompiledGrammar(context);
-	client_config.current_dialect = dialect_name;
-	auto &compatibility_mode = dialect_extension.GetCompatibilityMode();
-	if (compatibility_mode) {
-		Settings::Set<DialectCompatibilityModeSetting>(context, SetScope::LOCAL,
-		                                               Value(EnumUtil::ToString(*compatibility_mode)));
-	}
-}
-
-void CurrentDialectSetting::ResetLocal(ClientContext &context) {
-	if (!OnLocalReset(context)) {
-		return;
-	}
-	ClientConfig::GetConfig(context).current_dialect = std::nullopt;
-}
-
-bool CurrentDialectSetting::OnLocalSet(ClientContext &context, const Value &input) {
-	return true;
-}
-
-bool CurrentDialectSetting::OnLocalReset(ClientContext &context) {
-	return true;
-}
-
-Value CurrentDialectSetting::GetSetting(const ClientContext &context) {
-	auto &client_config = ClientConfig::GetConfig(context);
-	if (client_config.current_dialect) {
-		return Value(*client_config.current_dialect);
-	}
-	return Value();
 }
 
 void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1912,10 +1870,6 @@ void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
 }
 
-void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
-}
-
 void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
 }
@@ -1930,6 +1884,10 @@ void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
 
 void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
+}
+
+void NullOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, NullOnDivisionByZeroSetting::Name);
 }
 
 void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {
