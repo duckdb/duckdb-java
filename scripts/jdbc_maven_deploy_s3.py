@@ -53,8 +53,8 @@ def run_cmd(cmd, check=True, cwd=project_dir):
 def get_snapshot_version(external_version_prefix, external_version_suffix):
     # Get short commit hash for traceability
     prefix = "2.0.0-dev"
-    if len(external_version) > 0:
-        prefix = external_version
+    if len(external_version_prefix) > 0:
+        prefix = external_version_prefix
     if prefix[0] == "v":
         prefix = prefix[1:]
     if len(external_version_suffix) > 0:
