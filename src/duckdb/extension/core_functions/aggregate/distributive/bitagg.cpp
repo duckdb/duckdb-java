@@ -24,7 +24,7 @@ static AggregateFunction NameArgParameter(AggregateFunction fun) {
 }
 
 template <class OP>
-AggregateFunction GetBitfieldUnaryAggregate(const LogicalType &type) {
+AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return NameArgParameter(AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type));
@@ -111,9 +111,7 @@ struct BitwiseOperation {
 };
 
 template <class OP>
-struct NumericBitwiseOperation // NOLINT(bugprone-crtp-constructor-accessibility)
-    : public BitwiseOperation,
-      public ClusteredStateCopy {
+struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
 		if (!local.is_set) {

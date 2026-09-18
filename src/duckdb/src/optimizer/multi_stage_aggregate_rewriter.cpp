@@ -369,8 +369,7 @@ static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &
 					    AggregateRewriteHelper::CreateCTERef(optimizer, TableIndex(input_cte_index.GetIndex()),
 					                                         input_types, input_names, input_bindings, replacements));
 				} else {
-					// The validation above guarantees that the input is moved exactly once when no CTE is needed.
-					sources.push_back(std::move(input)); // NOLINT(bugprone-use-after-move)
+					sources.push_back(std::move(input));
 				}
 			} else {
 				auto &source_stage = set.plan->stages[source.stage_index];

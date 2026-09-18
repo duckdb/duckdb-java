@@ -764,8 +764,7 @@ private:
 				issues.push_back(InternalInvariant(child_path, "Bound expression has a null child"));
 				continue;
 			}
-			if (expected_types[child_index].has_value() &&
-			    source[child_index]->GetReturnType() != expected_types[child_index].value()) {
+			if (expected_types[child_index] && source[child_index]->GetReturnType() != *expected_types[child_index]) {
 				issues.push_back(InternalExpressionInvariant(child_path, *source[child_index],
 				                                             "Bound expression child has an unexpected type"));
 				continue;
