@@ -31,6 +31,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 
+// jdbc_update_marker_1
 
 namespace duckdb {
 
