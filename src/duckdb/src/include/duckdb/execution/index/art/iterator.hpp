@@ -70,40 +70,16 @@ struct RowIdSetOutput {
 	RowIdSetOutput(set<row_t> &row_ids, const idx_t capacity) : row_ids(row_ids), capacity(capacity) {
 	}
 
-	bool TryAdd(const row_t rid) {
+	bool IsFull() const {
 		D_ASSERT(row_ids.size() <= capacity);
-		if (row_ids.size() >= capacity) {
-			return false;
-		}
+		return row_ids.size() >= capacity;
+	}
+	void SetKey(const IteratorKey &, const idx_t) {
+		// No-op: we don't need keys for row ID output.
+	}
+	void Add(const row_t rid) {
 		row_ids.insert(rid);
-		return true;
 	}
-	void SetKey(const IteratorKey &, const idx_t) {
-		// No-op: we don't need keys for row ID output.
-	}
-};
-
-//! Stores Row IDs in an unsafe_vector with sorting and deduplication.
-class RowIdVectorOutput {
-public:
-	explicit RowIdVectorOutput(idx_t capacity);
-
-	bool TryAdd(row_t row_id);
-	void SetKey(const IteratorKey &, const idx_t) {
-		// No-op: we don't need keys for row ID output.
-	}
-
-	//! Clear all collection state while retaining reusable vector storage.
-	void Reset();
-	//! Normalize and transfer ownership of the contiguous Row IDs.
-	unsafe_vector<row_t> TakeRows();
-
-private:
-	void Normalize();
-
-private:
-	unsafe_vector<row_t> row_ids;
-	const idx_t capacity;
 };
 
 //! Output policy for scanning keys and row IDs.
@@ -128,25 +104,24 @@ struct KeyRowIdOutput {
 		count = 0;
 		arena.Reset();
 	}
-	bool TryAdd(const row_t rid) {
+	bool IsFull() const {
 		D_ASSERT(count <= capacity);
-		if (count >= capacity) {
-			return false;
-		}
-		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
-		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
-		count++;
-		return true;
+		return count >= capacity;
 	}
 	void SetKey(const IteratorKey &current_key, const idx_t column_key_len) {
 		key_data = current_key.Data();
 		key_len = column_key_len;
 	}
+	void Add(const row_t rid) {
+		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
+		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
+		count++;
+	}
 };
 
 //! Scanning state. The scanning output policies allow us to pass in a capacity while scanning, so that when the
 //! scan fills up the capacity, we can pause the scan state at that location, and resume scanning later.
-enum class ARTScanProgress : uint8_t { COMPLETED = 0, PAUSED = 1 };
+enum class ARTScanResult : uint8_t { COMPLETED = 0, PAUSED = 1 };
 
 class Iterator {
 public:
@@ -161,7 +136,7 @@ public:
 	//! Templated scan implementation. Output policy defines how results are emitted.
 	//! Returns COMPLETED if scan finished, PAUSED if stopped due to output capacity.
 	template <typename Output>
-	ARTScanProgress Scan(const ARTKey &upper_bound, Output &output, bool equal);
+	ARTScanResult Scan(const ARTKey &upper_bound, Output &output, bool equal);
 
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(NodePtr current);
@@ -190,7 +165,7 @@ private:
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
 
-	//! State for resuming a scan after early return due to the Output policy capacity (see note for the ARTScanProgress
+	//! State for resuming a scan after early return due to the Output policy capacity (see note for the ARTScanResult
 	//! enum).
 	struct ResumeScanState {
 		//! For LEAF: cached row IDs and current position.
