@@ -8,7 +8,8 @@
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/query_result.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
@@ -48,17 +49,15 @@ public:
 	unique_ptr<BatchedDataCollection> batch_data;
 };
 
-void PhysicalResultSink::SetResultBuffer(shared_ptr<BufferedData> buffer) {
-	D_ASSERT(!result_buffer);
-	result_buffer = std::move(buffer);
-}
-
 unique_ptr<GlobalSinkState> PhysicalResultSink::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<ResultSinkGlobalState>();
 	state->context = context.shared_from_this();
 	if (lifetime != ResultLifetime::RETAINED) {
-		D_ASSERT(result_buffer);
-		state->buffered_data = result_buffer;
+		if (BatchOrdered()) {
+			state->buffered_data = make_shared_ptr<BatchedBufferedData>(context, lifetime);
+		} else {
+			state->buffered_data = make_shared_ptr<SimpleBufferedData>(context, lifetime);
+		}
 	}
 	return std::move(state);
 }
@@ -214,9 +213,19 @@ SinkNextBatchType PhysicalResultSink::UpdateMinBatchIndex(ExecutionContext &cont
 
 unique_ptr<QueryResult> PhysicalResultSink::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<ResultSinkGlobalState>();
-	// A draining sink hands its chunks to the consumer through the buffer, never through a result
-	D_ASSERT(CurrentLifetime(gstate) == ResultLifetime::RETAINED);
-	return GetMaterializedResult(gstate);
+	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
+		return GetMaterializedResult(gstate);
+	}
+	return GetStreamResult(gstate);
+}
+
+unique_ptr<QueryResult> PhysicalResultSink::GetStreamResult(ResultSinkGlobalState &gstate) const {
+	auto cc = gstate.context.lock();
+	if (!cc) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	return make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
+	                                    gstate.buffered_data);
 }
 
 unique_ptr<QueryResult> PhysicalResultSink::GetMaterializedResult(ResultSinkGlobalState &gstate) const {
@@ -238,7 +247,16 @@ unique_ptr<QueryResult> PhysicalResultSink::GetMaterializedResult(ResultSinkGlob
 	if (!collection) {
 		collection = CreateCollection(*cc);
 	}
-	return make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), cc->GetClientProperties());
+	return make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	                                          cc->GetClientProperties());
+}
+
+bool PhysicalResultSink::HasBlockedResultProducer(GlobalSinkState &state) const {
+	auto &gstate = state.Cast<ResultSinkGlobalState>();
+	if (!gstate.buffered_data) {
+		return false;
+	}
+	return gstate.buffered_data->HasParkedProducer();
 }
 
 OperatorPartitionInfo PhysicalResultSink::RequiredPartitionInfo() const {

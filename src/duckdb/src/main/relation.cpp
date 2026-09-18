@@ -355,7 +355,7 @@ shared_ptr<Relation> Relation::CreateView(const Identifier &schema_name, const I
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &sql) const {
-	return context->GetContext()->Query(sql, QueryParameters());
+	return context->GetContext()->Query(sql, false);
 }
 
 unique_ptr<QueryResult> Relation::Query(const Identifier &name, const string &sql) {

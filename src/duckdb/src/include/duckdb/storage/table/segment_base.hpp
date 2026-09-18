@@ -14,7 +14,7 @@
 namespace duckdb {
 
 template <class T>
-class SegmentBase { // NOLINT(bugprone-crtp-constructor-accessibility)
+class SegmentBase {
 public:
 	explicit SegmentBase(idx_t count) : count(count) {
 	}

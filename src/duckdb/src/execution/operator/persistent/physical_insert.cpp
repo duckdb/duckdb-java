@@ -802,7 +802,6 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 		current_rows += data_table.GetOptimisticCollection(context, collection_index).collection->GetTotalRows();
 		if (current_rows >= row_group_size) {
 			mergers.push_back(std::move(current_merger));
-			current_merger.reset();
 			current_rows = 0;
 		}
 	}
