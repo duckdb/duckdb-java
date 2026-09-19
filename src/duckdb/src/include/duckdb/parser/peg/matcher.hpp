@@ -151,10 +151,10 @@ struct MatchContext {
 	             ArenaAllocator &process_allocator_p, idx_t &max_token_index_p,
 	             MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
 	             IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
-	             ParserPackratCache *packrat_cache_p = nullptr)
+	             bool use_heap_based_parser_p = false, ParserPackratCache *packrat_cache_p = nullptr)
 	    : suggestions(suggestions_p), allocator(allocator_p), process_allocator(process_allocator_p),
 	      max_token_index(max_token_index_p), identifier_case_mode(identifier_case_mode_p),
-	      packrat_cache(packrat_cache_p), mode(mode_p) {
+	      packrat_cache(packrat_cache_p), mode(mode_p), use_heap_based_parser(use_heap_based_parser_p) {
 	}
 
 	vector<MatcherSuggestion> &suggestions;
@@ -164,6 +164,7 @@ struct MatchContext {
 	IdentifierCaseMode identifier_case_mode;
 	ParserPackratCache *packrat_cache;
 	MatchMode mode;
+	bool use_heap_based_parser;
 };
 
 struct MatchState {
@@ -234,7 +235,7 @@ public:
 
 private:
 	MatchStep(optional<MatchInput> child_p, optional<MatcherResult> result_p)
-	    : child(std::move(child_p)), result(result_p) {
+	    : child(std::move(child_p)), result(std::move(result_p)) {
 	}
 
 private:

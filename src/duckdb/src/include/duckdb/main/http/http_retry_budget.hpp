@@ -26,8 +26,7 @@ public:
 
 private:
 	enum class Type : uint8_t { FINISH, RETRY, THROTTLED };
-	explicit HTTPRetryDecision(Type type_p, string retry_after_p = {})
-	    : type(type_p), retry_after(std::move(retry_after_p)) {
+	HTTPRetryDecision(Type type_p, string retry_after_p = {}) : type(type_p), retry_after(std::move(retry_after_p)) {
 	}
 	static HTTPRetryDecision Throttled(const string &retry_after);
 

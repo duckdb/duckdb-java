@@ -33,8 +33,7 @@ private:
 				throw;
 			}
 		}
-		~DeserializeContext() { // NOLINT(bugprone-exception-escape): Unset only throws if the stack invariant is
-			                    // broken.
+		~DeserializeContext() {
 			deserializer.Unset<const_expression_list_t>();
 			deserializer.Unset<LogicalType>();
 		}

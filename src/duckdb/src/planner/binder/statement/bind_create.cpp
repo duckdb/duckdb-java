@@ -13,7 +13,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -88,11 +87,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
-		// with no default database there is no schema for the name to be ambiguous with
-		auto default_database = DatabaseManager::TryGetDefaultDatabase(context);
-		if (!IsInvalidCatalog(default_database)) {
-			catalog_names.emplace_back(std::move(default_database));
-		}
+		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
@@ -370,12 +365,6 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 }
 
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
-	// references to the view's own catalog are resolved through the view's search path anyway - drop the qualifier so
-	// the view keeps working when the database is attached under a different alias
-	auto &view_catalog = base.GetQualifiedName().Catalog();
-	if (base.query && !view_catalog.empty()) {
-		RemotePushdownOptimizer::StripCatalogName(*base.query, view_catalog);
-	}
 	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
 		return;
 	}
@@ -853,6 +842,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	auto return_type = StatementReturnType::NOTHING;
+	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -1104,7 +1094,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 
 	properties.return_type = return_type;
-	properties.result_eagerness = ResultEagerness::FORCED;
+	properties.output_type = output_type;
 
 	return result;
 }

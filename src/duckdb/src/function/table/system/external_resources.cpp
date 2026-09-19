@@ -6,6 +6,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
 #include "duckdb/main/external_resources_manager.hpp"
@@ -100,7 +101,7 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 	// con.Query reports query errors in-band, but with statement verification active (a global debug setting
 	// the internal connection inherits) a bind-time failure of the callback is thrown instead. Handle both so
 	// the wrapped message is identical in every mode.
-	unique_ptr<QueryResult> res;
+	unique_ptr<MaterializedQueryResult> res;
 	try {
 		res = con.Query(sql);
 	} catch (const std::exception &ex) {

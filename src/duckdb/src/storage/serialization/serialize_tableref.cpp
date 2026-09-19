@@ -43,6 +43,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = MatchRecognizeRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
 		break;
@@ -186,6 +189,21 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void MatchRecognizeRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "input", input);
+	serializer.WritePropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", config);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "column_name_alias", column_name_alias);
+}
+
+unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MatchRecognizeRef>(new MatchRecognizeRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "input", result->input);
+	deserializer.ReadPropertyWithDefault<unique_ptr<MatchRecognizeConfig>>(201, "config", result->config);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
+	return std::move(result);
+}
+
 void PivotRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
@@ -251,7 +269,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
 
 void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", SerializableFunction());
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<OrdinalityType>(202, "with_ordinality", with_ordinality, OrdinalityType::WITHOUT_ORDINALITY);
 }
