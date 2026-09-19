@@ -12,8 +12,7 @@ public:
 
 public:
 	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
-	    : AtomicMatcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p),
-	      literal_table(keyword_helper_p.GetLiteralTable()) {
+	    : AtomicMatcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -160,12 +159,7 @@ public:
 	}
 
 private:
-	bool IsAllowedKeyword(TokenIterator &tokens, const string &token_text) const {
-		if (literal_table) {
-			auto literal_info = tokens.CurrentLiteralInfo(*literal_table);
-			return !literal_info.IsKeyword() || literal_info.HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			       literal_info.HasCategory(GetAllowedCategory());
-		}
+	bool IsAllowedKeyword(const string &token_text) const {
 		if (!keyword_helper.IsKeyword(token_text)) {
 			return true;
 		}
@@ -181,7 +175,7 @@ private:
 			return false;
 		}
 		auto &token_text = token->text;
-		if (!IsAllowedKeyword(state.token_iterator, token_text) || !IsIdentifier(token_text)) {
+		if (!IsAllowedKeyword(token_text) || !IsIdentifier(token_text)) {
 			return false;
 		}
 		state.token_iterator.Advance();
@@ -191,7 +185,6 @@ private:
 
 	SuggestionState suggestion_type;
 	const PEGKeywordHelper &keyword_helper;
-	optional_ptr<const GrammarLiteralTable> literal_table;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {

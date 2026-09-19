@@ -112,7 +112,7 @@ public:
 struct BlockIndexManager {
 public:
 	BlockIndexManager();
-	explicit BlockIndexManager(TemporaryFileManager &manager, bool encrypted = false);
+	explicit BlockIndexManager(TemporaryFileManager &manager);
 
 public:
 	//! Obtains a new block index from the index manager
@@ -140,8 +140,6 @@ private:
 	set<idx_t> indexes_in_use;
 	//! The TemporaryFileManager that "owns" this BlockIndexManager
 	optional_ptr<TemporaryFileManager> manager;
-	//! Whether the tracked file is encrypted
-	bool encrypted;
 };
 
 //===--------------------------------------------------------------------===//

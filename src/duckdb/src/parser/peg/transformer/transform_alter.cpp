@@ -149,7 +149,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 unique_ptr<AlterInfo>
 PEGTransformerFactory::TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
                                                            unique_ptr<AlterTableInfo> rename_alter) {
-	throw NotImplementedException("Renaming sequences is not yet supported");
+	return std::move(rename_alter);
 }
 
 unique_ptr<AlterInfo>
@@ -244,7 +244,6 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	if (add_column_entry.default_value) {
 		column_definition.SetDefaultValue(std::move(add_column_entry.default_value));
 	}
-	column_definition.SetCompressionType(add_column_entry.compression_type);
 
 	unique_ptr<AlterTableInfo> result;
 	auto if_not_exists_value = if_not_exists.has_value();
@@ -255,9 +254,6 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	} else {
 		if (add_column_entry.is_not_null) {
 			throw NotImplementedException("Adding NOT NULL constraints to nested fields is not supported");
-		}
-		if (add_column_entry.compression_type != CompressionType::COMPRESSION_AUTO) {
-			throw NotImplementedException("Adding compression to nested fields is not supported");
 		}
 		const auto parent_path =
 		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
@@ -286,19 +282,22 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 	}
 	if (column_constraint) {
 		for (auto &constraint : *column_constraint) {
+			auto constraint_type =
+			    constraint.constraint ? constraint.constraint->type : constraint.constraint_type_info.type;
 			if (constraint.constraint_name == "DefaultValue") {
 				if (new_column.default_value) {
 					throw ParserException("Cannot define a default value twice");
 				}
 				new_column.default_value = std::move(constraint.expression);
-			} else if (constraint.constraint_name == "NotNullConstraint" &&
-			           constraint.constraint_type_info.second == ConstraintType::NOT_NULL) {
+			} else if (constraint_type == ConstraintType::NOT_NULL) {
 				new_column.is_not_null = true;
-			} else if (constraint.constraint_name == "ColumnCompression") {
-				new_column.compression_type = constraint.compression_type;
-				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
-					throw ParserException("Unrecognized option for column compression");
-				}
+			} else if (constraint_type == ConstraintType::UNIQUE) {
+				throw ParserException("Adding columns with %s constraints is not supported yet",
+				                      constraint.constraint_type_info.is_primary_key ? "PRIMARY KEY" : "UNIQUE");
+			} else if (constraint_type == ConstraintType::CHECK) {
+				throw ParserException("Adding columns with CHECK constraints is not supported yet");
+			} else if (constraint_type == ConstraintType::FOREIGN_KEY) {
+				throw ParserException("Adding columns with FOREIGN KEY constraints is not supported yet");
 			}
 		}
 	}

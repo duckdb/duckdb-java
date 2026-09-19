@@ -215,7 +215,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		TokenIterator token_iterator(tokens);
 		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 		MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE);
+		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE,
+		                           parameters.use_heap_based_parser);
 		MatchState state(token_iterator, match_context);
 		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}

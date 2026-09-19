@@ -168,8 +168,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Lock
 	mutable mutex lock;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
-	//! Atomic because a cancelled file open settles it while the scheduling thread may hold the lock.
-	atomic<bool> error_opening_file {false};
+	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;

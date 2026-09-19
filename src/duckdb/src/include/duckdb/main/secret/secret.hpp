@@ -213,9 +213,7 @@ public:
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
-	static unique_ptr<BaseSecret>
-	Deserialize(Deserializer &deserializer,
-	            BaseSecret base_secret) { // NOLINT(performance-unnecessary-value-param): callback signature.
+	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);

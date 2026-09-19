@@ -184,12 +184,11 @@ PEGTransformerFactory::TransformCopyFileNameIdentifierColId(PEGTransformer &tran
 }
 
 Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
-                                                           const vector<Identifier> &copy_file_name_suffix) {
-	string result = identifier.GetIdentifierName();
-	for (const auto &suffix : copy_file_name_suffix) {
-		result += ".";
-		result += suffix.GetIdentifierName();
-	}
+                                                           const Identifier &col_id) {
+	string result;
+	result += identifier.GetIdentifierName();
+	result += ".";
+	result += col_id.GetIdentifierName();
 	return Identifier(result);
 }
 
