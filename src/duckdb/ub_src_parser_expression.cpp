@@ -26,6 +26,8 @@
 
 #include "src/parser/expression/parameter_expression.cpp"
 
+#include "src/parser/expression/pattern_expression.cpp"
+
 #include "src/parser/expression/positional_reference_expression.cpp"
 
 #include "src/parser/expression/star_expression.cpp"
@@ -33,6 +35,8 @@
 #include "src/parser/expression/subquery_expression.cpp"
 
 #include "src/parser/expression/type_expression.cpp"
+
+#include "src/parser/expression/value_expression.cpp"
 
 #include "src/parser/expression/window_expression.cpp"
 

@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BufferManager;
+class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -607,6 +608,11 @@ public:
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
+	//! Statistics callback for aggregates whose result always lies within the range of their first
+	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
+	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
+	                                                           AggregateStatisticsInput &input);
+
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		callbacks.get_state_type = get_state_type_callback;
 		return *this;
@@ -832,12 +838,39 @@ public:
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
 public:
 	explicit BoundAggregateFunction(const AggregateFunction &function);
+	explicit BoundAggregateFunction(shared_ptr<const AggregateFunction> function);
 
+	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
+public:
+	//! The function this was bound from. Unaffected by ReplaceImplementation and by later mutation of the bound
+	//! function, e.g. statistics propagation swapping in a specialized implementation. For a function bound from an
+	//! AggregateFunctionSet this is the set's own overload, so it compares equal by pointer across binds. Functions
+	//! bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const AggregateFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
+	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
+		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
+	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -850,6 +883,20 @@ public:
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
 	}
+
+private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
+	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

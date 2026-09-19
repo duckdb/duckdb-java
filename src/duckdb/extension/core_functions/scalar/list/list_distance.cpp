@@ -66,13 +66,17 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 template <class OP>
 static void AddListFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
 	const auto list = LogicalType::LIST(type);
+	scalar_function_t function;
 	if (type.id() == LogicalTypeId::FLOAT) {
-		set.AddFunction(ScalarFunction({list, list}, type, ListGenericFold<float, OP>));
+		function = ListGenericFold<float, OP>;
 	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		set.AddFunction(ScalarFunction({list, list}, type, ListGenericFold<double, OP>));
+		function = ListGenericFold<double, OP>;
 	} else {
 		throw NotImplementedException("List function not implemented for type %s", type.ToString());
 	}
+	ScalarFunction fun({}, type, function);
+	fun.GetSignature().AddParameter("list1", list).AddParameter("list2", list);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet ListDistanceFun::GetFunctions() {
@@ -80,9 +84,7 @@ ScalarFunctionSet ListDistanceFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<DistanceOp>(set, type);
 	}
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -91,9 +93,7 @@ ScalarFunctionSet ListInnerProductFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<InnerProductOp>(set, type);
 	}
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -102,9 +102,7 @@ ScalarFunctionSet ListNegativeInnerProductFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<NegativeInnerProductOp>(set, type);
 	}
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -113,9 +111,7 @@ ScalarFunctionSet ListCosineSimilarityFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<CosineSimilarityOp>(set, type);
 	}
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -124,9 +120,7 @@ ScalarFunctionSet ListCosineDistanceFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<CosineDistanceOp>(set, type);
 	}
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 

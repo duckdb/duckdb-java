@@ -54,6 +54,8 @@
 
 #include "src/common/gzip_file_system.cpp"
 
+#include "src/common/hash_functions.cpp"
+
 #include "src/common/hive_partitioning.cpp"
 
 #include "src/common/identifier.cpp"
@@ -66,6 +68,8 @@
 
 #include "src/common/memory_safety.cpp"
 
+#include "src/common/open_file_info.cpp"
+
 #include "src/common/opener_file_system.cpp"
 
 #include "src/common/optional_idx.cpp"
@@ -75,6 +79,8 @@
 #include "src/common/pipe_file_system.cpp"
 
 #include "src/common/printer.cpp"
+
+#include "src/common/process_util.cpp"
 
 #include "src/common/radix_partitioning.cpp"
 

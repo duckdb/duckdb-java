@@ -18,6 +18,8 @@
 
 #include "src/planner/expression_binder/lateral_binder.cpp"
 
+#include "src/planner/expression_binder/match_recognize_binder.cpp"
+
 #include "src/planner/expression_binder/order_binder.cpp"
 
 #include "src/planner/expression_binder/projection_binder.cpp"
@@ -27,6 +29,8 @@
 #include "src/planner/expression_binder/relation_binder.cpp"
 
 #include "src/planner/expression_binder/returning_binder.cpp"
+
+#include "src/planner/expression_binder/scope_resolution.cpp"
 
 #include "src/planner/expression_binder/select_bind_state.cpp"
 

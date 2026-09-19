@@ -67,8 +67,8 @@ public class TestErrorCodes {
     // ---- closed result set ----------------------------------------------------
 
     public static void test_result_set_closed_state() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT 42 as a")) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
+            ResultSet rs = stmt.executeQuery("SELECT 42 as a");
             rs.next();
             rs.close();
             try {

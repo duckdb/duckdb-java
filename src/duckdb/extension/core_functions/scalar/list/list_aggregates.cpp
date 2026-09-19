@@ -101,14 +101,17 @@ struct StateVector {
 	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-		if (aggr.Function().HasStateDestructorCallback()) {
+		if (initialized_count != 0 && aggr.Function().HasStateDestructorCallback()) {
 			ArenaAllocator allocator(Allocator::DefaultAllocator());
 			AggregateInputData aggr_input_data(aggr, allocator);
-			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, count);
+			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, initialized_count);
 		}
 	}
 
 	idx_t count;
+	//! The number of states that have been initialized so far. The vector holds uninitialized memory until then,
+	//! so an exception during initialization must not leave the destructor reading it as state pointers.
+	idx_t initialized_count = 0;
 	unique_ptr<Expression> aggr_expr;
 	Vector state_vector;
 };
@@ -275,6 +278,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
 		aggr.Function().GetStateInitCallback()(state_input, &states[i], 1);
+		state_vector.initialized_count = i + 1;
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -492,7 +496,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = *func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
@@ -508,11 +512,9 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 }
 
 unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.GetArguments().size() >= 2);
-	D_ASSERT(arguments.size() >= 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() >= 2);
+	D_ASSERT(input.GetArguments().size() >= 2);
 
 	return ListAggregatesBind<true>(input);
 }
@@ -520,8 +522,11 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
+	auto result = ScalarFunction({}, LogicalType::ANY, ListAggregateFunction, ListAggregateBind, nullptr,
+	                             ListAggregatesInitLocalState);
+	result.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("function_name", LogicalType::VARCHAR);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.SetVarArgs(LogicalType::ANY);
@@ -531,14 +536,17 @@ ScalarFunction ListAggregateFun::GetFunction() {
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
-	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
-	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	ScalarFunction fun({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
+	                   ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::TEMPLATE("T")));
+	return fun;
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	ScalarFunction fun({}, LogicalType::UBIGINT, ListUniqueFunction, ListAggregatesBind<false>, nullptr,
+	                   ListAggregatesInitLocalState);
+	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	return fun;
 }
 
 } // namespace duckdb
