@@ -70,9 +70,6 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(deserializer);
 		break;
-	case ExpressionClass::PATTERN:
-		result = PatternExpression::Deserialize(deserializer);
-		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		result = PositionalReferenceExpression::Deserialize(deserializer);
 		break;
