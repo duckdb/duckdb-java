@@ -46,7 +46,7 @@ struct MultiFileReaderInterface {
 	//! Combine the schemas of a set of files that were bound individually into a single schema
 	//! The default implementation combines the return types of the files by name
 	virtual void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
-	                            bool union_by_name, vector<LogicalType> &return_types, vector<Identifier> &names);
+	                            vector<LogicalType> &return_types, vector<Identifier> &names);
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
@@ -408,15 +408,6 @@ public:
 		return OpenMarkedFile(context, bind_data, global_state, current_reader_data, current_file_index, parallel_lock);
 	}
 
-	//! Record an error of an async file open. Read-ahead is optional, and a scan drains the opens it scheduled
-	//! before it goes away - without a read-ahead to report to, the error only marks the scan as failed
-	static void PushAsyncOpenError(MultiFileGlobalState &gstate, ErrorData error) {
-		if (gstate.read_ahead) {
-			gstate.read_ahead->PushError(std::move(error));
-		}
-		gstate.error_opening_file = true;
-	}
-
 	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
 	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
@@ -428,12 +419,14 @@ public:
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
 			}
-			PushAsyncOpenError(gstate, ErrorData(ex));
+			gstate.read_ahead->PushError(ErrorData(ex));
+			gstate.error_opening_file = true;
 		} catch (...) { // LCOV_EXCL_START
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
 			}
-			PushAsyncOpenError(gstate, ErrorData("Unknown exception while opening a file"));
+			gstate.read_ahead->PushError(ErrorData("Unknown exception while opening a file"));
+			gstate.error_opening_file = true;
 		} // LCOV_EXCL_STOP
 	}
 
@@ -459,14 +452,9 @@ public:
 				reader_data.file_state = MultiFileFileState::OPENING;
 				{
 					MultiFileReaderData *reader_ptr = &reader_data;
-					read_ahead.ScheduleFileOpen(
-					    [&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
-						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
-					    },
-					    [&gstate]() {
-						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
-						    gstate.error_opening_file = true;
-					    });
+					read_ahead.ScheduleFileOpen([&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
+						OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					});
 				}
 				progress_guaranteed = true;
 				break;
@@ -653,10 +641,6 @@ public:
 
 		while (true) {
 			if (gstate.error_opening_file) {
-				// the flag only says a file failed, the error itself lives on the read-ahead - report before ending
-				if (gstate.read_ahead) {
-					gstate.read_ahead->ThrowIfError();
-				}
 				return MultiFileClaimResult::EXHAUSTED;
 			}
 
@@ -743,9 +727,7 @@ public:
 		result->job->scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
 
 		if (!ClaimNextJob(context.client, bind_data, gstate, *result->job)) {
-			// keep the local state so the scan can still emit FinalizeScan output
-			result->job.reset();
-			return std::move(result);
+			return nullptr;
 		}
 		result->job_state = MultiFileJobState::SCHEDULE;
 		return std::move(result);
@@ -878,12 +860,6 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		if (data.finalize_batch_index.IsValid()) {
-			if (input.partition_info.RequiresPartitionColumns()) {
-				throw InternalException("Cannot get partition columns for FinalizeScan output");
-			}
-			return OperatorPartitionData(data.finalize_batch_index.GetIndex());
-		}
 		auto &job = *data.job;
 		OperatorPartitionData partition_data(job.batch_index);
 		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *job.reader_data,
@@ -968,7 +944,7 @@ public:
 	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
 	                                                 MultiFileBindData &bind_data) {
 		if (lstate.job_state == MultiFileJobState::NONE) {
-			if (!lstate.job || !ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
+			if (!ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 			lstate.job_state = MultiFileJobState::SCHEDULE;
@@ -1017,6 +993,13 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
+			auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+			if (gstate.global_state && bind_data.interface &&
+			    bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				return;
+			}
 			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
@@ -1034,11 +1017,6 @@ public:
 					return;
 				case ScanReadAheadAcquire::EXHAUSTED:
 					if (bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
-						// finalized output has no job, give it its own batch index for GetPartitionData
-						if (!data.finalize_batch_index.IsValid()) {
-							lock_guard<mutex> guard(gstate.lock);
-							data.finalize_batch_index = gstate.batch_index++;
-						}
 						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 						return;
 					}
@@ -1222,7 +1200,7 @@ public:
 	                                           vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
-		MultiFilePushdownInfo info(get.table_index, data.names, get.GetColumnIds(), get.extra_info);
+		MultiFilePushdownInfo info(get);
 		auto new_list =
 		    data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info, filters);
 

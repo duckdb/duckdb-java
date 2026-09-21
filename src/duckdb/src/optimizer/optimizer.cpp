@@ -287,7 +287,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		CTEFilterPusher cte_filter_pusher(*this);
 		plan = cte_filter_pusher.Optimize(std::move(plan));
 	});
-	CTEFilterPusher::ClearDependencies(*plan);
 
 	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {
 		RegexRangeFilter regex_opt;
@@ -556,7 +555,6 @@ unique_ptr<LogicalOperator> Optimizer::LowerMandatoryAggregateRewrites(unique_pt
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
 	plan_p = LowerMandatoryAggregateRewrites(std::move(plan_p));
 	if (!Settings::Get<EnableOptimizerSetting>(context)) {
-		CTEFilterPusher::ClearDependencies(*plan_p);
 		return plan_p;
 	}
 	Verify(*plan_p);
@@ -574,7 +572,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
-				CTEFilterPusher::ClearDependencies(*plan);
 				pre_optimizer_extension.pre_optimize_function(input, plan);
 			}
 		});

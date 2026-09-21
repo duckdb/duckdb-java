@@ -18,8 +18,8 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
@@ -45,7 +45,6 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
-struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
@@ -241,12 +240,6 @@ public:
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
-	//! Whether the expression is COUNT(tbl.*)
-	static bool IsQualifiedCountStar(const ParsedExpression &expr);
-	//! Rewrites COUNT(tbl.*) into a COUNT that skips the rows NULL-extended by an outer join, or returns nullptr
-	unique_ptr<ParsedExpression> TryRewriteQualifiedCountStar(const ParsedExpression &expr);
-
-public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
@@ -275,6 +268,7 @@ public:
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
+	static void VerifyConstraintTimingStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
@@ -491,13 +485,6 @@ private:
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
 	BoundStatement Bind(ExternalResourceStatement &stmt);
-	//! Bind + constant-fold a single EXTERNAL RESOURCE expression (a create param, or the REGISTER handle).
-	Value BindExternalResourceValue(unique_ptr<ParsedExpression> &expr);
-	//! Bind + constant-fold the create params of an EXTERNAL RESOURCE statement or clause.
-	void BindExternalResourceParams(case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_params,
-	                                unordered_map<string, Value> &params);
-	//! Bind the `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` clause. Shared by ATTACH and CONNECT.
-	void BindExternalResource(ExternalResourceOptions &external_resource);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -572,6 +559,7 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	BoundStatement Bind(MatchRecognizeRef &ref);
 	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
 	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);

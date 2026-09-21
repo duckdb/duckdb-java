@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/query_result_memory_type.hpp
+// duckdb/common/enums/pending_execution_result.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,13 @@
 
 namespace duckdb {
 
-//! Where a retained result keeps its rows
-enum class QueryResultMemoryType : uint8_t { IN_MEMORY, BUFFER_MANAGED };
+enum class PendingExecutionResult : uint8_t {
+	RESULT_READY,
+	RESULT_NOT_READY,
+	EXECUTION_ERROR,
+	BLOCKED,
+	NO_TASKS_AVAILABLE,
+	EXECUTION_FINISHED
+};
 
 } // namespace duckdb

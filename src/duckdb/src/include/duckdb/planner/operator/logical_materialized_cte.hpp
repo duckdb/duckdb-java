@@ -13,16 +13,6 @@
 
 namespace duckdb {
 
-//! Retaining outer rows preserves every domain partition needed for their results.
-//! The domain scan has no consumers independent of the outer-row scan.
-struct CTEFilterDependency {
-	CTEFilterDependency(TableIndex row_scan, TableIndex domain_scan) : row_scan(row_scan), domain_scan(domain_scan) {
-	}
-
-	TableIndex row_scan;
-	TableIndex domain_scan;
-};
-
 class LogicalMaterializedCTE : public LogicalCTE {
 	explicit LogicalMaterializedCTE() : LogicalCTE(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 	}
@@ -40,8 +30,6 @@ public:
 	}
 
 	CTEMaterialize materialize = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-	//! Valid only for the original generated consumers, until CTE filter pushdown. Deliberately not serialized.
-	unique_ptr<CTEFilterDependency> filter_dependency;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
