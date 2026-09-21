@@ -2,7 +2,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
 
 namespace duckdb {
 struct GeneratedColumnDefinition {
@@ -13,7 +12,7 @@ struct GeneratedColumnDefinition {
 
 struct ConstraintColumnDefinition {
 	ColumnDefinition column_definition;
-	vector<ColumnConstraintTypeInfo> constraint_types;
+	vector<pair<bool, ConstraintType>> constraint_types;
 	vector<unique_ptr<Constraint>> constraints;
 };
 } // namespace duckdb

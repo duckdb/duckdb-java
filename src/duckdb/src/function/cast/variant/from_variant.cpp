@@ -517,9 +517,16 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder holder(Allocator::DefaultAllocator());
 
+	auto &variant = conversion_data.variant;
 	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		const auto row_index = row.IsValid() ? row.GetIndex() : i;
+		if (!variant.RowIsValid(row_index)) {
+			// a SQL NULL row stays a SQL NULL - rendering it as the JSON token `null` would make it
+			// indistinguishable from a JSON null actually stored in the variant
+			result_data.WriteNull();
+			continue;
+		}
 		const auto json_val =
 		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
@@ -784,9 +791,10 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1].GetType() == result.GetType()) {
+		auto &typed_value = shredded_entries[VariantStats::TYPED_VALUE_INDEX];
+		if (typed_value.GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(shredded_entries[1]);
+			result.Reference(typed_value);
 			return true;
 		}
 	}

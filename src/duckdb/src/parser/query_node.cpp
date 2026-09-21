@@ -13,7 +13,21 @@ CommonTableExpressionMap::CommonTableExpressionMap() {
 CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	CommonTableExpressionMap res;
 	for (auto &kv : this->map) {
-		res.map[kv.first] = kv.second->Copy();
+		auto kv_info = make_uniq<CommonTableExpressionInfo>();
+		for (auto &al : kv.second->aliases) {
+			kv_info->aliases.push_back(al);
+		}
+		for (auto &al : kv.second->key_targets) {
+			kv_info->key_targets.push_back(al->Copy());
+		}
+		for (auto &al : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(al->Copy());
+		}
+		if (kv.second->query_node) {
+			kv_info->query_node = kv.second->query_node->Copy();
+		}
+		kv_info->materialized = kv.second->materialized;
+		res.map[kv.first] = std::move(kv_info);
 	}
 
 	return res;
@@ -78,7 +92,7 @@ string CommonTableExpressionMap::ToString() const {
 		result += ")";
 		first_cte = false;
 	}
-	return result;
+	return result + " ";
 }
 
 string QueryNode::ResultModifiersToString() const {
@@ -163,7 +177,21 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		other.modifiers.push_back(modifier->Copy());
 	}
 	for (auto &kv : cte_map.map) {
-		other.cte_map.map[kv.first] = kv.second->Copy();
+		auto kv_info = make_uniq<CommonTableExpressionInfo>();
+		for (auto &al : kv.second->aliases) {
+			kv_info->aliases.push_back(al);
+		}
+		for (auto &key : kv.second->key_targets) {
+			kv_info->key_targets.push_back(key->Copy());
+		}
+		for (auto &agg : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(agg->Copy());
+		}
+		if (kv.second->query_node) {
+			kv_info->query_node = kv.second->query_node->Copy();
+		}
+		kv_info->materialized = kv.second->materialized;
+		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
 }
 
