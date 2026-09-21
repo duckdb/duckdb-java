@@ -157,16 +157,12 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex
 	auto &right_expr = BoundComparisonExpression::Right(comparison);
 	auto left_side = JoinSide::GetJoinSide(left_expr, left_bindings, right_bindings);
 	auto right_side = JoinSide::GetJoinSide(right_expr, left_bindings, right_bindings);
-	const bool normal = (left_side == JoinSide::LEFT || left_side == JoinSide::NONE) &&
-	                    (right_side == JoinSide::RIGHT || right_side == JoinSide::NONE);
-	const bool reversed = (left_side == JoinSide::RIGHT || left_side == JoinSide::NONE) &&
-	                      (right_side == JoinSide::LEFT || right_side == JoinSide::NONE);
-	if (normal || reversed) {
+	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		auto comp_type = expr.GetExpressionType();
 		auto left = std::move(BoundComparisonExpression::LeftMutable(comparison));
 		auto right = std::move(BoundComparisonExpression::RightMutable(comparison));
-		if (!normal) {
+		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
 			comp_type = FlipComparisonExpression(comp_type);
@@ -202,9 +198,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
 				PushFilterToChild(right_child, expr);
 				continue;
 			}
-		}
-		if (side == JoinSide::BOTH || type == JoinType::MARK || type == JoinType::RIGHT_SEMI ||
-		    type == JoinType::RIGHT_ANTI) {
+		} else if (side == JoinSide::BOTH) {
 			if (IsComparisonExpression(*expr) && IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
 			    CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				continue;

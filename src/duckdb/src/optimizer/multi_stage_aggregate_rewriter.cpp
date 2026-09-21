@@ -346,7 +346,6 @@ static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &
 	optional_idx input_cte_index;
 	if (input_consumers > 1) {
 		input_cte_index = optimizer.binder.GenerateTableIndex().index;
-		input = AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(input), input_types, input_bindings);
 	}
 
 	struct StageOutput {
@@ -370,8 +369,7 @@ static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &
 					    AggregateRewriteHelper::CreateCTERef(optimizer, TableIndex(input_cte_index.GetIndex()),
 					                                         input_types, input_names, input_bindings, replacements));
 				} else {
-					// The validation above guarantees that the input is moved exactly once when no CTE is needed.
-					sources.push_back(std::move(input)); // NOLINT(bugprone-use-after-move)
+					sources.push_back(std::move(input));
 				}
 			} else {
 				auto &source_stage = set.plan->stages[source.stage_index];
@@ -719,8 +717,6 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		input_names = AggregateRewriteHelper::GenerateColumnNames("__aggregate_input", input_types.size());
 		input_bindings = op->children[0]->GetColumnBindings();
 		cte_index = optimizer.binder.GenerateTableIndex();
-		op->children[0] =
-		    AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(op->children[0]), input_types, input_bindings);
 	}
 
 	vector<BranchResult> branches;

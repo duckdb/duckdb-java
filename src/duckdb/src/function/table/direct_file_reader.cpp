@@ -61,28 +61,21 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	auto &fs = FileSystem::GetFileSystem(context);
 	const idx_t out_idx = 0;
 
+	// We utilize projection pushdown here to only read the file content if the 'data' column is requested
 	unique_ptr<FileHandle> file_handle = nullptr;
-	optional<FileMetadata> file_metadata;
-	const bool is_remote = FileSystem::IsRemoteFile(file.path);
 
-	// Remote metadata is obtained from the opened handle so it can use the remote file cache and validators.
-	if (state.requires_file_open || (state.requires_file_metadata && is_remote)) {
+	// Given the columns requested, do we even need to open the file?
+	if (state.requires_file_open) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
-		if (is_remote) {
+		if (FileSystem::IsRemoteFile(file.path)) {
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
 		flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
 		file_handle = fs.OpenFile(file, flags);
-	} else if (state.requires_file_metadata) {
-		file_metadata = fs.GetStatsIfExists(file);
-		if (!file_metadata) {
-			done = true;
-			return SourceResultType::FINISHED;
-		}
 	} else {
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
-		if (is_remote && !fs.FileExists(file.path)) {
+		if (FileSystem::IsRemoteFile(file.path) && !fs.FileExists(file.path)) {
 			done = true;
 			return SourceResultType::FINISHED;
 		}
@@ -148,19 +141,15 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			} break;
 			case ReadFileBindData::FILE_SIZE_COLUMN: {
 				auto &file_size_vector = output.data[col_idx];
-				D_ASSERT(file_metadata.has_value() || file_handle);
-				auto file_size =
-				    file_metadata ? file_metadata->file_size : NumericCast<int64_t>(file_handle->GetFileSize());
-				FlatVector::GetDataMutable<int64_t>(file_size_vector)[out_idx] = file_size;
+				FlatVector::GetDataMutable<int64_t>(file_size_vector)[out_idx] =
+				    NumericCast<int64_t>(file_handle->GetFileSize());
 			} break;
 			case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
 				auto &last_modified_vector = output.data[col_idx];
 				// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 				// correctly)
 				try {
-					D_ASSERT(file_metadata.has_value() || file_handle);
-					const auto timestamp_seconds =
-					    file_metadata ? file_metadata->last_modification_time : fs.GetLastModifiedTime(*file_handle);
+					const auto timestamp_seconds = fs.GetLastModifiedTime(*file_handle);
 					FlatVector::GetDataMutable<timestamp_tz_t>(last_modified_vector)[out_idx] =
 					    timestamp_tz_t(timestamp_seconds);
 				} catch (std::exception &ex) {

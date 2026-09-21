@@ -225,6 +225,7 @@ public:
 		case ExpressionClass::POSITIONAL_REFERENCE:
 		case ExpressionClass::BETWEEN:
 		case ExpressionClass::LAMBDA_REF:
+		case ExpressionClass::PATTERN:
 		case ExpressionClass::TYPE:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Expression export requires a final bound class"));
@@ -764,8 +765,7 @@ private:
 				issues.push_back(InternalInvariant(child_path, "Bound expression has a null child"));
 				continue;
 			}
-			if (expected_types[child_index].has_value() &&
-			    source[child_index]->GetReturnType() != expected_types[child_index].value()) {
+			if (expected_types[child_index] && source[child_index]->GetReturnType() != *expected_types[child_index]) {
 				issues.push_back(InternalExpressionInvariant(child_path, *source[child_index],
 				                                             "Bound expression child has an unexpected type"));
 				continue;

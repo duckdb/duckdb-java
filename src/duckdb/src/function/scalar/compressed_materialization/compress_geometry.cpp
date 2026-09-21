@@ -133,14 +133,4 @@ ScalarFunction InternalDecompressGeometryPointFun::GetFunction() {
 	return CMGeometryPointDecompressFun::GetFunction();
 }
 
-CMExpressionType CMUtils::GetGeometryType(const BoundScalarFunction &function) {
-	if (function.GetDeserializeCallback() == CMGeometryPointCompressDeserialize) {
-		return CMExpressionType::COMPRESS;
-	}
-	if (function.GetDeserializeCallback() == CMGeometryPointDecompressDeserialize) {
-		return CMExpressionType::DECOMPRESS;
-	}
-	return CMExpressionType::NONE;
-}
-
 } // namespace duckdb

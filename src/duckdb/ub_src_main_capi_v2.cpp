@@ -14,6 +14,8 @@
 
 #include "src/main/capi/v2/capi_v2_data_chunk.cpp"
 
+#include "src/main/capi/v2/capi_v2_database.cpp"
+
 #include "src/main/capi/v2/capi_v2_environment.cpp"
 
 #include "src/main/capi/v2/capi_v2_error.cpp"
@@ -40,8 +42,6 @@
 
 #include "src/main/capi/v2/capi_v2_identifier.cpp"
 
-#include "src/main/capi/v2/capi_v2_instance.cpp"
-
 #include "src/main/capi/v2/capi_v2_logging.cpp"
 
 #include "src/main/capi/v2/capi_v2_logical_type.cpp"
@@ -61,10 +61,6 @@
 #include "src/main/capi/v2/capi_v2_statement.cpp"
 
 #include "src/main/capi/v2/capi_v2_stubs.cpp"
-
-#include "src/main/capi/v2/capi_v2_tokenizer.cpp"
-
-#include "src/main/capi/v2/capi_v2_utf8.cpp"
 
 #include "src/main/capi/v2/capi_v2_value.cpp"
 

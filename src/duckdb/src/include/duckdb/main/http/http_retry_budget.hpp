@@ -26,8 +26,7 @@ public:
 
 private:
 	enum class Type : uint8_t { FINISH, RETRY, THROTTLED };
-	explicit HTTPRetryDecision(Type type_p, string retry_after_p = {})
-	    : type(type_p), retry_after(std::move(retry_after_p)) {
+	HTTPRetryDecision(Type type_p, string retry_after_p = {}) : type(type_p), retry_after(std::move(retry_after_p)) {
 	}
 	static HTTPRetryDecision Throttled(const string &retry_after);
 
@@ -49,8 +48,6 @@ public:
 	//! Run once, then consume budget and wait before each requested retry. Exhaustion returns normally.
 	//! Callbacks establish replay safety; exceptions propagate without further retries.
 	DUCKDB_API void Run(const std::function<HTTPRetryDecision()> &attempt);
-	//! Retries admitted for HTTP 429 or 503 responses.
-	DUCKDB_API uint64_t ThrottledRetries() const;
 
 private:
 	//! Core's hook runs after admission/backoff, outside the attempt's transport-error handling.
@@ -65,7 +62,6 @@ private:
 
 	//! Retries admitted across all participating requests.
 	uint64_t retries_used = 0;
-	uint64_t throttled_retries = 0;
 };
 
 } // namespace duckdb

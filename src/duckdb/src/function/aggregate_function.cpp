@@ -114,7 +114,9 @@ BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function
 BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
     : definition(std::move(function_p)) {
 	auto &function = *definition;
-	qualified_name = function.GetQualifiedName();
+	name = function.name;
+	schema_name = function.GetSchemaName();
+	catalog_name = function.GetCatalogName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	properties = function.GetProperties();
@@ -145,13 +147,9 @@ void BoundAggregateFunction::ReplaceImplementation(const BoundAggregateFunction 
 }
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
-	SetName(function.GetName());
-	// The replacement is a specialized implementation of the function we were bound from, and is usually built by
-	// a factory rather than handed out by a catalog entry. Only take its qualification when it has one, so that
-	// specializing an implementation does not drop the catalog and schema name of the definition.
-	if (!function.GetCatalogName().empty() || !function.GetSchemaName().empty()) {
-		qualified_name = function.GetQualifiedName();
-	}
+	this->name = function.name;
+	this->schema_name = function.GetSchemaName();
+	this->catalog_name = function.GetCatalogName();
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();

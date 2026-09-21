@@ -2,7 +2,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
@@ -29,12 +29,6 @@ bool SimpleBufferedData::HasBlockedSink() {
 	return !blocked_sinks.empty();
 }
 
-bool SimpleBufferedData::HasObservableUnit() {
-	annotated_lock_guard<annotated_mutex> lock(glock);
-	// Readiness is the unit queue, never the byte count: units with rows but zero data bytes exist
-	return !unread_units.empty();
-}
-
 void SimpleBufferedData::CollectRestartableSinks(annotated_lock_guard<annotated_mutex> &lock,
                                                  vector<BlockedSink> &to_unblock) {
 	D_ASSERT(to_unblock.empty());
@@ -42,16 +36,17 @@ void SimpleBufferedData::CollectRestartableSinks(annotated_lock_guard<annotated_
 	to_unblock.reserve(blocked_sinks.size());
 	while (!blocked_sinks.empty()) {
 		auto &front = blocked_sinks.front();
-		// Sinks restart in FIFO order. Stop at the first unit that does not fit yet
-		if (buffered_count > 0 && buffered_count + front.PendingBytes() > BufferSize()) {
+		// Sinks restart in FIFO order. Stop at the first chunk that does not fit yet
+		if (buffered_count > 0 && buffered_count + front.pending_bytes > BufferSize()) {
 			break;
 		}
-		// Deposit the parked unit, so it is visible before the producer wakes.
-		// Parks always carry their unit; the guard keeps a null from corrupting the queue
-		if (front.pending_unit) {
-			buffered_count += front.pending_unit->byte_size;
-			unread_units.push(std::move(front.pending_unit));
+		// Deposit the parked copy, so the chunk is visible before the producer wakes.
+		// Parks always carry their copy; the guard keeps a null from corrupting the queue
+		if (front.pending_chunk) {
+			buffered_count += front.pending_bytes;
+			unread_chunks.push(BufferedChunk {std::move(front.pending_chunk), front.pending_bytes});
 			peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
+			front.pending_bytes = 0;
 		}
 		to_unblock.push_back(std::move(front));
 		blocked_sinks.pop();
@@ -92,42 +87,45 @@ void SimpleBufferedData::AssertNoBlockedSinks() {
 #endif
 }
 
-unique_ptr<ResultUnit> SimpleBufferedData::Scan() {
+unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	if (Closed()) {
 		return nullptr;
 	}
 
-	unique_ptr<ResultUnit> unit;
+	unique_ptr<DataChunk> chunk;
 	vector<BlockedSink> to_unblock;
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);
-		if (unread_units.empty()) {
+		if (unread_chunks.empty()) {
 			Close();
 			return nullptr;
 		}
-		unit = std::move(unread_units.front());
-		unread_units.pop();
-		buffered_count -= unit->byte_size;
+		auto ref = std::move(unread_chunks.front());
+		unread_chunks.pop();
+		chunk = std::move(ref.chunk);
+		buffered_count -= ref.data_size;
 		// The pop restarts blocked producers below the low-water mark
 		if (buffered_count < LowWaterMark(BufferSize())) {
 			CollectRestartableSinks(lock, to_unblock);
 		}
 	}
 	InvokeUnblocks(to_unblock);
-	return unit;
+	return chunk;
 }
 
-bool SimpleBufferedData::AppendOrBlock(unique_ptr<ResultUnit> unit, const InterruptState &blocked_sink) {
-	const idx_t unit_data_size = unit->byte_size;
+bool SimpleBufferedData::AppendOrBlock(DataChunk &to_append, const InterruptState &blocked_sink) {
+	// Copied outside the lock: both outcomes need the copy, and parallel producers copy concurrently
+	auto copy = CopyForBuffering(to_append);
+	const idx_t chunk_data_size = copy->GetDataSize();
 	annotated_lock_guard<annotated_mutex> lock(glock);
-	// The buffer admits a unit that fits, and always one unit when empty
-	if (buffered_count > 0 && buffered_count + unit_data_size > BufferSize()) {
-		// Park holding the finished unit. Restart selection deposits it at wake time
-		blocked_sinks.push(BlockedSink {blocked_sink, std::move(unit)});
+	// The buffer admits a chunk that fits, and always one chunk when empty
+	if (buffered_count > 0 && buffered_count + chunk_data_size > BufferSize()) {
+		// Park holding the finished copy. Restart selection deposits it at wake time
+		blocked_sinks.push(BlockedSink {blocked_sink, chunk_data_size, std::move(copy)});
 		return true;
 	}
-	unread_units.push(std::move(unit));
-	buffered_count += unit_data_size;
+	unread_chunks.push(BufferedChunk {std::move(copy), chunk_data_size});
+	buffered_count += chunk_data_size;
 	peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
 	return false;
 }

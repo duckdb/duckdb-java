@@ -285,7 +285,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

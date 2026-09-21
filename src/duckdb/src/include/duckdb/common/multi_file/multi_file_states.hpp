@@ -168,8 +168,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Lock
 	mutable mutex lock;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
-	//! Atomic because a cancelled file open settles it while the scheduling thread may hold the lock.
-	atomic<bool> error_opening_file {false};
+	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
@@ -258,8 +257,6 @@ public:
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)
 	idx_t rows_scanned = 0;
-	//! FinalizeScan may have no job, here's a special batch index for it
-	optional_idx finalize_batch_index;
 };
 
 } // namespace duckdb

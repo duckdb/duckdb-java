@@ -713,7 +713,6 @@ ScalarFunction ParquetVariantConversion::GetBytesToVariantFunction() {
 	ScalarFunction function("variant_bytes_to_variant", {}, LogicalType::VARIANT(), VariantBytesToVariantFunction);
 	function.GetSignature().AddParameter("blob", LogicalType::BLOB);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	function.SetFallible();
 	return function;
 }
 
