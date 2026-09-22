@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/stream_execution_result.hpp
+// duckdb/common/enums/file_sync_mode.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,14 +12,6 @@
 
 namespace duckdb {
 
-enum class StreamExecutionResult : uint8_t {
-	CHUNK_READY,
-	CHUNK_NOT_READY,
-	EXECUTION_ERROR,
-	EXECUTION_CANCELLED,
-	BLOCKED,
-	NO_TASKS_AVAILABLE,
-	EXECUTION_FINISHED
-};
+enum class FileSyncMode : uint8_t { STANDARD, NONE, FULL };
 
 } // namespace duckdb

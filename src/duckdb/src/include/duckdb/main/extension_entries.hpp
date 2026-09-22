@@ -1317,6 +1317,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
     {"hnsw_enable_experimental_persistence", "vss"},
+    {"hnsw_prefilter", "vss"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
@@ -1537,8 +1538,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
-    {"DuckLakeMetadata", "ducklake"},
-    {"Iceberg", "iceberg"},
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
