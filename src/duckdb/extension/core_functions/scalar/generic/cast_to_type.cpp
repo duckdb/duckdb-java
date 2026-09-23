@@ -18,8 +18,7 @@ unique_ptr<Expression> BindCastToTypeFunction(FunctionBindExpressionInput &input
 	if (return_type.id() == LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("cast_to_type cannot be used to cast to NULL");
 	}
-	auto result = BoundCastExpression::AddCastToType(input.context, std::move(input.children[0]), return_type);
-	return Expression::PreserveReturnType(return_type, std::move(result));
+	return BoundCastExpression::AddCastToType(input.context, std::move(input.children[0]), return_type);
 }
 
 } // namespace

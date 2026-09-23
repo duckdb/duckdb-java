@@ -360,12 +360,8 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
-	info->indexes.AddIndex(std::move(index), index_oid);
-}
-
-void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
+void DataTable::AddIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index));
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -747,9 +743,9 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		if (!global_conflicts && !local_conflicts) {
 			conflict = 0;
 		} else if (!global_conflicts && local_conflicts) {
-			conflict = local_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
 		} else if (global_conflicts && !local_conflicts) {
-			conflict = global_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
 		} else {
 			auto &global_validity = global_conflict_manager.GetFirstValidity();
 			auto &local_validity = local_conflict_manager.GetFirstValidity();
@@ -1138,7 +1134,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	auto row_start_aligned =
-	    state.table_state.GetRowGroup()->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
+	    state.table_state.row_group->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
@@ -1690,7 +1686,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
+	info->indexes.AddIndex(std::move(art));
 }
 
 } // namespace duckdb

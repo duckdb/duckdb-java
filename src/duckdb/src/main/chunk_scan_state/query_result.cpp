@@ -1,4 +1,5 @@
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 namespace duckdb {
@@ -11,7 +12,13 @@ QueryResultChunkScanState::~QueryResultChunkScanState() {
 
 bool QueryResultChunkScanState::InternalLoad(ErrorData &error) {
 	D_ASSERT(!finished);
-	return result.TryFetchOrError(current_chunk, error);
+	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = result.Cast<StreamQueryResult>();
+		if (!stream_result.IsOpen()) {
+			return true;
+		}
+	}
+	return result.TryFetch(current_chunk, error);
 }
 
 bool QueryResultChunkScanState::HasError() const {

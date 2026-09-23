@@ -5,7 +5,8 @@
 #include "duckdb/common/column_data_collection_render_interface.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
-#include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 
 namespace duckdb::capiv2 {
@@ -35,21 +36,21 @@ DUCKDB_V2_RESULT_TYPE MapResultType(StatementReturnType t) {
 // ResultWrapperV2 state machine
 // ---------------------------------------------------------------------------
 
-void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal) {
-	if (next_handle->HasError()) {
+void ResultWrapperV2::BeginPending(unique_ptr<PendingQueryResult> next_pending, bool is_principal) {
+	if (next_pending->HasError()) {
 		// Re-throw the typed ErrorData so the exception's ExceptionType is
 		// preserved and routed through GetErrorCodeFromExceptionType.
-		next_handle->GetErrorObject().Throw();
+		next_pending->GetErrorObject().Throw();
 	}
 	principal_active = is_principal;
 	if (is_principal) {
-		types = next_handle->GetTypes();
-		names = next_handle->GetNames();
-		statement_type = next_handle->GetStatementType();
-		properties = next_handle->GetStatementProperties();
+		types = next_pending->GetTypes();
+		names = next_pending->GetNames();
+		statement_type = next_pending->GetStatementType();
+		properties = next_pending->GetStatementProperties();
 		metadata_available = true;
 	}
-	handle = std::move(next_handle);
+	pending = std::move(next_pending);
 	state = State::PENDING;
 }
 
@@ -69,14 +70,15 @@ void ResultWrapperV2::StartNextFragment() {
 	// Parameters bind only to the first fragment (statement_execute rejects them on
 	// a statement that expands, so that fragment is the user's statement). Later
 	// fragments take the no-values path.
-	auto next_handle = (this_index == 0 && !param_values.empty())
-	                       ? context->Submit(std::move(stmt), param_values, QueryParameters())
-	                       : context->Submit(std::move(stmt), QueryParameters());
+	auto next_pending =
+	    (this_index == 0 && !param_values.empty())
+	        ? context->PendingQuery(std::move(stmt), param_values, QueryResultOutputType::ALLOW_STREAMING)
+	        : context->PendingQuery(std::move(stmt), QueryResultOutputType::ALLOW_STREAMING);
 	// Principal selection is a property of the fragment group; compute it here, then
-	// hand the handle to the shared BeginPending seam. A HasError() handle is left
+	// hand the pending to the shared BeginPending seam. A HasError() pending is left
 	// for BeginPending to raise (return_type is meaningless on it).
-	bool has_result = !next_handle->HasError() &&
-	                  next_handle->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT;
+	bool has_result = !next_pending->HasError() &&
+	                  next_pending->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT;
 	if (principal_seen && has_result) {
 		// ClientContext::Query would chain these as separate results with
 		// separate schemas; a single stream cannot. No known expansion
@@ -91,7 +93,7 @@ void ResultWrapperV2::StartNextFragment() {
 	if (has_result) {
 		principal_seen = true;
 	}
-	BeginPending(std::move(next_handle), is_principal);
+	BeginPending(std::move(next_pending), is_principal);
 }
 
 void ResultWrapperV2::RequireMetadata() const {
@@ -108,8 +110,8 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	// engine's message, mirroring the eager ClientContext::Query path.
 	bool user_cancelled = error_data.Type() == ExceptionType::INTERRUPT && busy_slot &&
 	                      busy_slot->cancel_requested.load(std::memory_order_relaxed);
-	stream.reset();
-	handle.reset();
+	pending.reset();
+	result.reset();
 	fragments.clear();
 	try {
 		RollbackIncompleteGroup();
@@ -142,91 +144,104 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 		// internal results.
 		error.Throw();
 	case State::PENDING: {
-		QueryResultState exec;
+		PendingExecutionResult exec;
 		try {
-			exec = handle->ExecuteTask();
+			exec = pending->ExecuteTask();
 		} catch (std::exception &ex) {
 			return HandleExecutionError(ErrorData(ex));
 		}
 		switch (exec) {
-		case QueryResultState::NOT_READY:
-		case QueryResultState::BLOCKED:
-		case QueryResultState::NO_TASKS_AVAILABLE:
+		case PendingExecutionResult::RESULT_NOT_READY:
+		case PendingExecutionResult::BLOCKED:
+		case PendingExecutionResult::NO_TASKS_AVAILABLE:
 			return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-		case QueryResultState::EXECUTION_ERROR:
-			return HandleExecutionError(handle->GetErrorObject());
-		case QueryResultState::READY:
-		case QueryResultState::FINISHED: {
-			// Transition to the streaming phase. Reporting WAITING after the
-			// transition keeps the contract simple: one unit of work per
-			// step; the next step hits the stream.
+		case PendingExecutionResult::EXECUTION_ERROR:
+			return HandleExecutionError(pending->GetErrorObject());
+		case PendingExecutionResult::RESULT_READY:
+		case PendingExecutionResult::EXECUTION_FINISHED: {
+			// Transition to the streaming phase. Execute() is (mostly)
+			// instant once the pending result is ready. Reporting WAITING
+			// after the transition keeps the contract simple: one unit of
+			// work per step; the next step hits the stream.
+			unique_ptr<QueryResult> res;
 			try {
-				if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
-					// The statement completes before its result is returned:
-					// its chunks come from the retained handle instead.
-					handle->Complete();
-					if (handle->HasError()) {
-						return HandleExecutionError(handle->GetErrorObject());
-					}
-				} else {
-					stream = make_uniq<QueryResultStream>(std::move(handle));
-				}
+				res = pending->Execute();
 			} catch (std::exception &ex) {
 				return HandleExecutionError(ErrorData(ex));
 			}
+			pending.reset();
+			if (res->HasError()) {
+				return HandleExecutionError(res->GetErrorObject());
+			}
+			result = std::move(res);
 			state = State::STREAMING;
 			return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 		}
 		}
-		D_ASSERT(false); // unmapped QueryResultState variant
+		D_ASSERT(false); // unmapped PendingExecutionResult variant
 		return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 	}
 	case State::STREAMING: {
-		if (stream) {
-			QueryResultState exec;
+		if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
+			auto &stream = result->Cast<StreamQueryResult>();
+			StreamExecutionResult exec;
 			try {
-				exec = stream->ExecuteTask();
+				exec = stream.ExecuteTask();
 			} catch (std::exception &ex) {
-				// The stream records an interrupt as an error rather than
-				// throwing; this is a guard for anything that escapes.
+				// SimpleBufferedData surfaces a pending interrupt by
+				// throwing InterruptException from ExecuteTask; route it
+				// through the same sink as EXECUTION_CANCELLED.
 				return HandleExecutionError(ErrorData(ex));
 			}
 			switch (exec) {
-			case QueryResultState::NOT_READY:
-			case QueryResultState::BLOCKED:
-			case QueryResultState::NO_TASKS_AVAILABLE:
+			case StreamExecutionResult::CHUNK_NOT_READY:
+			case StreamExecutionResult::BLOCKED:
+			case StreamExecutionResult::NO_TASKS_AVAILABLE:
 				return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-			case QueryResultState::EXECUTION_ERROR:
-				return HandleExecutionError(stream->GetErrorObject());
-			case QueryResultState::READY:
-			case QueryResultState::FINISHED:
+			case StreamExecutionResult::EXECUTION_CANCELLED:
+				pending.reset();
+				result.reset();
+				fragments.clear();
+				try {
+					RollbackIncompleteGroup();
+				} catch (...) {
+					// Best effort; cancellation still wins.
+				}
+				ReleaseBusySlot();
+				state = State::CANCELLED;
+				return DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED;
+			case StreamExecutionResult::EXECUTION_ERROR:
+				return HandleExecutionError(stream.GetErrorObject());
+			case StreamExecutionResult::CHUNK_READY:
+			case StreamExecutionResult::EXECUTION_FINISHED:
 				// Both states mean "Fetch without doing more execution
-				// work": READY has a buffered chunk; after FINISHED the
-				// buffer may still hold trailing chunks and Fetch drains
-				// them until it reports end-of-stream.
+				// work": CHUNK_READY has a buffered chunk; after
+				// EXECUTION_FINISHED the buffer may still hold trailing
+				// chunks and Fetch drains them until it reports
+				// end-of-stream.
 				break;
 			}
 		}
-		// Fetch the next chunk. For a statement that completes before its
-		// result is returned the data is fully available and every step
+		// Fetch the next buffered chunk. For the materialized fallback
+		// (non-row statements can come back materialized even with
+		// ALLOW_STREAMING) the data is fully available and every step
 		// lands here directly.
 		unique_ptr<DataChunk> chunk;
 		try {
-			chunk = stream ? stream->Fetch() : handle->Fetch();
+			chunk = result->Fetch();
 		} catch (std::exception &ex) {
 			return HandleExecutionError(ErrorData(ex));
 		}
-		if (stream ? stream->HasError() : handle->HasError()) {
-			// The stream reports late execution errors by setting the error
-			// and returning null.
-			return HandleExecutionError(stream ? stream->GetErrorObject() : handle->GetErrorObject());
+		if (result->HasError()) {
+			// StreamQueryResult::Fetch reports late execution errors by
+			// setting the error and returning null.
+			return HandleExecutionError(result->GetErrorObject());
 		}
 		if (!chunk || chunk->size() == 0) {
-			// A stream normalizes end-of-stream to null (and closes); the
-			// size() == 0 arm is needed for the retained handle, whose Fetch
-			// does not normalize.
-			stream.reset();
-			handle.reset();
+			// Stream results already normalize end-of-stream to null (and
+			// close) in FetchInternal; the size() == 0 arm is needed for the
+			// materialized fallback, whose Fetch does not normalize.
+			result.reset();
 			if (fragment_index < fragments.size()) {
 				// More fragments in the group: start the next one and keep
 				// reporting WAITING. FINISHED only after the whole group
@@ -263,41 +278,44 @@ void ResultWrapperV2::Wait() {
 	// executability first, the same way the steps do.
 	switch (state) {
 	case State::PENDING: {
-		// Poll re-validates executability and reports the engine state
-		// without running work. Its outcome decides whether blocking is
-		// safe: the engine may already have processed an execution error and
-		// ended the query internally (waiting then dereferences the closed
-		// query), and a ready or finished query has no task to wake on.
-		switch (handle->Poll()) {
-		case QueryResultState::BLOCKED:
-		case QueryResultState::NO_TASKS_AVAILABLE:
+		// CheckPulse re-validates executability (throwing a clean error when
+		// the result is closed) and reports the engine state without running
+		// work. Its outcome decides whether blocking is safe: the engine may
+		// already have processed an execution error and ended the query
+		// internally (waiting then dereferences the closed query), and a
+		// ready or finished query has no task to wake on.
+		switch (pending->CheckPulse()) {
+		case PendingExecutionResult::BLOCKED:
+		case PendingExecutionResult::NO_TASKS_AVAILABLE:
 			// No progress possible right now; this is the one case where
 			// blocking is meaningful.
-			handle->WaitForTask();
+			pending->WaitForTask();
 			return;
-		case QueryResultState::EXECUTION_ERROR:
+		case PendingExecutionResult::EXECUTION_ERROR:
 			// The error (interrupts included) is already recorded on the
-			// handle and the engine closed the query. Transition the state
-			// machine now: a later ExecuteTask would trip the engine's
+			// pending result and the engine closed the query. Transition the
+			// state machine now: a later ExecuteTask would trip the engine's
 			// closed-result check and misreport the error as INVALID_INPUT.
-			HandleExecutionError(handle->GetErrorObject());
+			HandleExecutionError(pending->GetErrorObject());
 			return;
 		default:
-			// NOT_READY / READY / FINISHED: the next step makes progress
-			// without blocking.
+			// RESULT_NOT_READY / RESULT_READY / EXECUTION_FINISHED: the next
+			// step makes progress without blocking.
 			return;
 		}
 	}
 	case State::STREAMING:
-		if (stream) {
-			if (!stream->IsOpen()) {
+		if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
+			auto &stream = result->Cast<StreamQueryResult>();
+			if (!stream.IsOpen()) {
 				// Closed or invalidated: the next step returns without
 				// blocking, so there is nothing to wait for.
 				return;
 			}
-			stream->WaitForTask();
+			stream.WaitForTask();
 		}
-		// A retained result makes progress on every step; nothing to wait for.
+		// Materialized fallback: every step makes progress; nothing to
+		// wait for.
 		return;
 	default:
 		// Terminal states: waiting is a no-op, never an error.
@@ -341,7 +359,7 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
                                 identifier_map_t<BoundParameterData> &values) -> duckdb_v2_result_handle {
 	auto wrapper = make_uniq<ResultWrapperV2>();
 	// One live result per connection, claimed the way statement_execute claims it and
-	// before the submission runs, which would otherwise cancel the live stream.
+	// before PendingQuery runs, which would otherwise cancel the live stream.
 	auto busy_slot = GetBusySlot(*context);
 	void *expected = nullptr;
 	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
@@ -356,7 +374,7 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
 	// the wrapping transaction all happened at prepare time, so this bypasses the fragment
 	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
 	wrapper->fragment_count = 1;
-	wrapper->BeginPending(prepared.Submit(values), true);
+	wrapper->BeginPending(prepared.PendingQuery(values, /*allow_stream_result=*/true), true);
 	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
 	// would otherwise be what the result reports. Report the type of the statement that was
 	// prepared instead, so a prepared result is indistinguishable from a stateless one.

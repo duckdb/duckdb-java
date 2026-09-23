@@ -1,6 +1,5 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -16,7 +15,7 @@ struct RepeatRowFunctionData : public TableFunctionData {
 struct RepeatRowOperatorData : public GlobalTableFunctionState {
 	RepeatRowOperatorData() : current_count(0) {
 	}
-	atomic<idx_t> current_count;
+	idx_t current_count;
 };
 
 static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunctionBindInput &input,
@@ -33,14 +32,7 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 	if (inputs.empty()) {
 		throw BinderException("repeat_rows requires at least one column to be specified");
 	}
-	if (entry->second.IsNull()) {
-		throw BinderException("num_rows should be an integer value >= 0");
-	}
-	auto repeat_rows = entry->second.GetValue<int64_t>();
-	if (repeat_rows < 0) {
-		throw BinderException("num_rows cannot be less than zero");
-	}
-	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(repeat_rows));
+	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(entry->second.GetValue<int64_t>()));
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -59,17 +51,6 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 	state.current_count += remaining;
 }
 
-static double RepeatRowProgress(ClientContext &, const FunctionData *bind_data_p,
-                                const GlobalTableFunctionState *state_p) {
-	if (!state_p) {
-		return -1;
-	}
-	auto &bind_data = bind_data_p->Cast<RepeatRowFunctionData>();
-	auto &state = state_p->Cast<RepeatRowOperatorData>();
-	return bind_data.target_count == 0 ? 100
-	                                   : 100.0 * double(state.current_count.load()) / double(bind_data.target_count);
-}
-
 static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<RepeatRowFunctionData>();
 	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
@@ -80,7 +61,6 @@ void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	repeat_row.SetVarArgs(LogicalType::ANY);
 	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
 	repeat_row.cardinality = RepeatRowCardinality;
-	repeat_row.table_scan_progress = RepeatRowProgress;
 	set.AddFunction(repeat_row);
 }
 

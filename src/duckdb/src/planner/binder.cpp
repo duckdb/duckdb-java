@@ -178,6 +178,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = Bind(ref.Cast<MatchRecognizeRef>());
+		break;
 	case TableReferenceType::BOUND_TABLE_REF:
 		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
@@ -605,7 +608,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	// returned, it should be guaranteed that the row has been inserted.
 	// see https://github.com/duckdb/duckdb/issues/8310
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

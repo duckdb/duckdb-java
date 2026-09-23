@@ -159,7 +159,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_timestamp.cpp
   src/duckdb/extension/parquet/parquet_writer.cpp
-  src/duckdb/extension/parquet/reader/variant/parquet_variant_shredding.cpp
   src/duckdb/extension/parquet/serialize_parquet.cpp
   src/duckdb/extension/parquet/zstd_file_system.cpp
   src/duckdb/generated_extension_loader_package_build.cpp
@@ -372,6 +371,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/ub_extension_parquet_reader.cpp
+  src/duckdb/ub_extension_parquet_reader_variant.cpp
   src/duckdb/ub_extension_parquet_writer.cpp
   src/duckdb/ub_extension_parquet_writer_variant.cpp
   src/duckdb/ub_src_catalog.cpp

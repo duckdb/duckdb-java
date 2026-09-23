@@ -30,6 +30,8 @@ struct DuckDBErrorDetails {
 
 #include <string.h>
 
+#include "duckdb/main/materialized_query_result.hpp"
+
 #include "duckdb/parser/keyword_helper.hpp"
 
 // We must leak the symbols of the init function
