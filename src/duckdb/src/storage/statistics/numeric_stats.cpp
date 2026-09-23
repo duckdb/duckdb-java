@@ -9,19 +9,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
-#include <limits>
-
 namespace duckdb {
-
-namespace {
-
-template <class T>
-void InitializeEmptyFloatingPointStats(BaseStatistics &result) {
-	NumericStats::SetMin(result, std::numeric_limits<T>::quiet_NaN());
-	NumericStats::SetMax(result, NumericLimits<T>::Minimum());
-}
-
-} // namespace
 
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
@@ -34,18 +22,8 @@ BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::FLOAT:
-		InitializeEmptyFloatingPointStats<float>(result);
-		break;
-	case PhysicalType::DOUBLE:
-		InitializeEmptyFloatingPointStats<double>(result);
-		break;
-	default:
-		SetMin(result, Value::MaximumValue(result.GetType()));
-		SetMax(result, Value::MinimumValue(result.GetType()));
-		break;
-	}
+	SetMin(result, Value::MaximumValue(result.GetType()));
+	SetMax(result, Value::MinimumValue(result.GetType()));
 	return result;
 }
 
@@ -64,13 +42,6 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 		return;
 	}
 	D_ASSERT(stats.GetType() == other.GetType());
-	// If the min and max of the stats are not valid, we need to merge the min and max of the other stats.
-	if (NumericStats::HasMin(stats) && NumericStats::HasMax(stats) &&
-	    NumericStats::Min(stats) > NumericStats::Max(stats)) {
-		NumericStats::SetMin(stats, NumericStats::HasMin(other) ? NumericStats::Min(other) : Value());
-		NumericStats::SetMax(stats, NumericStats::HasMax(other) ? NumericStats::Max(other) : Value());
-		return;
-	}
 	if (NumericStats::HasMin(other) && NumericStats::HasMin(stats)) {
 		auto other_min = NumericStats::Min(other);
 		if (other_min < NumericStats::Min(stats)) {

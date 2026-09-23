@@ -12,8 +12,6 @@
 
 #include "src/execution/expression_executor_state.cpp"
 
-#include "src/execution/ie_join_union.cpp"
-
 #include "src/execution/join_hashtable.cpp"
 
 #include "src/execution/mark_join_row_comparison.cpp"

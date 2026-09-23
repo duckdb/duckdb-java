@@ -17,7 +17,6 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -41,6 +40,10 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BetweenFunctionData;
+struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -64,6 +67,23 @@ enum class FunctionCollationHandling : uint8_t {
 
 struct FunctionData {
 public:
+	FunctionData() = default;
+	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData &operator=(const FunctionData &other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
+	FunctionData &operator=(FunctionData &&other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -86,6 +106,22 @@ public:
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
+
+private:
+	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
+	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
+	}
+	InternalKind GetInternalKind() const {
+		return internal_kind;
+	}
+
+	InternalKind internal_kind = InternalKind::GENERIC;
+
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
+	friend struct BetweenFunctionData;
+	friend struct CastFunctionData;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -305,34 +341,20 @@ public:
 		name = std::move(name_p);
 	}
 	auto SetSchemaName(Identifier schema_name_p) -> void {
-		qualified_name = QualifiedName(GetCatalogName(), std::move(schema_name_p), name);
+		schema_name = std::move(schema_name_p);
 	}
 	auto SetCatalogName(Identifier catalog_name_p) -> void {
-		auto path = qualified_name.Path();
-		if (path.size() < 3) {
-			qualified_name = QualifiedName(std::move(catalog_name_p), GetSchemaName(), name);
-		} else {
-			path.pop_back();
-			path[0] = std::move(catalog_name_p);
-			qualified_name = QualifiedName(std::move(path), name);
-		}
-	}
-	void SetQualifiedName(QualifiedName name_p) {
-		name = name_p.Name();
-		qualified_name = std::move(name_p);
-	}
-	QualifiedName GetQualifiedName() const {
-		return qualified_name.WithName(name);
+		catalog_name = std::move(catalog_name_p);
 	}
 
 	const Identifier &GetName() const {
 		return name;
 	}
 	const Identifier &GetSchemaName() const {
-		return qualified_name.Schema();
+		return schema_name;
 	}
 	const Identifier &GetCatalogName() const {
-		return qualified_name.Catalog();
+		return catalog_name;
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
@@ -350,7 +372,10 @@ public:
 	                                      const named_parameter_type_map_t &named_parameters);
 
 private:
-	QualifiedName qualified_name;
+	//! Optional catalog name of the function
+	Identifier catalog_name;
+	//! Optional schema name of the function
+	Identifier schema_name;
 };
 
 class SimpleFunction : public Function {
@@ -516,7 +541,9 @@ public:
 
 class BoundSimpleFunction {
 protected:
-	QualifiedName qualified_name;
+	Identifier name;
+	Identifier schema_name;
+	Identifier catalog_name;
 	string extra_info;
 
 	//! The set of arguments of the function
@@ -526,24 +553,17 @@ protected:
 
 public:
 	void SetName(Identifier name_p) {
-		qualified_name = qualified_name.WithName(std::move(name_p));
+		name = std::move(name_p);
 	}
 
 	const Identifier &GetName() const {
-		return qualified_name.Name();
+		return name;
 	}
 	const Identifier &GetSchemaName() const {
-		return qualified_name.Schema();
+		return schema_name;
 	}
 	const Identifier &GetCatalogName() const {
-		return qualified_name.Catalog();
-	}
-
-	const QualifiedName &GetQualifiedName() const {
-		return qualified_name;
-	}
-	void SetQualifiedName(QualifiedName name_p) {
-		qualified_name = std::move(name_p);
+		return catalog_name;
 	}
 
 	const string &GetExtraInfo() const {

@@ -161,29 +161,30 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		D_ASSERT(index_entry);
 		auto &index = index_entry->Cast<DuckIndexEntry>();
 		index.initial_index_size = bound_index->GetInMemorySize();
-		storage.AddIndex(std::move(bound_index), index.oid);
-		return SinkFinalizeType::READY;
-	}
 
-	// Ensure that there are no other indexes with that name on this table.
-	const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-	if (indexes.Contains(info->GetIndexName())) {
-		throw CatalogException("an index with that name already exists for this table: %s",
-		                       SQLIdentifier(info->GetIndexName()));
-	}
-
-	// PRIMARY KEY columns cannot be NULL.
-	if (info->constraint_type == IndexConstraintType::PRIMARY) {
-		auto &local_storage = LocalStorage::Get(context, storage.db);
-		for (const auto &column_id : storage_ids) {
-			BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
-			local_storage.VerifyNewConstraint(storage, not_null);
+	} else {
+		// Ensure that there are no other indexes with that name on this table.
+		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
+		if (indexes.Contains(info->GetIndexName())) {
+			throw CatalogException("an index with that name already exists for this table: %s",
+			                       SQLIdentifier(info->GetIndexName()));
 		}
+
+		// PRIMARY KEY columns cannot be NULL.
+		if (info->constraint_type == IndexConstraintType::PRIMARY) {
+			auto &local_storage = LocalStorage::Get(context, storage.db);
+			for (const auto &column_id : storage_ids) {
+				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
+				local_storage.VerifyNewConstraint(storage, not_null);
+			}
+		}
+
+		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
+		catalog.Alter(context, *alter_table_info);
 	}
 
-	auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
-	catalog.Alter(context, *alter_table_info);
-	storage.AddConstraintIndex(std::move(bound_index));
+	// Add the index to the storage.
+	storage.AddIndex(std::move(bound_index));
 
 	return SinkFinalizeType::READY;
 }

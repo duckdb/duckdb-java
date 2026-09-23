@@ -100,7 +100,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	child_pushdown.GenerateFilters();
 
 	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
-	return PushFinalFilters(std::move(op));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

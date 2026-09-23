@@ -240,7 +240,7 @@ static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, ToVariantGlob
 		}
 
 		for (idx_t j = 0; j < lengths_size; j++) {
-			OffsetData::AddBlobOffset(blob_offset, lengths[j]);
+			blob_offset += lengths[j];
 		}
 	}
 	return true;

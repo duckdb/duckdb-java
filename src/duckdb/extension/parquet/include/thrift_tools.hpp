@@ -148,9 +148,7 @@ struct ReadAheadBuffer {
 	// Prefetch all read heads
 	void Prefetch() {
 		for (auto &read_head : read_heads) {
-			if (!read_head->data_isset) {
-				read_head->Fetch(file_handle);
-			}
+			read_head->Fetch(file_handle);
 		}
 	}
 };

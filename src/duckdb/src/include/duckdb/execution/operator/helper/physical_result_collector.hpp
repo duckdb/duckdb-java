@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -57,9 +56,11 @@ public:
 	virtual bool IsStreaming() const {
 		return false;
 	}
-	//! Whether this collector builds its own result object, rather than serving it through a result buffer
-	virtual bool BuildsOwnResult() const {
-		return true;
+	//! Whether a producer is parked on this sink and only the consumer can release it. A streaming
+	//! collector without a parked-producer notion reports true: it is never waited on forever, at
+	//! the price of returning to the consumer on every unrelated block
+	virtual bool HasBlockedResultProducer(GlobalSinkState &state) const {
+		return IsStreaming();
 	}
 
 protected:

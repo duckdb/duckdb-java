@@ -20,21 +20,6 @@ class ClientContext;
 
 class FunctionSerializer {
 private:
-	static QualifiedName DeserializeQualifiedName(Deserializer &deserializer, Identifier name) {
-		auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
-		auto schema = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
-		auto qname = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(507, "qname", QualifiedName());
-		if (!qname.Name().empty()) {
-			if (qname.Schema().empty()) {
-				return QualifiedName(qname.Catalog().empty() ? Identifier::SystemCatalog() : qname.Catalog(),
-				                     Identifier::DefaultSchema(), qname.Name());
-			}
-			return qname.Catalog().empty() ? qname.WithCatalog(Identifier::SystemCatalog()) : qname;
-		}
-		return QualifiedName(catalog.empty() ? Identifier::SystemCatalog() : catalog,
-		                     schema.empty() ? Identifier::DefaultSchema() : schema, std::move(name));
-	}
-
 	class DeserializeContext {
 	public:
 		DeserializeContext(Deserializer &deserializer_p, const LogicalType &return_type,
@@ -48,8 +33,7 @@ private:
 				throw;
 			}
 		}
-		~DeserializeContext() { // NOLINT(bugprone-exception-escape): Unset only throws if the stack invariant is
-			                    // broken.
+		~DeserializeContext() {
 			deserializer.Unset<const_expression_list_t>();
 			deserializer.Unset<LogicalType>();
 		}
@@ -73,26 +57,26 @@ private:
 		function.SetLogicalReturnType(return_type.IsAggregateState() ? function.GetReturnType() : return_type);
 	}
 
+	static void RestoreLogicalSignature(BoundWindowFunction &, const vector<unique_ptr<Expression>> &,
+	                                    const LogicalType &) {
+	}
+
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.GetName().empty());
-		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-			serializer.WriteProperty(500, "name", function.GetName());
-		}
+		serializer.WriteProperty(500, "name", function.GetName());
 		serializer.WriteProperty(501, "arguments", function.GetArguments());
 		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 			// binds no longer erase the arguments they fold into their bind data, so the argument list above is
 			// always the full one - older versions read this field unconditionally, so write it (empty) for them
 			serializer.WriteProperty(502, "original_arguments", vector<LogicalType>());
 		}
-
-		if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-			serializer.WriteProperty(507, "qname", function.GetQualifiedName());
-		} else {
-			serializer.WritePropertyWithDefault(505, "catalog_name", function.GetCatalogName(), Identifier());
-			serializer.WritePropertyWithDefault(506, "schema_name", function.GetSchemaName(), Identifier());
-		}
+		// These are optional fields that are written out of numeric order, older
+		// databases won't contain the fields, so the defaults will be used, but if
+		// the fields are present, they will be used.
+		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
+		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -112,13 +96,18 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type,
-	                                const QualifiedName &qualified_name, const vector<LogicalType> &arguments) {
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, qualified_name);
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
+	                                const Identifier &schema_name, const Identifier &name,
+	                                const vector<LogicalType> &arguments) {
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
+		auto &func_catalog =
+		    Catalog::GetEntry(context, catalog_type,
+		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
-			                        qualified_name.Name().GetIdentifierName());
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		return *functions.functions.GetFunctionByArguments(context, arguments);
@@ -128,10 +117,17 @@ public:
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
 	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
-		auto name = deserializer.ReadPropertyWithDefault<Identifier>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
-		auto qualified_name = DeserializeQualifiedName(deserializer, std::move(name));
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
+		if (catalog_name.empty()) {
+			catalog_name = Identifier::SystemCatalog();
+		}
+		if (schema_name.empty()) {
+			schema_name = Identifier::DefaultSchema();
+		}
 		RestoreErasedArguments(arguments, original_arguments);
 
 		if (arguments.empty() && children && !children->empty()) {
@@ -144,7 +140,8 @@ public:
 			}
 		}
 
-		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, qualified_name, arguments);
+		auto function =
+		    DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name, arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		if (has_serialize) {
 			function.GetArguments() = std::move(arguments);
@@ -208,12 +205,19 @@ public:
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
 
-		auto name = deserializer.ReadPropertyWithDefault<Identifier>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
-		auto qualified_name = DeserializeQualifiedName(deserializer, std::move(name));
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
+		if (catalog_name.empty()) {
+			catalog_name = Identifier::SystemCatalog();
+		}
+		if (schema_name.empty()) {
+			schema_name = Identifier::DefaultSchema();
+		}
 		RestoreErasedArguments(arguments, original_arguments);
 
 		if (arguments.empty() && !children.empty()) {
@@ -227,11 +231,12 @@ public:
 		}
 
 		// Now lookup the function in the catalog.
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, qualified_name);
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, QualifiedName(catalog_name, schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
-			                        qualified_name.Name().GetIdentifierName());
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		const auto function = functions.functions.GetFunctionByArguments(context, arguments);

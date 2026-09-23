@@ -393,7 +393,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
 	state.assignment_io_registered = false;
-	state.SetRowGroup(node);
+	state.row_group = node;
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -715,18 +715,24 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 	return result_count;
 }
 
+static BaseStatistics CreateRowIdStats(idx_t beg_row, idx_t end_row) {
+	D_ASSERT(end_row > beg_row);
+	auto result = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	result.SetHasNoNullFast();
+	NumericStats::SetMin(result, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(result, UnsafeNumericCast<row_t>(end_row - 1));
+	return result;
+}
+
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	if (end_row <= beg_row) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
-	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
-	dummy_stats.SetHasNoNullFast();
-	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
+	auto rowid_stats = CreateRowIdStats(beg_row, end_row);
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
-	return expr_filter.CheckStatistics(dummy_stats);
+	return expr_filter.CheckStatistics(rowid_stats);
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
@@ -743,7 +749,11 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					throw InternalException("Multi-column filter column index out of range");
 				}
 				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
-				if (storage_index.IsRowIdColumn() || storage_index.IsRowNumberColumn()) {
+				if (storage_index.IsRowIdColumn()) {
+					input_stats.push_back(CreateRowIdStats(row_start, row_start + count));
+					continue;
+				}
+				if (storage_index.IsRowNumberColumn()) {
 					supported = false;
 					break;
 				}
@@ -924,7 +934,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 					continue;
 				}
 				if (rate < 1) {
-					auto row_group_start = state.GetRowGroup()->GetRowStart();
+					auto row_group_start = state.row_group->GetRowStart();
 					sample_count =
 					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
@@ -946,8 +956,10 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
+		auto &current_row_group = state.row_group->GetNode();
+
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -1621,7 +1633,7 @@ bool RowGroup::HasUnchangedColumns() const {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
-	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
+	if (can_reuse_metadata && !HasChanges()) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
@@ -1909,12 +1921,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
-bool RowGroup::HasChanges(VisibilityBound bound) const {
+bool RowGroup::HasChanges() const {
 	if (has_changes) {
 		return true;
 	}
 	auto version_info_loaded = version_info.load();
-	if (version_info_loaded && version_info_loaded->HasUnserializedChanges(bound)) {
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
 		// we have deletes
 		return true;
 	}
@@ -2042,7 +2054,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges(VisibilityBound::AllCommitted());
+		return row_group->HasChanges();
 	}
 };
 

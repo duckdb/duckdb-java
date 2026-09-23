@@ -4,14 +4,6 @@
 
 namespace duckdb {
 
-ProgressData OuterJoinGlobalScanState::GetProgress() const {
-	const auto total = data->Count();
-	if (total == 0) {
-		return ProgressData {1.0, 1.0, false};
-	}
-	return ProgressData {double(rows_scanned.load()), double(total), false};
-}
-
 void OuterJoinLocalScanState::Reset() {
 	scan_chunk.Reset();
 	local_scan = ColumnDataLocalScanState();
@@ -85,7 +77,6 @@ idx_t OuterJoinMarker::MaxThreads() const {
 
 void OuterJoinMarker::InitializeScan(ColumnDataCollection &data, OuterJoinGlobalScanState &gstate) {
 	gstate.data = &data;
-	gstate.rows_scanned = 0;
 	data.InitializeScan(gstate.global_scan);
 }
 
@@ -116,9 +107,6 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
 				                           result_count);
 			}
-		}
-		gstate.rows_scanned += lstate.scan_chunk.size();
-		if (result_count > 0) {
 			return;
 		}
 	}

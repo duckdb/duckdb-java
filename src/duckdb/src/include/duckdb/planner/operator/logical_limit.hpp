@@ -23,8 +23,6 @@ public:
 
 	BoundLimitNode limit_val;
 	BoundLimitNode offset_val;
-	//! SQL offset before row group pruning removed rows from the scan.
-	optional_idx unpruned_offset;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

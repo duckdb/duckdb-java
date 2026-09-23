@@ -11,7 +11,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 
@@ -22,7 +21,6 @@ public:
 public:
 	PhysicalTableInOutFunction(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
 	                           unique_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
-	                           vector<idx_t> projection_ids_p, unique_ptr<TableFilterSet> table_filters_p,
 	                           idx_t estimated_cardinality, vector<column_t> projected_input);
 
 public:
@@ -59,10 +57,6 @@ private:
 	unique_ptr<FunctionData> bind_data;
 	//! The set of column ids to fetch
 	vector<ColumnIndex> column_ids;
-	//! The projected-out column ids
-	vector<idx_t> projection_ids;
-	//! Filters pushed into the table in-out function
-	unique_ptr<TableFilterSet> table_filters;
 	//! The set of input columns to project out
 	vector<column_t> projected_input;
 };

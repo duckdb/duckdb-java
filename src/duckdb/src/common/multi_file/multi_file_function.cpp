@@ -12,12 +12,7 @@ MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_
     : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
 }
 
-MultiFileGlobalState::~MultiFileGlobalState() {
-	if (read_ahead) {
-		// the file opens scheduled on the async pool reference this state - wait for them before it goes away
-		read_ahead->CancelAndDrain();
-	}
-}
+MultiFileGlobalState::~MultiFileGlobalState() = default;
 
 MultiFileReaderInterface::~MultiFileReaderInterface() {
 }
@@ -47,7 +42,7 @@ optional_idx MultiFileReaderInterface::MaxThreads(ClientContext &context, const 
 }
 
 void MultiFileReaderInterface::CombineSchemas(ClientContext &context,
-                                              const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
+                                              const vector<shared_ptr<BaseUnionData>> &union_data,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	identifier_map_t<idx_t> union_names_map;
 	for (auto &data : union_data) {
