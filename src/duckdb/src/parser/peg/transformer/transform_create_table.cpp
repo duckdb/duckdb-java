@@ -210,11 +210,6 @@ Identifier PEGTransformerFactory::TransformStringLiteralIdentifier(PEGTransforme
 	return Identifier(string_literal);
 }
 
-string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier.GetIdentifierName();
-}
-
 vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
                                                                 const Identifier &identifier,
                                                                 const optional<vector<string>> &dot_col_label) {
@@ -296,14 +291,14 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	if (has_generated) {
 		auto generated = std::move(*generated_column);
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 		if (column_type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(column_type, std::move(generated.expr));
 		}
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 

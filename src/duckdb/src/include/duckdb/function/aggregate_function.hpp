@@ -646,7 +646,7 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
@@ -659,7 +659,7 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
-	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
+	UnaryAggregate(const LogicalType &input_type, const LogicalType &return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
@@ -689,7 +689,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
-	                                         LogicalType return_type) {
+	                                         const LogicalType &return_type) {
 		AggregateFunction result({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
@@ -856,13 +856,24 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
 	//! Restore the definition after the bound function has been replaced wholesale, together with the
 	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {
