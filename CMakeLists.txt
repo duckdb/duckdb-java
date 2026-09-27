@@ -703,6 +703,11 @@ target_compile_definitions(duckdb_java PRIVATE
   -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT
   -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  target_compile_definitions(duckdb_java PRIVATE
+    -DD_ASSERT_IS_ENABLED)
+endif()
+
 if(JEMALLOC_ENABLED)
   target_compile_definitions(duckdb_java PRIVATE
     -DDUCKDB_ENABLE_JEMALLOC)
