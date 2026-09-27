@@ -232,13 +232,37 @@ public class TestResults {
         Properties props = new Properties();
         props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
 
-        try (Connection conn = DriverManager.getConnection(JDBC_URL, props);
-             PreparedStatement stmt1 = conn.prepareStatement("SELECT * FROM range(100000)");
-             ResultSet rs = stmt1.executeQuery()) {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM range(100000)")) {
             while (rs.next()) {
                 rs.getInt(1);
             }
             assertFalse(rs.next()); // is exhausted
+        }
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props);
+             PreparedStatement ps = conn.prepareStatement("SELECT * FROM range(100000)");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                rs.getInt(1);
+            }
+            assertFalse(rs.next()); // is exhausted
+        }
+    }
+
+    public static void test_result_streaming_ddl() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt = conn.createStatement()) {
+            boolean hasResultSet = stmt.execute("CREATE TABLE tab1 (col1 INT)");
+            assertFalse(hasResultSet);
+        }
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props);
+             PreparedStatement ps = conn.prepareStatement("CREATE TABLE tab1 (col1 INT)")) {
+            boolean hasResultSet = ps.execute();
+            assertFalse(hasResultSet);
         }
     }
 
