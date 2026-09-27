@@ -47,11 +47,13 @@ struct StatementHolder {
 };
 
 struct PendingHolder {
-	duckdb::unique_ptr<duckdb::PendingQueryResult> pending;
+	duckdb::unique_ptr<duckdb::QueryResult> pending;
+	bool streaming = false;
 };
 
 struct ResultHolder {
 	duckdb::unique_ptr<duckdb::QueryResult> res;
+	duckdb::unique_ptr<duckdb::QueryResultStream> stream;
 	duckdb::unique_ptr<duckdb::DataChunk> chunk;
 };
 

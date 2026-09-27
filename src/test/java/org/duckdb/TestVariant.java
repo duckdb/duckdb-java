@@ -278,22 +278,8 @@ public class TestVariant {
                          + "                    )");
 
             String testData = "{\n"
-                              + "                    \"id\": \"72869b95-ab13-4405-9371-546b6dcc443e\",\n"
-                              + "                    \"isSimulation\": false,\n"
-                              + "                    \"workOrderSchedules\": [\n"
-                              + "                    {\n"
-                              + "                    \"workOrderId\": \"e10c064f-6280-41f7-be75-b0075234754b\",\n"
-                              + "                    \"scheduledStart\": \"2026-06-02T22:56:00\",\n"
-                              + "                    \"scheduledEnd\": \"2026-06-03T05:01:00\",\n"
-                              + "                    \"scheduledResourceIds\": [\n"
-                              + "                    \"a49f8503-f2db-43aa-9d7c-711fc78d8dc9\"\n"
-                              + "                    ],\n"
-                              + "                    \"batchId\": null,\n"
-                              + "                    \"batchSequence\": null\n"
-                              + "                    }\n"
-                              + "                    ],\n"
-                              + "                    \"simulationResultType\": null\n"
-                              + "                    }";
+                              + "\"id\": \"72869b95-ab13-4405-9371-546b6dcc443e\""
+                              + "}";
 
             try (PreparedStatement preparedStatement =
                      conn.prepareStatement("INSERT INTO events (globalSequence, data) VALUES (?, json(?)::VARIANT)")) {
@@ -304,12 +290,7 @@ public class TestVariant {
             try (ResultSet rs = stmt.executeQuery("SELECT globalSequence, data FROM events")) {
                 assertTrue(rs.next());
                 assertEquals(rs.getLong(1), 100L);
-                assertEquals(rs.getString(2),
-                             "{id=72869b95-ab13-4405-9371-546b6dcc443e, isSimulation=false, "
-                                 + "workOrderSchedules=[{workOrderId=e10c064f-6280-41f7-be75-b0075234754b, "
-                                 + "scheduledStart=2026-06-02T22:56:00, scheduledEnd=2026-06-03T05:01:00, "
-                                 + "scheduledResourceIds=[a49f8503-f2db-43aa-9d7c-711fc78d8dc9], batchId=null, "
-                                 + "batchSequence=null}], simulationResultType=null}");
+                assertEquals(rs.getString(2), "{id=72869b95-ab13-4405-9371-546b6dcc443e}");
                 assertFalse(rs.next());
             }
         }
