@@ -481,6 +481,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_planner_expression_binder.cpp
   src/duckdb/ub_src_planner_filter.cpp
   src/duckdb/ub_src_planner_operator.cpp
+  src/duckdb/ub_src_planner_sql_export.cpp
   src/duckdb/ub_src_planner_subquery.cpp
   src/duckdb/ub_src_storage.cpp
   src/duckdb/ub_src_storage_buffer.cpp
