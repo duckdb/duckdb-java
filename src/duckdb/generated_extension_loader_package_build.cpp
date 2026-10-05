@@ -18,6 +18,10 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb_static_extension.h"
 
+extern "C" int32_t duckdb_extension_httplib_describe(duckdb_extension_descriptor *descriptor);
+
+extern "C" int32_t duckdb_extension_loadable_extensions_describe(duckdb_extension_descriptor *descriptor);
+
 #if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
 #ifndef EXT_VERSION_CORE_FUNCTIONS
 #define EXT_VERSION_CORE_FUNCTIONS ""
@@ -41,7 +45,7 @@ int32_t duckdb_extension_core_functions_describe(duckdb_extension_descriptor *de
 	descriptor->version = 1;
 	descriptor->name = "core_functions";
 	descriptor->extension_version = EXT_VERSION_CORE_FUNCTIONS;
-	descriptor->api_version = "v2.0.0-alpha43763";
+	descriptor->api_version = "v2.0.0-alpha44357";
 	descriptor->entry_cpp = (void (*)(void))core_functions_duckdb_cpp_init;
 	return 0;
 }
@@ -74,7 +78,7 @@ int32_t duckdb_extension_parquet_describe(duckdb_extension_descriptor *descripto
 	descriptor->version = 1;
 	descriptor->name = "parquet";
 	descriptor->extension_version = EXT_VERSION_PARQUET;
-	descriptor->api_version = "v2.0.0-alpha43763";
+	descriptor->api_version = "v2.0.0-alpha44357";
 	descriptor->entry_cpp = (void (*)(void))parquet_duckdb_cpp_init;
 	return 0;
 }
@@ -107,7 +111,7 @@ int32_t duckdb_extension_icu_describe(duckdb_extension_descriptor *descriptor) {
 	descriptor->version = 1;
 	descriptor->name = "icu";
 	descriptor->extension_version = EXT_VERSION_ICU;
-	descriptor->api_version = "v2.0.0-alpha43763";
+	descriptor->api_version = "v2.0.0-alpha44357";
 	descriptor->entry_cpp = (void (*)(void))icu_duckdb_cpp_init;
 	return 0;
 }
@@ -140,7 +144,7 @@ int32_t duckdb_extension_json_describe(duckdb_extension_descriptor *descriptor) 
 	descriptor->version = 1;
 	descriptor->name = "json";
 	descriptor->extension_version = EXT_VERSION_JSON;
-	descriptor->api_version = "v2.0.0-alpha43763";
+	descriptor->api_version = "v2.0.0-alpha44357";
 	descriptor->entry_cpp = (void (*)(void))json_duckdb_cpp_init;
 	return 0;
 }
@@ -160,6 +164,12 @@ int32_t duckdb_extension_json_describe(duckdb_extension_descriptor *descriptor) 
 
 extern "C" DUCKDB_STATIC_EXTENSION_LOADER_API int32_t duckdb_register_static_extensions(void) {
 	int32_t result = 0;
+	if (duckdb_register_static_extension(duckdb_extension_httplib_describe) != 0) {
+		result = 1;
+	}
+	if (duckdb_register_static_extension(duckdb_extension_loadable_extensions_describe) != 0) {
+		result = 1;
+	}
 #if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
 	if (duckdb_register_static_extension(duckdb_extension_core_functions_describe) != 0) {
 		result = 1;

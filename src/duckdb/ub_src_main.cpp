@@ -2,11 +2,11 @@
 
 #include "src/main/attached_database.cpp"
 
-#include "src/main/chunk_scan_state.cpp"
-
 #include "src/main/client_config.cpp"
 
 #include "src/main/client_context.cpp"
+
+#include "src/main/client_context_execution.cpp"
 
 #include "src/main/client_context_file_opener.cpp"
 
@@ -47,6 +47,8 @@
 #include "src/main/external_resources_manager.cpp"
 
 #include "src/main/parse_iterator.cpp"
+
+#include "src/main/parser_context.cpp"
 
 #include "src/main/prepared_statement.cpp"
 

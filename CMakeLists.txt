@@ -160,6 +160,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_timestamp.cpp
   src/duckdb/extension/parquet/parquet_writer.cpp
+  src/duckdb/extension/parquet/read_single_parquet_file.cpp
   src/duckdb/extension/parquet/reader/variant/parquet_variant_shredding.cpp
   src/duckdb/extension/parquet/serialize_parquet.cpp
   src/duckdb/extension/parquet/zstd_file_system.cpp
@@ -224,10 +225,14 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_alias.cpp
   src/duckdb/src/main/extension/extension_helper.cpp
   src/duckdb/src/main/extension/extension_install.cpp
+  src/duckdb/src/main/extension/extension_install_dynamic.cpp
   src/duckdb/src/main/extension/extension_load.cpp
+  src/duckdb/src/main/extension/extension_load_dynamic.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
   src/duckdb/src/main/extension/extension_repository_manager.cpp
+  src/duckdb/src/main/extension/external_extension_provider.cpp
   src/duckdb/src/main/extension/linked_extension_registry.cpp
+  src/duckdb/src/main/http/http_client_httplib.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
   src/duckdb/third_party/brotli/common/constants.cpp
   src/duckdb/third_party/brotli/common/context.cpp
@@ -445,7 +450,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main.cpp
   src/duckdb/ub_src_main_buffered_data.cpp
   src/duckdb/ub_src_main_capi_v2.cpp
-  src/duckdb/ub_src_main_chunk_scan_state.cpp
   src/duckdb/ub_src_main_http.cpp
   src/duckdb/ub_src_main_profiler.cpp
   src/duckdb/ub_src_main_relation.cpp
