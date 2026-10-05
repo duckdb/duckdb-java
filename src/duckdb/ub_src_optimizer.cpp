@@ -26,6 +26,10 @@
 
 #include "src/optimizer/cte_inlining.cpp"
 
+#include "src/optimizer/cte_join_filter_collector.cpp"
+
+#include "src/optimizer/cte_join_filter_pusher.cpp"
+
 #include "src/optimizer/deliminator.cpp"
 
 #include "src/optimizer/empty_result_pullup.cpp"
@@ -77,6 +81,8 @@
 #include "src/optimizer/remote_pushdown_optimizer.cpp"
 
 #include "src/optimizer/remove_duplicate_groups.cpp"
+
+#include "src/optimizer/remove_redundant_order_keys.cpp"
 
 #include "src/optimizer/remove_unused_columns.cpp"
 
