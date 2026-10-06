@@ -47,6 +47,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
 import org.duckdb.test.TempDirectory;
@@ -135,6 +136,21 @@ public class TestDuckDBJDBC {
         assertTrue(conn.isClosed());
 
         assertThrows(conn::createStatement, SQLException.class);
+    }
+
+    public static void test_datasource_connection() throws Exception {
+        DataSource source = new DuckDBDataSource(JDBC_URL);
+        Connection conn = source.getConnection();
+        Statement stmt = conn.createStatement();
+
+        ResultSet rs = stmt.executeQuery("SELECT 42 as a");
+        assertTrue(rs.next());
+        int res = rs.getInt(1);
+        assertEquals(res, 42);
+
+        rs.close();
+        stmt.close();
+        conn.close();
     }
 
     public static void test_execute_exception() throws Exception {
