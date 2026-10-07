@@ -271,6 +271,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JN
 	}
 }
 
+/*
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream(JNIEnv * env, jclass param0, jobject param1, jlong param2) {
 	try {
 		return _duckdb_jdbc_arrow_stream(env, param0, param1, param2);
@@ -291,6 +292,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
 
 	}
 }
+*/
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2, jbyteArray param3) {
 	try {

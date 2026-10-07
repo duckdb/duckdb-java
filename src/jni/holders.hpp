@@ -53,7 +53,7 @@ struct PendingHolder {
 
 struct ResultHolder {
 	duckdb::unique_ptr<duckdb::QueryResult> res;
-	duckdb::unique_ptr<duckdb::QueryResultStream> stream;
+	duckdb::unique_ptr<duckdb::QueryResultStream<>> stream;
 	duckdb::unique_ptr<duckdb::DataChunk> chunk;
 };
 
