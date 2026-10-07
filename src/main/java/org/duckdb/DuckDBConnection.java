@@ -562,6 +562,8 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerArrowStream(String name, Object arrow_array_stream) {
+        throw new RuntimeException(new SQLFeatureNotSupportedException("registerArrowStream"));
+        /*
         try {
             checkOpen();
             long array_stream_address = getArrowStreamAddress(arrow_array_stream);
@@ -575,6 +577,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+         */
     }
 
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
