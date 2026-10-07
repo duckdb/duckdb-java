@@ -4,7 +4,7 @@ extern "C" {
 #include "config.hpp"
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
@@ -322,8 +322,8 @@ static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, j
 	return res;
 }
 
-duckdb::unique_ptr<QueryResultStream> complete_query_streaming(JNIEnv *env, duckdb::unique_ptr<QueryResult> pending) {
-	auto stream = make_uniq<QueryResultStream>(std::move(pending));
+duckdb::unique_ptr<QueryResultStream<>> complete_query_streaming(JNIEnv *env, duckdb::unique_ptr<QueryResult> pending) {
+	auto stream = make_uniq<QueryResultStream<>>(std::move(pending));
 	while (!duckdb::IsObservable(stream->ExecuteTask())) {
 		if (stream->HasError()) {
 			throw_execution_java_error(env, stream.get());
@@ -1041,69 +1041,71 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 	get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
 }
 
+/* TODO: ArrowFormat
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
-	if (!res_ref_buf) {
-		throw InvalidInputException("Invalid result set");
-	}
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
-		throw InvalidInputException("Invalid result set");
-	}
+    if (!res_ref_buf) {
+        throw InvalidInputException("Invalid result set");
+    }
+    auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+    if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+        throw InvalidInputException("Invalid result set");
+    }
 
-	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
-	return (jlong)&wrapper->stream;
+    auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
+    return (jlong)&wrapper->stream;
 }
 
 class JavaArrowTabularStreamFactory {
 public:
-	JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
+    JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
 
-	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+    static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 
-		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-		if (!factory->stream_ptr->release) {
-			throw InvalidInputException("This stream has been released");
-		}
-		auto res = make_uniq<ArrowArrayStreamWrapper>();
-		res->arrow_array_stream = *factory->stream_ptr;
-		factory->stream_ptr->release = nullptr;
-		return res;
-	}
+        auto factory = (JavaArrowTabularStreamFactory *)factory_p;
+        if (!factory->stream_ptr->release) {
+            throw InvalidInputException("This stream has been released");
+        }
+        auto res = make_uniq<ArrowArrayStreamWrapper>();
+        res->arrow_array_stream = *factory->stream_ptr;
+        factory->stream_ptr->release = nullptr;
+        return res;
+    }
 
-	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
-		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-		auto stream_ptr = factory->stream_ptr;
-		if (!stream_ptr->release) {
-			throw InvalidInputException("This stream has been released");
-		}
-		stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
-		auto error = stream_ptr->get_last_error(stream_ptr);
-		if (error != nullptr) {
-			throw InvalidInputException(error);
-		}
-	}
+    static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
+        auto factory = (JavaArrowTabularStreamFactory *)factory_p;
+        auto stream_ptr = factory->stream_ptr;
+        if (!stream_ptr->release) {
+            throw InvalidInputException("This stream has been released");
+        }
+        stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
+        auto error = stream_ptr->get_last_error(stream_ptr);
+        if (error != nullptr) {
+            throw InvalidInputException(error);
+        }
+    }
 
-	ArrowArrayStream *stream_ptr;
+    ArrowArrayStream *stream_ptr;
 };
 
 void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlong arrow_array_stream_pointer,
                                  jbyteArray name_j) {
 
-	auto conn = get_connection(env, conn_ref_buf);
-	if (conn == nullptr) {
-		return;
-	}
-	auto name = jbyteArray_to_string(env, name_j);
+    auto conn = get_connection(env, conn_ref_buf);
+    if (conn == nullptr) {
+        return;
+    }
+    auto name = jbyteArray_to_string(env, name_j);
 
-	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
+    auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
 
-	auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
-	duckdb::vector<Value> parameters;
-	parameters.push_back(Value::POINTER((uintptr_t)factory));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(Identifier(name), true, true);
+    auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
+    duckdb::vector<Value> parameters;
+    parameters.push_back(Value::POINTER((uintptr_t)factory));
+    parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
+    parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
+    conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(Identifier(name), true, true);
 }
+*/
 
 static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
 	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);
