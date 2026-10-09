@@ -130,7 +130,20 @@ public class TestParameterMetadata {
             try (PreparedStatement ps = conn.prepareStatement("INSERT INTO metadata_test_union_1 VALUES(?)")) {
                 ParameterMetaData meta = ps.getParameterMetaData();
                 assertEquals(meta.getParameterTypeName(1), "UNION(num INTEGER, str VARCHAR)");
-                assertEquals(meta.getParameterClassName(1), String.class.getName());
+                assertEquals(meta.getParameterClassName(1), Object.class.getName());
+                assertEquals(meta.getPrecision(1), 0);
+                assertEquals(meta.getScale(1), 0);
+            }
+        }
+    }
+
+    public static void test_parameter_metadata_variant() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE metadata_test_variant_1 (col1 VARIANT)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO metadata_test_variant_1 VALUES(?)")) {
+                ParameterMetaData meta = ps.getParameterMetaData();
+                assertEquals(meta.getParameterTypeName(1), "VARIANT");
+                assertEquals(meta.getParameterClassName(1), Object.class.getName());
                 assertEquals(meta.getPrecision(1), 0);
                 assertEquals(meta.getScale(1), 0);
             }
