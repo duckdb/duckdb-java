@@ -305,4 +305,200 @@ public class TestBatch {
             }
         }
     }
+
+    private interface BatchExecutor {
+        void execute() throws Exception;
+    }
+
+    private static BatchUpdateException executeBatchExpectingFailure(BatchExecutor executor) throws Exception {
+        try {
+            executor.execute();
+        } catch (BatchUpdateException e) {
+            return e;
+        }
+        fail("Expected the batch execution to throw BatchUpdateException");
+        return null;
+    }
+
+    private static void assertPartialFailureException(BatchUpdateException e, SQLException reference,
+                                                      long[] expectedCounts, boolean large) throws Exception {
+        // JDBC requires the SQLState, message and cause of the failing command to be preserved
+        assertEquals(e.getSQLState(), reference.getSQLState());
+        assertEquals(e.getMessage(), reference.getMessage());
+        assertNotNull(e.getCause());
+        assertTrue(e.getCause() instanceof SQLException, "cause should be the underlying SQLException");
+        assertEquals(((SQLException) e.getCause()).getSQLState(), reference.getSQLState());
+        assertEquals(e.getCause().getMessage(), reference.getMessage());
+
+        // only the commands executed successfully before the failure are reported
+        long[] counts = e.getLargeUpdateCounts();
+        assertEquals(counts.length, expectedCounts.length);
+        for (int i = 0; i < expectedCounts.length; i++) {
+            assertEquals(counts[i], expectedCounts[i]);
+        }
+        if (!large) {
+            int[] intCounts = e.getUpdateCounts();
+            assertEquals(intCounts.length, expectedCounts.length);
+            for (int i = 0; i < expectedCounts.length; i++) {
+                assertEquals(intCounts[i], (int) expectedCounts[i]);
+            }
+        }
+    }
+
+    private static SQLException newNullViolationFailure(boolean prepared) throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+            }
+            try {
+                if (prepared) {
+                    try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?)")) {
+                        ps.setString(1, null);
+                        ps.executeUpdate();
+                    }
+                } else {
+                    try (Statement stmt = conn.createStatement()) {
+                        stmt.execute("INSERT INTO tab1 VALUES(NULL)");
+                    }
+                }
+            } catch (SQLException e) {
+                return e;
+            }
+            fail("expected the NOT NULL violation to fail");
+            return null;
+        }
+    }
+
+    private static SQLException newSqlFailure(String sql) throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            try {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                return e;
+            }
+            fail("expected the invalid statement to fail");
+            return null;
+        }
+    }
+
+    private static void checkPartialFailureBatch(boolean prepared, boolean large, boolean autoCommit) throws Exception {
+        SQLException reference = newNullViolationFailure(prepared);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.setAutoCommit(autoCommit);
+            assertEquals(conn.getAutoCommit(), autoCommit);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+            }
+            if (!autoCommit) {
+                conn.commit();
+            }
+
+            BatchUpdateException bue;
+            if (prepared) {
+                try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tab1 VALUES(?)")) {
+                    ps.setString(1, "a");
+                    ps.addBatch();
+                    ps.setString(1, "b");
+                    ps.addBatch();
+                    ps.setString(1, "c");
+                    ps.addBatch();
+                    ps.setString(1, null);
+                    ps.addBatch();
+                    ps.setString(1, "d");
+                    ps.addBatch();
+                    bue = executeBatchExpectingFailure(() -> {
+                        if (large) {
+                            ps.executeLargeBatch();
+                        } else {
+                            ps.executeBatch();
+                        }
+                    });
+                }
+            } else {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.addBatch("INSERT INTO tab1 VALUES('a')");
+                    stmt.addBatch("INSERT INTO tab1 VALUES('b')");
+                    stmt.addBatch("INSERT INTO tab1 VALUES('c')");
+                    stmt.addBatch("INSERT INTO tab1 VALUES(NULL)");
+                    stmt.addBatch("INSERT INTO tab1 VALUES('d')");
+                    bue = executeBatchExpectingFailure(() -> {
+                        if (large) {
+                            stmt.executeLargeBatch();
+                        } else {
+                            stmt.executeBatch();
+                        }
+                    });
+                }
+            }
+            assertPartialFailureException(bue, reference, new long[] {1L, 1L, 1L}, large);
+
+            // rollback/autocommit semantics must be unchanged: no row of the failed batch survives
+            if (!autoCommit) {
+                conn.rollback();
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+
+            // the connection stays usable after the failure
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("INSERT INTO tab1 VALUES('after')");
+                if (!autoCommit) {
+                    conn.commit();
+                }
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 1L);
+            }
+        }
+    }
+
+    public static void test_prepared_statement_batch_partial_failure() throws Exception {
+        checkPartialFailureBatch(true, false, true);
+        checkPartialFailureBatch(true, false, false);
+    }
+
+    public static void test_prepared_statement_large_batch_partial_failure() throws Exception {
+        checkPartialFailureBatch(true, true, true);
+        checkPartialFailureBatch(true, true, false);
+    }
+
+    public static void test_statement_batch_partial_failure() throws Exception {
+        checkPartialFailureBatch(false, false, true);
+        checkPartialFailureBatch(false, false, false);
+    }
+
+    public static void test_statement_large_batch_partial_failure() throws Exception {
+        checkPartialFailureBatch(false, true, true);
+        checkPartialFailureBatch(false, true, false);
+    }
+
+    public static void test_statement_batch_partial_failure_invalid_sql() throws Exception {
+        SQLException reference = newSqlFailure("SELCT 1");
+        assertNotNull(reference);
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE tab1 (col1 VARCHAR NOT NULL)");
+            }
+            try (Statement stmt = conn.createStatement()) {
+                stmt.addBatch("INSERT INTO tab1 VALUES('a')");
+                stmt.addBatch("INSERT INTO tab1 VALUES('b')");
+                stmt.addBatch("SELCT 1");
+                stmt.addBatch("INSERT INTO tab1 VALUES('c')");
+                BatchUpdateException e = executeBatchExpectingFailure(stmt::executeBatch);
+                // the two statements before the invalid one ran, the trailing one was not attempted
+                assertPartialFailureException(e, reference, new long[] {1L, 1L}, false);
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM tab1")) {
+                rs.next();
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
 }
