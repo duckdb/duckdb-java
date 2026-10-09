@@ -672,6 +672,58 @@ public class TestClosure {
         }
     }
 
+    // JDBC contract (java.sql.Connection): getMetaData(), createArrayOf() and createStruct() must
+    // keep working on an open connection and must throw SQLException once it is closed.
+    public static void test_open_connection_factories_return_objects() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertNotNull(conn.getMetaData());
+            assertNotNull(conn.createArrayOf("INTEGER", new Object[] {1, 2}));
+            assertNotNull(conn.createStruct("STRUCT(a INTEGER, b INTEGER)", new Object[] {1, 2}));
+        }
+    }
+
+    public static void test_closed_connection_getMetaData_throws() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.close();
+            assertTrue(conn.isClosed());
+            try {
+                conn.getMetaData();
+                fail("getMetaData() on a closed connection should throw SQLException");
+            } catch (SQLException e) {
+                assertEquals(e.getMessage(), "Connection was closed");
+                assertEquals(e.getSQLState(), "08003");
+            }
+        }
+    }
+
+    public static void test_closed_connection_createArrayOf_throws() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.close();
+            assertTrue(conn.isClosed());
+            try {
+                conn.createArrayOf("INTEGER", new Object[] {1, 2});
+                fail("createArrayOf() on a closed connection should throw SQLException");
+            } catch (SQLException e) {
+                assertEquals(e.getMessage(), "Connection was closed");
+                assertEquals(e.getSQLState(), "08003");
+            }
+        }
+    }
+
+    public static void test_closed_connection_createStruct_throws() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            conn.close();
+            assertTrue(conn.isClosed());
+            try {
+                conn.createStruct("STRUCT(a INTEGER, b INTEGER)", new Object[] {1, 2});
+                fail("createStruct() on a closed connection should throw SQLException");
+            } catch (SQLException e) {
+                assertEquals(e.getMessage(), "Connection was closed");
+                assertEquals(e.getSQLState(), "08003");
+            }
+        }
+    }
+
     public static void manual_test_set_query_timeout_wo_scheduler() throws Exception {
         assertTrue(DuckDBDriver.shutdownQueryCancelScheduler());
         assertFalse(DuckDBDriver.shutdownQueryCancelScheduler());

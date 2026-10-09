@@ -311,6 +311,7 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public DatabaseMetaData getMetaData() throws SQLException {
+        checkOpen();
         return new DuckDBDatabaseMetaData(this);
     }
 
@@ -505,10 +506,12 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
+        checkOpen();
         return new DuckDBUserArray(typeName, elements);
     }
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
+        checkOpen();
         return new DuckDBUserStruct(typeName, attributes);
     }
 
