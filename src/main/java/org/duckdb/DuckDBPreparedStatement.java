@@ -699,6 +699,41 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public boolean getMoreResults() throws SQLException {
         checkOpen();
+        return moveToEnd(Statement.CLOSE_CURRENT_RESULT);
+    }
+
+    /**
+     * Moves the statement to its end-of-results state. DuckDB exposes at most one result per execution,
+     * so there is never a next result to expose and this always returns {@code false}.
+     *
+     * <p>{@code KEEP_CURRENT_RESULT} leaves the {@link ResultSet} handed out by {@link #getResultSet()}
+     * open/readable; it is no longer the statement's <i>current</i> result, so
+     * a following {@code CLOSE_CURRENT_RESULT} (or the no-argument overload) must not close it, while
+     * {@code CLOSE_ALL_RESULTS}, an explicit close, or the next execution still release the native result.
+     */
+    private boolean moveToEnd(int flag) throws SQLException {
+        // returnsResultSet is only set while the last result is still the statement's "current" result.
+        // A kept result has been left behind; it is released only by CLOSE_ALL_RESULTS / close().
+        boolean hasCurrentResult = returnsResultSet;
+        DuckDBResultSet current = selectResult;
+
+        // Move to end-of-results before closing anything: closing can re-enter Statement#close() via
+        // closeOnCompletion, which must observe the updated state, not a result that is being closed.
+        returnsResultSet = false;
+        returnsChangedRows = false;
+        returnsNothing = false;
+        updateResult = -1;
+
+        if (Statement.KEEP_CURRENT_RESULT == flag) {
+            return false;
+        }
+        if (Statement.CLOSE_ALL_RESULTS == flag || hasCurrentResult) {
+            if (current != null) {
+                selectResult = null; // detach before close -> no closeOnCompletion recursion
+                selectResultReturned = false;
+                current.close();
+            }
+        }
         return false;
     }
 
@@ -848,7 +883,16 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public boolean getMoreResults(int current) throws SQLException {
         checkOpen();
-        return false;
+        switch (current) {
+        case Statement.CLOSE_CURRENT_RESULT:
+        case Statement.KEEP_CURRENT_RESULT:
+        case Statement.CLOSE_ALL_RESULTS:
+            return moveToEnd(current);
+        default:
+            throw new SQLException("Invalid getMoreResults flag " + current + ", expected Statement."
+                                   + "CLOSE_CURRENT_RESULT, Statement.KEEP_CURRENT_RESULT or Statement."
+                                   + "CLOSE_ALL_RESULTS");
+        }
     }
 
     @Override

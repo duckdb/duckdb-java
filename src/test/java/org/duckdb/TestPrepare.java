@@ -656,4 +656,191 @@ public class TestPrepare {
             }
         }
     }
+
+    public static void test_get_more_results_closes_current_result_set() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SELECT 42");
+            ResultSet rs = stmt.getResultSet();
+            assertNotNull(rs);
+            assertFalse(rs.isClosed());
+
+            // DuckDB returns a single result per execution, so there is no next result and the
+            // current ResultSet is closed implicitly, as required by JDBC.
+            assertFalse(stmt.getMoreResults());
+            assertTrue(rs.isClosed());
+
+            // The statement is in its end-of-results state.
+            assertNull(stmt.getResultSet());
+            assertEquals(stmt.getUpdateCount(), -1);
+            assertEquals(stmt.getLargeUpdateCount(), -1L);
+        }
+    }
+
+    public static void test_get_more_results_discards_update_count() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE t (i INT)");
+            assertFalse(stmt.execute("INSERT INTO t VALUES (42)"));
+
+            // The update count belongs to the current result. Moving past it must invalidate the
+            // count, otherwise a JDBC result loop sees a spurious update count at end-of-results.
+            assertFalse(stmt.getMoreResults());
+            assertEquals(stmt.getUpdateCount(), -1);
+            assertEquals(stmt.getLargeUpdateCount(), -1L);
+            assertNull(stmt.getResultSet());
+
+            // ... and it stays stable when called again.
+            assertFalse(stmt.getMoreResults());
+            assertEquals(stmt.getUpdateCount(), -1);
+            assertEquals(stmt.getLargeUpdateCount(), -1L);
+        }
+    }
+
+    public static void test_get_more_results_invalid_flag() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SELECT 42");
+
+            // JDBC: an argument that is not one of the three Statement constants is a SQLException.
+            // SQLFeatureNotSupportedException is reserved for unsupported KEEP/CLOSE_ALL flags.
+            try {
+                stmt.getMoreResults(42);
+                fail("expected SQLException for an invalid getMoreResults(int) flag");
+            } catch (SQLException e) {
+                assertFalse(e instanceof SQLFeatureNotSupportedException,
+                            "invalid flag must be a plain SQLException but was " + e.getClass().getName());
+                assertTrue(e.getMessage().contains("42"),
+                           "message should report the invalid flag but was: " + e.getMessage());
+            }
+
+            // The rejected call must not have consumed the current result.
+            ResultSet rs = stmt.getResultSet();
+            assertNotNull(rs);
+            assertFalse(stmt.getMoreResults());
+            assertTrue(rs.isClosed());
+            assertNull(stmt.getResultSet());
+            assertEquals(stmt.getUpdateCount(), -1);
+        }
+    }
+
+    public static void test_get_more_results_flags_close_results() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            for (int flag : new int[] {Statement.CLOSE_CURRENT_RESULT, Statement.CLOSE_ALL_RESULTS}) {
+                stmt.execute("SELECT 42");
+                ResultSet rs = stmt.getResultSet();
+                assertNotNull(rs);
+
+                assertFalse(stmt.getMoreResults(flag));
+                assertTrue(rs.isClosed(), "flag " + flag + " must close the current ResultSet");
+                assertNull(stmt.getResultSet());
+                assertEquals(stmt.getUpdateCount(), -1);
+                assertEquals(stmt.getLargeUpdateCount(), -1L);
+            }
+        }
+    }
+
+    public static void test_get_more_results_keep_current_result() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            // KEEP_CURRENT_RESULT is only allowed to throw SQLFeatureNotSupportedException when the
+            // driver cannot keep multiple results open; DuckDB reports that it can, so the flag is
+            // accepted and the ResultSet object handed out by getResultSet() stays usable.
+            assertTrue(conn.getMetaData().supportsMultipleOpenResults());
+
+            stmt.execute("SELECT 42");
+            ResultSet kept = stmt.getResultSet();
+            assertFalse(stmt.getMoreResults(Statement.KEEP_CURRENT_RESULT));
+            assertFalse(kept.isClosed(), "KEEP_CURRENT_RESULT must not close the current ResultSet");
+            assertTrue(kept.next());
+            assertEquals(kept.getInt(1), 42);
+
+            // The statement itself still has no further result to expose.
+            assertNull(stmt.getResultSet());
+            assertEquals(stmt.getUpdateCount(), -1);
+            assertEquals(stmt.getLargeUpdateCount(), -1L);
+
+            kept.close();
+            assertTrue(kept.isClosed());
+        }
+    }
+
+    public static void test_get_more_results_statement_reusable() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SELECT 42");
+            assertNotNull(stmt.getResultSet());
+            assertFalse(stmt.getMoreResults());
+            assertNull(stmt.getResultSet());
+
+            // A new execution starts a fresh single-result lifecycle.
+            try (ResultSet rs = stmt.executeQuery("SELECT 43")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 43);
+                assertFalse(rs.next());
+            }
+            assertFalse(stmt.isClosed());
+            assertEquals(stmt.getUpdateCount(), -1);
+        }
+    }
+
+    public static void test_get_more_results_close_on_completion() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            Statement stmt = conn.createStatement();
+            stmt.closeOnCompletion();
+            ResultSet rs = stmt.executeQuery("SELECT 42");
+            assertTrue(rs.next());
+
+            // The implicit close performed by getMoreResults() is a regular ResultSet close, so
+            // closeOnCompletion applies: the statement ends up closed, without recursion, detached
+            // reference or broken state.
+            assertFalse(stmt.getMoreResults());
+            assertTrue(rs.isClosed());
+            assertTrue(stmt.isClosed());
+            assertThrows(() -> stmt.getMoreResults(), SQLException.class);
+        }
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            PreparedStatement ps = conn.prepareStatement("SELECT 42");
+            ps.closeOnCompletion();
+            ResultSet rs = ps.executeQuery();
+            assertTrue(rs.next());
+            assertFalse(ps.getMoreResults());
+            assertTrue(rs.isClosed());
+            assertTrue(ps.isClosed());
+        }
+    }
+
+    public static void test_get_more_results_kept_result_survives_close_current() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SELECT 42");
+            ResultSet kept = stmt.getResultSet();
+            assertFalse(stmt.getMoreResults(Statement.KEEP_CURRENT_RESULT));
+            assertFalse(kept.isClosed());
+
+            // A kept ResultSet is no longer the statement's *current* result, so neither the no-argument
+            // overload nor an explicit CLOSE_CURRENT_RESULT may close it.
+            assertFalse(stmt.getMoreResults());
+            assertFalse(kept.isClosed(), "no-arg getMoreResults() must not close a kept ResultSet");
+            assertFalse(stmt.getMoreResults(Statement.CLOSE_CURRENT_RESULT));
+            assertFalse(kept.isClosed(), "CLOSE_CURRENT_RESULT must not close a kept ResultSet");
+
+            // The kept object is still the live, readable result.
+            assertTrue(kept.next());
+            assertEquals(kept.getInt(1), 42);
+
+            // Only CLOSE_ALL_RESULTS (or an explicit close) releases the native result.
+            assertFalse(stmt.getMoreResults(Statement.CLOSE_ALL_RESULTS));
+            assertTrue(kept.isClosed(), "CLOSE_ALL_RESULTS must close the kept ResultSet");
+        }
+    }
+
+    public static void test_get_more_results_kept_result_released_by_statement_close() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            Statement stmt = conn.createStatement();
+            stmt.execute("SELECT 42");
+            ResultSet kept = stmt.getResultSet();
+            assertFalse(stmt.getMoreResults(Statement.KEEP_CURRENT_RESULT));
+            assertFalse(kept.isClosed());
+
+            // Closing the statement releases every result it handed out, kept ones included.
+            stmt.close();
+            assertTrue(stmt.isClosed());
+            assertTrue(kept.isClosed(), "Statement#close() must release a kept ResultSet");
+        }
+    }
 }
