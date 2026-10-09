@@ -683,13 +683,17 @@ public final class DuckDBWritableVector {
         int entryOffset = Math.toIntExact(Math.multiplyExact(row / Long.SIZE, (long) Long.BYTES));
         long bitIndex = row % Long.SIZE;
         long mask = 1L << bitIndex;
-        long entry = validity.getLong(entryOffset);
-        if (valid) {
-            entry |= mask;
-        } else {
-            entry &= ~mask;
+        // Row validity is packed 64 rows per word, so producers writing disjoint rows still share the word;
+        // guard only this read-modify-write so concurrent mark/clear of different bits is not lost.
+        synchronized (validity) {
+            long entry = validity.getLong(entryOffset);
+            if (valid) {
+                entry |= mask;
+            } else {
+                entry &= ~mask;
+            }
+            validity.putLong(entryOffset, entry);
         }
-        validity.putLong(entryOffset, entry);
     }
 
     private String typeMismatchMessage(DuckDBColumnType expected) {
