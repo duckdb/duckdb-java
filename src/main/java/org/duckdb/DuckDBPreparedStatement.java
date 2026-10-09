@@ -16,6 +16,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.sql.Array;
+import java.sql.BatchUpdateException;
 import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.Connection;
@@ -37,6 +38,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.RejectedExecutionException;
@@ -776,17 +778,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         stmtRefLock.lock();
         boolean tranStarted = false;
         DuckDBConnection conn = this.conn;
+        long[] updateCounts = null;
+        int executedCommands = 0;
         try {
             checkOpen();
             checkPrepared();
 
             tranStarted = startTransaction();
 
-            long[] updateCounts = new long[this.batchedParams.size()];
+            updateCounts = new long[this.batchedParams.size()];
             for (int i = 0; i < this.batchedParams.size(); i++) {
                 params = this.batchedParams.get(i);
                 execute();
                 updateCounts[i] = getUpdateCountInternal();
+                executedCommands = i + 1;
             }
             clearBatch();
 
@@ -800,7 +805,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             if (tranStarted && conn.getAutoCommit()) {
                 conn.rollback();
             }
-            throw e;
+            throw batchUpdateException(e, updateCounts, executedCommands);
         } finally {
             stmtRefLock.unlock();
         }
@@ -810,16 +815,19 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         stmtRefLock.lock();
         boolean tranStarted = false;
         DuckDBConnection conn = this.conn;
+        long[] updateCounts = null;
+        int executedCommands = 0;
         try {
             checkOpen();
 
             tranStarted = startTransaction();
 
-            long[] updateCounts = new long[this.batchedStatements.size()];
+            updateCounts = new long[this.batchedStatements.size()];
             for (int i = 0; i < this.batchedStatements.size(); i++) {
                 prepare(this.batchedStatements.get(i));
                 execute();
                 updateCounts[i] = getUpdateCountInternal();
+                executedCommands = i + 1;
             }
             clearBatch();
 
@@ -833,10 +841,24 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             if (tranStarted && conn.getAutoCommit()) {
                 conn.rollback();
             }
-            throw e;
+            throw batchUpdateException(e, updateCounts, executedCommands);
         } finally {
             stmtRefLock.unlock();
         }
+    }
+
+    /**
+     * JDBC requires a failing batch command to be reported as a {@link BatchUpdateException} carrying the update counts
+     * of the commands that executed successfully before the failure, plus the SQLState and the cause of the underlying
+     * failure. This driver never continues after a failed command, so the counts only cover the executed prefix.
+     * <p>
+     * The {@code long[]} constructor also derives the {@code int[]} update counts reported by
+     * {@link BatchUpdateException#getUpdateCounts()}, so a single constructor covers both
+     * {@code executeBatch()} and {@code executeLargeBatch()}.
+     */
+    private BatchUpdateException batchUpdateException(SQLException cause, long[] updateCounts, int executedCommands) {
+        long[] counts = updateCounts == null ? new long[0] : Arrays.copyOf(updateCounts, executedCommands);
+        return new BatchUpdateException(cause.getMessage(), cause.getSQLState(), cause.getErrorCode(), counts, cause);
     }
 
     @Override
