@@ -1145,4 +1145,62 @@ public class TestMetadata {
             }
         }
     }
+
+    public static void test_metadata_union_class() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE metadata_union_rows (u UNION(a INTEGER, b VARCHAR), s VARCHAR, j JSON)");
+            stmt.execute("INSERT INTO metadata_union_rows VALUES (union_value(a := 1), 'plain', JSON '{\"a\": 1}'), "
+                         + "(union_value(b := 'abc'), 'other', JSON '{\"b\": 2}'), (NULL, NULL, NULL)");
+            try (ResultSet rs = stmt.executeQuery("SELECT u, s, j FROM metadata_union_rows")) {
+                ResultSetMetaData meta = rs.getMetaData();
+                assertTrue(meta.getColumnTypeName(1).startsWith("UNION"));
+                assertEquals(meta.getColumnType(1), Types.OTHER);
+                assertEquals(meta.getColumnClassName(1), Object.class.getName());
+                // neighboring VARCHAR/JSON columns must keep their dedicated Java classes
+                assertEquals(meta.getColumnType(2), Types.VARCHAR);
+                assertEquals(meta.getColumnClassName(2), String.class.getName());
+                assertEquals(meta.getColumnClassName(3), JsonNode.class.getName());
+
+                int rows = 0;
+                while (rs.next()) {
+                    rows++;
+                    Object unionValue = rs.getObject(1);
+                    if (unionValue != null) {
+                        assertTrue(Class.forName(meta.getColumnClassName(1)).isInstance(unionValue));
+                    }
+                }
+                assertEquals(rows, 3);
+            }
+        }
+    }
+
+    public static void test_metadata_variant_class() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 'foo'::VARCHAR::VARIANT AS col1, 'plain' AS col2, "
+                                              + "JSON '{\"a\": 1}' AS col3"
+                                              + " UNION ALL "
+                                              + "SELECT NULL::VARIANT AS col1, NULL AS col2, NULL AS col3"
+                                              + " UNION ALL "
+                                              + "SELECT 42::INTEGER::VARIANT AS col1, 'other' AS col2, "
+                                              + "JSON '{\"b\": 2}' AS col3")) {
+            ResultSetMetaData meta = rs.getMetaData();
+            assertEquals(meta.getColumnTypeName(1), "VARIANT");
+            assertEquals(meta.getColumnType(1), Types.OTHER);
+            assertEquals(meta.getColumnClassName(1), Object.class.getName());
+            // neighboring VARCHAR/JSON columns must keep their dedicated Java classes
+            assertEquals(meta.getColumnType(2), Types.VARCHAR);
+            assertEquals(meta.getColumnClassName(2), String.class.getName());
+            assertEquals(meta.getColumnClassName(3), JsonNode.class.getName());
+
+            int rows = 0;
+            while (rs.next()) {
+                rows++;
+                Object variantValue = rs.getObject(1);
+                if (variantValue != null) {
+                    assertTrue(Class.forName(meta.getColumnClassName(1)).isInstance(variantValue));
+                }
+            }
+            assertEquals(rows, 3);
+        }
+    }
 }
