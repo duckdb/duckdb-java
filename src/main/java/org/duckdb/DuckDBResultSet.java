@@ -576,7 +576,7 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public byte[] getBytes(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException("getBytes");
+        return getBytes(findColumn(columnLabel));
     }
 
     public Date getDate(String columnLabel) throws SQLException {

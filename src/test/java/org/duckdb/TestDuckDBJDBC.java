@@ -2061,6 +2061,41 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_bytes_by_label() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL); Statement s = connection.createStatement();
+             ResultSet rs =
+                 s.executeQuery("SELECT 'abc'::BLOB AS abcCol, ''::BLOB AS emptyCol, NULL::BLOB AS nullCol")) {
+
+            assertTrue(rs.next());
+
+            assertEquals(rs.getBytes("abcCol"), rs.getBytes(1));
+            assertEquals(rs.getBytes(1), "abc".getBytes(UTF_8));
+            assertNotNull(rs.getBytes("abcCol"));
+            assertFalse(rs.wasNull());
+
+            assertEquals(rs.getBytes("emptyCol"), new byte[0]);
+            assertNotNull(rs.getBytes("emptyCol"));
+            assertFalse(rs.wasNull());
+
+            assertNull(rs.getBytes("nullCol"));
+            assertTrue(rs.wasNull());
+
+            assertEquals(rs.getBytes("ABCCOL"), "abc".getBytes(UTF_8));
+            assertEquals(rs.getBytes("AbCcOl"), "abc".getBytes(UTF_8));
+
+            assertThrows(() -> rs.getBytes("does_not_exist"), SQLException.class);
+        }
+
+        try (Connection connection = DriverManager.getConnection(JDBC_URL);
+             Statement s = connection.createStatement()) {
+            ResultSet rs = s.executeQuery("SELECT 'abc'::BLOB AS abcCol");
+            assertTrue(rs.next());
+            rs.close();
+            assertTrue(rs.isClosed());
+            assertThrows(() -> rs.getBytes("abcCol"), SQLException.class);
+        }
+    }
+
     public static void test_set_streams() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL);
              PreparedStatement ps = connection.prepareStatement("select ?::VARCHAR")) {
