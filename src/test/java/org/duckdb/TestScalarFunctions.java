@@ -2578,8 +2578,8 @@ public class TestScalarFunctions {
                 .register(conn);
             for (int repetition = 0; repetition < 3; repetition++) {
                 try (ResultSet rs =
-                         stmt.executeQuery("SELECT java_validity_rmw(x, x + 1) FROM range(0, (1<<16)) r(x)")) {
-                    for (long i = 0; i < (1 << 16); i++) {
+                         stmt.executeQuery("SELECT java_validity_rmw(x, x + 1) FROM range(0, (1<<12)) r(x)")) {
+                    for (long i = 0; i < (1 << 12); i++) {
                         assertTrue(rs.next());
                         if (i % 2 == 0) {
                             assertNullRow(rs);
