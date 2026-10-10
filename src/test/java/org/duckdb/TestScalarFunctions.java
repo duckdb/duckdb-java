@@ -24,7 +24,16 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -2477,15 +2486,113 @@ public class TestScalarFunctions {
                     output.setLong(row, left + right);
                 }))
                 .register(conn);
-            try (ResultSet rs = stmt.executeQuery("SELECT java_add(x, x + 1) FROM range(0, (1<<16) + 3) r(x)")) {
-                for (long i = 0; i < (1 << 16) + 3; i++) {
-                    assertTrue(rs.next());
-                    long expected = i + i + 1;
-                    long actual = rs.getLong(1);
-                    assertEquals(actual, expected);
+            // Repeated because a lost update on the shared validity bitmap only leaves a subset of the rows
+            // NULL, so the outcome depends on how the parallel scheduler interleaves the producers.
+            for (int repetition = 0; repetition < 3; repetition++) {
+                try (ResultSet rs = stmt.executeQuery("SELECT java_add(x, x + 1) FROM range(0, (1<<16) + 3) r(x)")) {
+                    for (long i = 0; i < (1 << 16) + 3; i++) {
+                        assertTrue(rs.next());
+                        long expected = i + i + 1;
+                        long actual = rs.getLong(1);
+                        assertFalse(rs.wasNull());
+                        assertEquals(actual, expected);
+                    }
+                    assertFalse(rs.next());
                 }
-                assertFalse(rs.next());
             }
+        }
+    }
+
+    private static final int VALIDITY_RMW_WORKERS = 64;
+
+    private static void awaitValidityBarrier(CyclicBarrier barrier) {
+        try {
+            barrier.await(60, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Validity producer was interrupted", e);
+        } catch (BrokenBarrierException | TimeoutException e) {
+            throw new IllegalStateException("Validity producer barrier failed", e);
+        }
+    }
+
+    /**
+     * Lost-update regression for the packed row validity bitmap. {@code VALIDITY_RMW_WORKERS} producers are
+     * released by a shared barrier and each one touches its own row of the same 64-bit validity word, so any
+     * non-atomic read-modify-write on that word drops another producer's bit: rows that were marked valid
+     * stay NULL and rows that were cleared stay valid.
+     */
+    public static void test_scalar_function_vectorized_parallel_validity_rmw() throws Exception {
+        ExecutorService producers = Executors.newFixedThreadPool(VALIDITY_RMW_WORKERS);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            // DuckDB must not parallelize inside one invocation here: the 64 Java producers below already
+            // parallelize, and DuckDB workers sharing that pool could interleave the producers' barriers.
+            stmt.execute("SET threads=1");
+            DuckDBFunctions.scalarFunction()
+                .withName("java_validity_rmw")
+                .withParameters(long.class, long.class)
+                .withReturnType(long.class)
+                .withVectorizedFunction((input, output) -> {
+                    long rows = input.rowCount();
+                    int workers = (int) Math.min(VALIDITY_RMW_WORKERS, rows);
+                    if (workers == 0) {
+                        return;
+                    }
+                    CyclicBarrier barrier = new CyclicBarrier(workers);
+                    long rounds = rows / workers;
+                    List<Future<?>> futures = new ArrayList<>(workers);
+                    for (int worker = 0; worker < workers; worker++) {
+                        final long index = worker;
+                        futures.add(producers.submit(() -> {
+                            for (long round = 0; round < rounds; round++) {
+                                long row = round * workers + index;
+                                output.setLong(row, input.vector(0).getLong(row, 0) + input.vector(1).getLong(row, 0));
+                                // Everybody marks its own row of the shared validity word valid at the same time.
+                                awaitValidityBarrier(barrier);
+                                // Half of the producers then clear their own row again, so a lost clear would
+                                // leave an even row valid.
+                                if (index % 2 == 0) {
+                                    output.setNull(row);
+                                }
+                                awaitValidityBarrier(barrier);
+                            }
+                            return null;
+                        }));
+                    }
+                    for (Future<?> future : futures) {
+                        try {
+                            future.get();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("Validity producer was interrupted", e);
+                        } catch (ExecutionException e) {
+                            throw new IllegalStateException("Validity producer failed", e.getCause());
+                        }
+                    }
+                    // Tail rows of a chunk that is not a multiple of the worker count are written by the caller,
+                    // which keeps every barrier round aligned with the producer count.
+                    for (long row = rounds * workers; row < rows; row++) {
+                        output.setLong(row, input.vector(0).getLong(row, 0) + input.vector(1).getLong(row, 0));
+                    }
+                })
+                .register(conn);
+            for (int repetition = 0; repetition < 3; repetition++) {
+                try (ResultSet rs =
+                         stmt.executeQuery("SELECT java_validity_rmw(x, x + 1) FROM range(0, (1<<16)) r(x)")) {
+                    for (long i = 0; i < (1 << 16); i++) {
+                        assertTrue(rs.next());
+                        if (i % 2 == 0) {
+                            assertNullRow(rs);
+                        } else {
+                            assertEquals(rs.getLong(1), i + i + 1);
+                            assertFalse(rs.wasNull());
+                        }
+                    }
+                    assertFalse(rs.next());
+                }
+            }
+        } finally {
+            producers.shutdownNow();
         }
     }
 
