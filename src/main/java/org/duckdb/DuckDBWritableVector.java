@@ -32,6 +32,7 @@ public final class DuckDBWritableVector {
     private final DuckDBVectorTypeInfo typeInfo;
     private final ByteBuffer data;
     private final ByteBuffer validity;
+    private final ReentrantLock validityLock = new ReentrantLock();
     private static final class StringBatchState {
         byte[] payload;
         CharsetEncoder encoder;
@@ -685,7 +686,8 @@ public final class DuckDBWritableVector {
         long mask = 1L << bitIndex;
         // Row validity is packed 64 rows per word, so producers writing disjoint rows still share the word;
         // guard only this read-modify-write so concurrent mark/clear of different bits is not lost.
-        synchronized (validity) {
+        validityLock.lock();
+        try {
             long entry = validity.getLong(entryOffset);
             if (valid) {
                 entry |= mask;
@@ -693,6 +695,8 @@ public final class DuckDBWritableVector {
                 entry &= ~mask;
             }
             validity.putLong(entryOffset, entry);
+        } finally {
+            validityLock.unlock();
         }
     }
 
