@@ -455,6 +455,15 @@ public class DuckDBResultSet implements ResultSet {
             }
 
             public int read(byte[] bytes, int off, int len) throws IOException {
+                if (bytes == null) {
+                    throw new NullPointerException();
+                }
+                if (off < 0 || len < 0 || len > bytes.length - off) {
+                    throw new IndexOutOfBoundsException();
+                }
+                if (len == 0) {
+                    return 0;
+                }
                 if (!buf.hasRemaining()) {
                     return -1;
                 }
@@ -472,21 +481,31 @@ public class DuckDBResultSet implements ResultSet {
         }
 
         public InputStream getBinaryStream() {
-            return getBinaryStream(0, length());
+            return new ByteBufferBackedInputStream(buffer.duplicate());
         }
 
-        public InputStream getBinaryStream(long pos, long length) {
-            return new ByteBufferBackedInputStream(buffer);
+        public InputStream getBinaryStream(long pos, long length) throws SQLException {
+            long blobLength = length();
+            if (pos < 1 || length < 0 || pos - 1 > blobLength || length > blobLength - (pos - 1)) {
+                throw createSQLException("Invalid position or length", ErrorCode.RESULT_SET_INVALID_POS_LEN);
+            }
+            ByteBuffer slice = buffer.duplicate();
+            slice.position((int) (pos - 1));
+            slice.limit((int) (pos - 1 + length));
+            return new ByteBufferBackedInputStream(slice);
         }
 
         @Override
         public byte[] getBytes(long pos, int length) throws SQLException {
-            if (pos < 1 || length < 0) {
+            long blobLength = length();
+            if (pos < 1 || length < 0 || pos - 1 > blobLength) {
                 throw createSQLException("Invalid position or length", ErrorCode.RESULT_SET_INVALID_POS_LEN);
             }
-            byte[] bytes = new byte[length];
-            buffer.position((int) pos - 1);
-            buffer.get(bytes, 0, length);
+            int available = (int) Math.min((long) length, blobLength - (pos - 1));
+            byte[] bytes = new byte[available];
+            ByteBuffer dup = buffer.duplicate();
+            dup.position((int) (pos - 1));
+            dup.get(bytes, 0, available);
             return bytes;
         }
 

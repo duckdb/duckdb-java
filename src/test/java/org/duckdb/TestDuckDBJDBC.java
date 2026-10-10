@@ -18,6 +18,8 @@ import static org.duckdb.test.Assertions.*;
 import static org.duckdb.test.Runner.runTests;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -2005,6 +2007,95 @@ public class TestDuckDBJDBC {
                 }
             }
         }
+    }
+
+    private static byte[] readAll(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[8];
+        int n;
+        while ((n = in.read(buf, 0, buf.length)) != -1) {
+            out.write(buf, 0, n);
+        }
+        return out.toByteArray();
+    }
+
+    public static void test_blob_binary_stream_slice() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 'ABCDEF'::BLOB")) {
+            assertTrue(rs.next());
+            Blob blob = rs.getBlob(1);
+            // 1-based pos with an exact bounded length yields just the requested slice
+            assertEquals(new String(readAll(blob.getBinaryStream(2, 3)), US_ASCII), "BCD");
+            // whole-blob stream still sees everything
+            assertEquals(new String(readAll(blob.getBinaryStream()), US_ASCII), "ABCDEF");
+            // bounded slice from the first byte spanning the whole blob
+            assertEquals(new String(readAll(blob.getBinaryStream(1, blob.length())), US_ASCII), "ABCDEF");
+        }
+    }
+
+    public static void test_blob_streams_independent_cursors() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 'ABCDEF'::BLOB")) {
+            assertTrue(rs.next());
+            Blob blob = rs.getBlob(1);
+            InputStream first = blob.getBinaryStream();
+            InputStream second = blob.getBinaryStream();
+            // Advancing one stream must not move the other
+            assertEquals(first.read(), (int) 'A');
+            assertEquals(second.read(), (int) 'A');
+            assertEquals(first.read(), (int) 'B');
+            assertEquals(second.read(), (int) 'B');
+            // getBytes must not disturb either stream's cursor
+            assertEquals(new String(blob.getBytes(1, (int) blob.length()), US_ASCII), "ABCDEF");
+            assertEquals(first.read(), (int) 'C');
+            assertEquals(second.read(), (int) 'C');
+            assertEquals(new String(readAll(first), US_ASCII), "DEF");
+            assertEquals(new String(readAll(second), US_ASCII), "DEF");
+        }
+    }
+
+    public static void test_blob_get_bytes_overlength() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 'ABCDEF'::BLOB")) {
+            assertTrue(rs.next());
+            Blob blob = rs.getBlob(1);
+            // Over-length is clipped to the remaining bytes per JDBC
+            assertEquals(new String(blob.getBytes(2, 100), US_ASCII), "BCDEF");
+            assertEquals(new String(blob.getBytes(1, 100), US_ASCII), "ABCDEF");
+            // Zero-length read returns 0 even at EOF; an empty range yields an empty array/stream
+            InputStream empty = blob.getBinaryStream(1, 0);
+            assertEquals(empty.read(new byte[4], 0, 0), 0);
+            assertEquals(empty.read(new byte[4], 0, 4), -1);
+            assertEquals(blob.getBytes(1, 0).length, 0);
+            // Empty blob supports an empty whole-blob stream
+            assertEquals(new String(readAll(blobOf("").getBinaryStream()), US_ASCII), "");
+        }
+    }
+
+    public static void test_blob_invalid_pos_len() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 'ABCDEF'::BLOB")) {
+            assertTrue(rs.next());
+            Blob blob = rs.getBlob(1);
+            assertThrows(() -> blob.getBytes(0, 1), SQLException.class);
+            assertThrows(() -> blob.getBytes(1, -1), SQLException.class);
+            assertThrows(() -> blob.getBinaryStream(0, 1), SQLException.class);
+            assertThrows(() -> blob.getBinaryStream(1, -1), SQLException.class);
+            assertThrows(() -> blob.getBinaryStream(2, 100), SQLException.class);
+            // Extreme positions/lengths must not silently wrap
+            assertThrows(() -> blob.getBytes(Long.MAX_VALUE, 1), SQLException.class);
+            assertThrows(() -> blob.getBinaryStream(Long.MAX_VALUE, 1), SQLException.class);
+            assertThrows(() -> blob.getBinaryStream(1, Long.MAX_VALUE), SQLException.class);
+        }
+    }
+
+    public static void test_blob_stream_read_arg_validation() throws Exception {
+        // Even at EOF / on a zero-length blob stream, read(byte[], int, int) must
+        // validate its arguments before reporting -1.
+        Blob empty = blobOf("");
+        InputStream stream = empty.getBinaryStream();
+        assertThrows(() -> stream.read(null, 0, 0), NullPointerException.class);
+        assertThrows(() -> stream.read(new byte[1], 2, 0), IndexOutOfBoundsException.class);
     }
 
     public static void test_typed_connection_properties() throws Exception {
