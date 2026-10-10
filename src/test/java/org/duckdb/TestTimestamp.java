@@ -468,6 +468,80 @@ public class TestTimestamp {
         }
     }
 
+    public static void test_set_timestamp_with_calendar_preserves_micros() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement("SELECT ?::TIMESTAMP")) {
+            Calendar utcCal = new GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.US);
+            // micro-aligned timestamp (6 fractional digits) so the expected value is independent of
+            // any nanosecond-to-microsecond rounding behavior
+            Timestamp ts = Timestamp.valueOf("2024-03-05 06:07:08.123456");
+            LocalDateTime expected = LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC"));
+            assertEquals(expected.getNano(), 123456000);
+
+            ps.setTimestamp(1, ts, utcCal);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertEquals(rs.getObject(1, LocalDateTime.class), expected);
+            }
+        }
+    }
+
+    public static void test_set_timestamp_with_calendar_before_epoch_micros() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement("SELECT ?::TIMESTAMP")) {
+            Calendar utcCal = new GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.US);
+            // pre-1970 micro-aligned timestamp (6 fractional digits, independent of Chrono MICRO rounding)
+            Timestamp ts = Timestamp.valueOf("1969-07-20 20:17:40.987654");
+            LocalDateTime expected = LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC"));
+            assertEquals(expected.getNano(), 987654000);
+
+            ps.setTimestamp(1, ts, utcCal);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertEquals(rs.getObject(1, LocalDateTime.class), expected);
+            }
+        }
+    }
+
+    public static void test_set_timestamp_with_calendar_zones_and_nulls() throws Exception {
+        TimeZone originalTz = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement("SELECT ?::TIMESTAMP, ?::TIMESTAMP, ?::TIMESTAMP")) {
+            Timestamp ts = Timestamp.valueOf("2021-07-16 12:34:45.123456");
+            Calendar utcCal = new GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.US);
+            Calendar laCal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
+
+            ps.setTimestamp(1, ts);         // no calendar: resolved in the JVM default zone (UTC here)
+            ps.setTimestamp(2, ts, utcCal); // UTC calendar
+            ps.setTimestamp(3, ts, laCal);  // explicit non-default zone
+
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                LocalDateTime noCal = rs.getObject(1, LocalDateTime.class);
+                // no-calendar and UTC-calendar bindings agree when the default zone is UTC
+                assertEquals(noCal, LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC")));
+                assertEquals(rs.getObject(2, LocalDateTime.class), noCal);
+                assertEquals(rs.getObject(3, LocalDateTime.class),
+                             LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("America/Los_Angeles")));
+            }
+
+            // null timestamp and null calendar keep the existing fall-through behavior
+            try (PreparedStatement nullPs = conn.prepareStatement("SELECT ?::TIMESTAMP, ?::TIMESTAMP")) {
+                nullPs.setTimestamp(1, null, utcCal);
+                nullPs.setTimestamp(2, ts, null);
+                try (ResultSet rs = nullPs.executeQuery()) {
+                    rs.next();
+                    assertNull(rs.getObject(1));
+                    assertEquals(rs.getObject(2, LocalDateTime.class),
+                                 LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC")));
+                }
+            }
+        } finally {
+            TimeZone.setDefault(originalTz);
+        }
+    }
+
     public static void test_calendar_types() throws Exception {
         TimeZone defaultTimeZone = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/Sofia"));
