@@ -683,44 +683,41 @@ public class TestClosure {
     }
 
     public static void test_closed_connection_getMetaData_throws() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
-            conn.close();
-            assertTrue(conn.isClosed());
-            try {
-                conn.getMetaData();
-                fail("getMetaData() on a closed connection should throw SQLException");
-            } catch (SQLException e) {
-                assertEquals(e.getMessage(), "Connection was closed");
-                assertEquals(e.getSQLState(), "08003");
-            }
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        conn.close();
+        assertTrue(conn.isClosed());
+        try {
+            conn.getMetaData();
+            fail("getMetaData() on a closed connection should throw SQLException");
+        } catch (SQLException e) {
+            assertEquals(e.getMessage(), "Connection was closed");
+            assertEquals(e.getSQLState(), "08003");
         }
     }
 
     public static void test_closed_connection_createArrayOf_throws() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
-            conn.close();
-            assertTrue(conn.isClosed());
-            try {
-                conn.createArrayOf("INTEGER", new Object[] {1, 2});
-                fail("createArrayOf() on a closed connection should throw SQLException");
-            } catch (SQLException e) {
-                assertEquals(e.getMessage(), "Connection was closed");
-                assertEquals(e.getSQLState(), "08003");
-            }
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        conn.close();
+        assertTrue(conn.isClosed());
+        try {
+            conn.createArrayOf("INTEGER", new Object[] {1, 2});
+            fail("createArrayOf() on a closed connection should throw SQLException");
+        } catch (SQLException e) {
+            assertEquals(e.getMessage(), "Connection was closed");
+            assertEquals(e.getSQLState(), "08003");
         }
     }
 
     public static void test_closed_connection_createStruct_throws() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
-            conn.close();
-            assertTrue(conn.isClosed());
-            try {
-                conn.createStruct("STRUCT(a INTEGER, b INTEGER)", new Object[] {1, 2});
-                fail("createStruct() on a closed connection should throw SQLException");
-            } catch (SQLException e) {
-                assertEquals(e.getMessage(), "Connection was closed");
-                assertEquals(e.getSQLState(), "08003");
-            }
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        conn.close();
+        assertTrue(conn.isClosed());
+        try {
+            conn.createStruct("STRUCT(a INTEGER, b INTEGER)", new Object[] {1, 2});
+            fail("createStruct() on a closed connection should throw SQLException");
+        } catch (SQLException e) {
+            assertEquals(e.getMessage(), "Connection was closed");
+            assertEquals(e.getSQLState(), "08003");
         }
     }
 

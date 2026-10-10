@@ -61,24 +61,32 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         return conn.isReadOnly();
     }
 
+    private String getDefaultNullOrder() throws SQLException {
+        try (Statement s = conn.createStatement();
+             ResultSet rs = s.executeQuery("SELECT current_setting('default_null_order')")) {
+            rs.next();
+            return rs.getString(1);
+        }
+    }
+
     @Override
     public boolean nullsAreSortedHigh() throws SQLException {
-        return true;
+        return "NULLS_LAST_ON_ASC_FIRST_ON_DESC".equals(getDefaultNullOrder());
     }
 
     @Override
     public boolean nullsAreSortedLow() throws SQLException {
-        return false;
+        return "NULLS_FIRST_ON_ASC_LAST_ON_DESC".equals(getDefaultNullOrder());
     }
 
     @Override
     public boolean nullsAreSortedAtStart() throws SQLException {
-        return true;
+        return "NULLS_FIRST".equals(getDefaultNullOrder());
     }
 
     @Override
     public boolean nullsAreSortedAtEnd() throws SQLException {
-        return false;
+        return "NULLS_LAST".equals(getDefaultNullOrder());
     }
 
     @Override
