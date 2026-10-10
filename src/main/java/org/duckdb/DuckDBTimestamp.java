@@ -10,10 +10,6 @@ import java.time.*;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {
-    static {
-        // LocalDateTime reference of epoch
-        RefLocalDateTime = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC);
-    }
 
     public DuckDBTimestamp(long timeMicros) {
         this.timeMicros = timeMicros;
@@ -24,15 +20,13 @@ public class DuckDBTimestamp {
     }
 
     public DuckDBTimestamp(OffsetDateTime offsetDateTime) {
-        this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC),
-                                                                 ChronoUnit.MICROS);
+        this.timeMicros = localDateTime2Micros(offsetDateTime.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime());
     }
 
     public DuckDBTimestamp(Timestamp sqlTimestamp) {
-        this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(sqlTimestamp.toLocalDateTime(), ChronoUnit.MICROS);
+        this.timeMicros = localDateTime2Micros(sqlTimestamp.toLocalDateTime());
     }
 
-    final static LocalDateTime RefLocalDateTime;
     protected long timeMicros;
 
     private static Instant createInstant(long value, ChronoUnit unit) throws SQLException {
@@ -109,7 +103,17 @@ public class DuckDBTimestamp {
     }
 
     public static long localDateTime2Micros(LocalDateTime localDateTime) {
-        return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
+        // Whole microseconds since the epoch, rounded toward negative infinity (floor).
+        //
+        // A naive RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS) truncates the
+        // interval toward zero, so a pre-epoch timestamp whose sub-microsecond remainder is
+        // not exact (e.g. 1969-12-31T23:59:59.987654321) is rounded up by one microsecond
+        // (to .987655 instead of the expected floor .987654). Computing from the UTC epoch
+        // second (which is already floored) plus the floored microsecond part of the nanos
+        // keeps the negative floor exact for every path (Timestamp/LocalDateTime/OffsetDateTime).
+        long epochSecond = localDateTime.toEpochSecond(ZoneOffset.UTC);
+        int nanoOfSecond = localDateTime.getNano();
+        return Math.addExact(Math.multiplyExact(epochSecond, 1_000_000L), nanoOfSecond / 1000L);
     }
 
     // TODO: move this to C++ side
@@ -146,7 +150,7 @@ public class DuckDBTimestamp {
     }
 
     public static long getMicroseconds(Timestamp sqlTimestamp) {
-        return DuckDBTimestamp.RefLocalDateTime.until(sqlTimestamp.toLocalDateTime(), ChronoUnit.MICROS);
+        return localDateTime2Micros(sqlTimestamp.toLocalDateTime());
     }
 
     public long getMicrosEpoch() {

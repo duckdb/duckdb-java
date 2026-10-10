@@ -70,7 +70,9 @@ public class TestTimestamp {
             OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
             OffsetDateTime odt1Rounded = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12000, ZoneOffset.ofHours(7));
             OffsetDateTime odt2 = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12345, ZoneOffset.ofHours(-5));
-            OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 13000, ZoneOffset.ofHours(-5));
+            // Pre-epoch 1878: the sub-microsecond fraction .345us micro-truncates consistently to 12000ns
+            // (floor semantics), not 13000ns which reflected the old toward-zero rounding.
+            OffsetDateTime odt2Rounded = OffsetDateTime.of(1878, 10, 2, 1, 15, 7, 12000, ZoneOffset.ofHours(-5));
             OffsetDateTime odt3 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(2));
             OffsetDateTime odt4 = OffsetDateTime.of(2022, 1, 1, 12, 11, 10, 0, ZoneOffset.ofHours(0));
             OffsetDateTime odt5 = OffsetDateTime.of(1900, 11, 27, 23, 59, 59, 0, ZoneOffset.ofHours(1));
@@ -573,6 +575,66 @@ public class TestTimestamp {
             try (ResultSet rs = stmt.executeQuery("SELECT t0.c0 FROM t0; ")) {
                 rs.next();
                 rs.getObject(1);
+            }
+        }
+    }
+
+    public static void test_negative_fractional_timestamp_micros() throws Exception {
+        // Whole microseconds since the epoch must round toward negative infinity (floor).
+        // The previous RefLocalDateTime.until(..., MICROS) truncated toward zero, rounding a
+        // pre-epoch sub-microsecond remainder up by one microsecond.
+
+        // -1ns since the epoch -> floor -1us
+        LocalDateTime minus1Ns = LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999999999);
+        assertEquals(-1L, DuckDBTimestamp.localDateTime2Micros(minus1Ns));
+        assertEquals(-1L, new DuckDBTimestamp(minus1Ns).getMicrosEpoch());
+        assertEquals(-1L, new DuckDBTimestamp(Timestamp.valueOf(minus1Ns)).getMicrosEpoch());
+
+        // -1001ns since the epoch -> floor -2us
+        LocalDateTime minus1001Ns = LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999998999);
+        assertEquals(-2L, DuckDBTimestamp.localDateTime2Micros(minus1001Ns));
+        assertEquals(-2L, new DuckDBTimestamp(minus1001Ns).getMicrosEpoch());
+
+        // Pre-1970 with a sub-microsecond remainder: .987654321 floors to .987654, not .987655
+        LocalDateTime pre1970 = LocalDateTime.of(1969, 12, 31, 23, 59, 59, 987654321);
+        assertEquals(-12346L, DuckDBTimestamp.localDateTime2Micros(pre1970));
+        assertEquals(-12346L, new DuckDBTimestamp(pre1970).getMicrosEpoch());
+        assertEquals(-12346L, new DuckDBTimestamp(Timestamp.valueOf(pre1970)).getMicrosEpoch());
+        assertEquals(LocalDateTime.of(1969, 12, 31, 23, 59, 59, 987654000),
+                     new DuckDBTimestamp(pre1970).toLocalDateTime());
+
+        // Pre-epoch but already a whole number of microseconds: exact, unchanged
+        LocalDateTime wholeMicrosPreEpoch = LocalDateTime.of(1965, 1, 1, 0, 0, 0, 123456000);
+        assertEquals(-157766399876544L, DuckDBTimestamp.localDateTime2Micros(wholeMicrosPreEpoch));
+        assertEquals(wholeMicrosPreEpoch, new DuckDBTimestamp(wholeMicrosPreEpoch).toLocalDateTime());
+
+        // Positive fraction still floors (truncates) as before
+        LocalDateTime positive = LocalDateTime.of(2021, 7, 29, 21, 13, 11, 123456789);
+        assertEquals(1627593191123456L, DuckDBTimestamp.localDateTime2Micros(positive));
+        assertEquals(1627593191123456L, new DuckDBTimestamp(positive).getMicrosEpoch());
+        assertEquals(1627593191123456L, new DuckDBTimestamp(Timestamp.valueOf(positive)).getMicrosEpoch());
+
+        // The same instant expressed with different offsets must map to the same micros
+        Instant instant = Instant.ofEpochSecond(1627679591L, 123456789L);
+        ZoneOffset[] offsets = {ZoneOffset.UTC, ZoneOffset.ofHours(5), ZoneOffset.ofHoursMinutes(5, 30),
+                                ZoneOffset.ofHours(-8)};
+        for (ZoneOffset offset : offsets) {
+            OffsetDateTime odt = OffsetDateTime.ofInstant(instant, offset);
+            assertEquals(1627679591123456L, DuckDBTimestamp.localDateTime2Micros(
+                                                odt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+            assertEquals(1627679591123456L, new DuckDBTimestamp(odt).getMicrosEpoch());
+        }
+    }
+
+    public static void test_timestamp_negative_fraction_jdbc() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement ps = conn.prepareStatement("SELECT ?::TIMESTAMP")) {
+            ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.of(1969, 12, 31, 23, 59, 59, 987654321)));
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.of(1969, 12, 31, 23, 59, 59, 987654000),
+                             rs.getObject(1, LocalDateTime.class));
+                assertEquals("1969-12-31 23:59:59.987654", rs.getTimestamp(1).toString());
             }
         }
     }
