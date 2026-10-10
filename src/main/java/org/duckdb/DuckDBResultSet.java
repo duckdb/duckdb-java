@@ -406,6 +406,9 @@ public class DuckDBResultSet implements ResultSet {
     }
 
     public LocalTime getLocalTime(int columnIndex) throws SQLException {
+        if (checkAndNull(columnIndex)) {
+            return null;
+        }
         return currentChunk[columnIndex - 1].getLocalTime(chunkIdx - 1);
     }
 

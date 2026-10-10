@@ -641,6 +641,66 @@ public class TestTimestamp {
         }
     }
 
+    public static void test_local_time_getter_ns() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE t (i TIME_NS)");
+            stmt.execute("INSERT INTO t VALUES ('01:02:03.456789012')");
+            try (DuckDBResultSet rs = (DuckDBResultSet) stmt.executeQuery("SELECT i FROM t")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLocalTime(1), LocalTime.of(1, 2, 3, 456789012));
+                assertFalse(rs.wasNull());
+                assertEquals(rs.getLocalTime("i"), LocalTime.of(1, 2, 3, 456789012));
+                assertFalse(rs.wasNull());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_local_time_getter_null() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE t (i TIME_NS)");
+            stmt.execute("INSERT INTO t VALUES ('01:02:03.456789012'), (NULL)");
+            try (DuckDBResultSet rs = (DuckDBResultSet) stmt.executeQuery("SELECT i FROM t ORDER BY rowid")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLocalTime(1), LocalTime.of(1, 2, 3, 456789012));
+                assertFalse(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertNull(rs.getLocalTime(1));
+                assertTrue(rs.wasNull());
+                assertNull(rs.getLocalTime("i"));
+                assertTrue(rs.wasNull());
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_local_time_getter_invalid_index() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             DuckDBResultSet rs = (DuckDBResultSet) stmt.executeQuery("SELECT TIME '01:02:03' AS t")) {
+            assertThrows(() -> rs.getLocalTime(1), SQLException.class);
+            assertThrows(() -> rs.getLocalTime("t"), SQLException.class);
+            assertTrue(rs.next());
+            assertThrows(() -> rs.getLocalTime(0), SQLException.class);
+            assertThrows(() -> rs.getLocalTime(2), SQLException.class);
+            assertThrows(() -> rs.getLocalTime("nope"), SQLException.class);
+            assertFalse(rs.next());
+            assertThrows(() -> rs.getLocalTime(1), SQLException.class);
+            assertThrows(() -> rs.getLocalTime("t"), SQLException.class);
+        }
+    }
+
+    public static void test_local_time_getter_closed() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            DuckDBResultSet rs = (DuckDBResultSet) stmt.executeQuery("SELECT TIME '01:02:03' AS t");
+            assertTrue(rs.next());
+            rs.close();
+            assertThrows(() -> rs.getLocalTime(1), SQLException.class);
+            assertThrows(() -> rs.getLocalTime("t"), SQLException.class);
+        }
+    }
+
     public static void test_bug532_timestamp() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
 
