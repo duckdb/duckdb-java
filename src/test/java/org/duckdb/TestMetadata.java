@@ -1203,4 +1203,32 @@ public class TestMetadata {
             assertEquals(rows, 3);
         }
     }
+    public static void test_metadata_null_ordering() throws Exception {
+        String[] options = {"NULLS_LAST", "NULLS_FIRST", "NULLS_FIRST_ON_ASC_LAST_ON_DESC",
+                            "NULLS_LAST_ON_ASC_FIRST_ON_DESC"};
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE test_null_order (i INTEGER)");
+            stmt.execute("INSERT INTO test_null_order VALUES (1), (2), (NULL)");
+
+            DatabaseMetaData md = conn.getMetaData();
+            for (String option : options) {
+                stmt.execute("SET default_null_order = '" + option + "'");
+
+                boolean ascNullFirst = isNullFirst(stmt, "ASC");
+                boolean descNullFirst = isNullFirst(stmt, "DESC");
+
+                assertEquals(md.nullsAreSortedHigh(), !ascNullFirst && descNullFirst);
+                assertEquals(md.nullsAreSortedLow(), ascNullFirst && !descNullFirst);
+                assertEquals(md.nullsAreSortedAtStart(), ascNullFirst && descNullFirst);
+                assertEquals(md.nullsAreSortedAtEnd(), !ascNullFirst && !descNullFirst);
+            }
+        }
+    }
+
+    private static boolean isNullFirst(Statement stmt, String direction) throws Exception {
+        try (ResultSet rs = stmt.executeQuery("SELECT i FROM test_null_order ORDER BY i " + direction)) {
+            assertTrue(rs.next());
+            return rs.getObject(1) == null;
+        }
+    }
 }
