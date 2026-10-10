@@ -126,6 +126,8 @@ enum ErrorCode {
     PREPARED_NO_QUERY(2414, "DuckDBPreparedStatement", SQLState.FUNCTION_SEQUENCE_ERROR,
                       "Query to execute not specified"),
     PREPARED_STREAM_EXECUTE(2415, "DuckDBPreparedStatement", SQLState.HY000, "Streaming execute error"),
+    PREPARED_INVALID_MORE_RESULTS_FLAG(2416, "DuckDBPreparedStatement", SQLState.INVALID_ATTRIBUTE_VALUE,
+                                       "Invalid getMoreResults flag"),
 
     // ------------------------------------------------------------------
     // SCALAR / TABLE FUNCTION BUILDING (validation errors -> HY024 / HY000,
