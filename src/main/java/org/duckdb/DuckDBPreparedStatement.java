@@ -1293,7 +1293,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             setObject(parameterIndex, x);
             return;
         }
-        Instant instant = Instant.ofEpochMilli(x.getTime());
+        // Use the full instant so sub-millisecond precision is preserved; Instant.ofEpochMilli(x.getTime())
+        // would truncate the fractional seconds to milliseconds. Timezone semantics are unchanged.
+        Instant instant = x.toInstant();
         ZoneId zoneId = cal.getTimeZone().toZoneId();
         ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, zoneId);
         LocalDateTime ldt = zdt.toLocalDateTime();
