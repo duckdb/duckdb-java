@@ -317,22 +317,22 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public boolean isBeforeFirst() throws SQLException {
-        return currentValueIndex < 0;
+        return length > 0 && currentValueIndex < 0;
     }
 
     @Override
     public boolean isAfterLast() throws SQLException {
-        return currentValueIndex >= length;
+        return length > 0 && currentValueIndex >= length;
     }
 
     @Override
     public boolean isFirst() throws SQLException {
-        return currentValueIndex == 0;
+        return length > 0 && currentValueIndex == 0;
     }
 
     @Override
     public boolean isLast() throws SQLException {
-        return currentValueIndex == length - 1;
+        return length > 0 && currentValueIndex == length - 1;
     }
 
     @Override
@@ -365,7 +365,7 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     @Override
     public int getRow() throws SQLException {
-        return currentValueIndex + 1;
+        return isValidRow() ? currentValueIndex + 1 : 0;
     }
 
     @Override
@@ -379,12 +379,16 @@ public class DuckDBArrayResultSet implements ResultSet {
         return checkBounds();
     }
 
+    private boolean isValidRow() {
+        return currentValueIndex >= 0 && currentValueIndex < length;
+    }
+
     private boolean checkBounds() {
-        if (currentValueIndex < -1) {
+        if (currentValueIndex < 0) {
             currentValueIndex = -1;
             return false;
         }
-        if (currentValueIndex > length) {
+        if (currentValueIndex >= length) {
             currentValueIndex = length;
             return false;
         }

@@ -1405,6 +1405,134 @@ public class TestDuckDBJDBC {
         }
     }
 
+    @SuppressWarnings("try")
+    public static void test_array_resultset_cursor() throws Exception {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL);
+             Statement statement = connection.createStatement()) {
+            try (ResultSet rs = statement.executeQuery("select [10, 20, 30]")) {
+                assertTrue(rs.next());
+                try (ResultSet arrayResultSet = rs.getArray(1).getResultSet()) {
+                    // initial position: before first, not on a row
+                    assertTrue(arrayResultSet.isBeforeFirst());
+                    assertFalse(arrayResultSet.isAfterLast());
+                    assertFalse(arrayResultSet.isFirst());
+                    assertFalse(arrayResultSet.isLast());
+                    assertEquals(arrayResultSet.getRow(), 0);
+
+                    // absolute positive within bounds
+                    assertTrue(arrayResultSet.absolute(2));
+                    assertFalse(arrayResultSet.isBeforeFirst());
+                    assertFalse(arrayResultSet.isAfterLast());
+                    assertFalse(arrayResultSet.isFirst());
+                    assertFalse(arrayResultSet.isLast());
+                    assertEquals(arrayResultSet.getRow(), 2);
+                    assertEquals(arrayResultSet.getInt(2), 20);
+
+                    assertTrue(arrayResultSet.absolute(1));
+                    assertTrue(arrayResultSet.isFirst());
+                    assertEquals(arrayResultSet.getRow(), 1);
+
+                    // absolute beyond last (length + 1) -> after last
+                    assertFalse(arrayResultSet.absolute(4));
+                    assertTrue(arrayResultSet.isAfterLast());
+                    assertFalse(arrayResultSet.isBeforeFirst());
+                    assertEquals(arrayResultSet.getRow(), 0);
+
+                    // absolute(0) -> before first
+                    assertFalse(arrayResultSet.absolute(0));
+                    assertTrue(arrayResultSet.isBeforeFirst());
+                    assertFalse(arrayResultSet.isAfterLast());
+                    assertEquals(arrayResultSet.getRow(), 0);
+
+                    // negative absolute counts from the end
+                    assertTrue(arrayResultSet.absolute(-1));
+                    assertTrue(arrayResultSet.isLast());
+                    assertEquals(arrayResultSet.getRow(), 3);
+                    assertEquals(arrayResultSet.getInt(2), 30);
+
+                    assertTrue(arrayResultSet.absolute(-3));
+                    assertTrue(arrayResultSet.isFirst());
+                    assertEquals(arrayResultSet.getRow(), 1);
+
+                    assertFalse(arrayResultSet.absolute(-4));
+                    assertTrue(arrayResultSet.isBeforeFirst());
+                    assertEquals(arrayResultSet.getRow(), 0);
+
+                    // relative edges
+                    assertTrue(arrayResultSet.absolute(1));
+                    assertTrue(arrayResultSet.relative(2));
+                    assertTrue(arrayResultSet.isLast());
+                    assertFalse(arrayResultSet.relative(1));
+                    assertTrue(arrayResultSet.isAfterLast());
+                    assertFalse(arrayResultSet.relative(0));
+
+                    assertTrue(arrayResultSet.absolute(1));
+                    assertTrue(arrayResultSet.relative(0));
+                    assertTrue(arrayResultSet.isFirst());
+
+                    // previous from the first row -> before first
+                    assertFalse(arrayResultSet.previous());
+                    assertTrue(arrayResultSet.isBeforeFirst());
+                    assertFalse(arrayResultSet.isAfterLast());
+                    assertEquals(arrayResultSet.getRow(), 0);
+                    // previous again stays before first
+                    assertFalse(arrayResultSet.previous());
+                    assertTrue(arrayResultSet.isBeforeFirst());
+                    assertEquals(arrayResultSet.getRow(), 0);
+
+                    // next walks 1 -> 2 -> 3 -> after last
+                    assertTrue(arrayResultSet.next());
+                    assertTrue(arrayResultSet.isFirst());
+                    assertEquals(arrayResultSet.getRow(), 1);
+                    assertEquals(arrayResultSet.getInt(2), 10);
+
+                    // second next -> second row, neither first nor last
+                    assertTrue(arrayResultSet.next());
+                    assertFalse(arrayResultSet.isBeforeFirst());
+                    assertFalse(arrayResultSet.isFirst());
+                    assertFalse(arrayResultSet.isLast());
+                    assertEquals(arrayResultSet.getRow(), 2);
+                    assertEquals(arrayResultSet.getInt(2), 20);
+
+                    // third next -> last row
+                    assertTrue(arrayResultSet.next());
+                    assertFalse(arrayResultSet.isFirst());
+                    assertTrue(arrayResultSet.isLast());
+                    assertEquals(arrayResultSet.getRow(), 3);
+                    assertEquals(arrayResultSet.getInt(2), 30);
+
+                    // fourth next -> after last
+                    assertFalse(arrayResultSet.next());
+                    assertFalse(arrayResultSet.isBeforeFirst());
+                    assertTrue(arrayResultSet.isAfterLast());
+                    assertEquals(arrayResultSet.getRow(), 0);
+                }
+            }
+
+            // empty array (0 values)
+            try (ResultSet rs = statement.executeQuery("select []::INTEGER[]")) {
+                assertTrue(rs.next());
+                try (ResultSet empty = rs.getArray(1).getResultSet()) {
+                    assertFalse(empty.isBeforeFirst());
+                    assertFalse(empty.isAfterLast());
+                    assertEquals(empty.getRow(), 0);
+                    assertFalse(empty.first());
+                    assertFalse(empty.last());
+                    assertFalse(empty.next());
+                    assertFalse(empty.absolute(1));
+                    assertFalse(empty.absolute(-1));
+                    assertFalse(empty.absolute(0));
+                    assertFalse(empty.relative(1));
+                    assertFalse(empty.relative(0));
+                    assertFalse(empty.previous());
+                    assertFalse(empty.isBeforeFirst());
+                    assertFalse(empty.isAfterLast());
+                    assertEquals(empty.getRow(), 0);
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> List<T> arrayToList(Array array) throws SQLException {
         return arrayToList((T[]) array.getArray());
@@ -1450,7 +1578,14 @@ public class TestDuckDBJDBC {
                 for (int i = 1; i <= rsmd.getColumnCount(); i++) {
                     Object value = rs.getObject(i);
 
-                    assertEquals(rsmd.getColumnClassName(i), value.getClass().getName());
+                    String typeName = rsmd.getColumnTypeName(i);
+                    if (typeName.startsWith("UNION") || typeName.equals("VARIANT")) {
+                        // UNION and VARIANT values have a dynamic runtime type, so the metadata can only report
+                        // their common supertype; for those columns it must report exactly java.lang.Object.
+                        assertEquals(Object.class.getName(), rsmd.getColumnClassName(i));
+                    } else {
+                        assertEquals(rsmd.getColumnClassName(i), value.getClass().getName());
+                    }
                 }
             }
         }
