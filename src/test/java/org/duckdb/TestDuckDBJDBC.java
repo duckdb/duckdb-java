@@ -1450,7 +1450,14 @@ public class TestDuckDBJDBC {
                 for (int i = 1; i <= rsmd.getColumnCount(); i++) {
                     Object value = rs.getObject(i);
 
-                    assertEquals(rsmd.getColumnClassName(i), value.getClass().getName());
+                    String typeName = rsmd.getColumnTypeName(i);
+                    if (typeName.startsWith("UNION") || typeName.equals("VARIANT")) {
+                        // UNION and VARIANT values have a dynamic runtime type, so the metadata can only report
+                        // their common supertype; for those columns it must report exactly java.lang.Object.
+                        assertEquals(Object.class.getName(), rsmd.getColumnClassName(i));
+                    } else {
+                        assertEquals(rsmd.getColumnClassName(i), value.getClass().getName());
+                    }
                 }
             }
         }
