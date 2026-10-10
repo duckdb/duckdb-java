@@ -709,6 +709,9 @@ public class TestPrepare {
                             "invalid flag must be a plain SQLException but was " + e.getClass().getName());
                 assertTrue(e.getMessage().contains("42"),
                            "message should report the invalid flag but was: " + e.getMessage());
+                assertEquals(e.getErrorCode(), ErrorCode.PREPARED_INVALID_MORE_RESULTS_FLAG.getCode(), "error code");
+                assertEquals(e.getSQLState(), ErrorCode.PREPARED_INVALID_MORE_RESULTS_FLAG.getSQLState().getCode(),
+                             "SQLState");
             }
 
             // The rejected call must not have consumed the current result.

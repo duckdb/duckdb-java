@@ -889,9 +889,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         case Statement.CLOSE_ALL_RESULTS:
             return moveToEnd(current);
         default:
-            throw new SQLException("Invalid getMoreResults flag " + current + ", expected Statement."
-                                   + "CLOSE_CURRENT_RESULT, Statement.KEEP_CURRENT_RESULT or Statement."
-                                   + "CLOSE_ALL_RESULTS");
+            throw createSQLException("Invalid getMoreResults flag " + current + ", expected Statement."
+                                         + "CLOSE_CURRENT_RESULT, Statement.KEEP_CURRENT_RESULT or Statement."
+                                         + "CLOSE_ALL_RESULTS",
+                                     ErrorCode.PREPARED_INVALID_MORE_RESULTS_FLAG);
         }
     }
 
