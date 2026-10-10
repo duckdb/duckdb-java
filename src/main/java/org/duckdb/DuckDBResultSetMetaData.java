@@ -243,6 +243,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return LinkedHashMap.class.getName();
         case STRUCT:
             return DuckDBStruct.class.getName();
+        case UNION:
+        case VARIANT:
+            // UNION and VARIANT columns hold values of dynamic type, so only Object is a safe common supertype
+            return Object.class.getName();
         default:
             return String.class.getName();
         }
