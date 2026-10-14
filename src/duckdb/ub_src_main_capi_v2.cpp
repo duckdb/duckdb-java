@@ -8,7 +8,11 @@
 
 #include "src/main/capi/v2/capi_v2_column_data_collection.cpp"
 
+#include "src/main/capi/v2/capi_v2_config.cpp"
+
 #include "src/main/capi/v2/capi_v2_connection.cpp"
+
+#include "src/main/capi/v2/capi_v2_custom_option.cpp"
 
 #include "src/main/capi/v2/capi_v2_custom_type.cpp"
 
@@ -22,6 +26,8 @@
 
 #include "src/main/capi/v2/capi_v2_extension.cpp"
 
+#include "src/main/capi/v2/capi_v2_factory.cpp"
+
 #include "src/main/capi/v2/capi_v2_file_system.cpp"
 
 #include "src/main/capi/v2/capi_v2_func.cpp"
@@ -31,6 +37,12 @@
 #include "src/main/capi/v2/capi_v2_func_cast.cpp"
 
 #include "src/main/capi/v2/capi_v2_func_copy.cpp"
+
+#include "src/main/capi/v2/capi_v2_func_docs.cpp"
+
+#include "src/main/capi/v2/capi_v2_func_macro.cpp"
+
+#include "src/main/capi/v2/capi_v2_func_pragma.cpp"
 
 #include "src/main/capi/v2/capi_v2_func_properties.cpp"
 
@@ -43,6 +55,8 @@
 #include "src/main/capi/v2/capi_v2_identifier.cpp"
 
 #include "src/main/capi/v2/capi_v2_instance.cpp"
+
+#include "src/main/capi/v2/capi_v2_log_sink.cpp"
 
 #include "src/main/capi/v2/capi_v2_logging.cpp"
 
