@@ -52,9 +52,11 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		auto msg = StringUtil::Format("Cannot cast array of size %u to array of size %u", source_array_size,
 		                              target_array_size);
 		HandleCastError::AssignError(msg, parameters);
-		// every row fails, so just return null
-		ConstantVector::SetNull(result, count_t(count));
-		return false;
+		if (!parameters.strict) {
+			// if this was a TRY_CAST, we know every row will fail, so just return null
+			ConstantVector::SetNull(result, count_t(count));
+			return false;
+		}
 	}
 
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();

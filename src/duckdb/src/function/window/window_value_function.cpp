@@ -628,19 +628,6 @@ unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &con
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
-//! The index of the row at the offset - saturated if it does not fit, as it is outside the partition anyway
-static int64_t LeadLagIndex(ExpressionType type, int64_t row_idx, int64_t offset) {
-	int64_t result;
-	if (type == ExpressionType::WINDOW_LEAD) {
-		if (!TryAddOperator::Operation(row_idx, offset, result)) {
-			result = offset < 0 ? NumericLimits<int64_t>::Minimum() : NumericLimits<int64_t>::Maximum();
-		}
-	} else if (!TrySubtractOperator::Operation(row_idx, offset, result)) {
-		result = offset < 0 ? NumericLimits<int64_t>::Maximum() : NumericLimits<int64_t>::Minimum();
-	}
-	return result;
-}
-
 void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                     idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
@@ -681,7 +668,12 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
-			const auto val_idx = LeadLagIndex(wexpr.GetExpressionType(), NumericCast<int64_t>(own_row), offset);
+			auto val_idx = NumericCast<int64_t>(own_row);
+			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
+			} else {
+				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
+			}
 			const auto frame_width = NumericCast<int64_t>(frame.end - frame.start);
 			if (val_idx >= 0 && val_idx < frame_width) {
 				// (3) find the row at that offset
@@ -735,7 +727,12 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
-		auto val_idx = LeadLagIndex(wexpr.GetExpressionType(), NumericCast<int64_t>(row_idx), offset);
+		int64_t val_idx = (int64_t)row_idx;
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
+		} else {
+			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
+		}
 
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
@@ -1549,8 +1546,7 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
 		if (executor.range_idx == DConstants::INVALID_INDEX) {
-			// the first ordering - also when it is shared with an argument ordering that is a prefix of the orderings
-			D_ASSERT(!wexpr.OrderBy().empty());
+			D_ASSERT(wexpr.OrderBy().size() == 1);
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
 			executor.range_idx = shared.RegisterCollection(wexpr.OrderBy()[0].expression, false);
 		}

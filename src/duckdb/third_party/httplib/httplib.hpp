@@ -194,6 +194,14 @@
 #define CPPHTTPLIB_RECV_FLAGS 0
 #endif
 
+#ifndef CPPHTTPLIB_SEND_FLAGS
+#ifdef MSG_NOSIGNAL
+#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
+#else
+#define CPPHTTPLIB_SEND_FLAGS 0
+#endif
+#endif
+
 #ifndef CPPHTTPLIB_LISTEN_BACKLOG
 #define CPPHTTPLIB_LISTEN_BACKLOG 128
 #endif
@@ -320,14 +328,6 @@ using socket_t = int;
 #define INVALID_SOCKET (-1)
 #endif
 #endif //_WIN32
-
-#ifndef CPPHTTPLIB_SEND_FLAGS
-#ifdef MSG_NOSIGNAL
-#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
-#else
-#define CPPHTTPLIB_SEND_FLAGS 0
-#endif
-#endif
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>

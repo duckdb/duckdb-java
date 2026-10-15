@@ -757,14 +757,7 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDa
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
-	if (segments.empty()) {
-		// The collection was Reset() while an append state still referred to it, which happens when an exception
-		// (e.g. out-of-memory) unwinds a Repartition after it moved this partition's rows and before the owner
-		// re-initialised its append states. There is no segment left to store the handles in, so release them.
-		pin_state.row_handles.clear();
-		pin_state.heap_handles.clear();
-		return;
-	}
+	D_ASSERT(!segments.empty());
 	FinalizePinState(pin_state, *segments.back());
 }
 

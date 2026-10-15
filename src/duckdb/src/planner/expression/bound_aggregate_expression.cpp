@@ -1,5 +1,4 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -90,11 +89,6 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(*children[i], *other.children[i])) {
-			return false;
-		}
-		// expression equality ignores the return type, but a collation lives in the return type and decides
-		// which argument values compare equal - two aggregates that disagree on it are not the same aggregate
-		if (!children[i]->GetReturnType().EqualsIncludingCollation(other.children[i]->GetReturnType())) {
 			return false;
 		}
 	}

@@ -143,9 +143,12 @@ struct ICUStrptime : public ICUDateFunc {
 					result = timestamp_tz_t(parsed.ToTimestamp());
 					return;
 				} else {
-					// Use the calendar of the parsed time zone, if any - the shared calendar keeps the session zone
-					auto row_calendar = parsed.tz.empty() ? calendar : cache.GetCalendar(parsed.tz);
-					result = GetTime(row_calendar, ToMicros(row_calendar, parsed, format));
+					// Set TZ first, if any.
+					if (!parsed.tz.empty()) {
+						cache.SetTimeZone(calendar, parsed.tz);
+					}
+
+					result = GetTime(calendar, ToMicros(calendar, parsed, format));
 					return;
 				}
 			}
@@ -163,9 +166,11 @@ struct ICUStrptime : public ICUDateFunc {
 					result.value = parsed.ToTimestamp().value;
 					return;
 				} else {
-					// Use the calendar of the parsed time zone, if any - the shared calendar keeps the session zone
-					auto row_calendar = parsed.tz.empty() ? calendar : cache.GetCalendar(parsed.tz);
-					result = GetTimeNS(row_calendar, ToNanos(row_calendar, parsed, format));
+					// Set TZ first, if any.
+					if (!parsed.tz.empty()) {
+						cache.SetTimeZone(calendar, parsed.tz);
+					}
+					result = GetTimeNS(calendar, ToNanos(calendar, parsed, format));
 					return;
 				}
 			}
@@ -202,9 +207,8 @@ struct ICUStrptime : public ICUDateFunc {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else {
-					auto row_calendar = parsed.tz.empty() ? calendar : cache.TryGetCalendar(parsed.tz);
-					if (row_calendar && TryGetTime(row_calendar, ToMicros(row_calendar, parsed, format), result)) {
+				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
+					if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
 						return true;
 					}
 				}
@@ -222,9 +226,8 @@ struct ICUStrptime : public ICUDateFunc {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else {
-					auto row_calendar = parsed.tz.empty() ? calendar : cache.TryGetCalendar(parsed.tz);
-					if (row_calendar && TryGetTimeNS(row_calendar, ToNanos(row_calendar, parsed, format), result)) {
+				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
+					if (TryGetTimeNS(calendar, ToNanos(calendar, parsed, format), result)) {
 						return true;
 					}
 				}
@@ -400,24 +403,18 @@ struct ICUStrptime : public ICUDateFunc {
 			// Convert parts to a TZ (default or parsed) if no offset was provided
 			auto calendar = cal.get();
 
-			// Use the calendar of the time zone if one was provided - the shared calendar keeps the session zone
+			// Change TZ if one was provided.
 			if (tz.GetSize()) {
 				string error_msg;
-				calendar = cache.TryGetCalendar(tz, &error_msg);
-				if (!calendar) {
+				cache.SetTimeZone(calendar, tz, &error_msg);
+				if (!error_msg.empty()) {
 					HandleCastError::AssignError(error_msg, parameters);
 					return nullopt;
 				}
 			}
 
 			// Now get the parts in the given time zone
-			timestamp_tz_t result;
-			string error_msg;
-			if (!TryFromNaive(calendar, us, result, error_msg)) {
-				HandleCastError::AssignError(error_msg, parameters);
-				return nullopt;
-			}
-			return result;
+			return FromNaive(calendar, us);
 		}
 
 		return timestamp_tz_t(us);

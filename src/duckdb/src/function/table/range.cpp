@@ -262,8 +262,7 @@ struct RangeDateTimeBindData : public TableFunctionData {
 			return;
 		}
 
-		// a step pointing away from the end produces an empty range
-		cardinality = delta / increment < 0 ? 0 : idx_t(delta / increment);
+		cardinality = idx_t(delta / increment);
 	}
 
 	idx_t cardinality;

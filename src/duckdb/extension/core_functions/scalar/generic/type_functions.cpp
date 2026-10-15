@@ -111,11 +111,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	}
 
 	auto type_name = args.front().second.GetValue<string>();
-	QualifiedName qualified_name;
-	string error;
-	if (!QualifiedName::TryParse(type_name, qualified_name, error)) {
-		throw ParserException(error);
-	}
+	auto qualified_name = QualifiedName::Parse(type_name);
 
 	auto unbound_type =
 	    LogicalType::UNBOUND(make_uniq<TypeExpression>(std::move(qualified_name), std::move(type_args)));
