@@ -226,9 +226,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 		// bind the aggregate
 		FunctionBinder function_binder(binder);
-		auto window_bound_aggregate = function_binder.BindAggregateFunction(
-		    func, std::move(arguments), error, nullptr,
-		    window.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+		auto window_bound_aggregate = function_binder.BindAggregateFunction(func, std::move(arguments), error, nullptr);
 		// No function found, throw an error
 		if (!window_bound_aggregate) {
 			error.AddQueryLocation(window);

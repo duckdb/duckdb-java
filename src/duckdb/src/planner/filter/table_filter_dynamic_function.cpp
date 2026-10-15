@@ -21,7 +21,6 @@ DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value con
 }
 
 unique_ptr<Expression> DynamicFilterData::ToExpression(const Expression &column) const {
-	annotated_shared_lock<annotated_shared_mutex> guard(lock);
 	return BoundComparisonExpression::Create(comparison_type, column.Copy(),
 	                                         make_uniq<BoundConstantExpression>(constant));
 }
@@ -121,7 +120,7 @@ static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, option
 	ExpressionType comparison_type;
 	Value constant;
 	{
-		annotated_shared_lock<annotated_shared_mutex> lock(func_data.filter_data->lock);
+		lock_guard<mutex> lock(func_data.filter_data->lock);
 		comparison_type = func_data.filter_data->comparison_type;
 		constant = func_data.filter_data->constant;
 	}
@@ -151,7 +150,7 @@ FilterPropagateResult DynamicFilterScalarFun::FilterPrune(const FunctionStatisti
 	if (!data.filter_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	annotated_shared_lock<annotated_shared_mutex> lock(data.filter_data->lock);
+	lock_guard<mutex> lock(data.filter_data->lock);
 	if (!data.filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

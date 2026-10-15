@@ -151,16 +151,11 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 }
 
 void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
-                           idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
+                           idx_t sel_count) {
 	if (!function.get().select) {
 		throw InternalException("ColumnSegment::Select not implemented for this compression method");
 	}
-	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
-		D_ASSERT(result_offset == 0);
-	} else {
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	}
-	function.get().select(*this, state, scan_count, result, sel, sel_count, result_offset, scan_type);
+	function.get().select(*this, state, scan_count, result, sel, sel_count);
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,

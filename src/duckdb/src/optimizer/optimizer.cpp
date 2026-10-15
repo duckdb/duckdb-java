@@ -130,11 +130,13 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 		return true;
 	}
 	auto &config = DBConfig::GetConfig(context_p);
-	return config.IsOptimizerDisabled(type);
+	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
-	context.InterruptCheck();
+	if (context.IsInterrupted()) {
+		throw InterruptException();
+	}
 
 	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip

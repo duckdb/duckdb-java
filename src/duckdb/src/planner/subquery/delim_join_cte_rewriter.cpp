@@ -2631,8 +2631,9 @@ static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<Tabl
 
 DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	auto &config = DBConfig::GetConfig(binder.context);
-	cte_deliminator_enabled = Settings::Get<EnableOptimizerSetting>(binder.context) &&
-	                          !config.IsOptimizerDisabled(OptimizerType::DELIMINATOR);
+	cte_deliminator_enabled =
+	    Settings::Get<EnableOptimizerSetting>(binder.context) &&
+	    config.options.disabled_optimizers.find(OptimizerType::DELIMINATOR) == config.options.disabled_optimizers.end();
 }
 
 BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan,

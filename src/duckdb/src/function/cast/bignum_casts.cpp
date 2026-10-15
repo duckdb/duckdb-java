@@ -276,18 +276,6 @@ BoundCastInfo Bignum::NumericToBignumCastSwitch(const LogicalType &source) {
 	}
 }
 
-struct BignumToDoubleErrorCast {
-	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		if (Bignum::BignumToDouble(input, result, parameters.strict)) {
-			return true;
-		}
-		HandleCastError::AssignError(
-		    StringUtil::Format("Could not convert bignum '%s' to Double", Bignum::BignumToVarchar(input)), parameters);
-		return false;
-	}
-};
-
 BoundCastInfo DefaultCasts::BignumCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
 	D_ASSERT(source.id() == LogicalTypeId::BIGNUM);
@@ -325,7 +313,7 @@ BoundCastInfo DefaultCasts::BignumCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<bignum_t, BignumCastToVarchar>);
 	case LogicalTypeId::DOUBLE:
-		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<bignum_t, double, BignumToDoubleErrorCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<bignum_t, double, BignumToDoubleCast>);
 	default:
 		return TryVectorNullCast;
 	}

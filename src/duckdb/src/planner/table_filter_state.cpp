@@ -348,7 +348,7 @@ private:
 		}
 	}
 
-	shared_ptr<const BloomFilter> filter;
+	optional_ptr<BloomFilter> filter;
 	bool filters_null_values;
 	Vector hashes;
 	SelectionVector bloom_sel;

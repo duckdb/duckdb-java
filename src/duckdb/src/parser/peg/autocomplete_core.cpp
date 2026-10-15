@@ -229,7 +229,6 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
 		case SuggestionState::SUGGEST_VARIABLE:
-		case SuggestionState::SUGGEST_BARE_LABEL:
 			// variables have no suggestions available
 			break;
 		case SuggestionState::SUGGEST_KEYWORD:

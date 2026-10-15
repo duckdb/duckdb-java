@@ -159,7 +159,7 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 	}
 	Start(query);
 }
-void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time) {
+void QueryProfiler::AddParserTime(const Profiler &parser_timer) {
 	if (!running || !IsEnabled()) {
 		return;
 	}
@@ -167,7 +167,7 @@ void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t star
 	if (!parser_time_ns) {
 		return;
 	}
-	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns, start_time, end_time);
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -843,7 +843,7 @@ void QueryProfiler::ToLogInternal() const {
 	if (!root) {
 		return;
 	}
-	metrics->WriteMetricsToLog(context, query_metrics.GetMetricTimings());
+	metrics->WriteMetricsToLog(context);
 }
 
 void QueryProfiler::ToLog() const {
