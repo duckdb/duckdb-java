@@ -1005,14 +1005,9 @@ struct RoundOperatorPrecision {
 		double rounded_value;
 		if (precision < 0) {
 			double modifier = std::pow(10, -TA(precision));
-			if (std::isinf(modifier)) {
-				// every finite value rounds to zero
-				return Value::IsFinite(input) ? 0 : input;
-			}
 			rounded_value = ROUND_POLICY::Nearest(input / modifier) * modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
-				// the input is too large to be rounded to this precision
-				return input;
+				return 0;
 			}
 		} else {
 			double modifier = std::pow(10, TA(precision));

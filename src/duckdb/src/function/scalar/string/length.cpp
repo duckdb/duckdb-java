@@ -1,8 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -222,24 +220,13 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &dimensions = data.dimensions;
 	auto max_dimension = static_cast<int64_t>(dimensions.size());
 
-	// the result is NULL for NULL arrays
-	const auto count = args.size();
-	auto array_validity = args.data[0].Validity();
-	auto dimension_values = dimension.Values<int64_t>();
-	auto writer = FlatVector::Writer<int64_t>(result, count);
-	for (idx_t i = 0; i < count; i++) {
-		auto entry = dimension_values[i];
-		if (!array_validity.IsValid(i) || !entry.IsValid()) {
-			writer.WriteNull();
-			continue;
-		}
-		auto dim = entry.GetValue();
-		if (dim < 1 || dim > max_dimension) {
+	UnaryExecutor::Execute<int64_t, int64_t>(dimension, result, [&](int64_t dimension) {
+		if (dimension < 1 || dimension > max_dimension) {
 			throw OutOfRangeException(StringUtil::Format(
-			    "array_length dimension '%lld' out of range (min: '1', max: '%lld')", dim, max_dimension));
+			    "array_length dimension '%lld' out of range (min: '1', max: '%lld')", dimension, max_dimension));
 		}
-		writer.WriteValue(dimensions[UnsafeNumericCast<idx_t>(dim - 1)]);
-	}
+		return dimensions[UnsafeNumericCast<idx_t>(dimension - 1)];
+	});
 }
 
 void ArrayOrListLengthBinaryResolveTypes(ResolveScalarFunctionTypesInput &input) {

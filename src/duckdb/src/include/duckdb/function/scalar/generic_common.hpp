@@ -16,7 +16,6 @@
 
 namespace duckdb {
 class BoundFunctionExpression;
-struct SortedAggregateStateOrder;
 
 struct ConstantOrNull {
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
@@ -33,8 +32,6 @@ struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 	static void SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout);
 	static unique_ptr<ParsedExpression> StateToSQL(const LogicalType &type, unique_ptr<ParsedExpression> value);
-	//! The per-key (column, modifiers) of the AGGREGATE_STATE type of an ordered aggregate
-	static void GetSortedStateOrders(const LogicalType &state_type, vector<SortedAggregateStateOrder> &orders);
 };
 
 } // namespace duckdb

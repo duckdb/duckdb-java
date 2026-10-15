@@ -1106,16 +1106,7 @@ void ClientContext::InterruptCheck() const {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
-	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
-		BlockingInterruptCheck();
-	}
-}
-
-void ClientContext::BlockingInterruptCheck() const {
-	if (IsInterrupted()) {
-		throw InterruptException();
-	}
-	if (QueryDeadlinePassed()) {
+	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0 && QueryDeadlinePassed()) {
 		throw InterruptException(QUERY_DEADLINE_ERROR);
 	}
 }

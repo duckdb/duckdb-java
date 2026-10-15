@@ -53,12 +53,6 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> type_variations,
                                                  const optional<vector<int64_t>> &array_bounds) {
-	return LogicalType::UNBOUND(TransformNestedType(transformer, std::move(type_variations), array_bounds));
-}
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNestedType(PEGTransformer &transformer,
-                                                                        unique_ptr<ParsedExpression> type_variations,
-                                                                        const optional<vector<int64_t>> &array_bounds) {
 	auto array_depth_guard = transformer.StackCheck(array_bounds ? array_bounds->size() : 0);
 	auto type = std::move(type_variations);
 	if (array_bounds) {
@@ -74,7 +68,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNestedType(PEGTrans
 			}
 		}
 	}
-	return type;
+	return LogicalType::UNBOUND(std::move(type));
 }
 
 int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer) {
@@ -137,9 +131,6 @@ PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const Logi
 			}
 			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
-		}
-		if (with_timezone) {
-			throw ParserException("TIMESTAMP WITH TIME ZONE does not take a precision");
 		}
 		if (modifiers.size() > 1) {
 			throw ParserException("TIMESTAMP only supports a single modifier");
@@ -325,29 +316,36 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
 	return QualifiedName(std::move(qualification), reserved_type_name);
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
-                                        optional<vector<unique_ptr<ParsedExpression>>> nested_type) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
+                                                                     const optional<vector<LogicalType>> &type) {
 	vector<unique_ptr<ParsedExpression>> map_children;
-	if (nested_type) {
-		map_children = std::move(*nested_type);
+	if (type) {
+		for (auto &child_type : *type) {
+			map_children.push_back(UnboundType::GetTypeExpression(child_type)->Copy());
+		}
 	}
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
-                                          vector<unique_ptr<ParsedExpression>> nested_type) {
-	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(nested_type));
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
+                                                                       const vector<LogicalType> &type) {
+	vector<unique_ptr<ParsedExpression>> tuple_children;
+	for (auto &child : type) {
+		tuple_children.push_back(UnboundType::GetTypeExpression(child)->Copy());
+	}
+	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(tuple_children));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowType(
-    PEGTransformer &transformer, optional<vector<pair<Identifier, unique_ptr<ParsedExpression>>>> col_id_type_list) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
+                                        const optional<child_list_t<LogicalType>> &col_id_type_list) {
 	vector<unique_ptr<ParsedExpression>> struct_children;
 	if (col_id_type_list) {
 		for (auto &child : *col_id_type_list) {
-			child.second->SetAlias(child.first);
-			struct_children.push_back(std::move(child.second));
+			auto &type_expr = UnboundType::GetTypeExpression(child.second);
+			auto new_type_expr = type_expr->Copy();
+			new_type_expr->SetAlias(child.first);
+			struct_children.push_back(std::move(new_type_expr));
 		}
 	}
 	return make_uniq<TypeExpression>(Identifier("STRUCT"), std::move(struct_children));
@@ -374,25 +372,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformVariantType(PEGTran
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformUnionType(PEGTransformer &transformer,
-                                          vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type_list) {
+                                          const child_list_t<LogicalType> &col_id_type_list) {
+	identifier_set_t union_names;
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : col_id_type_list) {
-		colid.second->SetAlias(colid.first);
-		union_children.push_back(std::move(colid.second));
+		union_names.insert(colid.first);
+		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
+		auto new_type_expr = type_expr->Copy();
+		new_type_expr->SetAlias(colid.first);
+		union_children.push_back(std::move(new_type_expr));
 	}
 	return make_uniq<TypeExpression>(Identifier("UNION"), std::move(union_children));
 }
 
-vector<pair<Identifier, unique_ptr<ParsedExpression>>>
+child_list_t<LogicalType>
 PEGTransformerFactory::TransformColIdTypeList(PEGTransformer &transformer,
-                                              vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type) {
+                                              const vector<pair<Identifier, LogicalType>> &col_id_type) {
 	return col_id_type;
 }
 
-pair<Identifier, unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformColIdType(PEGTransformer &transformer, const Identifier &col_id,
-                                          unique_ptr<ParsedExpression> nested_type) {
-	return make_pair(Identifier(col_id), std::move(nested_type));
+pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTransformer &transformer,
+                                                                        const Identifier &col_id,
+                                                                        const LogicalType &type) {
+	return make_pair(Identifier(col_id), type);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(
@@ -529,8 +531,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSetofType(PEGTransformer &transformer,
-                                                                       unique_ptr<ParsedExpression> nested_type) {
-	return nested_type;
+                                                                       const LogicalType &type) {
+	return UnboundType::GetTypeExpression(type)->Copy();
 }
 
 // StringLiteral <- '\'' [^\']* '\''

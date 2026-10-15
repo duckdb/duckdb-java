@@ -27,13 +27,13 @@ public:
 	                    unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
 	//! The table to insert into
-	mutable optional_ptr<DuckTableEntry> insert_table;
+	optional_ptr<DuckTableEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The bound constraints for the table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Table schema, in case of CREATE TABLE AS
-	mutable optional_ptr<SchemaCatalogEntry> schema;
+	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
 	//! Preferred input batch size

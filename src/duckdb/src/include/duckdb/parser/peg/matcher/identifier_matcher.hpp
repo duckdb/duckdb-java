@@ -54,10 +54,6 @@ public:
 		if (Tokenizer::CharacterIsInitialNumber(text[0])) {
 			return false;
 		}
-		if (text.back() == '\'') {
-			// a prefixed string literal such as x'41' or e'ab'
-			return false;
-		}
 		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
