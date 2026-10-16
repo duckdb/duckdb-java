@@ -32,7 +32,7 @@ jobs:
   format-check:
     name: Format Check
     if: ${{ !(github.event_name == 'pull_request' && startsWith(github.head_ref, 'vendoring-')) }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,7 +44,7 @@ jobs:
 
   java-linux-amd64:
     name: Linux (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: format-check
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
@@ -109,7 +109,7 @@ jobs:
 
   java-linux-amd64-tck:
     name: Linux TCK (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
@@ -171,7 +171,7 @@ jobs:
 
   java-linux-amd64-graal:
     name: Linux Graal (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
@@ -216,7 +216,7 @@ jobs:
 
   java-linux-amd64-spark:
     name: Linux Spark (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
@@ -319,7 +319,7 @@ jobs:
 
   java-linux-amd64-asan:
     name: Linux ASan (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       GEN: ninja
@@ -418,7 +418,7 @@ jobs:
 
   java-linux-amd64-jepsen:
     name: Linux Jepsen (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
@@ -575,7 +575,7 @@ jobs:
 
   java-linux-amd64-musl:
     name: Linux (amd64-musl)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs: java-linux-amd64
     env:
       ALPINE_IMAGE: alpine:3.22
@@ -907,7 +907,7 @@ jobs:
   maven-deploy:
     if: ${{ github.repository == 'duckdb/duckdb-java' && startsWith(github.ref, 'refs/tags/') }}
     name: Maven Deploy
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
@@ -988,7 +988,7 @@ jobs:
   maven-snapshot-deploy:
     if: ${{ github.repository == 'duckdb/duckdb-java' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/vendoring-main') && github.event_name == 'workflow_dispatch' }}
     name: Maven S3 Deploy
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     needs:
       - java-linux-amd64
       - java-linux-amd64-tck
@@ -1076,7 +1076,7 @@ jobs:
       - java-windows-amd64
       - java-windows-aarch64
       - java-osx-universal
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
         with:
