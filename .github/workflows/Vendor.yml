@@ -29,7 +29,7 @@ jobs:
   vendor:
     name: "Update Vendored Sources"
     if: ${{ github.repository == 'duckdb/duckdb-java' }}
-    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-latest' }}
     permissions:
       actions: write
       contents: write
