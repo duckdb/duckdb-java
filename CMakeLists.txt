@@ -142,6 +142,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/json/json_scan.cpp
   src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/extension/json/serialize_json.cpp
+  src/duckdb/extension/loader/static_extension_autoregister.cpp
   src/duckdb/extension/parquet/column_reader.cpp
   src/duckdb/extension/parquet/column_writer.cpp
   src/duckdb/extension/parquet/parquet_column_schema.cpp
@@ -151,6 +152,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_file_metadata_cache.cpp
   src/duckdb/extension/parquet/parquet_float16.cpp
   src/duckdb/extension/parquet/parquet_geometry.cpp
+  src/duckdb/extension/parquet/parquet_int96.cpp
   src/duckdb/extension/parquet/parquet_metadata.cpp
   src/duckdb/extension/parquet/parquet_multi_file_info.cpp
   src/duckdb/extension/parquet/parquet_prefetch_cost_model.cpp
@@ -159,6 +161,8 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_statistics.cpp
   src/duckdb/extension/parquet/parquet_timestamp.cpp
   src/duckdb/extension/parquet/parquet_writer.cpp
+  src/duckdb/extension/parquet/read_single_parquet_file.cpp
+  src/duckdb/extension/parquet/reader/variant/parquet_variant_shredding.cpp
   src/duckdb/extension/parquet/serialize_parquet.cpp
   src/duckdb/extension/parquet/zstd_file_system.cpp
   src/duckdb/generated_extension_loader_package_build.cpp
@@ -222,9 +226,14 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/main/extension/extension_alias.cpp
   src/duckdb/src/main/extension/extension_helper.cpp
   src/duckdb/src/main/extension/extension_install.cpp
+  src/duckdb/src/main/extension/extension_install_dynamic.cpp
   src/duckdb/src/main/extension/extension_load.cpp
+  src/duckdb/src/main/extension/extension_load_dynamic.cpp
   src/duckdb/src/main/extension/extension_loader.cpp
   src/duckdb/src/main/extension/extension_repository_manager.cpp
+  src/duckdb/src/main/extension/external_extension_provider.cpp
+  src/duckdb/src/main/extension/linked_extension_registry.cpp
+  src/duckdb/src/main/http/http_client_httplib.cpp
   src/duckdb/src/optimizer/matcher/expression_matcher.cpp
   src/duckdb/third_party/brotli/common/constants.cpp
   src/duckdb/third_party/brotli/common/context.cpp
@@ -371,7 +380,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_extension_json_json_functions.cpp
   src/duckdb/ub_extension_parquet_decoder.cpp
   src/duckdb/ub_extension_parquet_reader.cpp
-  src/duckdb/ub_extension_parquet_reader_variant.cpp
   src/duckdb/ub_extension_parquet_writer.cpp
   src/duckdb/ub_extension_parquet_writer_variant.cpp
   src/duckdb/ub_src_catalog.cpp
@@ -443,7 +451,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main.cpp
   src/duckdb/ub_src_main_buffered_data.cpp
   src/duckdb/ub_src_main_capi_v2.cpp
-  src/duckdb/ub_src_main_chunk_scan_state.cpp
   src/duckdb/ub_src_main_http.cpp
   src/duckdb/ub_src_main_profiler.cpp
   src/duckdb/ub_src_main_relation.cpp
@@ -479,6 +486,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_planner_expression_binder.cpp
   src/duckdb/ub_src_planner_filter.cpp
   src/duckdb/ub_src_planner_operator.cpp
+  src/duckdb/ub_src_planner_sql_export.cpp
   src/duckdb/ub_src_planner_subquery.cpp
   src/duckdb/ub_src_storage.cpp
   src/duckdb/ub_src_storage_buffer.cpp
