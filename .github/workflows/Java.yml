@@ -835,7 +835,6 @@ jobs:
 
   java-osx-universal:
     name: macOS (Universal)
-    runs-on: macos-latest
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-macos-arm64' || 'macos-latest' }}
     needs: java-linux-amd64
     env:
