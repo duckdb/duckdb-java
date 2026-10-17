@@ -8,8 +8,6 @@
 
 #include "src/optimizer/build_probe_side_optimizer.cpp"
 
-#include "src/optimizer/builtin_function_lookup.cpp"
-
 #include "src/optimizer/column_binding_replacer.cpp"
 
 #include "src/optimizer/column_lifetime_analyzer.cpp"
@@ -28,7 +26,13 @@
 
 #include "src/optimizer/cte_inlining.cpp"
 
+#include "src/optimizer/cte_join_filter_collector.cpp"
+
+#include "src/optimizer/cte_join_filter_pusher.cpp"
+
 #include "src/optimizer/deliminator.cpp"
+
+#include "src/optimizer/disjunctive_join_rewriter.cpp"
 
 #include "src/optimizer/empty_result_pullup.cpp"
 
