@@ -39,7 +39,11 @@ jobs:
           fetch-depth: 0
       - run: |
           python ./scripts/retry.py --timeout 1m -- \
-            python -m pip install --user --break-system-packages clang_format==11.0.1
+            python -m pip install --break-system-packages clang_format==11.0.1
+          python -m site
+          which clang-format
+          clang-format --version
+          echo $PATH
           make format-check
 
   java-linux-amd64:
