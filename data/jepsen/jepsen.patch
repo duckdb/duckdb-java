@@ -37,6 +37,19 @@ index 8b280e7..9e85e33 100644
                   [clj-http "3.13.1"]]
    :main jepsen.duckdb.cli
    :repl-options {:init-ns jepsen.duckdb.repl}
+diff --git a/src/jepsen/duckdb/cli.clj b/src/jepsen/duckdb/cli.clj
+index b5c493c..be4590d 100644
+--- a/src/jepsen/duckdb/cli.clj
++++ b/src/jepsen/duckdb/cli.clj
+@@ -107,7 +107,7 @@
+         env           {"JEPSEN_OPTS" (pr-str env-opts)}
+         primary-env   (assoc env "JEPSEN_RW_MODE" "rw")
+         secondary-env (assoc env "JEPSEN_RW_MODE" "ro")]
+-      (local/db {:bin "/usr/bin/java"
++      (local/db {:bin (str (System/getenv "JAVA_HOME") "/bin/java")
+                  :node-args (zipmap (:nodes opts) (repeat args))
+                  :node-envs (zipmap (:nodes opts)
+                                     (cons primary-env (repeat secondary-env)))})))
 diff --git a/src/jepsen/duckdb/client.clj b/src/jepsen/duckdb/client.clj
 index 718ec4c..3c6355f 100644
 --- a/src/jepsen/duckdb/client.clj

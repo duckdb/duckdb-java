@@ -213,7 +213,6 @@ jobs:
           java ${{ github.workspace }}/src/test/external/RunGraalNativeImage.java \
             ${{ github.workspace }}/src/test/external/graal
 
-
   java-linux-amd64-spark:
     name: Linux Spark (amd64)
     runs-on: ubuntu-latest
@@ -472,6 +471,13 @@ jobs:
           sudo update-alternatives --set javac /usr/lib/jvm/java-21-openjdk-amd64/bin/javac
           /usr/bin/java --version
 
+      - name: Check JDK version
+        run: |
+          which java
+          java -version
+          echo $JAVA_HOME
+          $JAVA_HOME/bin/java -version
+
       - name: Install JAR
         run: |
           mvn -B -ntp --version
@@ -487,7 +493,7 @@ jobs:
         run: |
           patch -p1 < ${{ github.workspace }}/data/jepsen/jepsen.patch
           lein --version
-          python ../scripts/retry.py --timeout 5m -- \
+          python ../scripts/retry.py --retries 1 --timeout 5m -- \
             lein run test \
             --time-limit 10 \
             --max-writes-per-key 8 \
