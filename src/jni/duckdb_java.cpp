@@ -360,7 +360,7 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		return nullptr;
 	}
 
-	bool stream_results_stmt = pending->GetStatementProperties().result_eagerness != ResultEagerness::FORCED;
+	bool stream_results_stmt = StreamsByDefault(stmt_ref->stmt->GetStatementType(), *pending);
 	bool stream_results = stream_results_user && stream_results_stmt;
 
 	auto res_ref = make_uniq<ResultHolder>();
@@ -383,12 +383,17 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 }
 
 jobject _duckdb_jdbc_execute_capi(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
+	if (!stmt_ref || !stmt_ref->stmt) {
+		throw InvalidInputException("Invalid statement");
+	}
+
 	auto pending = execute_prepared_statement(env, stmt_ref_buf, params, true);
 	if (!pending) {
 		return nullptr;
 	}
 
-	bool stream_results = pending->GetStatementProperties().result_eagerness != ResultEagerness::FORCED;
+	bool stream_results = StreamsByDefault(stmt_ref->stmt->GetStatementType(), *pending);
 	auto out = make_uniq<duckdb_result>();
 
 	if (stream_results) {
@@ -420,7 +425,8 @@ jobject _duckdb_jdbc_execute_pending(JNIEnv *env, jclass, jobject pending_ref_bu
 		return nullptr;
 	}
 
-	bool stream_results = pending_ref->pending->GetStatementProperties().result_eagerness != ResultEagerness::FORCED;
+	// the pending result was submitted from the SQL statement as written, so its type is the written type
+	bool stream_results = StreamsByDefault(pending_ref->pending->GetStatementType(), *pending_ref->pending);
 	auto res_ref = make_uniq<ResultHolder>();
 
 	if (pending_ref->streaming && stream_results) {
