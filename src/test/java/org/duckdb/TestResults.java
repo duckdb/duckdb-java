@@ -270,13 +270,18 @@ public class TestResults {
         Properties props = new Properties();
         props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
 
-        String QUERY = "SELECT * FROM range(100000)";
+        int count = 100000;
+        String QUERY = "SELECT * FROM range(" + count + ")";
         try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt1 = conn.createStatement();
              Statement stmt2 = conn.createStatement()) {
 
-            try (ResultSet rs1 = stmt1.executeQuery(QUERY); ResultSet rs2 = stmt2.executeQuery(QUERY)) {
-                assertNotNull(rs2);
-                assertThrows(rs1::next, SQLException.class);
+            try (ResultSet rs1 = stmt1.executeQuery(QUERY)) {
+                assertThrows(() -> { stmt2.executeQuery(QUERY); }, SQLException.class);
+                int rows = 0;
+                while (rs1.next()) {
+                    rows++;
+                }
+                assertEquals(rows, count);
             }
         }
     }
