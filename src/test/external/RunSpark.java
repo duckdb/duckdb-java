@@ -18,13 +18,25 @@ public class RunSpark {
         System.out.print(output);
         int status = ps.waitFor();
         String[] lines = output.split("\n");
-        if (lines.length < 2 || !"7433139".equals(lines[0]) || !"1.429378704487457E8".equals(lines[1])) {
+        if (lines.length < 2 || !"7433139".equals(lines[0]) || !sumMatches(lines[1])) {
             throw new RuntimeException("Spark SQL test output check failed");
         }
         if (status == 0) {
             System.out.println("Success");
         }
         System.exit(status);
+    }
+
+    // Sum of FLOAT values depends on the order in which they are added, physical row order
+    // of the DuckLake table is not stable across setups, so the last digits can differ.
+    static boolean sumMatches(String line) {
+        double expected = 1.429378704487457E8;
+        try {
+            double actual = Double.parseDouble(line.trim());
+            return Math.abs(actual - expected) <= Math.abs(expected) * 1e-9;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     static String fromEnv(String envVarName, String defaultValue) {
