@@ -1462,6 +1462,29 @@ public class DuckDBResultSet implements ResultSet {
                                              ", SQL type: " + sqlType,
                                          ErrorCode.RESULT_SET_CONVERSION);
             }
+        } else if (type == OffsetTime.class) {
+            if (sqlType == DuckDBColumnType.TIME || sqlType == DuckDBColumnType.TIME_NS ||
+                sqlType == DuckDBColumnType.TIME_WITH_TIME_ZONE) {
+                return type.cast(getOffsetTime(columnIndex));
+            } else {
+                throw createSQLException("Can't convert value to OffsetTime, Java type: " + type +
+                                             ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
+            }
+        } else if (type == Struct.class || type == DuckDBStruct.class) {
+            if (sqlType == DuckDBColumnType.STRUCT) {
+                return type.cast(getStruct(columnIndex));
+            } else {
+                throw createSQLException("Can't convert value to Struct, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
+            }
+        } else if (type == Map.class || type == LinkedHashMap.class) {
+            if (sqlType == DuckDBColumnType.MAP) {
+                return type.cast(currentChunk[columnIndex - 1].getMap(chunkIdx - 1));
+            } else {
+                throw createSQLException("Can't convert value to Map, Java type: " + type + ", SQL type: " + sqlType,
+                                         ErrorCode.RESULT_SET_CONVERSION);
+            }
         } else if (type == Blob.class) {
             if (sqlType == DuckDBColumnType.BLOB) {
                 throw createSQLException("Can't convert value to Blob, Java type: " + type + ", SQL type: " + sqlType,
