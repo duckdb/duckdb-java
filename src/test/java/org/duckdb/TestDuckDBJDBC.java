@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -1129,6 +1130,28 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_struct_get_object_typed() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE t (s STRUCT(name VARCHAR, age INTEGER), i INTEGER)");
+            stmt.execute("INSERT INTO t VALUES ({'name': 'foo', 'age': 42}, 1), (NULL, 2)");
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM t ORDER BY i")) {
+                assertEquals(rs.getMetaData().getColumnClassName(1), DuckDBStruct.class.getName());
+                assertTrue(rs.next());
+                Struct struct = rs.getObject(1, Struct.class);
+                assertEquals(struct.getSQLTypeName(), "STRUCT(\"name\" VARCHAR, age INTEGER)");
+                assertEquals(toJavaObject(struct), mapOf("name", "foo", "age", 42));
+                assertEquals(toJavaObject(rs.getObject("s", Struct.class)), mapOf("name", "foo", "age", 42));
+                DuckDBStruct duckdbStruct = rs.getObject(1, DuckDBStruct.class);
+                assertEquals(duckdbStruct.getMap(), mapOf("name", "foo", "age", 42));
+                assertThrows(() -> { rs.getObject(2, Struct.class); }, SQLException.class);
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1, Struct.class));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_struct_with_timestamp() throws Exception {
         try (Connection connection = DriverManager.getConnection(JDBC_URL)) {
             LocalDateTime now = LocalDateTime.of(LocalDate.of(2020, 5, 12), LocalTime.of(16, 20, 0, 0));
@@ -1569,6 +1592,27 @@ public class TestDuckDBJDBC {
             ResultSet rs = statement.executeQuery();
             assertTrue(rs.next());
             assertEquals(rs.getObject(1), mapOf(100, "a", 5, "b"));
+        }
+    }
+
+    public static void test_map_get_object_typed() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE t (m MAP(VARCHAR, INTEGER), i INTEGER)");
+            stmt.execute("INSERT INTO t VALUES (MAP {'foo': 1, 'bar': 2}, 1), (NULL, 2)");
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM t ORDER BY i")) {
+                assertEquals(rs.getMetaData().getColumnClassName(1), LinkedHashMap.class.getName());
+                assertTrue(rs.next());
+                Map<?, ?> map = rs.getObject(1, Map.class);
+                assertEquals(map, mapOf("foo", 1, "bar", 2));
+                assertEquals(new ArrayList<>(map.keySet()), Arrays.asList("foo", "bar"));
+                assertEquals(rs.getObject("m", Map.class), mapOf("foo", 1, "bar", 2));
+                assertEquals(rs.getObject(1, LinkedHashMap.class), mapOf("foo", 1, "bar", 2));
+                assertThrows(() -> { rs.getObject(2, Map.class); }, SQLException.class);
+                assertTrue(rs.next());
+                assertNull(rs.getObject(1, Map.class));
+                assertTrue(rs.wasNull());
+                assertFalse(rs.next());
+            }
         }
     }
 

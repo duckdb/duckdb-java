@@ -620,6 +620,40 @@ public class TestTimestamp {
         }
     }
 
+    public static void test_time_tz_get_object_offset_time() throws Exception {
+        TimeZone defaultTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try {
+            try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
+                s.executeUpdate("CREATE TABLE t (i TIME WITH TIME ZONE)");
+                s.execute("INSERT INTO t VALUES ('01:02:03+12:30:45'), ('04:05:06-03:10'), (NULL)");
+                try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
+                    assertEquals(rs.getMetaData().getColumnClassName(1), OffsetTime.class.getName());
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1, OffsetTime.class),
+                                 OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
+                    assertEquals(rs.getObject("i", OffsetTime.class),
+                                 OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1, OffsetTime.class),
+                                 OffsetTime.of(LocalTime.of(4, 5, 6), ZoneOffset.ofHoursMinutesSeconds(-3, -10, 0)));
+                    assertTrue(rs.next());
+                    assertNull(rs.getObject(1, OffsetTime.class));
+                    assertTrue(rs.wasNull());
+                    assertFalse(rs.next());
+                }
+                try (ResultSet rs = s.executeQuery("SELECT '01:02:03'::TIME, 'foo'")) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getObject(1, OffsetTime.class),
+                                 OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.UTC));
+                    assertThrows(() -> { rs.getObject(2, OffsetTime.class); }, SQLException.class);
+                }
+            }
+        } finally {
+            TimeZone.setDefault(defaultTimeZone);
+        }
+    }
+
     public static void test_time_ns() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement()) {
             s.executeUpdate("create table t (i time_ns)");
