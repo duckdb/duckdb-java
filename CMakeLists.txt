@@ -651,6 +651,7 @@ if(JEMALLOC_ENABLED)
 endif()
 
 add_library(duckdb_java SHARED
+  src/jni/arrow.cpp
   src/jni/bindings_appender.cpp
   src/jni/bindings_common.cpp
   src/jni/bindings_data_chunk.cpp

@@ -109,13 +109,17 @@ jint _duckdb_jdbc_fetch_size(JNIEnv * env, jclass param0);
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv * env, jclass param0);
 
-jlong _duckdb_jdbc_arrow_stream(JNIEnv * env, jclass param0, jobject param1, jlong param2);
+jlong _duckdb_jdbc_arrow_stream(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
 
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream(JNIEnv * env, jclass param0, jobject param1, jlong param2);
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
 
 void _duckdb_jdbc_arrow_register(JNIEnv * env, jclass param0, jobject param1, jlong param2, jbyteArray param3);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1register(JNIEnv * env, jclass param0, jobject param1, jlong param2, jbyteArray param3);
+
+void _duckdb_jdbc_arrow_close_streams(JNIEnv * env, jclass param0, jobject param1);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1close_1streams(JNIEnv * env, jclass param0, jobject param1);
 
 jobject _duckdb_jdbc_create_appender(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2, jbyteArray param3);
 

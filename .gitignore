@@ -1,3 +1,6 @@
-build
-.idea
-cmake-build-debug
+/build
+/.idea
+/.local
+/.arrow
+*.iml
+test1.db

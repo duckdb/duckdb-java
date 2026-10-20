@@ -196,12 +196,11 @@ final class DuckDBNative {
 
     static native int duckdb_jdbc_fetch_size();
 
-    /*
-        static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, long batch_size);
+    static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, ByteBuffer conn_ref, long batch_size);
 
-        static native void duckdb_jdbc_arrow_register(ByteBuffer conn_ref, long arrow_array_stream_pointer, byte[]
-       name);
-    */
+    static native void duckdb_jdbc_arrow_register(ByteBuffer conn_ref, long arrow_array_stream_pointer, byte[] name);
+
+    static native void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref);
 
     static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name)
         throws SQLException;

@@ -215,6 +215,10 @@ public final class DuckDBConnection implements java.sql.Connection {
             }
             appenders.clear();
 
+            // Arrow streams are owned by their consumers and are not tracked
+            // on Java side, last stream created is first closed on native side
+            DuckDBNative.duckdb_jdbc_arrow_close_streams(connRef);
+
             DuckDBNative.duckdb_jdbc_disconnect(connRef);
             connRef = null;
             notifyMonitor = (monitorName != null);
@@ -561,9 +565,17 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    /**
+     * Register an Arrow stream as a temporary view in this connection
+     *
+     * <p>Ownership of the stream is taken by the connection, the passed instance is marked as released. The stream
+     * can be consumed by a single query only. It is released when it is consumed, when the view is replaced or
+     * when the connection is closed.
+     *
+     * @param name name of the view
+     * @param arrow_array_stream an instance of {@link org.apache.arrow.c.ArrowArrayStream}
+     */
     public void registerArrowStream(String name, Object arrow_array_stream) {
-        throw new RuntimeException(new SQLFeatureNotSupportedException("registerArrowStream"));
-        /*
         try {
             checkOpen();
             long array_stream_address = getArrowStreamAddress(arrow_array_stream);
@@ -577,7 +589,6 @@ public final class DuckDBConnection implements java.sql.Connection {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-         */
     }
 
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
