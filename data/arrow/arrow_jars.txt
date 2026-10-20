@@ -1,0 +1,14 @@
+https://repo1.maven.org/maven2/org/apache/arrow/arrow-c-data/17.0.0/arrow-c-data-17.0.0.jar
+https://repo1.maven.org/maven2/org/apache/arrow/arrow-format/17.0.0/arrow-format-17.0.0.jar
+https://repo1.maven.org/maven2/org/apache/arrow/arrow-memory-core/17.0.0/arrow-memory-core-17.0.0.jar
+https://repo1.maven.org/maven2/org/apache/arrow/arrow-memory-unsafe/17.0.0/arrow-memory-unsafe-17.0.0.jar
+https://repo1.maven.org/maven2/org/apache/arrow/arrow-vector/17.0.0/arrow-vector-17.0.0.jar
+https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.17.1/jackson-annotations-2.17.1.jar
+https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.17.1/jackson-core-2.17.1.jar
+https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.17.1/jackson-databind-2.17.1.jar
+https://repo1.maven.org/maven2/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.17.1/jackson-datatype-jsr310-2.17.1.jar
+https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar
+https://repo1.maven.org/maven2/com/google/flatbuffers/flatbuffers-java/24.3.25/flatbuffers-java-24.3.25.jar
+https://repo1.maven.org/maven2/commons-codec/commons-codec/1.17.0/commons-codec-1.17.0.jar
+https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar
+https://repo1.maven.org/maven2/org/checkerframework/checker-qual/3.44.0/checker-qual-3.44.0.jar

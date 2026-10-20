@@ -4,7 +4,7 @@ description: 'Linux test run in host OS'
 runs:
   using: "composite"
   steps:
-    - name: Setup JDK 26
+    - name: Setup JDK
       uses: actions/setup-java@v6
       with:
         distribution: 'corretto'
@@ -18,3 +18,8 @@ runs:
         java                                                \
           -cp ./build/release/duckdb_jdbc_tests.jar:./build/release/duckdb_jdbc.jar \
           org.duckdb.TestDuckDBJDBC
+
+    - name: Arrow Tests Host
+      shell: bash
+      run: |
+        ./src/test/external/test_arrow.sh
