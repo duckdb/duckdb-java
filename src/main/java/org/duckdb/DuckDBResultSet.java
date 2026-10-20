@@ -126,6 +126,9 @@ public class DuckDBResultSet implements ResultSet {
     /**
      * Export the result set as an ArrowReader
      *
+     * <p>The rows of the result are moved into the returned reader, the reader must be closed by the caller.
+     * When the connection is closed before the reader, the reader fails to load next batches.
+     *
      * @param arrow_buffer_allocator an instance of {@link org.apache.arrow.memory.BufferAllocator}
      * @param arrow_batch_size batch size of arrow vectors to return
      * @return an instance of {@link org.apache.arrow.vector.ipc.ArrowReader}
@@ -134,26 +137,37 @@ public class DuckDBResultSet implements ResultSet {
         throws SQLException {
         checkOpen();
 
-        throw new SQLFeatureNotSupportedException("arrowExportStream");
-        /*
+        try {
+            Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
+            if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
+                throw new RuntimeException("Need to pass an Arrow BufferAllocator");
+            }
+            long stream_pointer;
+            conn.connRefLock.lock();
+            try {
+                conn.checkOpen();
+                resultRefLock.lock();
                 try {
-                    Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
-                    if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
-                        throw new RuntimeException("Need to pass an Arrow BufferAllocator");
-                    }
-                    Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(resultRef, arrow_batch_size);
-                    Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
-                    Object arrow_array_stream =
-                        arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
-
-                    Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
-
-                    return c_data_class.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
-                        .invoke(null, arrow_buffer_allocator, arrow_array_stream);
-                } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | SecurityException
-           | ClassNotFoundException e) { throw new RuntimeException(e);
+                    checkOpen();
+                    stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(resultRef, conn.connRef, arrow_batch_size);
+                } finally {
+                    resultRefLock.unlock();
                 }
-        */
+            } finally {
+                conn.connRefLock.unlock();
+            }
+            Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
+            Object arrow_array_stream =
+                arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
+
+            Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
+
+            return c_data_class.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
+                .invoke(null, arrow_buffer_allocator, arrow_array_stream);
+        } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | SecurityException |
+                 ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public Object getObject(int columnIndex) throws SQLException {

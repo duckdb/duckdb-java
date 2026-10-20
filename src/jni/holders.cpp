@@ -1,5 +1,6 @@
 #include "holders.hpp"
 
+#include <algorithm>
 #include <iostream>
 
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
@@ -11,6 +12,33 @@ ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
 		throw duckdb::ConnectionException("Invalid connection buffer");
 	}
 	return conn_holder;
+}
+
+void ConnectionHolder::track_arrow_stream(duckdb::shared_ptr<ArrowStreamState> state) {
+	std::lock_guard<std::mutex> guard(arrow_streams_lock);
+	auto expired = [](const duckdb::weak_ptr<ArrowStreamState> &weak) {
+		return weak.expired();
+	};
+	arrow_streams.erase(std::remove_if(arrow_streams.begin(), arrow_streams.end(), expired), arrow_streams.end());
+	arrow_streams.emplace_back(std::move(state));
+}
+
+void ConnectionHolder::close_arrow_streams() {
+	duckdb::vector<duckdb::shared_ptr<ArrowStreamState>> live;
+	{
+		std::lock_guard<std::mutex> guard(arrow_streams_lock);
+		// Last stream created is first closed
+		for (auto it = arrow_streams.rbegin(); it != arrow_streams.rend(); ++it) {
+			auto state = it->lock();
+			if (state) {
+				live.emplace_back(std::move(state));
+			}
+		}
+		arrow_streams.clear();
+	}
+	for (auto &state : live) {
+		state->Close();
+	}
 }
 
 /**
