@@ -1,10 +1,10 @@
 extern "C" {
 #include "duckdb.h"
 }
+#include "arrow.hpp"
 #include "config.hpp"
 #include "duckdb.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
@@ -1047,71 +1047,66 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 	get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
 }
 
-/* TODO: ArrowFormat
-jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
-    if (!res_ref_buf) {
-        throw InvalidInputException("Invalid result set");
-    }
-    auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-    if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
-        throw InvalidInputException("Invalid result set");
-    }
+jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf, jlong batch_size) {
+	if (!res_ref_buf) {
+		throw InvalidInputException("Invalid result set");
+	}
+	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
+	if (!res_ref || (!res_ref->res && !res_ref->stream) || (res_ref->res && res_ref->res->HasError()) ||
+	    (res_ref->stream && res_ref->stream->HasError())) {
+		throw InvalidInputException("Invalid result set");
+	}
+	if (batch_size <= 0) {
+		throw InvalidInputException("Arrow batch size must be greater than 0");
+	}
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
 
-    auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
-    return (jlong)&wrapper->stream;
+	auto state = make_shared_ptr<JavaResultArrowStream>(std::move(res_ref->res), std::move(res_ref->stream),
+	                                                    static_cast<idx_t>(batch_size));
+	res_ref->chunk = nullptr;
+	conn_holder->track_arrow_stream(state);
+	return reinterpret_cast<jlong>(JavaResultArrowStream::Export(std::move(state)));
 }
 
-class JavaArrowTabularStreamFactory {
+class JavaArrowScanFactory : public ArrowScanFactory {
 public:
-    JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
+	explicit JavaArrowScanFactory(duckdb::shared_ptr<JavaRegisteredArrowStream> state_p) : state(std::move(state_p)) {
+	}
 
-    static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+	void GetSchema(ArrowSchema &schema) override {
+		state->GetSchema(schema);
+	}
 
-        auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-        if (!factory->stream_ptr->release) {
-            throw InvalidInputException("This stream has been released");
-        }
-        auto res = make_uniq<ArrowArrayStreamWrapper>();
-        res->arrow_array_stream = *factory->stream_ptr;
-        factory->stream_ptr->release = nullptr;
-        return res;
-    }
+	duckdb::unique_ptr<ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &) override {
+		return state->Take();
+	}
 
-    static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
-        auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-        auto stream_ptr = factory->stream_ptr;
-        if (!stream_ptr->release) {
-            throw InvalidInputException("This stream has been released");
-        }
-        stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
-        auto error = stream_ptr->get_last_error(stream_ptr);
-        if (error != nullptr) {
-            throw InvalidInputException(error);
-        }
-    }
-
-    ArrowArrayStream *stream_ptr;
+private:
+	duckdb::shared_ptr<JavaRegisteredArrowStream> state;
 };
 
 void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlong arrow_array_stream_pointer,
                                  jbyteArray name_j) {
+	auto conn = get_connection(env, conn_ref_buf);
+	if (conn == nullptr) {
+		return;
+	}
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	auto name = jbyteArray_to_string(env, name_j);
+	auto arrow_array_stream = reinterpret_cast<ArrowArrayStream *>(arrow_array_stream_pointer);
+	if (!arrow_array_stream || !arrow_array_stream->release) {
+		throw InvalidInputException("This stream has been released");
+	}
 
-    auto conn = get_connection(env, conn_ref_buf);
-    if (conn == nullptr) {
-        return;
-    }
-    auto name = jbyteArray_to_string(env, name_j);
-
-    auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
-
-    auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
-    duckdb::vector<Value> parameters;
-    parameters.push_back(Value::POINTER((uintptr_t)factory));
-    parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
-    parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-    conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(Identifier(name), true, true);
+	auto state = make_shared_ptr<JavaRegisteredArrowStream>(arrow_array_stream);
+	conn_holder->track_arrow_stream(state);
+	auto factory = make_shared_ptr<JavaArrowScanFactory>(std::move(state));
+	conn->TableFunction("arrow_scan_dumb", {}, {}, std::move(factory))->CreateView(Identifier(name), true, true);
 }
-*/
+
+void _duckdb_jdbc_arrow_close_streams(JNIEnv *env, jclass, jobject conn_ref_buf) {
+	get_connection_ref(env, conn_ref_buf)->close_arrow_streams();
+}
 
 static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
 	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);

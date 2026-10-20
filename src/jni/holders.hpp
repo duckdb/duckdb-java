@@ -7,6 +7,7 @@ extern "C" {
 #include "refs.hpp"
 
 #include <jni.h>
+#include <mutex>
 
 /**
  * Holds a copy of a shared_ptr to an existing DB instance.
@@ -24,6 +25,17 @@ struct DBHolder {
 };
 
 /**
+ * State of an Arrow stream exported from or registered with a connection. Arrow streams are owned by their consumers
+ * and can outlive the connection, connection closes the state of all its live streams before it is disconnected.
+ */
+struct ArrowStreamState {
+	virtual ~ArrowStreamState() = default;
+
+	//! Releases the resources held by the stream, must be idempotent
+	virtual void Close() = 0;
+};
+
+/**
  * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
  * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
  * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing a DuckDB is freed, the
@@ -37,9 +49,22 @@ struct ConnectionHolder {
 	    : db(_db), connection(duckdb::make_uniq<duckdb::Connection>(*_db)) {
 	}
 
+	~ConnectionHolder() {
+		close_arrow_streams();
+	}
+
+	void track_arrow_stream(duckdb::shared_ptr<ArrowStreamState> state);
+
+	void close_arrow_streams();
+
 	DBHolder *create_db_ref() {
 		return new DBHolder(db);
 	}
+
+private:
+	std::mutex arrow_streams_lock;
+	//! Streams are untracked implicitly when they are released by their consumers
+	duckdb::vector<duckdb::weak_ptr<ArrowStreamState>> arrow_streams;
 };
 
 struct StatementHolder {
