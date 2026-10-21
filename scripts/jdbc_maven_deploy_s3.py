@@ -31,14 +31,15 @@ arch_builds = {
     'java-linux-aarch64': 'linux_arm64',
     'java-linux-amd64-musl': 'linux_amd64_musl',    # Alpine Linux
     'java-linux-aarch64-musl': 'linux_arm64_musl',  # Alpine Linux ARM
-    'java-osx-universal': 'macos_universal',        # Intel + Apple Silicon
+    'java-macos-aarch64': 'macos_arm64',            # Apple Silicon
+    'java-macos-amd64': 'macos_amd64',              # Intel
     'java-windows-amd64': 'windows_amd64',
     'java-windows-aarch64': 'windows_arm64',
 }
 
 # Builds to combine into the main (fat) JAR.
 # The main JAR includes natives for all major platforms for convenience.
-combine_builds = ['java-linux-amd64', 'java-osx-universal', 'java-windows-amd64', 'java-linux-aarch64']
+combine_builds = ['java-linux-amd64', 'java-macos-aarch64', 'java-windows-amd64', 'java-linux-aarch64']
 
 def run_cmd(cmd, check=True, cwd=project_dir):
     """Execute a command and return output."""

@@ -21,10 +21,9 @@ final class DuckDBNative {
 
     private static final String ARCH_X86_64 = "amd64";
     private static final String ARCH_AARCH64 = "arm64";
-    private static final String ARCH_UNIVERSAL = "universal";
 
     private static final String OS_WINDOWS = "windows";
-    private static final String OS_MACOS = "osx";
+    private static final String OS_MACOS = "macos";
     private static final String OS_LINUX = "linux";
 
     static {
@@ -90,14 +89,7 @@ final class DuckDBNative {
     }
 
     static String nativeLibName() {
-        String os = osName();
-        final String arch;
-        if (OS_MACOS.equals(os)) {
-            arch = ARCH_UNIVERSAL;
-        } else {
-            arch = cpuArch();
-        }
-        return "libduckdb_java.so_" + os + "_" + arch;
+        return "libduckdb_java.so_" + osName() + "_" + cpuArch();
     }
 
     static Path currentJarDir() throws Exception {
