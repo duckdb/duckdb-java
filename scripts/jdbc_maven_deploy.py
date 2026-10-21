@@ -58,13 +58,14 @@ else:
 jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
 
-combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
+combine_builds = ['linux-amd64', 'macos-aarch64', 'windows-amd64', 'linux-aarch64']
 arch_specific_builds = [
   'linux-amd64',
   'linux-aarch64',
   'linux-amd64-musl',
   'linux-aarch64-musl',
-  'osx-universal',
+  'macos-aarch64',
+  'macos-amd64',
   'windows-amd64',
   'windows-aarch64',
 ]
@@ -73,7 +74,8 @@ arch_specific_classifiers = [
   'linux_arm64',
   'linux_amd64_musl',
   'linux_arm64_musl',
-  'macos_universal',
+  'macos_arm64',
+  'macos_amd64',
   'windows_amd64',
   'windows_arm64',
 ]

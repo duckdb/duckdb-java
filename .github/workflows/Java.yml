@@ -863,8 +863,8 @@ jobs:
           path: |
             build/release/duckdb_jdbc.jar
 
-  java-osx-universal:
-    name: macOS (Universal)
+  java-macos-aarch64:
+    name: macOS (aarch64)
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-macos-arm64' || 'macos-latest' }}
     needs: java-linux-amd64
     env:
@@ -881,7 +881,7 @@ jobs:
         id: cache_key
         run: |
           DUCKDB_VERSION=$(python3 ./scripts/print_duckdb_version.py)
-          KEY="${{ runner.os }}-${{ runner.arch }}-$DUCKDB_VERSION"
+          KEY="${{ runner.os }}-${{ runner.arch }}-arm64-$DUCKDB_VERSION"
           echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore Cache
@@ -915,15 +915,15 @@ jobs:
 
       - name: List Symbols
         run: |
-          nm -gU ./build/release/libduckdb_java.so_osx_universal
+          nm -gU ./build/release/libduckdb_java.so_macos_arm64
 
       - name: Check jemalloc
         run: |
-          ! (nm ./build/release/libduckdb_java.so_osx_universal | grep jemalloc) || exit 1
+          ! (nm ./build/release/libduckdb_java.so_macos_arm64 | grep jemalloc) || exit 1
 
-      - name: See if this actually universal
+      - name: Check architecture
         shell: bash
-        run: lipo -archs build/release/libduckdb_java.so_osx_universal | grep "x86_64 arm64"
+        run: test "$(lipo -archs build/release/libduckdb_java.so_macos_arm64)" = "arm64"
 
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
@@ -932,7 +932,81 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: java-osx-universal
+          name: java-macos-aarch64
+          path: |
+            build/release/duckdb_jdbc.jar
+
+  java-macos-amd64:
+    name: macOS (amd64)
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-macos-arm64' || 'macos-latest' }}
+    needs: java-linux-amd64
+    env:
+      GEN: ninja
+      CC: 'ccache clang'
+      CXX: 'ccache clang++'
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Cache Key
+        id: cache_key
+        run: |
+          DUCKDB_VERSION=$(python3 ./scripts/print_duckdb_version.py)
+          KEY="${{ runner.os }}-${{ runner.arch }}-amd64-$DUCKDB_VERSION"
+          echo "value=${KEY}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }}
+
+      - name: Install Dependencies
+        run: |
+          python3 ./scripts/retry.py --timeout 1m -- \
+            brew install -q \
+            ccache \
+            ninja
+
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: corretto
+          java-version: '8'
+          architecture: x64
+
+      - name: Build
+        shell: bash
+        run: OSX_BUILD_AMD64=1 make release
+
+      - name: Save Cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/ccache
+          key: ${{ steps.cache_key.outputs.value }} 
+
+      - name: List Symbols
+        run: |
+          nm -gU ./build/release/libduckdb_java.so_macos_amd64
+
+      - name: Check jemalloc
+        run: |
+          ! (nm ./build/release/libduckdb_java.so_macos_amd64 | grep jemalloc) || exit 1
+
+      - name: Check architecture
+        shell: bash
+        run: test "$(lipo -archs build/release/libduckdb_java.so_macos_amd64)" = "x86_64"
+
+      - name: Java Tests
+        if: ${{ inputs.skip_tests != 'true' }}
+        shell: bash
+        run: make test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-macos-amd64
           path: |
             build/release/duckdb_jdbc.jar
 
@@ -952,7 +1026,8 @@ jobs:
       - java-linux-aarch64-musl
       - java-windows-amd64
       - java-windows-aarch64
-      - java-osx-universal
+      - java-macos-aarch64
+      - java-macos-amd64
 
     steps:
       - uses: actions/checkout@v7
@@ -994,8 +1069,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: java-osx-universal
-          path: jdbc-artifacts/java-osx-universal
+          name: java-macos-aarch64
+          path: jdbc-artifacts/java-macos-aarch64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-macos-amd64
+          path: jdbc-artifacts/java-macos-amd64
 
       - name: Combine JARs
         shell: bash
@@ -1033,7 +1113,8 @@ jobs:
       - java-linux-aarch64-musl
       - java-windows-amd64
       - java-windows-aarch64
-      - java-osx-universal
+      - java-macos-aarch64
+      - java-macos-amd64
 
     steps:
       - uses: actions/checkout@v7
@@ -1075,8 +1156,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: java-osx-universal
-          path: jdbc-artifacts/java-osx-universal
+          name: java-macos-aarch64
+          path: jdbc-artifacts/java-macos-aarch64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: java-macos-amd64
+          path: jdbc-artifacts/java-macos-amd64
 
       - name: Deploy snapshot to S3
         shell: bash
@@ -1107,7 +1193,8 @@ jobs:
       - java-linux-aarch64-musl
       - java-windows-amd64
       - java-windows-aarch64
-      - java-osx-universal
+      - java-macos-aarch64
+      - java-macos-amd64
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7

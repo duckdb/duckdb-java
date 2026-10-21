@@ -22,6 +22,11 @@ ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
 	OS_ARCH_OVERRIDE=-DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
 endif
 
+OSX_AMD64_FLAG=
+ifneq ($(OSX_BUILD_AMD64),)
+	OSX_AMD64_FLAG=-DOSX_BUILD_AMD64=1
+endif
+
 PERF_ROWS?=2000000
 PERF_SAMPLES?=5
 
@@ -45,15 +50,15 @@ stress:
 
 debug:
 	mkdir -p build/debug
-	cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Debug
+	cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) $(OSX_AMD64_FLAG) ../.. && cmake --build . --config Debug
 
 release:
 	mkdir -p build/release
-	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Release
+	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) $(OSX_AMD64_FLAG) ../.. && cmake --build . --config Release
 
 sanitized:
 	mkdir -p build/sanitized
-	cd build/sanitized && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ADDRESS_SANITIZER=ON $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) ../.. && cmake --build . --config Release
+	cd build/sanitized && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ADDRESS_SANITIZER=ON $(GENERATOR) $(OS_NAME_OVERRIDE) $(OS_ARCH_OVERRIDE) $(OSX_AMD64_FLAG) ../.. && cmake --build . --config Release
 
 format:
 	python3 scripts/format.py
