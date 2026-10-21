@@ -37,7 +37,7 @@ public class TestNoLib {
         switch (os) {
         case "windows":
             return "duckdb_java.dll";
-        case "osx":
+        case "macos":
             return "libduckdb_java.dylib";
         case "linux":
             return "libduckdb_java.so";
