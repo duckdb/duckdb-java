@@ -436,6 +436,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (x instanceof BigInteger) {
             x = new DuckDBHugeInt((BigInteger) x);
         }
+        // TIMESTAMP_NS parameters keep the full nanosecond value; every other type keeps the regular conversion.
+        if ((x instanceof Timestamp || x instanceof LocalDateTime) &&
+            "TIMESTAMP_NS".equals(getParameterMetaData().getParameterTypeName(parameterIndex))) {
+            x = x instanceof Timestamp ? new DuckDBTimestampNS(((Timestamp) x).toLocalDateTime())
+                                       : new DuckDBTimestampNS((LocalDateTime) x);
+        }
         params[parameterIndex - 1] = x;
     }
 

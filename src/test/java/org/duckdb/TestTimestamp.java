@@ -851,6 +851,259 @@ public class TestTimestamp {
         }
     }
 
+    // Safe epoch-nanoseconds -> UTC LocalDateTime conversion; Long.MAX_VALUE / -Long.MAX_VALUE are the TIMESTAMP_NS
+    // infinity sentinels in the native representation, so only finite values are bound.
+    private static LocalDateTime utcFromEpochNanos(long epochNanos) {
+        return LocalDateTime.ofEpochSecond(Math.floorDiv(epochNanos, 1_000_000_000L),
+                                           (int) Math.floorMod(epochNanos, 1_000_000_000L), ZoneOffset.UTC);
+    }
+
+    public static void test_timestamp_ns_bind_keeps_nanoseconds() throws Exception {
+        LocalDateTime expected = LocalDateTime.of(2026, 2, 20, 12, 0, 0, 123456789);
+        long expectedNanos = 1771588800123456789L;
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind (id INT, ts TIMESTAMP_NS)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind VALUES (?, ?)")) {
+                ps.setInt(1, 1);
+                ps.setTimestamp(2, Timestamp.valueOf(expected));
+                ps.execute();
+                ps.setInt(1, 2);
+                ps.setObject(2, Timestamp.valueOf(expected));
+                ps.execute();
+                ps.setInt(1, 3);
+                ps.setObject(2, expected);
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT epoch_ns(ts), ts FROM ns_bind ORDER BY id")) {
+                for (int i = 0; i < 3; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(expectedNanos, rs.getLong(1));
+                    assertEquals(expected, rs.getObject(2, LocalDateTime.class));
+                }
+                assertEquals(expected, rs.getTimestamp(2).toLocalDateTime());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamp_ns_bind_pre_epoch_negative_fractions() throws Exception {
+        // -12345679ns since the epoch (-0.012345679s), and the -1ns case: fractions must floor exactly.
+        LocalDateTime preEpoch = LocalDateTime.of(1969, 12, 31, 23, 59, 59, 987654321);
+        LocalDateTime minusOneNano = LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999999999);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_pre (id INT, ts TIMESTAMP_NS)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_pre VALUES (?, ?)")) {
+                ps.setInt(1, 1);
+                ps.setTimestamp(2, Timestamp.valueOf(preEpoch));
+                ps.execute();
+                ps.setInt(1, 2);
+                ps.setObject(2, minusOneNano);
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT epoch_ns(ts), ts FROM ns_bind_pre ORDER BY id")) {
+                assertTrue(rs.next());
+                assertEquals(-12345679L, rs.getLong(1));
+                assertEquals(preEpoch, rs.getObject(2, LocalDateTime.class));
+                assertTrue(rs.next());
+                assertEquals(-1L, rs.getLong(1));
+                assertEquals(minusOneNano, rs.getObject(2, LocalDateTime.class));
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamp_ns_bind_with_calendar_wall_clock() throws Exception {
+        TimeZone originalTz = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_cal (id INT, ts TIMESTAMP_NS)");
+            Timestamp ts = Timestamp.valueOf(LocalDateTime.of(2024, 3, 5, 6, 7, 8, 123456789));
+            Calendar utcCal = new GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.US);
+            Calendar laCal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_cal VALUES (?, ?)")) {
+                ps.setInt(1, 1);
+                ps.setTimestamp(2, ts, utcCal);
+                ps.execute();
+                ps.setInt(1, 2);
+                ps.setTimestamp(2, ts, laCal);
+                ps.execute();
+                ps.setInt(1, 3);
+                ps.setTimestamp(2, ts, null);
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT ts FROM ns_bind_cal ORDER BY id")) {
+                // the calendar overload keeps the wall clock of the calendar's zone, nanoseconds included
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC")),
+                             rs.getObject(1, LocalDateTime.class));
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("America/Los_Angeles")),
+                             rs.getObject(1, LocalDateTime.class));
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.ofInstant(ts.toInstant(), ZoneId.of("UTC")),
+                             rs.getObject(1, LocalDateTime.class));
+                assertFalse(rs.next());
+            }
+        } finally {
+            TimeZone.setDefault(originalTz);
+        }
+    }
+
+    public static void test_timestamp_ns_bind_null() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_null (id INT, ts TIMESTAMP_NS)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_null VALUES (?, ?)")) {
+                ps.setInt(1, 1);
+                ps.setTimestamp(2, null);
+                ps.execute();
+                ps.setInt(1, 2);
+                ps.setObject(2, (Timestamp) null);
+                ps.execute();
+                ps.setInt(1, 3);
+                ps.setObject(2, (LocalDateTime) null);
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT ts FROM ns_bind_null ORDER BY id")) {
+                for (int i = 0; i < 3; i++) {
+                    assertTrue(rs.next());
+                    assertNull(rs.getObject(1));
+                    assertTrue(rs.wasNull());
+                    assertNull(rs.getObject(1, LocalDateTime.class));
+                    assertTrue(rs.wasNull());
+                    assertNull(rs.getTimestamp(1));
+                    assertTrue(rs.wasNull());
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamp_ns_bind_finite_bounds() throws Exception {
+        // Only Long.MAX_VALUE (infinity) and -Long.MAX_VALUE (-infinity) are reserved by native timestamp_ns_t; every
+        // other int64 value is finite, Long.MIN_VALUE included. All finite boundaries must round-trip exactly,
+        // without wrapping or being truncated to microseconds.
+        long[] finiteBounds = {Long.MAX_VALUE - 1, Long.MIN_VALUE, -Long.MAX_VALUE + 1};
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_bounds (id INT, ts TIMESTAMP_NS)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_bounds VALUES (?, ?)")) {
+                for (int i = 0; i < finiteBounds.length; i++) {
+                    ps.setInt(1, i + 1);
+                    ps.setTimestamp(2, Timestamp.valueOf(utcFromEpochNanos(finiteBounds[i])));
+                    ps.execute();
+                }
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT epoch_ns(ts), ts FROM ns_bind_bounds ORDER BY id")) {
+                for (long bound : finiteBounds) {
+                    assertTrue(rs.next());
+                    assertEquals(bound, rs.getLong(1));
+                    assertEquals(utcFromEpochNanos(bound), rs.getObject(2, LocalDateTime.class));
+                }
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamp_ns_bind_out_of_range_rejected() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_range (ts TIMESTAMP_NS)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_range VALUES (?)")) {
+                assertThrows(() -> {
+                    ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.of(2500, 1, 2, 3, 4, 5, 678901234)));
+                    ps.execute();
+                }, SQLException.class);
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_range VALUES (?)")) {
+                assertThrows(() -> {
+                    ps.setObject(1, Timestamp.valueOf(LocalDateTime.of(1500, 1, 2, 3, 4, 5, 678901234)));
+                    ps.execute();
+                }, SQLException.class);
+            }
+            // out-of-range TIMESTAMP_NS bindings must not be written, truncated or wrapped
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM ns_bind_range")) {
+                assertTrue(rs.next());
+                assertEquals(0L, rs.getLong(1));
+            }
+        }
+    }
+
+    public static void test_timestamp_ns_bind_infinity_sentinels_rejected() throws Exception {
+        // The TIMESTAMP_NS infinity bit patterns (Long.MAX_VALUE / -Long.MAX_VALUE) are not finite timestamps, so
+        // binding them as plain Java Timestamp values must be rejected before anything is written.
+        long[] sentinels = {Long.MAX_VALUE, -Long.MAX_VALUE};
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE ns_bind_sentinels (ts TIMESTAMP_NS)");
+            for (long sentinel : sentinels) {
+                Timestamp ts = Timestamp.valueOf(utcFromEpochNanos(sentinel));
+                try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_sentinels VALUES (?)")) {
+                    // the rejection happens on binding; execute() is intentionally never reached with a stale value
+                    assertThrows(() -> ps.setTimestamp(1, ts), SQLException.class);
+                    try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM ns_bind_sentinels")) {
+                        assertTrue(rs.next());
+                        assertEquals(0L, rs.getLong(1));
+                    }
+                }
+            }
+            // rejected bindings must not leave stale values behind for a later execute on the same statement
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO ns_bind_sentinels VALUES (?)")) {
+                assertThrows(
+                    () -> ps.setObject(1, Timestamp.valueOf(utcFromEpochNanos(Long.MAX_VALUE))), SQLException.class);
+                ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.of(2026, 2, 20, 12, 0, 0, 123456789)));
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT epoch_ns(ts) FROM ns_bind_sentinels")) {
+                assertTrue(rs.next());
+                assertEquals(1771588800123456789L, rs.getLong(1));
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamp_micro_bind_beyond_ns_range_unchanged() throws Exception {
+        // Ordinary TIMESTAMP keeps its microsecond floor and its wider date range, so dates outside the
+        // TIMESTAMP_NS range must still be bindable there.
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE micro_bind_wide (id INT, ts TIMESTAMP)");
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO micro_bind_wide VALUES (?, ?)")) {
+                ps.setInt(1, 1);
+                ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.of(2500, 1, 2, 3, 4, 5, 678901234)));
+                ps.execute();
+                ps.setInt(1, 2);
+                ps.setObject(2, LocalDateTime.of(1500, 1, 2, 3, 4, 5, 678901234));
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT ts FROM micro_bind_wide ORDER BY id")) {
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.of(2500, 1, 2, 3, 4, 5, 678901000), rs.getObject(1, LocalDateTime.class));
+                assertTrue(rs.next());
+                assertEquals(LocalDateTime.of(1500, 1, 2, 3, 4, 5, 678901000), rs.getObject(1, LocalDateTime.class));
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_timestamptz_micro_precision_unchanged() throws Exception {
+        TimeZone originalTz = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            stmt.execute("SET TimeZone='UTC'");
+            stmt.execute("CREATE TABLE tz_bind_micro (ts TIMESTAMPTZ)");
+            OffsetDateTime odt = OffsetDateTime.of(2026, 2, 20, 12, 0, 0, 123456789, ZoneOffset.UTC);
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO tz_bind_micro VALUES (?)")) {
+                ps.setObject(1, odt);
+                ps.execute();
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT epoch_ns(ts), ts FROM tz_bind_micro")) {
+                assertTrue(rs.next());
+                // TIMESTAMPTZ parameters stay microsecond truncated
+                assertEquals(1771588800123456000L, rs.getLong(1));
+                assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt.withNano(123456000)));
+                assertFalse(rs.next());
+            }
+        } finally {
+            TimeZone.setDefault(originalTz);
+        }
+    }
+
     public static void test_timestamp_read_ldt_from_date() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT '2020-01-02'::DATE")) {
