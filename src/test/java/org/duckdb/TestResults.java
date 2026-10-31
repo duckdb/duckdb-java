@@ -327,6 +327,57 @@ public class TestResults {
         }
     }
 
+    public static void test_results_strings_cast_nested() throws Exception {
+        String[] values = new String[] {// recently added types
+                                        "'123456789012345678901234567890'::BIGNUM", "'12:34:56.123456789'::TIME_NS",
+                                        "'POINT (1 2)'::GEOMETRY", "{'a': 1}::VARIANT",
+                                        "'2024-01-01 12:00:00.123456789+00'::TIMESTAMPTZ_NS",
+                                        // composite types
+                                        "row(1, 'x')", "[1, NULL]", "array_value(1, 2)", "{'a': 1, 'b': NULL}",
+                                        "MAP {1: 'x'}", "union_value(u := 1)"};
+        String[] wrappers = new String[] {
+            "[%s, NULL]",           "array_value(%s, NULL)", "{'k': %s, 'n': NULL}", "MAP {1: %s, 2: NULL}",
+            "union_value(u := %s)", "row(%s, NULL)",         "[[%s], NULL]",         "[{'k': %s}]"};
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
+            for (String value : values) {
+                for (String wrapper : wrappers) {
+                    String expr = String.format(wrapper, value);
+                    try (ResultSet rs = stmt.executeQuery("SELECT " + expr + ", CAST(" + expr + " AS VARCHAR)")) {
+                        assertTrue(rs.next());
+                        assertNotNull(rs.getObject(1));
+                        assertEquals(rs.getString(1), rs.getString(2), expr);
+                    }
+                }
+            }
+        }
+    }
+
+    public static void test_results_tuple() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT row(1, 'x'), [row(1, 'x'), NULL]")) {
+            ResultSetMetaData meta = rs.getMetaData();
+            assertEquals(meta.getColumnType(1), Types.STRUCT);
+            assertEquals(meta.getColumnTypeName(1), "TUPLE(INTEGER, VARCHAR)");
+            assertEquals(meta.getColumnType(2), Types.ARRAY);
+            assertEquals(meta.getColumnTypeName(2), "TUPLE(INTEGER, VARCHAR)[]");
+            assertTrue(rs.next());
+
+            DuckDBStruct struct = (DuckDBStruct) rs.getObject(1);
+            assertEquals(struct.getSQLTypeName(), "TUPLE(INTEGER, VARCHAR)");
+            assertEquals(struct.getAttributes().length, 2);
+            assertEquals(struct.getMap().get("element1"), 1);
+            assertEquals(struct.getMap().get("element2"), "x");
+            assertEquals(rs.getString(1), "(1, x)");
+
+            Object[] list = (Object[]) rs.getArray(2).getArray();
+            assertEquals(list.length, 2);
+            assertEquals(((DuckDBStruct) list[0]).getMap().get("element1"), 1);
+            assertEquals(((DuckDBStruct) list[0]).getMap().get("element2"), "x");
+            assertNull(list[1]);
+            assertEquals(rs.getString(2), "[(1, x), NULL]");
+        }
+    }
+
     public static void test_results_precision() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             try (ResultSet rs = stmt.executeQuery("SELECT TRUE::BOOLEAN")) {

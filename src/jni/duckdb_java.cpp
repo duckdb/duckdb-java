@@ -689,6 +689,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
+	Vector *string_vec = &vec;
+	duckdb::unique_ptr<Vector> cast_vec;
 
 	switch (vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -783,7 +785,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		}
 		break;
 	case LogicalTypeId::UNION:
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckStruct, nullptr);
 
 		auto &entries = StructVector::GetEntries(vec);
@@ -794,7 +797,10 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			jobject j_vec = ProcessVector(env, conn_ref, entries[entry_i], row_count);
 			env->SetObjectArrayElement(columns, entry_i, j_vec);
 			env->DeleteLocalRef(j_vec);
-			jstring jstr = env->NewStringUTF(StructType::GetChildName(vec.GetType(), entry_i).c_str());
+			// TUPLE members are unnamed, use the positional names synthesized by DuckDB: "element1", "element2", ...
+			auto &child_name = StructType::GetChildName(vec.GetType(), entry_i);
+			std::string name = child_name.empty() ? TupleType::GetChildName(entry_i) : child_name.GetIdentifierName();
+			jstring jstr = env->NewStringUTF(name.c_str());
 			env->SetObjectArrayElement(names, entry_i, jstr);
 			env->DeleteLocalRef(jstr);
 		}
@@ -904,21 +910,23 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	}
 	default: {
-		Vector string_vec(LogicalType::VARCHAR);
-		VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
-		vec.ReferenceAndSetType(string_vec);
-		if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
-			vec.Flatten();
+		// the source vector must not be modified, it is a part of the result chunk that can be cast again
+		// in getString() (with this vector as a child of a nested type)
+		cast_vec = make_uniq<Vector>(LogicalType::VARCHAR);
+		VectorOperations::Cast(*conn_ref->context, vec, *cast_vec, row_count);
+		if (cast_vec->GetVectorType() != VectorType::FLAT_VECTOR) {
+			cast_vec->Flatten();
 		}
+		string_vec = cast_vec.get();
 		// fall through on purpose
 	}
 	case LogicalTypeId::VARCHAR:
 		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
+			if (FlatVector::IsNull(*string_vec, row_idx)) {
 				continue;
 			}
-			const string_t *vec_data = FlatVector::GetData<string_t>(vec);
+			const string_t *vec_data = FlatVector::GetData<string_t>(*string_vec);
 			const string_t d_str = vec_data[row_idx];
 			auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
