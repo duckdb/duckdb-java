@@ -463,7 +463,7 @@ public class TestClosure {
                  ResultSet rs = stmt.executeQuery("SELECT i, i::VARCHAR FROM range(0, " + rowsCount + ") AS t(i)")) {
                 executor.submit(() -> {
                     try {
-                        Thread.sleep(100);
+                        Thread.sleep(200);
                         conn.close();
                     } catch (Exception e) {
                         e.printStackTrace();
