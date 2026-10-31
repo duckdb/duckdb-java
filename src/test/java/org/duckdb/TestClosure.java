@@ -455,7 +455,7 @@ public class TestClosure {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Properties config = new Properties();
         config.put(DuckDBDriver.JDBC_STREAM_RESULTS, true);
-        long rowsCount = 1 << 24;
+        long rowsCount = 1 << 26;
         int iterations = 1;
         for (int i = 0; i < iterations; i++) {
             try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
@@ -463,7 +463,7 @@ public class TestClosure {
                  ResultSet rs = stmt.executeQuery("SELECT i, i::VARCHAR FROM range(0, " + rowsCount + ") AS t(i)")) {
                 executor.submit(() -> {
                     try {
-                        Thread.sleep(200);
+                        Thread.sleep(100);
                         conn.close();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -486,7 +486,7 @@ public class TestClosure {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Properties config = new Properties();
         config.put(DuckDBDriver.JDBC_STREAM_RESULTS, true);
-        long rowsCount = 1 << 24;
+        long rowsCount = 1 << 26;
         int iterations = 1;
         for (int i = 0; i < iterations; i++) {
             try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
