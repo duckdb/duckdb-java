@@ -78,7 +78,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return DuckDBColumnType.TIME_WITH_TIME_ZONE;
         } else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
             return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
-        } else if (type_name.startsWith("STRUCT")) {
+        } else if (type_name.startsWith("STRUCT") || type_name.startsWith("TUPLE")) {
+            // TUPLE is an unnamed STRUCT
             return DuckDBColumnType.STRUCT;
         } else if (type_name.startsWith("MAP")) {
             return DuckDBColumnType.MAP;
