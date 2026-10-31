@@ -925,6 +925,10 @@ jobs:
         shell: bash
         run: test "$(lipo -archs build/release/libduckdb_java.so_macos_arm64)" = "arm64"
 
+      - name: Check minimum macOS version
+        shell: bash
+        run: otool -l build/release/libduckdb_java.so_macos_arm64 | grep -A4 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX'
+
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
@@ -998,6 +1002,10 @@ jobs:
       - name: Check architecture
         shell: bash
         run: test "$(lipo -archs build/release/libduckdb_java.so_macos_amd64)" = "x86_64"
+
+      - name: Check minimum macOS version
+        shell: bash
+        run: otool -l build/release/libduckdb_java.so_macos_amd64 | grep -A4 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX'
 
       - name: Java Tests
         if: ${{ inputs.skip_tests != 'true' }}
