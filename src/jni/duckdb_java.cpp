@@ -325,10 +325,10 @@ static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, j
 duckdb::unique_ptr<QueryResultStream<>> complete_query_streaming(JNIEnv *env, duckdb::unique_ptr<QueryResult> pending) {
 	auto stream = make_uniq<QueryResultStream<>>(std::move(pending));
 	while (!duckdb::IsObservable(stream->ExecuteTask())) {
-		if (stream->HasError()) {
-			throw_execution_java_error(env, stream.get());
-			return nullptr;
-		}
+	}
+	if (stream->HasError()) {
+		throw_execution_java_error(env, stream.get());
+		return nullptr;
 	}
 	return stream;
 }

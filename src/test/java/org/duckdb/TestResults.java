@@ -266,6 +266,23 @@ public class TestResults {
         }
     }
 
+    public static void test_result_streaming_error() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
+
+        String QUERY = "SELECT CAST('x' || i::VARCHAR AS INTEGER) AS v FROM range(10) t(i)";
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props); Statement stmt = conn.createStatement()) {
+            String msg = assertThrows(() -> { stmt.executeQuery(QUERY); }, SQLException.class);
+            assertTrue(msg.contains("Conversion Error: Could not convert string 'x0' to INT32"), msg);
+        }
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, props);
+             PreparedStatement ps = conn.prepareStatement(QUERY)) {
+            String msg = assertThrows(ps::executeQuery, SQLException.class);
+            assertTrue(msg.contains("Conversion Error: Could not convert string 'x0' to INT32"), msg);
+        }
+    }
+
     public static void test_stream_multiple_open_results() throws Exception {
         Properties props = new Properties();
         props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
