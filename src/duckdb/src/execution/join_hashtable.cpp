@@ -1083,14 +1083,14 @@ void JoinHashTable::AllocatePointerTable() {
 		auto current_capacity = hash_map.GetSize() / sizeof(ht_entry_t);
 		if (capacity > current_capacity) {
 			// Need more space
-			hash_map = buffer_manager.GetBufferAllocator().AllocateHuge(capacity * sizeof(ht_entry_t));
+			hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
 		} else {
 			// Just use the current hash map
 			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map
-		hash_map = buffer_manager.GetBufferAllocator().AllocateHuge(capacity * sizeof(ht_entry_t));
+		hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
 	}
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
@@ -2350,6 +2350,8 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 
 	// gather the values from the RHS
 	GatherRHS(addresses, sel_vector, found_entries, result, left_column_count);
+	// the result may have no columns, so set the count explicitly
+	result.SetChildCardinality(found_entries);
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {

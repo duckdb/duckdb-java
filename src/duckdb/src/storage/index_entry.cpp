@@ -1,21 +1,25 @@
 #include "duckdb/storage/table/index_entry.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p, const ConstraintCheckMode check_mode_p)
-    : index_oid(index_oid_p), owned_index(std::move(index_p)), check_mode(check_mode_p) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p)
+    : index_oid(index_oid_p), owned_index(std::move(index_p)) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -101,15 +105,6 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 }
 
 void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
-	InitializeLocalIndexesInternal(delete_indexes, &append_indexes);
-}
-
-void IndexEntry::InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const {
-	InitializeLocalIndexesInternal(delete_indexes, nullptr);
-}
-
-void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
-                                                optional_ptr<TableIndexList> append_indexes) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {
 		return;
@@ -120,11 +115,8 @@ void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid, ConstraintCheckMode::DEFAULT);
-	// Deferred constraints have no append index: transaction-local rows are verified when committing.
-	if (append_indexes && !IsDeferred()) {
-		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid, ConstraintCheckMode::DEFAULT);
-	}
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -289,18 +281,9 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
-bool IndexEntry::IsDeferred() const {
-	return check_mode == ConstraintCheckMode::DEFERRED;
-}
-
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
 	auto entry_lock = lock.GetSharedLock();
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-		// Foreign keys cannot reference a deferred key.
-		if (!owned_index->IsUnique() || IsDeferred()) {
-			return false;
-		}
-	} else if (!owned_index->IsForeign()) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !owned_index->IsUnique() : !owned_index->IsForeign()) {
 		return false;
 	}
 	const auto &column_ids = owned_index->GetColumnIds();
@@ -486,7 +469,6 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
-	result.check_mode = check_mode;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }
@@ -499,44 +481,19 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
-IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
+IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	auto entry_lock = lock.GetExclusiveLock();
-	D_ASSERT(owned_index);
-
-	auto storage_version = index_writer.GetStorageVersion();
-	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
-		if (owned_index->IsBound() && !owned_index->Cast<BoundIndex>().SupportsDeltaIndexes()) {
-			throw InternalException("Deferred index checkpointing requires delta index support");
-		}
-		return owned_index->Checkpoint(index_writer.GetSharedPartialBlockManager(), storage_version);
+	if (owned_index->IsBound()) {
+		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
 	}
-
-	auto partial_block_manager = index_writer.CreatePerIndexPartialBlockManager();
-	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
-	partial_block_manager.FlushPartialBlocks();
-
-	InstallShadowInternal(std::move(checkpoint.shadow_index));
-	return checkpoint;
+	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
 }
 
-void IndexEntry::InstallShadow(unique_ptr<BoundIndex> shadow_index) {
-	auto entry_lock = lock.GetExclusiveLock();
-	InstallShadowInternal(std::move(shadow_index));
-}
-
-void IndexEntry::InstallShadowInternal(unique_ptr<BoundIndex> shadow_index) {
-	if (!shadow_index) {
-		return;
-	}
-	D_ASSERT(owned_index && owned_index->IsBound());
-	owned_index = std::move(shadow_index);
-}
-
-IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
+IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
 	D_ASSERT(owned_index->IsBound());
-	return owned_index->Cast<BoundIndex>().SerializeToWAL(version);
+	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
 }
 
 void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {

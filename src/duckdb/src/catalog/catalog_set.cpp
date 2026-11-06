@@ -551,6 +551,18 @@ CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction,
 	return entry.get();
 }
 
+CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
+	reference<CatalogEntry> entry(current);
+	while (entry.get().HasChild()) {
+		if (IsCommitted(entry.get().timestamp.load())) {
+			// this entry is committed: use it
+			break;
+		}
+		entry = entry.get().Child();
+	}
+	return entry.get();
+}
+
 SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const Identifier &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
@@ -773,14 +785,14 @@ void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::funct
 	}
 }
 
-void CatalogSet::Scan(VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback) {
+void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
-	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, bound);
 	for (auto &kv : map.Entries()) {
-		auto &entry = GetEntryForTransaction(transaction, *kv.second);
-		if (!entry.deleted) {
-			callback(entry);
+		auto &entry = *kv.second;
+		auto &committed_entry = GetCommittedEntry(entry);
+		if (!committed_entry.deleted) {
+			callback(committed_entry);
 		}
 	}
 }
@@ -793,7 +805,7 @@ void CatalogSet::SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults_p) {
 void CatalogSet::Verify(Catalog &catalog_p) {
 	D_ASSERT(&catalog_p == &catalog);
 	vector<reference<CatalogEntry>> entries;
-	Scan(VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) { entries.push_back(entry); });
+	Scan([&](CatalogEntry &entry) { entries.push_back(entry); });
 	for (auto &entry : entries) {
 		entry.get().Verify(catalog_p);
 	}

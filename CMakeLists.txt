@@ -141,6 +141,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/json/json_functions.cpp
   src/duckdb/extension/json/json_reader.cpp
   src/duckdb/extension/json/json_scan.cpp
+  src/duckdb/extension/json/json_schema_inference.cpp
   src/duckdb/extension/json/json_serializer.cpp
   src/duckdb/extension/json/serialize_json.cpp
   src/duckdb/extension/loader/static_extension_autoregister.cpp

@@ -592,6 +592,9 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
+	for (auto &entry : list) {
+		StringUtil::Trim(entry);
+	}
 	fs.SetDisabledFileSystems(list);
 }
 
@@ -1837,11 +1840,18 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("%s setting cannot be NULL", WarningsAsErrorsSetting::Name);
 	}
+	if (!input.GetValue<bool>()) {
+		return;
+	}
+	if (!info.context) {
+		throw InvalidInputException(
+		    "Cannot set 'warnings_as_errors=true' in the startup config; no logger is available yet. To "
+		    "solve, run: 'SET enable_logging=true;' and 'SET warnings_as_errors=true;' after startup");
+	}
 	auto &log_manager = LogManager::Get(*info.context);
-	if (input == Value(true) && !log_manager.GetConfig().enabled) {
-		throw Exception(
-		    ExceptionType::SETTINGS,
-		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
+	if (!log_manager.GetConfig().enabled) {
+		throw InvalidInputException(
+		    "Cannot set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
 	}
 }
 
@@ -2019,66 +2029,11 @@ Value ActiveGrammarExtensionsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Deprecated Settings
 //===----------------------------------------------------------------------===//
-//! Settings below are still honored, but are scheduled for removal. Setting one emits a deprecation warning;
-//! resetting it back to its default does not.
-static void WarnDeprecatedSetting(SettingCallbackInfo &info, const char *name) {
-	if (info.is_reset) {
-		return;
-	}
-	auto message = StringUtil::Format("The '%s' setting is deprecated and will be removed in a future release.", name);
-	if (info.context) {
-		DUCKDB_LOG_WARNING(*info.context, message);
-	} else if (info.db) {
-		DUCKDB_LOG_WARNING(*info.db, message);
-	}
-}
-
-void DelimJoinAsCteSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, DelimJoinAsCteSetting::Name);
-}
-
-void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
-}
-
-void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
-}
-
-void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
-}
-
-void ForceColumnMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ForceColumnMetadataReuseSetting::Name);
-}
-
-void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, LegacyDisableNullTypeSetting::Name);
-}
-
-void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
-}
-
-void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ProduceArrowStringViewSetting::Name);
-}
-
-void ExtensionDirectorySetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, ExtensionDirectorySetting::Name);
-}
-
-void OldImplicitCastingSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, OldImplicitCastingSetting::Name);
-}
-
 void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (input.IsNull()) {
 		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
 	}
 	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(input));
-	WarnDeprecatedSetting(info, RegexMatchOperatorSemanticsSetting::Name);
 }
 
 void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -2086,6 +2041,5 @@ void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, 
 		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
 	}
 	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(input));
-	WarnDeprecatedSetting(info, TableFunctionIdentifierConversionSetting::Name);
 }
 } // namespace duckdb

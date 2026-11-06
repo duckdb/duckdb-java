@@ -31,9 +31,6 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
-	                                 const LogicalPlanVerificationPath &path) override;
-
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:

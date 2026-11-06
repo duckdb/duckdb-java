@@ -7,27 +7,24 @@
 
 namespace duckdb {
 
-idx_t FirstNonAscii(const char *input, idx_t n) {
+bool IsAscii(const char *input, idx_t n) {
 	// Check 8 bytes at a time
 	idx_t i = 0;
 	for (; i + SwarWord::SIZE <= n; i += SwarWord::SIZE) {
 		if (!SwarWord::IsAscii(Load<uint64_t>(const_data_ptr_cast(input + i)))) {
 			// non-ascii character in the next 8 bytes
-			break;
+			return false;
 		}
 	}
 
-	// Less than 8 bytes remain, or a non-ascii byte was found
+	// Less than 8 bytes remain
 	for (; i < n; i++) {
 		if (input[i] & 0x80) {
-			return i;
+			// non-ascii character
+			return false;
 		}
 	}
-	return n;
-}
-
-bool IsAscii(const char *input, idx_t n) {
-	return FirstNonAscii(input, n) == n;
+	return true;
 }
 
 idx_t DecodeCodepoint(const char *input, idx_t size, int32_t &codepoint) {

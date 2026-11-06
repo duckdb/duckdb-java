@@ -201,9 +201,11 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 	for (idx_t idx = 0; idx < valid_count; idx++) {
 		auto row_idx = valid_count == read_count ? idx : valid_sel.get_index(idx);
 		auto offset = offsets[idx];
-		// avoid a branch per row: always write, advance only on a match
-		new_sel.set_index(approved_tuple_count, row_idx);
-		approved_tuple_count += filter_result[offset];
+		if (!filter_result[offset]) {
+			// does not pass the filter
+			continue;
+		}
+		new_sel.set_index(approved_tuple_count++, row_idx);
 	}
 	if (approved_tuple_count < read_count) {
 		sel.Initialize(new_sel);

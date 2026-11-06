@@ -18,7 +18,6 @@
 namespace duckdb {
 
 class BoundColumnRefExpression;
-class LogicalOperator;
 
 //! The IndexBinder binds indexes and expressions within index statements.
 class IndexBinder : public ExpressionBinder {

@@ -287,7 +287,7 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &source_value, const TGT &) {
 		// Preserve the Parquet plain-encoding hash and add the hash used by DuckDB comparisons.
-		return ParquetIntervalUtils::HashNormalized(source_value);
+		return ParquetIntervalUtils::TryHashNormalized(source_value);
 	}
 };
 
@@ -338,7 +338,7 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return Time::NormalizeTimeTZ(input).value;
+		return ParquetTimeTZToUTCMicros(input);
 	}
 
 	template <class SRC, class TGT>

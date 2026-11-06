@@ -33,7 +33,6 @@ class StandardBufferManager : public BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
 	friend class BlockManager;
-	friend struct BufferAllocatorData;
 
 public:
 	StandardBufferManager(DatabaseInstance &db, string temp_directory);
@@ -99,7 +98,7 @@ public:
 
 	void SetTemporaryDirectory(const string &new_dir) final;
 
-	DUCKDB_API BufferAllocator &GetBufferAllocator() final;
+	DUCKDB_API Allocator &GetBufferAllocator() final;
 
 	const DatabaseInstance &GetDatabase() const override {
 		return db;
@@ -160,6 +159,11 @@ protected:
 
 	const char *InMemoryWarning();
 
+	static data_ptr_t BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
+	static void BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+	                                         idx_t size);
+
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
@@ -205,7 +209,7 @@ protected:
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
-	BufferAllocator buffer_allocator;
+	Allocator buffer_allocator;
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
 	//! Temporary evicted memory data per tag
