@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
@@ -24,8 +22,8 @@ enum class NType : uint8_t;
 //! For read-only access, use ConstNodeHandle instead.
 class NodeHandle {
 public:
-	NodeHandle(ART &art, const NodePtr node_ptr);
-	NodeHandle(FixedSizeAllocator &allocator, const NodePtr node_ptr, NType type);
+	NodeHandle(ART &art, const NodePtr node);
+	NodeHandle(FixedSizeAllocator &allocator, const NodePtr node, NType type);
 
 	NodeHandle(const NodeHandle &) = delete;
 	NodeHandle &operator=(const NodeHandle &) = delete;
@@ -57,7 +55,7 @@ private:
 //! For mutable access, use NodeHandle instead.
 class ConstNodeHandle {
 public:
-	ConstNodeHandle(const ART &art, const NodePtr node_ptr);
+	ConstNodeHandle(const ART &art, const NodePtr node);
 
 	ConstNodeHandle(const ConstNodeHandle &) = delete;
 	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;

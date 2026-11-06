@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-void Node48::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const NodePtr child_ptr) {
+void Node48::InsertChild(ART &art, NodePtr &node, const uint8_t byte, const NodePtr child) {
 	{
-		NodeHandle handle(art, node_ptr);
+		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node48>();
 
 		if (n.count != CAPACITY) {
@@ -21,7 +21,7 @@ void Node48::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const 
 				}
 			}
 
-			n.children[child_pos] = child_ptr;
+			n.children[child_pos] = child;
 			n.child_index[byte] = child_pos;
 			n.count++;
 			return;
@@ -30,14 +30,14 @@ void Node48::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const 
 
 	// The node is full.
 	// Grow to Node256.
-	auto node48_ptr = node_ptr;
-	Node256::GrowNode48(art, node_ptr, node48_ptr);
-	Node256::InsertChild(art, node_ptr, byte, child_ptr);
+	auto node48 = node;
+	Node256::GrowNode48(art, node, node48);
+	Node256::InsertChild(art, node, byte, child);
 }
 
-void Node48::DeleteChild(ART &art, NodePtr &node_ptr, const uint8_t byte) {
+void Node48::DeleteChild(ART &art, NodePtr &node, const uint8_t byte) {
 	{
-		NodeHandle handle(art, node_ptr);
+		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node48>();
 
 		// Free the child and decrease the count.
@@ -51,18 +51,18 @@ void Node48::DeleteChild(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 	}
 
 	// Shrink to Node16.
-	auto node48_ptr = node_ptr;
-	Node16::ShrinkNode48(art, node_ptr, node48_ptr);
+	auto node48 = node;
+	Node16::ShrinkNode48(art, node, node48);
 }
 
-void Node48::GrowNode16(ART &art, NodePtr &node48_ptr, NodePtr &node16_ptr) {
+void Node48::GrowNode16(ART &art, NodePtr &node48, NodePtr &node16) {
 	{
-		NodeHandle n16_handle(art, node16_ptr);
+		NodeHandle n16_handle(art, node16);
 		auto &n16 = n16_handle.Get<Node16>();
 
-		auto n48_handle = New(art, node48_ptr);
+		auto n48_handle = New(art, node48);
 		auto &n48 = n48_handle.Get<Node48>();
-		node48_ptr.SetGateStatus(node16_ptr.GetGateStatus());
+		node48.SetGateStatus(node16.GetGateStatus());
 
 		n48.count = n16.count;
 		for (uint8_t i = 0; i < n16.count; i++) {
@@ -70,16 +70,16 @@ void Node48::GrowNode16(ART &art, NodePtr &node48_ptr, NodePtr &node16_ptr) {
 			n48.children[i] = n16.children[i];
 		}
 	}
-	NodePtr::FreeNode(art, node16_ptr);
+	NodePtr::FreeNode(art, node16);
 }
 
-void Node48::ShrinkNode256(ART &art, NodePtr &node48_ptr, NodePtr &node256_ptr) {
+void Node48::ShrinkNode256(ART &art, NodePtr &node48, NodePtr &node256) {
 	{
-		auto n48_handle = New(art, node48_ptr);
+		auto n48_handle = New(art, node48);
 		auto &n48 = n48_handle.Get<Node48>();
-		node48_ptr.SetGateStatus(node256_ptr.GetGateStatus());
+		node48.SetGateStatus(node256.GetGateStatus());
 
-		NodeHandle n256_handle(art, node256_ptr);
+		NodeHandle n256_handle(art, node256);
 		auto &n256 = n256_handle.Get<Node256>();
 
 		n48.count = 0;
@@ -92,7 +92,7 @@ void Node48::ShrinkNode256(ART &art, NodePtr &node48_ptr, NodePtr &node256_ptr) 
 			n48.count++;
 		}
 	}
-	NodePtr::FreeNode(art, node256_ptr);
+	NodePtr::FreeNode(art, node256);
 }
 
 } // namespace duckdb

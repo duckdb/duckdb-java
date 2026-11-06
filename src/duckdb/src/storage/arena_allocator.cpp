@@ -13,7 +13,6 @@ ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), 
 	data = allocator.Allocate(size);
 }
 ArenaChunk::~ArenaChunk() {
-	ResetPosition(0);
 	if (next) {
 		auto current_next = std::move(next);
 		while (current_next) {
@@ -107,11 +106,7 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	if (pointer == head_ptr &&
 	    (size < old_size || current_position + diff <= NumericCast<int64_t>(head->maximum_size))) {
 		// passed pointer is the head pointer, and the diff fits on the current chunk
-		if (size < old_size) {
-			head->ResetPosition(NumericCast<idx_t>(current_position + diff));
-		} else {
-			head->current_position = NumericCast<idx_t>(current_position + diff);
-		}
+		head->current_position = NumericCast<idx_t>(current_position + diff);
 		return pointer;
 	} else {
 		// allocate new memory
@@ -162,7 +157,7 @@ void ArenaAllocator::Rewind(const Position &position) {
 		head->prev = nullptr;
 	}
 	D_ASSERT(position.current_position <= head->current_position);
-	head->ResetPosition(position.current_position);
+	head->current_position = position.current_position;
 }
 
 void ArenaAllocator::FreeAll() {
@@ -186,7 +181,7 @@ void ArenaAllocator::Reset() {
 		tail = head.get();
 
 		// reset the head
-		head->ResetPosition(0);
+		head->current_position = 0;
 		head->prev = nullptr;
 	}
 	allocated_size = 0;

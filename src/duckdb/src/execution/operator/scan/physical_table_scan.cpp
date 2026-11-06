@@ -10,7 +10,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 
 #include <utility>
 

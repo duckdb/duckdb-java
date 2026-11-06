@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
-#include "duckdb/common/enums/database_modification_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
@@ -64,7 +63,6 @@ public:
 
 public:
 	virtual unique_ptr<DropInfo> Copy() const;
-	DatabaseModificationType GetModifications() const;
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const override;

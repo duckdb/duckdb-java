@@ -21,6 +21,7 @@ static unique_ptr<Expression> TryRemoveEmptyStringConcat(ClientContext &context,
 		}
 		Value value;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, *children[child_idx], value)) {
+			// leave the error to execution, which may never evaluate it
 			continue;
 		}
 		if (value.IsNull() || value.type().id() != LogicalTypeId::VARCHAR || !StringValue::Get(value).empty()) {

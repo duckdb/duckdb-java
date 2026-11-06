@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 
@@ -438,33 +439,21 @@ struct DatePart {
 			return YearWeekFromParts(yyyy, ww);
 		}
 
-		// ISO years >= 1 use yyyy * 100 + week. Year 0 and negative years subtract the week,
-		// so the function decreases as the week number increases.
-		static int32_t MinISOYear(date_t input) {
-			return Date::ExtractISOYearNumber(input);
-		}
-		static int32_t MinISOYear(timestamp_t input) {
-			return Date::ExtractISOYearNumber(Timestamp::GetDate(input));
-		}
-		template <class U>
-		static int32_t MinISOYear(U) {
-			return 0;
-		}
-
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// Endpoint bounds do not contain the values in between once the range reaches the
-			// subtracted-week encoding. Positive ISO years are non-decreasing in the date.
-			auto &nstats = input.child_stats[0];
-			if (!NumericStats::HasMinMax(nstats)) {
+			auto result = PropagateDatePartStatistics<T, ISOYearOperator>(input.child_stats);
+			if (!result) {
 				return nullptr;
 			}
-			auto min = NumericStats::GetMin<T>(nstats);
-			auto max = NumericStats::GetMax<T>(nstats);
-			if (min > max || !min.IsFinite() || !max.IsFinite() || MinISOYear(min) < 1) {
-				return nullptr;
+			const auto min_year = NumericStats::GetMin<int64_t>(*result);
+			const auto max_year = NumericStats::GetMax<int64_t>(*result);
+			if (min_year > 0) {
+				return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
 			}
-			return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
+			// the week is subtracted for years before the common era, so only bound the result by the ISO year
+			NumericStats::SetMin(*result, Value::BIGINT(min_year * 100 - 53));
+			NumericStats::SetMax(*result, Value::BIGINT(max_year * 100 + 53));
+			return result;
 		}
 	};
 
@@ -2551,12 +2540,23 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	return operator_set;
 }
 
+//! timezone_hour and timezone_minute throw on every DATE and INTERVAL, but not on the other types
+static ScalarFunctionSet SetDateAndIntervalFallible(ScalarFunctionSet set) {
+	set.ApplyToFunctions([](ScalarFunction &function) {
+		auto type = function.GetSignature().GetParameter(0).GetType().id();
+		if (type == LogicalTypeId::DATE || type == LogicalTypeId::INTERVAL) {
+			function.SetFallible();
+		}
+	});
+	return set;
+}
+
 ScalarFunctionSet TimezoneHourFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneHourOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneHourOperator>());
 }
 
 ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneMinuteOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneMinuteOperator>());
 }
 
 ScalarFunctionSet EpochFun::GetFunctions() {
@@ -2576,10 +2576,11 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	tstz_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ);
 	operator_set.AddFunction(tstz_fun);
 	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
-	ScalarFunction tsns_fun({}, LogicalType::BIGINT, tsns_func);
+	auto tsns_stats = StatisticsPropagator::PropagateFiniteMonotoneBounds;
+	ScalarFunction tsns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tsns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_NS);
 	operator_set.AddFunction(tsns_fun);
-	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func);
+	ScalarFunction tstz_ns_fun({}, LogicalType::BIGINT, tsns_func, nullptr, tsns_stats);
 	tstz_ns_fun.GetSignature().AddParameter("temporal", LogicalType::TIMESTAMP_TZ_NS);
 	operator_set.AddFunction(tstz_ns_fun);
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
@@ -2709,6 +2710,7 @@ ScalarFunctionSet LastDayFun::GetFunctions() {
 	last_day.AddFunction(ts_fun);
 	last_day.SetFallible();
 	last_day.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	last_day.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 	return last_day;
 }
 

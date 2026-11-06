@@ -1,7 +1,6 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -34,7 +33,6 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -56,9 +54,6 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	// This happens on failure before we commit the transaction.
-	if (active) {
-		transaction_manager.ResetActiveCheckpoint();
-	}
 	if (checkpoint_transaction) {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
@@ -68,33 +63,28 @@ ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	}
 }
 
-void ActiveCheckpointWrapper::Begin(CheckpointOptions &options) {
-	if (checkpoint_context) {
-		// the start time of the checkpoint transaction defines the visibility for checkpointing
-		checkpoint_context->transaction.BeginTransaction();
-		checkpoint_context->transaction.SetReadOnly();
-		auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
-		transaction.SetIsCheckpointTransaction();
-		checkpoint_transaction = &transaction;
-		// the checkpoint sees every commit before it started
-		D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
-		options.visibility_bound = transaction.view.visibility_bound;
-	} else {
-		options.visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
-	}
+void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
+	checkpoint_context->transaction.BeginTransaction();
+	checkpoint_context->transaction.SetReadOnly();
+	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
+	transaction.SetIsCheckpointTransaction();
+	checkpoint_transaction = &transaction;
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
+	options.visibility_bound = transaction.view.visibility_bound;
 	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
-	active = true;
 }
 
 void ActiveCheckpointWrapper::Commit() {
 	transaction_manager.ResetActiveCheckpoint();
-	active = false;
 	if (!checkpoint_transaction) {
 		return;
 	}
 	checkpoint_context->transaction.Commit();
 	checkpoint_transaction = nullptr;
+}
+
+bool ActiveCheckpointWrapper::HasCheckpointContext() const {
+	return checkpoint_context;
 }
 
 optional_ptr<ClientContext> ActiveCheckpointWrapper::GetCheckpointContext() const {
@@ -106,17 +96,12 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
                                                        BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
-      index_partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	return *storage_manager.block_manager;
-}
-
-PartialBlockManager SingleFileCheckpointWriter::CreatePerIndexPartialBlockManager() {
-	return PartialBlockManager(QueryContext(context), GetBlockManager(), PartialBlockType::FULL_CHECKPOINT);
 }
 
 MetadataWriter &SingleFileCheckpointWriter::GetMetadataWriter() {
@@ -131,19 +116,19 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
 }
 
-static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry>> &schemas, VisibilityBound bound) {
+static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEntry>> &schemas) {
 	catalog_entry_vector_t entries;
 	for (auto &schema_p : schemas) {
 		auto &schema = schema_p.get();
 		entries.push_back(schema);
-		schema.Scan(CatalogType::TYPE_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
 			entries.push_back(entry);
 		});
 
-		schema.Scan(CatalogType::SEQUENCE_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -152,7 +137,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 
 		catalog_entry_vector_t tables;
 		vector<reference<ViewCatalogEntry>> views;
-		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -180,14 +165,14 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 				continue;
 			}
 			auto &duck_table = table.Cast<DuckTableEntry>();
-			duck_table.ScanTriggers(bound, [&](CatalogEntry &entry) {
+			duck_table.ScanTriggersNonTransactional([&](CatalogEntry &entry) {
 				if (!entry.internal) {
 					entries.push_back(entry);
 				}
 			});
 		}
 
-		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -196,7 +181,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 			}
 		});
 
-		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -205,7 +190,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 			}
 		});
 
-		schema.Scan(CatalogType::INDEX_ENTRY, bound, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
 			D_ASSERT(!entry.internal);
 			entries.push_back(entry);
 		});
@@ -216,11 +201,11 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry
 static bool HasBufferedIndexReplays(AttachedDatabase &db) {
 	bool has_buffered_replays = false;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas(VisibilityBound::AllCommitted(), [&](DuckSchemaEntry &schema) {
+	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
 		if (has_buffered_replays) {
 			return;
 		}
-		schema.Scan(CatalogType::TABLE_ENTRY, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (has_buffered_replays || entry.type != CatalogType::TABLE_ENTRY) {
 				return;
 			}
@@ -282,16 +267,16 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
 	}
 
-	vector<reference<DuckSchemaEntry>> schemas;
-	// write the catalog as of the bound: later commits are in the WAL that outlives this checkpoint
+	vector<reference<SchemaCatalogEntry>> schemas;
+	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas(options.visibility_bound, [&](DuckSchemaEntry &entry) { schemas.push_back(entry); });
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 
 	D_ASSERT(catalog.IsDuckCatalog());
 
 	auto &dependency_manager = *catalog.GetDependencyManager();
-	catalog_entries = GetCatalogEntries(schemas, options.visibility_bound);
-	dependency_manager.ReorderEntries(catalog_entries, options.visibility_bound);
+	catalog_entries = GetCatalogEntries(schemas);
+	dependency_manager.ReorderEntries(catalog_entries);
 
 	// write the actual data into the database
 
@@ -382,17 +367,17 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (has_wal) {
-		unique_lock<mutex> owned_commit_lock;
-		optional_ptr<unique_lock<mutex>> commit_lock;
-		if (!options.commit_lock) {
-			// not holding the commit lock yet - grab it
-			owned_commit_lock = storage_manager.GetCommitLock();
-			commit_lock = owned_commit_lock;
+		unique_lock<mutex> owned_wal_lock;
+		optional_ptr<unique_lock<mutex>> wal_lock;
+		if (!options.wal_lock) {
+			// not holding the WAL lock yet - grab it
+			owned_wal_lock = storage_manager.GetWALLock();
+			wal_lock = owned_wal_lock;
 		} else {
-			// we already have the commit lock - just refer to it
-			commit_lock = options.commit_lock;
+			// we already have the WAL lock - just refer to it
+			wal_lock = options.wal_lock;
 		}
-		storage_manager.WALFinishCheckpoint(*commit_lock);
+		storage_manager.WALFinishCheckpoint(*wal_lock);
 	}
 
 	// for any indexes that were appended to while checkpointing, merge the delta back into the main index
@@ -696,7 +681,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_storage_info),
 	                                             TableIOManager::Get(data_table), data_table.db);
-	table_info->GetIndexes().AddIndex(std::move(unbound_index), index.oid, ConstraintCheckMode::DEFAULT);
+	table_info->GetIndexes().AddIndex(std::move(unbound_index), index.oid);
 }
 
 //===--------------------------------------------------------------------===//
@@ -755,6 +740,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 
 	// Write the table data
+	auto table_lock = table.GetStorage().GetCheckpointLock();
 	auto writer = GetTableDataWriter(table);
 	if (writer) {
 		writer->WriteTableData(serializer);

@@ -137,18 +137,8 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	auto identity = BoundExpressionSQLExportState::DefinitionFunctionIdentity(
 	    *definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 	if (!identity.IsValid()) {
-		identity.arguments.clear();
-		for (auto &child : expression.GetChildren()) {
-			identity.arguments.push_back(child->GetReturnType());
-		}
-		identity.return_type = expression.GetReturnType();
-		if (!identity.IsValid()) {
-			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
-			    path, expression, "Bound window function identity is incomplete")});
-		}
-		//	Without a complete logical signature the function cannot be rebound from SQL
-		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFunction(
-		    path, std::move(identity), "The window function does not have a complete logical signature")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Bound window function identity is incomplete")});
 	}
 	if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
 		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFunction(

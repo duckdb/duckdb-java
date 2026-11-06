@@ -28,8 +28,9 @@ struct CheckpointOptions {
 	optional_idx checkpoint_id;
 	//! What this checkpoint sees: timestamps below this bound are written
 	VisibilityBound visibility_bound;
-	//! The commit lock, when the committing transaction holds it for the whole checkpoint (checkpoint instead of WAL)
-	optional_ptr<unique_lock<mutex>> commit_lock;
+	//! The WAL lock - in case we are holding it during the entire checkpoint.
+	//! This is only required if we are doing a checkpoint instead of writing to the WAL
+	optional_ptr<unique_lock<mutex>> wal_lock;
 };
 
 } // namespace duckdb

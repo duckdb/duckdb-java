@@ -45,10 +45,6 @@ public:
 
 	bool HasUUID() const;
 
-	const vector<FileNameSegment> &Segments() const {
-		return segments;
-	}
-
 public:
 	// serialization code for backwards compatibility
 	string SerializeBase() const;

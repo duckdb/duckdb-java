@@ -1,8 +1,9 @@
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -23,45 +24,23 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/execution/index/index_lock.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
-#include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/storage/table/table_index_list.hpp"
-#include <utility>
 
 namespace duckdb {
 
-enum class ARTScanType : uint8_t {
-	//! Equality lookup for one key.
-	EQUALITY,
-	//! Range lookup with one or two bounds.
-	RANGE,
-	//! Equality lookups for multiple keys.
-	BATCH_EQUALITY
-};
-
 struct ARTIndexScanState : public IndexScanState {
-	explicit ARTIndexScanState(ARTScanType scan_type) : scan_type(scan_type) {
-	}
-	ARTIndexScanState(ARTScanType scan_type, unique_ptr<DataChunk> key_columns)
-	    : scan_type(scan_type), batch_equality_keys(std::move(key_columns)) {
-		D_ASSERT(scan_type == ARTScanType::BATCH_EQUALITY);
-		D_ASSERT(batch_equality_keys);
-	}
-
-	ARTScanType scan_type;
-	unique_ptr<DataChunk> batch_equality_keys;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
-	ExpressionType expressions[2] = {ExpressionType::INVALID, ExpressionType::INVALID};
+	ExpressionType expressions[2];
+	bool checked = false;
+	//! All scanned row IDs.
+	set<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//
@@ -92,7 +71,9 @@ static idx_t GetNode256LeafSegmentSize(const IndexStorageInfo &info, StorageVers
 
 ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-         AttachedDatabase &db, const shared_ptr<AllocatorArray> &allocators_ptr, const IndexStorageInfo &info)
+         AttachedDatabase &db,
+         const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
+         const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 	// FIXME: Use the new byte representation function to support nested types.
@@ -126,7 +107,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
 		const auto leaf256_size = GetNode256LeafSegmentSize(info, db.GetStorageManager().GetStorageVersion());
 
-		AllocatorArray allocator_array = {
+		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
 		    make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
@@ -137,7 +118,8 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(leaf256_size, block_manager),
 		};
-		allocators = make_shared_ptr<AllocatorArray>(std::move(allocator_array));
+		allocators =
+		    make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	if (!info.IsValid()) {
@@ -153,7 +135,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 	}
 
 	// Set the root node and initialize the allocators.
-	root_ptr.Set(info.root);
+	tree.Set(info.root);
 	InitAllocators(info);
 
 	// Set the storage version of the ART
@@ -169,30 +151,13 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 	}
 }
 
-ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
-    : BoundIndex(src.name, ART::TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
-                 src.unbound_expressions, src.db),
-      root_ptr(src.root_ptr), allocators(std::move(allocators_ptr)), owns_data(true),
-      storage_version(src.storage_version), prefix_count(src.prefix_count) {
-	D_ASSERT(allocators);
-}
-
-uint8_t ART::GetAllocatorCount(const ARTSerializationFormat format) {
-	if (format == ARTSerializationFormat::V1_0_0) {
-		return DEPRECATED_ALLOCATOR_COUNT;
-	}
-
-	return ALLOCATOR_COUNT;
-}
-
 //===--------------------------------------------------------------------===//
 // Initialize Scans
 //===--------------------------------------------------------------------===//
 
 static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Value &value,
                                                                 const ExpressionType expression_type) {
-	auto scan_type = expression_type == ExpressionType::COMPARE_EQUAL ? ARTScanType::EQUALITY : ARTScanType::RANGE;
-	auto result = make_uniq<ARTIndexScanState>(scan_type);
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -202,7 +167,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
                                                               const ExpressionType low_expression_type,
                                                               const Value &high_value,
                                                               const ExpressionType high_expression_type) {
-	auto result = make_uniq<ARTIndexScanState>(ARTScanType::RANGE);
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -313,13 +278,9 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
 }
 
-unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> key_columns) const {
-	if (!key_columns || key_columns->GetTypes() != logical_types) {
-		throw InternalException("ART batch scan keys must have the index's logical types");
-	}
-	return make_uniq<ARTIndexScanState>(ARTScanType::BATCH_EQUALITY, std::move(key_columns));
+unique_ptr<IndexScanState> ART::InitializeFullScan() {
+	return make_uniq<ARTIndexScanState>();
 }
-
 //===--------------------------------------------------------------------===//
 // ART Keys
 //===--------------------------------------------------------------------===//
@@ -554,7 +515,7 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const 
 ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
 	ArenaAllocator arena(BufferAllocator::Get(db));
 	ARTBuilder builder(arena, *this, keys, row_ids);
-	builder.Init(root_ptr, row_count - 1);
+	builder.Init(tree, row_count - 1);
 
 	auto result = builder.Build();
 	if (result != ARTConflictType::NO_CONFLICT) {
@@ -564,7 +525,7 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 #ifdef DEBUG
 	set<row_t> row_ids_debug;
 	Iterator it(*this);
-	it.FindMinimum(root_ptr);
+	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
 	RowIdSetOutput output(row_ids_debug, NumericLimits<idx_t>().Maximum());
 	it.Scan(empty_key, output, false);
@@ -603,15 +564,15 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
                           optional_ptr<DataChunk> chunk) {
 	auto conflict_type = ARTConflictType::NO_CONFLICT;
 	optional_idx conflict_idx;
-	auto was_empty = !root_ptr.HasMetadata();
+	auto was_empty = !tree.HasMetadata();
 
 	// Insert the entries into the index.
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		conflict_type = ARTOperator::Insert(arena, *this, root_ptr, keys[i], 0, row_id_keys[i],
-		                                    GateStatus::GATE_NOT_SET, delete_info, append_mode);
+		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
+		                                    delete_info, append_mode);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -625,8 +586,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 			if (keys[i].Empty()) {
 				continue;
 			}
-			D_ASSERT(root_ptr.GetGateStatus() == GateStatus::GATE_NOT_SET);
-			ARTOperator::Delete(*this, root_ptr, keys[i], row_id_keys[i]);
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
 	}
 
@@ -646,9 +607,9 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 		if (keys[i].Empty()) {
 			continue;
 		}
-		auto leaf_ptr = ARTOperator::Lookup(*this, root_ptr, keys[i], 0);
-		D_ASSERT(leaf_ptr);
-		D_ASSERT(ARTOperator::LookupInLeaf(*this, leaf_ptr.Get(), row_id_keys[i]));
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, leaf.Get(), row_id_keys[i]));
 	}
 #endif
 	return ErrorData();
@@ -695,7 +656,7 @@ void ART::ResetStorage(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}
-	root_ptr.Clear();
+	tree.Clear();
 }
 
 idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
@@ -723,8 +684,8 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	for (idx_t i = 0; i < row_count; i++) {
 		bool deleted = true;
 		if (!keys[i].Empty()) {
-			D_ASSERT(root_ptr.GetGateStatus() == GateStatus::GATE_NOT_SET);
-			deleted = ARTOperator::Delete(*this, root_ptr, keys[i], row_id_keys[i]);
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			deleted = ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
 		if (deleted) {
 			if (deleted_sel) {
@@ -737,7 +698,7 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 		}
 	}
 
-	if (!root_ptr.HasMetadata()) {
+	if (!tree.HasMetadata()) {
 		// No more allocations.
 		VerifyAllocationsInternal();
 	}
@@ -747,9 +708,9 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 		if (keys[i].Empty()) {
 			continue;
 		}
-		auto leaf_ptr = ARTOperator::Lookup(*this, root_ptr, keys[i], 0);
-		if (leaf_ptr) {
-			auto contains_row_id = ARTOperator::LookupInLeaf(*this, leaf_ptr.Get(), row_id_keys[i]);
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		if (leaf) {
+			auto contains_row_id = ARTOperator::LookupInLeaf(*this, leaf.Get(), row_id_keys[i]);
 			D_ASSERT(!contains_row_id);
 		}
 	}
@@ -765,136 +726,94 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-ARTSearchResult ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const {
-	auto leaf_ptr = ARTOperator::Lookup(*this, root_ptr, key, 0);
-	if (!leaf_ptr) {
-		return ARTSearchResult::COMPLETED;
+bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) const {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+	Iterator it(*this);
+	it.FindMinimum(tree);
+	const auto empty_key = ARTKey();
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
+}
+
+bool ART::SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const {
+	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
+	if (!leaf) {
+		return true;
 	}
 
 	Iterator it(*this);
-	it.FindMinimum(leaf_ptr.Get());
+	it.FindMinimum(leaf.Get());
 	const auto empty_key = ARTKey();
-	return it.Scan(empty_key, row_ids, false) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                        : ARTSearchResult::CAPACITY_EXCEEDED;
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
-ARTSearchResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const {
-	if (!root_ptr.HasMetadata()) {
-		return ARTSearchResult::COMPLETED;
+bool ART::SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const {
+	if (!tree.HasMetadata()) {
+		return true;
 	}
 
 	// Find the lowest value that satisfies the predicate.
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(root_ptr, key, equal)) {
-		return ARTSearchResult::COMPLETED;
+	if (!it.LowerBound(tree, key, equal)) {
+		return true;
 	}
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	return it.Scan(ARTKey(), row_ids, false) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                       : ARTSearchResult::CAPACITY_EXCEEDED;
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(ARTKey(), output, false) == ARTScanResult::COMPLETED;
 }
 
-ARTSearchResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const {
-	if (!root_ptr.HasMetadata()) {
-		return ARTSearchResult::COMPLETED;
+bool ART::SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const {
+	if (!tree.HasMetadata()) {
+		return true;
 	}
 
 	// Find the minimum value in the ART: we start scanning from this value.
 	Iterator it(*this);
-	it.FindMinimum(root_ptr);
+	it.FindMinimum(tree);
 
 	// Early-out, if the minimum value is higher than the upper bound.
 	if (it.current_key.GreaterThan(upper_bound, equal, it.GetNestedDepth())) {
-		return ARTSearchResult::COMPLETED;
+		return true;
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, equal) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                          : ARTSearchResult::CAPACITY_EXCEEDED;
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(upper_bound, output, equal) == ARTScanResult::COMPLETED;
 }
 
-ARTSearchResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
-                                      bool right_equal, RowIdVectorOutput &row_ids) const {
-	if (!root_ptr.HasMetadata()) {
-		return ARTSearchResult::COMPLETED;
+bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
+                           idx_t max_count, set<row_t> &row_ids) const {
+	if (!tree.HasMetadata()) {
+		return true;
 	}
 
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(root_ptr, lower_bound, left_equal)) {
-		return ARTSearchResult::COMPLETED;
+	if (!it.LowerBound(tree, lower_bound, left_equal)) {
+		return true;
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanProgress::COMPLETED
-	           ? ARTSearchResult::COMPLETED
-	           : ARTSearchResult::CAPACITY_EXCEEDED;
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(upper_bound, output, right_equal) == ARTScanResult::COMPLETED;
 }
 
-ARTSearchResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
-	D_ASSERT(input.GetTypes() == logical_types);
-	if (input.size() == 0) {
-		return ARTSearchResult::COMPLETED;
-	}
-	ArenaAllocator arena(Allocator::Get(db));
-	unsafe_vector<ARTKey> keys(input.size());
-	if (HasLegacyGeometryKeys()) {
-		DataChunk converted;
-		ConvertKeyInput(input, converted);
-		GenerateKeys<>(arena, converted, keys);
-	} else {
-		GenerateKeys<>(arena, input, keys);
-	}
-	IndexLock guard(*this);
-	for (const auto &key : keys) {
-		D_ASSERT(!key.Empty());
-		if (SearchEqual(key, row_ids) == ARTSearchResult::CAPACITY_EXCEEDED) {
-			return ARTSearchResult::CAPACITY_EXCEEDED;
-		}
-	}
-	return ARTSearchResult::COMPLETED;
-}
-
-bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
-	if (ScanInternal(state, row_ids) == ARTSearchResult::CAPACITY_EXCEEDED) {
-		row_ids.Reset();
-		return false;
-	}
-	return true;
-}
-
-ARTSearchResult ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
-	switch (scan_state.scan_type) {
-	case ARTScanType::EQUALITY: {
-		D_ASSERT(!scan_state.batch_equality_keys);
-		D_ASSERT(!scan_state.values[0].IsNull());
-		D_ASSERT(scan_state.values[1].IsNull());
-		D_ASSERT(scan_state.expressions[0] == ExpressionType::COMPARE_EQUAL);
-		D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
-		ArenaAllocator arena_allocator(Allocator::Get(db));
-		auto key = ARTKey::CreateKey(arena_allocator, scan_state.values[0], storage_version);
+	if (scan_state.values[0].IsNull()) {
+		// full scan
 		IndexLock l(*this);
-		return SearchEqual(key, row_ids);
+		return FullScan(max_count, row_ids);
 	}
-	case ARTScanType::RANGE:
-		D_ASSERT(!scan_state.batch_equality_keys);
-		D_ASSERT(!scan_state.values[0].IsNull());
-		return ScanRange(scan_state, row_ids);
-	case ARTScanType::BATCH_EQUALITY:
-		D_ASSERT(scan_state.batch_equality_keys);
-		return ScanBatch(*scan_state.batch_equality_keys, row_ids);
-	default:
-		throw InternalException("Invalid ART scan type");
-	}
-}
-
-ARTSearchResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 
@@ -904,14 +823,16 @@ ARTSearchResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput 
 	if (scan_state.values[1].IsNull()) {
 		// Single predicate.
 		switch (scan_state.expressions[0]) {
+		case ExpressionType::COMPARE_EQUAL:
+			return SearchEqual(key, max_count, row_ids);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SearchGreater(key, true, row_ids);
+			return SearchGreater(key, true, max_count, row_ids);
 		case ExpressionType::COMPARE_GREATERTHAN:
-			return SearchGreater(key, false, row_ids);
+			return SearchGreater(key, false, max_count, row_ids);
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SearchLess(key, true, row_ids);
+			return SearchLess(key, true, max_count, row_ids);
 		case ExpressionType::COMPARE_LESSTHAN:
-			return SearchLess(key, false, row_ids);
+			return SearchLess(key, false, max_count, row_ids);
 		default:
 			throw InternalException("Index scan type not implemented");
 		}
@@ -922,9 +843,9 @@ ARTSearchResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput 
 
 	auto upper_bound = ARTKey::CreateKey(arena_allocator, scan_state.values[1], storage_version);
 
-	bool left_equal = scan_state.expressions[0] == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	bool right_equal = scan_state.expressions[1] == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	return SearchCloseRange(key, upper_bound, left_equal, right_equal, row_ids);
+	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);
 }
 
 //===--------------------------------------------------------------------===//
@@ -971,28 +892,28 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::VerifyLeaf(const NodePtr &leaf_ptr, const ARTKey &key, DeleteIndexInfo delete_index_info,
+void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
                      ConflictManager &manager, optional_idx &conflict_idx, idx_t i) const {
 	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {
 		for (auto &index : *delete_index_info.delete_indexes) {
 			auto &delete_art = index.get().Cast<ART>();
-			auto deleted_leaf_ptr = ARTOperator::Lookup(delete_art, delete_art.root_ptr, key, 0);
-			if (!deleted_leaf_ptr) {
+			auto deleted_leaf = ARTOperator::Lookup(delete_art, delete_art.tree, key, 0);
+			if (!deleted_leaf) {
 				continue;
 			}
 			// All leaves in the delete ART are inlined.
-			if (deleted_leaf_ptr.Get().GetType() != NType::LEAF_INLINED) {
+			if (deleted_leaf.Get().GetType() != NType::LEAF_INLINED) {
 				throw InternalException("Non-inlined leaf?");
 			}
-			auto deleted_row_id = deleted_leaf_ptr.Get().GetRowId();
+			auto deleted_row_id = deleted_leaf.Get().GetRowId();
 			deleted_row_ids.push_back(deleted_row_id);
 		}
 	}
 
-	if (leaf_ptr.GetType() == NType::LEAF_INLINED) {
-		auto this_row_id = leaf_ptr.GetRowId();
+	if (leaf.GetType() == NType::LEAF_INLINED) {
+		auto this_row_id = leaf.GetRowId();
 		if (!deleted_row_ids.empty()) {
 			// The leaf is inlined, and the same key exists in the delete ART.
 			// check if the row-id matches - if it does there is no conflict
@@ -1023,12 +944,12 @@ void ART::VerifyLeaf(const NodePtr &leaf_ptr, const ARTKey &key, DeleteIndexInfo
 
 	// Scan the two row IDs in the leaf.
 	Iterator it(*this);
-	it.FindMinimum(leaf_ptr);
+	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	set<row_t> row_ids;
 	RowIdSetOutput output(row_ids, 2);
 	auto result = it.Scan(empty_key, output, false);
-	if (result != ARTScanProgress::COMPLETED || row_ids.size() != 2) {
+	if (result != ARTScanResult::COMPLETED || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
@@ -1071,11 +992,11 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 			continue;
 		}
 
-		auto leaf_ptr = ARTOperator::Lookup(*this, root_ptr, keys[i], 0);
-		if (!leaf_ptr) {
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		if (!leaf) {
 			continue;
 		}
-		VerifyLeaf(leaf_ptr.Get(), keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
+		VerifyLeaf(leaf.Get(), keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
 	}
 
 	manager.FinishLookup();
@@ -1112,8 +1033,8 @@ void ART::TransformToDeprecated() {
 	    make_uniq<TransformToDeprecatedState>(std::move(deprecated_allocator));
 
 	// Transform all leaves, and possibly the prefixes.
-	if (root_ptr.HasMetadata()) {
-		NodePtr::TransformToDeprecated(*this, root_ptr, *state);
+	if (tree.HasMetadata()) {
+		NodePtr::TransformToDeprecated(*this, tree, *state);
 	}
 
 	// Replace the prefix allocator with the deprecated allocator.
@@ -1127,21 +1048,26 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_format) {
-	if (target_format == ARTSerializationFormat::V1_0_0) {
+IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage) {
+	if (v1_0_0_storage) {
 		TransformToDeprecated();
 	}
 
 	IndexStorageInfo info(name);
-	info.root = root_ptr.Get();
+	info.root = tree.Get();
+	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
 		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
+	for (auto &allocator : *allocators) {
+		allocator->RemoveEmptyBuffers();
+	}
+
 #ifdef DEBUG
-	if (target_format == ARTSerializationFormat::V1_0_0) {
+	if (v1_0_0_storage) {
 		D_ASSERT((*allocators)[NodePtr::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
 		D_ASSERT((*allocators)[NodePtr::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
 		D_ASSERT((*allocators)[NodePtr::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
@@ -1153,43 +1079,33 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 	return info;
 }
 
-ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_version) {
-	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
-		return ARTSerializationFormat::V1_0_0;
-	}
+IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	IndexLock guard(*this);
 
-	return ARTSerializationFormat::CURRENT;
-}
-
-IndexCheckpointResult ART::Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) {
-	const auto target_format = GetSerializationFormat(version);
-	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
-	auto storage_info = PrepareSerialize(target_format);
-
-	const auto new_allocators = make_shared_ptr<AllocatorArray>();
-	const auto allocator_count = GetAllocatorCount(target_format);
-
-	// We allocate all allocators, but serialize in accordance with the target format.
-	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		auto &new_allocator = (*new_allocators)[i];
-
-		new_allocator = (*allocators)[i]->Persist(partial_block_manager);
-
-		if (i < allocator_count) {
-			storage_info.allocator_infos.push_back(new_allocator->GetInfo());
-		}
-	}
-
-	auto shadow = unique_ptr<ART>(new ART(*this, new_allocators));
-	return {make_shared_ptr<IndexStorageInfo>(std::move(storage_info)), std::move(shadow)};
-}
-
-IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
-	const auto target_format = GetSerializationFormat(target_version);
-	auto info = PrepareSerialize(target_format);
-	const auto allocator_count = GetAllocatorCount(target_format);
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	auto info = PrepareSerialize(options, v1_0_0_storage);
+	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+
+	// Store the data on disk as partial blocks and set the block ids.
+	WritePartialBlocks(context, v1_0_0_storage);
+
+	for (idx_t i = 0; i < allocator_count; i++) {
+		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+	}
+
+	return info;
+}
+
+IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	// If the storage format uses deprecated leaf storage,
+	// then we need to transform all nested leaves before serialization.
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	auto info = PrepareSerialize(options, v1_0_0_storage);
+	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 
 	// Set the correct allocation sizes and get the map containing all buffers.
 	for (idx_t i = 0; i < allocator_count; i++) {
@@ -1198,10 +1114,20 @@ IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
-		D_ASSERT(info.buffers[i].size() == info.allocator_infos[i].buffer_ids.size());
 	}
 
 	return info;
+}
+
+void ART::WritePartialBlocks(QueryContext context, const bool v1_0_0_storage) {
+	auto &block_manager = table_io_manager.GetIndexBlockManager();
+	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
+
+	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+	for (idx_t i = 0; i < allocator_count; i++) {
+		(*allocators)[i]->SerializeBuffers(partial_block_manager);
+	}
+	partial_block_manager.FlushPartialBlocks();
 }
 
 void ART::InitAllocators(const IndexStorageInfo &info) {
@@ -1215,7 +1141,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 
 	auto &metadata_manager = table_io_manager.GetMetadataManager();
 	MetadataReader reader(metadata_manager, pointer);
-	root_ptr = reader.Read<NodePtr>();
+	tree = reader.Read<NodePtr>();
 
 	for (idx_t i = 0; i < DEPRECATED_ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
@@ -1290,8 +1216,8 @@ void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
 	}
 }
 
-static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, NodePtr &node_ptr) {
-	const auto type = node_ptr.GetType();
+static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, NodePtr &node) {
+	const auto type = node.GetType();
 	if (type == NType::LEAF_INLINED) {
 		return;
 	}
@@ -1300,20 +1226,20 @@ static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexe
 		return;
 	}
 	auto &allocator = NodePtr::GetAllocator(art, type);
-	if (!allocator.NeedsVacuum(node_ptr)) {
+	if (!allocator.NeedsVacuum(node)) {
 		return;
 	}
-	const auto status = node_ptr.GetGateStatus();
-	node_ptr = allocator.VacuumPointer(node_ptr);
-	node_ptr.SetMetadata(static_cast<uint8_t>(type));
-	node_ptr.SetGateStatus(status);
+	const auto status = node.GetGateStatus();
+	node = allocator.VacuumPointer(node);
+	node.SetMetadata(static_cast<uint8_t>(type));
+	node.SetGateStatus(status);
 }
 
 void ART::Vacuum(IndexLock &state) {
 	state.AssertHeld(*this);
 	D_ASSERT(owns_data);
 
-	if (!root_ptr.HasMetadata()) {
+	if (!tree.HasMetadata()) {
 		for (auto &allocator : *allocators) {
 			allocator->Reset();
 		}
@@ -1331,27 +1257,27 @@ void ART::Vacuum(IndexLock &state) {
 	auto &art = *this;
 	const auto vacuum_deprecated_leaves = indexes.find(NodePtr::GetAllocatorIdx(NType::LEAF)) != indexes.end();
 
-	auto child_handler = [&](NodePtr &child_ptr) -> OptionalNodePtr {
+	auto child_handler = [&](NodePtr &child) -> OptionalNodePtr {
 		// Vacuums the pointer if needed and updates in place within the parent.
-		VacuumPointerIfNeeded(art, indexes, child_ptr);
-		if (child_ptr.GetType() == NType::LEAF_INLINED) {
+		VacuumPointerIfNeeded(art, indexes, child);
+		if (child.GetType() == NType::LEAF_INLINED) {
 			return OptionalNodePtr();
 		}
 		// Push the updated pointer onto the stack to continue vacuum traversal on the subtree.
-		return child_ptr;
+		return child;
 	};
-	auto on_pop = [&](NodePtr current_ptr) -> ARTScanNodeResult {
-		D_ASSERT(current_ptr.HasMetadata());
-		if (current_ptr.GetType() == NType::LEAF) {
+	auto on_pop = [&](NodePtr current) -> ARTScanNodeResult {
+		D_ASSERT(current.HasMetadata());
+		if (current.GetType() == NType::LEAF) {
 			if (vacuum_deprecated_leaves) {
 				// Vacuum the internal pointers in the deprecated leaf chain.
-				Leaf::DeprecatedVacuum(art, current_ptr);
+				Leaf::DeprecatedVacuum(art, current);
 			}
 			return ARTScanNodeResult::SKIP;
 		}
 		return ARTScanNodeResult::SCAN_CHILDREN;
 	};
-	ARTScanPreorder(art, root_ptr, child_handler, on_pop);
+	ARTScanPreorder(art, tree, child_handler, on_pop);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1368,12 +1294,12 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	}
 }
 
-void ART::InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_bounds) {
-	D_ASSERT(other_root_ptr.HasMetadata());
+void ART::InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(other_tree.HasMetadata());
 
-	auto child_handler = [&](NodePtr &child_ptr) -> OptionalNodePtr {
-		D_ASSERT(child_ptr.HasMetadata());
-		auto type = child_ptr.GetType();
+	auto child_handler = [&](NodePtr &child) -> OptionalNodePtr {
+		D_ASSERT(child.HasMetadata());
+		auto type = child.GetType();
 		// no-op
 		if (type == NType::LEAF_INLINED) {
 			return OptionalNodePtr();
@@ -1382,10 +1308,10 @@ void ART::InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_b
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
-		auto original_ptr = child_ptr;
+		auto original = child;
 		// remap BufferId in-place within the parent.
 		auto idx = NodePtr::GetAllocatorIdx(type);
-		child_ptr.IncreaseBufferId(upper_bounds[idx]);
+		child.IncreaseBufferId(upper_bounds[idx]);
 
 		switch (type) {
 		case NType::NODE_7_LEAF:
@@ -1399,24 +1325,24 @@ void ART::InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_b
 		case NType::NODE_48:
 		case NType::NODE_256:
 			// Original pointer is pushed onto the stack.
-			return original_ptr;
+			return original;
 		default:
 			throw InternalException("invalid node type for InitializeMerge: %d", type);
 		}
 	};
 
-	auto on_pop = [](NodePtr node_ptr) -> ARTScanNodeResult {
-		D_ASSERT(node_ptr.HasMetadata());
+	auto on_pop = [](NodePtr node) -> ARTScanNodeResult {
+		D_ASSERT(node.HasMetadata());
 		return ARTScanNodeResult::SCAN_CHILDREN;
 	};
 
-	ARTScanPreorder(*this, other_root_ptr, child_handler, on_pop);
+	ARTScanPreorder(*this, other_tree, child_handler, on_pop);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 	state.AssertHeld(*this);
 	auto &other_art = source_index.Cast<ART>();
-	if (!other_art.root_ptr.HasMetadata()) {
+	if (!other_art.tree.HasMetadata()) {
 		return true;
 	}
 
@@ -1431,11 +1357,11 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 			    "Failed to merge ARTs - Node256Leaf segment sizes do not match (target %llu, source %llu)", target_size,
 			    source_size);
 		}
-		if (root_ptr.HasMetadata()) {
+		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
 			unsafe_vector<idx_t> upper_bounds;
 			InitializeMergeUpperBounds(upper_bounds);
-			other_art.InitializeMerge(other_art.root_ptr, upper_bounds);
+			other_art.InitializeMerge(other_art.tree, upper_bounds);
 		}
 
 		// Merge the node storage.
@@ -1445,16 +1371,16 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 	}
 
 	// Merge the ARTs.
-	D_ASSERT(root_ptr.GetGateStatus() == other_art.root_ptr.GetGateStatus());
-	if (root_ptr.HasMetadata()) {
+	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
+	if (tree.HasMetadata()) {
 		ArenaAllocator arena(Allocator::Get(db));
 		ARTMerger merger(arena, *this);
-		merger.Init(root_ptr, other_art.root_ptr);
+		merger.Init(tree, other_art.tree);
 		return merger.Merge() == ARTConflictType::NO_CONFLICT;
 	}
 
-	root_ptr = other_art.root_ptr;
-	other_art.root_ptr.Clear();
+	tree = other_art.tree;
+	other_art.tree.Clear();
 	return true;
 }
 
@@ -1463,7 +1389,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 	state.AssertHeld(*this);
 	auto &source = source_index.Cast<ART>();
-	if (!source.root_ptr.HasMetadata()) {
+	if (!source.tree.HasMetadata()) {
 		return;
 	}
 
@@ -1472,14 +1398,14 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 	idx_t delete_count = 0;
 
 	Iterator it(source);
-	it.FindMinimum(source.root_ptr);
+	it.FindMinimum(source.tree);
 
 	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
 	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
-	ARTScanProgress result;
+	ARTScanResult result;
 	do {
 		output.Reset();
 		result = it.Scan(empty_key, output, false);
@@ -1487,7 +1413,7 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 			scan_count += output.Count();
 			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
 		}
-	} while (result == ARTScanProgress::PAUSED);
+	} while (result == ARTScanResult::PAUSED);
 
 	if (delete_count != scan_count) {
 		throw InternalException("Failed to remove all rows while merging checkpoint deltas - "
@@ -1506,21 +1432,21 @@ void ART::RemovalMerge(BoundIndex &source_index) {
 ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppendMode append_mode) {
 	state.AssertHeld(*this);
 	auto &source = source_index.Cast<ART>();
-	if (!source.root_ptr.HasMetadata()) {
+	if (!source.tree.HasMetadata()) {
 		return ErrorData();
 	}
 
 	ArenaAllocator arena(BufferAllocator::Get(db));
 
 	Iterator it(source);
-	it.FindMinimum(source.root_ptr);
+	it.FindMinimum(source.tree);
 
 	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
 	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
-	ARTScanProgress result;
+	ARTScanResult result;
 	do {
 		output.Reset();
 		result = it.Scan(empty_key, output, false);
@@ -1530,7 +1456,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppe
 				return error;
 			}
 		}
-	} while (result == ARTScanProgress::PAUSED);
+	} while (result == ARTScanResult::PAUSED);
 
 	return ErrorData();
 }
@@ -1563,9 +1489,8 @@ string ART::ToString(IndexLock &l, bool display_ascii) {
 }
 
 string ART::ToStringInternal(bool display_ascii) {
-	if (root_ptr.HasMetadata()) {
-		return "\nART: \n" +
-		       root_ptr.ToString(*this, ToStringOptions(false, display_ascii, nullptr, 0, 0, true, false));
+	if (tree.HasMetadata()) {
+		return "\nART: \n" + tree.ToString(*this, ToStringOptions(false, display_ascii, nullptr, 0, 0, true, false));
 	}
 	return "[empty]";
 }
@@ -1576,8 +1501,8 @@ void ART::Verify(IndexLock &l) {
 }
 
 void ART::VerifyInternal() {
-	if (root_ptr.HasMetadata()) {
-		root_ptr.Verify(*this);
+	if (tree.HasMetadata()) {
+		tree.Verify(*this);
 	}
 }
 
@@ -1593,8 +1518,8 @@ void ART::VerifyAllocationsInternal() {
 		node_counts[NumericCast<uint8_t>(i)] = 0;
 	}
 
-	if (root_ptr.HasMetadata()) {
-		root_ptr.VerifyAllocations(*this, node_counts);
+	if (tree.HasMetadata()) {
+		tree.VerifyAllocations(*this, node_counts);
 	}
 
 	for (idx_t i = 0; i < allocators->size(); i++) {

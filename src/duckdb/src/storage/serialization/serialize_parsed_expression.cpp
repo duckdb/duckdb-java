@@ -70,9 +70,6 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(deserializer);
 		break;
-	case ExpressionClass::PATTERN:
-		result = PatternExpression::Deserialize(deserializer);
-		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		result = PositionalReferenceExpression::Deserialize(deserializer);
 		break;
@@ -215,6 +212,7 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", result->lhs);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", result->expr);
 	deserializer.ReadPropertyWithExplicitDefault<LambdaSyntaxType>(202, "syntax_type", result->syntax_type, LambdaSyntaxType::SINGLE_ARROW_STORAGE);
+	result->FinalizeDeserialization(deserializer);
 	return std::move(result);
 }
 

@@ -32,8 +32,6 @@
 
 #include "src/optimizer/deliminator.cpp"
 
-#include "src/optimizer/disjunctive_join_rewriter.cpp"
-
 #include "src/optimizer/empty_result_pullup.cpp"
 
 #include "src/optimizer/expression_heuristics.cpp"
