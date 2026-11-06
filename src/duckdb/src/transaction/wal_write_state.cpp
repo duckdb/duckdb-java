@@ -292,8 +292,7 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		// update infos without updates were replaced by a larger update info
-		if (info->N > 0 && !info->segment->column_data.GetTableInfo().IsTemporary()) {
+		if (!info->segment->column_data.GetTableInfo().IsTemporary()) {
 			WriteUpdate(*info);
 		}
 		break;
