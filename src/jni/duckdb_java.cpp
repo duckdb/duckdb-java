@@ -99,7 +99,8 @@ jobject _duckdb_jdbc_create_db_ref(JNIEnv *env, jclass, jobject conn_ref_buf) {
 
 jlong _duckdb_jdbc_db_address(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = get_connection_ref(env, conn_ref_buf);
-	return (jlong)conn_ref->db.get();
+	// the instance cache returns a new DuckDB handle for every cache hit, the DatabaseInstance is the shared object
+	return (jlong)conn_ref->db->instance.get();
 }
 
 void _duckdb_jdbc_destroy_db_ref(JNIEnv *env, jclass, jobject db_ref_buf) {
