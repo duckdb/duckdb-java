@@ -1000,7 +1000,8 @@ jobs:
         run: test "$(lipo -archs build/release/libduckdb_java.so_macos_amd64)" = "x86_64"
 
       - name: Java Tests
-        if: ${{ inputs.skip_tests != 'true' }}
+        # disabled: no extensions available for macos_amd64
+        if: ${{ inputs.skip_tests != 'true' && false }}
         shell: bash
         run: make test
 
