@@ -253,6 +253,8 @@ public:
 					// will be on again
 					started_last_phase = true;
 					l_state.in_charge_of_final_stretch = true;
+					// The local rows form their own batch after all row ID batches.
+					l_state.batch_index = next_batch_index;
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
 				} else if (l_state.in_charge_of_final_stretch) {
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
@@ -484,6 +486,14 @@ public:
 		return job;
 	}
 
+	//! Drops a settled job's row group when a filter set since it was produced prunes it
+	static void RecheckJob(TableScanLocalState &l_state) {
+		if (!l_state.job->scan_state->table_state.RecheckPreparedRowGroup()) {
+			// the row group is dropped without being scanned
+			l_state.row_groups_scanned--;
+		}
+	}
+
 	// Try to return control to the executor instead of looping back within the scan.
 	static bool TryYieldControl(TableFunctionInput &data_p) {
 		if (data_p.results_execution_mode != AsyncResultsExecutionMode::TASK_EXECUTOR) {
@@ -500,6 +510,7 @@ public:
 			if (l_state.job && l_state.job->io_completion) {
 				// resuming after parking, the job's I/O has completed
 				read_ahead->WaitForJob(*l_state.job);
+				RecheckJob(l_state);
 			}
 			if (!l_state.job) {
 				unique_ptr<ScanReadAheadJob> claimed;
@@ -515,6 +526,7 @@ public:
 				if (acquired == ScanReadAheadAcquire::PARKED) {
 					return true;
 				}
+				RecheckJob(l_state);
 			}
 			auto &job_scan = *l_state.job->scan_state;
 			// the job's I/O was registered when it was produced, so no I/O is scheduled here
@@ -722,8 +734,15 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 			g_state->row_ids[row_id_count++] = row_id;
 		}
 	}
-
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	// Tasks claim STANDARD_VECTOR_SIZE row IDs at a time, and one more task can scan the transaction-local rows.
+	auto local_table = LocalStorage::Get(context, duck_table.catalog).GetStorage(duck_table.GetStorage());
+	idx_t useful_threads = (g_state->row_id_count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	if (local_table && local_table->GetCollection().GetTotalRows() > 0) {
+		useful_threads++;
+	}
+	g_state->max_threads = MinValue<idx_t>(g_state->max_threads, MaxValue<idx_t>(useful_threads, 1));
+
 	if (input.CanRemoveFilterColumns()) {
 		g_state->projection_ids = input.projection_ids;
 	}

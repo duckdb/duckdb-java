@@ -277,8 +277,10 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			if (copy_count > 0) {
+				memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
+				plain_data.unsafe_inc(copy_count);
+			}
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);
@@ -384,6 +386,8 @@ private:
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
+	//! The size of the page body in the file, without the encryption framing that Arrow includes
+	uint32_t GetPageBodySize(const PageHeader &page_hdr) const;
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
