@@ -53,10 +53,12 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -69,6 +71,7 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TTransport.h"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -233,7 +236,11 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
                          uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
 	auto transport =
 	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, prefetch_mode, accepted_column_gap);
-	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+	// every list element takes at least one byte, so a list cannot hold more elements than the file has bytes
+	auto max_list_size = MinValue<idx_t>(transport->GetSize(), NumericLimits<int32_t>::Maximum());
+	auto container_limit = NumericCast<int32_t>(max_list_size);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport), 0,
+	                                                                                          container_limit);
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
@@ -333,10 +340,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			transport.Prefetch(metadata_pos, footer_len);
 		}
 	} else {
-		footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
-		if (footer_len == 0 || file_size < 12 + footer_len) {
+		auto provided_footer_len = footer_size.GetIndex();
+		if (provided_footer_len == 0 || provided_footer_len > NumericLimits<uint32_t>::Maximum() ||
+		    file_size < 12 + provided_footer_len) {
 			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
 		}
+		footer_len = UnsafeNumericCast<uint32_t>(provided_footer_len);
 
 		idx_t total_footer_len = footer_len + 8;
 		auto metadata_pos = file_size - total_footer_len;
@@ -353,6 +362,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
 		}
 	}
+
+	// CreateThriftFileProtocol bounded the container size limit by the whole file, since footer_len was not yet
+	// known at that point. The actual footer (crypto metadata and/or file metadata) can only ever occupy footer_len
+	// bytes, which is typically far smaller than the file - tighten the limit now to that true byte budget, so a
+	// declared list/map element count can no longer be inflated using unrelated bytes elsewhere in the file.
+	auto &compact_proto =
+	    reinterpret_cast<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport> &>(*file_proto);
+	auto limit = MinValue<idx_t>(footer_len, NumericLimits<int32_t>::Maximum());
+	compact_proto.setContainerSizeLimit(NumericCast<int32_t>(limit));
 
 	auto metadata = make_uniq<FileMetaData>();
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
@@ -422,6 +440,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
 	if (s_ele.__isset.type_length) {
+		if (s_ele.type_length < 0) {
+			throw IOException("Invalid negative type_length %d for column \"%s\"", s_ele.type_length, s_ele.name);
+		}
 		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
 	schema.parquet_type = s_ele.type;
@@ -773,6 +794,28 @@ optional_ptr<const BaseStatistics> ParquetReader::GetVariantStats(const ParquetC
 	return *res.first->second;
 }
 
+//! Whether the cast of the extracted field can be applied to its 'typed_value' instead of to the VARIANT
+static bool TypedValueCastMatchesVariantCast(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
+	D_ASSERT(schema.name == "typed_value");
+	reference<const ParquetColumnSchema> typed_value(schema);
+	reference<const ColumnIndex> path_iter(column_id);
+	while (path_iter.get().HasChildren()) {
+		auto &child = path_iter.get().GetChildIndexes()[0];
+		auto child_column_index = typed_value.get().GetChildIndexByName(child.GetFieldName());
+		if (!child_column_index.IsValid()) {
+			return false;
+		}
+		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
+		auto typed_value_index = child_column.GetChildIndexByName("typed_value");
+		if (!typed_value_index.IsValid()) {
+			return false;
+		}
+		typed_value = child_column.GetChildByIndex(typed_value_index.GetIndex());
+		path_iter = child;
+	}
+	return VariantUtils::ShreddedCastMatchesVariantCast(typed_value.get().type, path_iter.get().GetType());
+}
+
 static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
 	D_ASSERT(schema.name == "typed_value");
 	reference<const ParquetColumnSchema> typed_value(schema);
@@ -936,10 +979,14 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		if (schema.children.size() == 3 && column_id.IsPushdownExtract()) {
 			//! VARIANT is shredded - it has a 'typed_value' column
 			auto &typed_value_schema = schema.children[2];
-			D_ASSERT(typed_value_schema.name == "typed_value");
+			if (typed_value_schema.name != "typed_value") {
+				throw InvalidInputException("Variant group can only contain 'value'/'typed_value', found '%s'",
+				                            typed_value_schema.name);
+			}
 			auto variant_stats = GetVariantStats(schema);
 
-			if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
+			if (variant_stats && IsFullyShredded(*variant_stats, column_id) &&
+			    TypedValueCastMatchesVariantCast(typed_value_schema, column_id)) {
 				//! This field is present in 'typed_value' across all rowgroups
 				//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
 				auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
@@ -1275,7 +1322,11 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
 	}
-	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
+	if (next_schema_idx != file_meta_data->schema.size() - 1) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": schema has elements that are not part of the "
+		                            "schema tree",
+		                            file.path);
+	}
 	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": row group does not have enough columns",
 		                            file.path);
@@ -1358,6 +1409,8 @@ void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
 	context.TryGetCurrentSetting("binary_as_string", binary_as_string);
+	// a can_have_nan option of the scan is parsed after this, so it overrides the setting
+	context.TryGetCurrentSetting("parquet_can_have_nan", can_have_nan);
 	context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", variant_legacy_encoding);
 }
 
@@ -1396,6 +1449,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 		idx_t footer_size_option;
 		if (extended_info.TryGetOption("footer_size", footer_size_option)) {
+			if (footer_size_option > NumericLimits<uint32_t>::Maximum()) {
+				throw InvalidInputException("Invalid footer length provided for file '%s'", file.path);
+			}
 			footer_size = footer_size_option;
 		}
 	}
@@ -1837,7 +1893,9 @@ FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext
 
 bool ParquetReader::DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state) {
 	for (auto &scan_filter : state.scan_filters) {
-		if (!ExpressionFilter::GetOptionalDynamicFilterData(scan_filter.filter)) {
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(scan_filter.filter, "ParquetReader::DynamicFiltersExcludeRowGroup");
+		if (!ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME)) {
 			continue;
 		}
 		auto &column_reader = state.GetColumnReader(MultiFileLocalIndex(scan_filter.filter_idx));
@@ -2268,6 +2326,9 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	} else {
 		++state.row_groups_read;
 	}
+	// counted in Process when the scan of the row group starts: a row group that is read ahead but never scanned,
+	// or whose prefetch fails, is not counted
+	state.pending_bytes_scanned = row_group_skipped ? 0 : to_scan_compressed_bytes;
 	if (state.op) {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
 		           row_group_skipped ? "SkipRowGroup" : "ReadRowGroup",
@@ -2513,6 +2574,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 		// the row group is fully consumed
 		FinishRowGroup(context, state, log_prefetch);
 		return SourceResultType::FINISHED;
+	}
+	if (state.pending_bytes_scanned > 0) {
+		state.bytes_scanned += state.pending_bytes_scanned;
+		QueryProfiler::Get(context).TrackBytesScanned(state.pending_bytes_scanned);
+		state.pending_bytes_scanned = 0;
 	}
 
 	auto &deletion_filter = this->deletion_filter;

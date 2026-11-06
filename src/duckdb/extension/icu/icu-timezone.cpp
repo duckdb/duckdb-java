@@ -422,6 +422,8 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			}
 		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			switch (target.id()) {
+			case LogicalType::TIMESTAMP:
+				return BoundCastInfo(CastToNaive<timestamp_tz_ns_t, timestamp_t>, std::move(cast_data));
 			case LogicalType::TIMESTAMP_NS:
 				return BoundCastInfo(CastToNaive<timestamp_tz_ns_t, timestamp_ns_t>, std::move(cast_data));
 			default:
@@ -446,6 +448,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_S);
 
+		AddCast(casts, LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_NS);
 	}
 };
@@ -533,6 +536,9 @@ dtime_tz_t ICUToTimeTZ::Operation(Calendar *calendar, dtime_tz_t timetz) {
 bool ICUToTimeTZ::ToTimeTZ(Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result,
                            optional_ptr<string> error_message) {
 	if (!instant.IsFinite()) {
+		if (error_message) {
+			*error_message = "Can't get TIME of infinite TIMESTAMP";
+		}
 		return false;
 	}
 
