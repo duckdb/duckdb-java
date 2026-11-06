@@ -1008,7 +1008,8 @@ jobs:
         run: otool -l build/release/libduckdb_java.so_macos_amd64 | grep -A4 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX'
 
       - name: Java Tests
-        if: ${{ inputs.skip_tests != 'true' }}
+        # disabled: no extensions available for macos_amd64
+        if: ${{ inputs.skip_tests != 'true' && false }}
         shell: bash
         run: make test
 
