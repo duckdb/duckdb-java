@@ -91,3 +91,96 @@ index 718ec4c..3c6355f 100644
           (catch NoHttpResponseException e#
             (assoc ~op :type :info, :error :no-response))
           (catch [:status 409] e#
+diff --git a/src/jepsen/local.clj b/src/jepsen/local.clj
+index 53ad544..e4fde39 100644
+--- a/src/jepsen/local.clj
++++ b/src/jepsen/local.clj
+@@ -45,11 +45,17 @@
+                     PushbackReader
+                     OutputStreamWriter
+                     Writer)
++           (java.net InetSocketAddress
++                     Socket)
+            (java.util.concurrent TimeUnit)))
+ 
+ (def starting-port
+-  "Where we start assigning port numbers."
+-  47000)
++  "Where we start assigning port numbers. This must be outside the OS
++  ephemeral port range (32768-60999 on Linux, 49152-65535 elsewhere):
++  otherwise a client connecting to a not-yet-listening node can be assigned
++  the node's own port as its source port, TCP self-connects, and the node then
++  fails to bind with \"Address already in use\"."
++  17000)
+ 
+ (defn port
+   "Takes a test map and a local node; returns the local port assigned to that
+@@ -97,6 +103,47 @@
+     {:node    node
+      :process process}))
+ 
++(def ready-timeout
++  "How long, in milliseconds, we wait for a local node to start listening on
++  its port."
++  60000)
++
++(defn port-open?
++  "Returns true if we can open a TCP connection to the given local port."
++  [port]
++  (try (with-open [s (Socket.)]
++         (.connect s (InetSocketAddress. "127.0.0.1" (int port)) 1000)
++         true)
++       (catch IOException _
++         false)))
++
++(defn await-ready!
++  "Blocks until a freshly started local node is listening on its port. Throws
++  if the process exits first, or if it doesn't become ready within
++  `ready-timeout` ms."
++  [test {:keys [node, ^Process process]}]
++  (let [port     (port test node)
++        deadline (+ (System/currentTimeMillis) ready-timeout)]
++    (loop []
++      (cond (port-open? port)
++            (info "Local node" node "is listening on port" port)
++
++            (not (.isAlive process))
++            (throw+ {:type ::crashed-on-start
++                     :node node
++                     :port port
++                     :exit (.exitValue process)})
++
++            (< deadline (System/currentTimeMillis))
++            (throw+ {:type    ::start-timeout
++                     :node    node
++                     :port    port
++                     :timeout ready-timeout})
++
++            true
++            (do (Thread/sleep 100)
++                (recur))))))
++
+ (defn kill-process!
+   "Kills a local node's process. Takes a local node map with a :node and
+   :process key."
+@@ -131,12 +178,14 @@
+       (locking state
+         (if @state
+           :already-running
+-          (do (reset! state (start-process! test
+-                                        {:node node
+-                                         :bin  bin
+-                                         :args (get node-args node)
+-                                         :env  (get node-envs node)}))
+-              :started)))))
++          (let [s (start-process! test
++                                  {:node node
++                                   :bin  bin
++                                   :args (get node-args node)
++                                   :env  (get node-envs node)})]
++            (reset! state s)
++            (await-ready! test s)
++            :started)))))
+ 
+   db/DB
+   (setup! [this test node]
