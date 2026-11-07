@@ -71,8 +71,10 @@ public:
 	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid)
-		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid,
+		                ConstraintCheckMode check_mode)
+		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
+		      check_mode(check_mode) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -81,6 +83,8 @@ public:
 		idx_t table_oid;
 		//! The oid of the index, used to match a DROP INDEX in the same replayed transaction.
 		idx_t index_oid;
+		//! The check mode of the constraint enforced by the index.
+		ConstraintCheckMode check_mode;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -375,7 +379,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageMan
 WriteAheadLogReplayer::WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager,
                                              const string &main_wal_path)
     : context(context), storage_manager(storage_manager), database(storage_manager.GetAttached()),
-      main_wal_path(main_wal_path), fs(FileSystem::Get(context, storage_manager.GetAttached())) {
+      main_wal_path(main_wal_path), fs(FileSystem::Get(storage_manager.GetAttached())) {
 }
 
 unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
@@ -385,6 +389,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
 		return make_uniq<WriteAheadLog>(storage_manager, main_wal_path);
 	}
 
+	// context is passed for metric collection purposes only!!
 	auto wal_handle = ReplayLog(std::move(handle));
 	if (wal_handle) {
 		return wal_handle;
@@ -660,7 +665,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.index_oid);
+					info.index_list.get().AddIndex(std::move(info.index), info.index_oid, info.check_mode);
 				}
 				state.replay_index_infos.clear();
 
@@ -1017,7 +1022,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_oid = DatabaseManager::Get(context).NextOid();
 	unique_info.SetBackingIndexOid(index_oid);
 	catalog.Alter(context, alter_info);
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid,
+	                                      unique_info.check_mode);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1267,7 +1273,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
+	                                      ConstraintCheckMode::DEFAULT);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

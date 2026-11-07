@@ -157,6 +157,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/extension/parquet/parquet_int96.cpp
   src/duckdb/extension/parquet/parquet_metadata.cpp
   src/duckdb/extension/parquet/parquet_multi_file_info.cpp
+  src/duckdb/extension/parquet/parquet_page_index.cpp
   src/duckdb/extension/parquet/parquet_prefetch_cost_model.cpp
   src/duckdb/extension/parquet/parquet_reader.cpp
   src/duckdb/extension/parquet/parquet_shredding.cpp

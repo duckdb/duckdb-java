@@ -6,6 +6,8 @@
 
 #include "src/optimizer/aggregate_rewrite_helper.cpp"
 
+#include "src/optimizer/apply_functional_dependencies.cpp"
+
 #include "src/optimizer/build_probe_side_optimizer.cpp"
 
 #include "src/optimizer/column_binding_replacer.cpp"
@@ -31,6 +33,8 @@
 #include "src/optimizer/cte_join_filter_pusher.cpp"
 
 #include "src/optimizer/deliminator.cpp"
+
+#include "src/optimizer/disjunctive_join_rewriter.cpp"
 
 #include "src/optimizer/empty_result_pullup.cpp"
 
@@ -82,6 +86,8 @@
 
 #include "src/optimizer/remove_duplicate_groups.cpp"
 
+#include "src/optimizer/remove_redundant_order.cpp"
+
 #include "src/optimizer/remove_redundant_order_keys.cpp"
 
 #include "src/optimizer/remove_unused_columns.cpp"
@@ -105,6 +111,8 @@
 #include "src/optimizer/type_pushdown.cpp"
 
 #include "src/optimizer/unnest_rewriter.cpp"
+
+#include "src/optimizer/window_join_pushdown.cpp"
 
 #include "src/optimizer/window_self_join.cpp"
 

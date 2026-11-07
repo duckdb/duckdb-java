@@ -151,6 +151,9 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
+			if (item.get().Equals(col)) {
+				continue;
+			}
 			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
 		}
 	}
@@ -418,8 +421,11 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 	vector<ProjectionIndex> column_indexes;
 	column_indexes.reserve(distinct_bindings.size());
 	for (const auto &binding : distinct_bindings) {
-		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size()) {
+			return nullptr;
+		}
+		auto &column_id = get.GetColumnIds()[binding.column_index];
+		if (column_id.IsVirtualColumn() && !column_id.IsRowIdColumn()) {
 			return nullptr;
 		}
 		column_indexes.emplace_back(binding.column_index);
@@ -778,9 +784,15 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			    CreateComparisonExpression(*column_ref, comparison_type, const_val->GetValue()));
 		}
 	}
-	if (only_equalities && equality_column &&
-	    TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
-		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	if (only_equalities && equality_column) {
+		if (TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
+			return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		}
+		// Push the same filter as for `col IN (...)`, which index scans can use.
+		auto in_expr = ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*equality_column),
+		                                                    std::move(equality_values));
+		table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(in_expr), col_type));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;

@@ -4773,13 +4773,14 @@ typedef struct _duckdb_v2_stats {
 
 /* --- Functions for stats --- */
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Returns whether the values described can include NULL.
  *
  * False guarantees that every value is non-NULL.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param stats The statistics to read.
  * @param out Receives true if a value can be NULL, false if none can.
@@ -4789,7 +4790,9 @@ typedef struct _duckdb_v2_stats {
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_null(duckdb_v2_stats_handle stats, bool *out,
                                                            duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Returns whether the values described can include a valid, non-NULL value.
  *
@@ -4797,7 +4800,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_null(duckdb_v2_stats_handl
  * no values at all.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param stats The statistics to read.
  * @param out Receives true if a value can be non-NULL, false if none can.
@@ -4807,7 +4810,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_null(duckdb_v2_stats_handl
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_valid(duckdb_v2_stats_handle stats, bool *out,
                                                             duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets whether the values described can include NULL.
  *
@@ -4815,7 +4820,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_valid(duckdb_v2_stats_hand
  * true is always safe. Fails with `ERROR_INPUT_INVALID` on read-only statistics, such as those of an argument.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param stats The statistics to modify.
  * @param value True if a value can be NULL, false if none can.
@@ -4825,7 +4830,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_can_have_valid(duckdb_v2_stats_hand
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_null(duckdb_v2_stats_handle stats, bool value,
                                                                duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets whether the values described can include a valid, non-NULL value.
  *
@@ -4834,7 +4841,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_null(duckdb_v2_stats_h
  * argument.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param stats The statistics to modify.
  * @param value True if a value can be non-NULL, false if none can.
@@ -4844,6 +4851,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_null(duckdb_v2_stats_h
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_stats_set_can_have_valid(duckdb_v2_stats_handle stats, bool value,
                                                                 duckdb_v2_error_info_handle *err);
+#endif
 
 /* --- Struct definitions for stats --- */
 
@@ -5401,6 +5409,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
     duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the optional stats callback of the aggregate function.
  *
@@ -5410,7 +5419,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
  * the engine no statistics for its result.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param function The function to set the stats callback of.
  * @param callback The stats callback to set.
@@ -5421,6 +5430,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_stats_callback(
     duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_stats_callback_fn callback,
     duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -5953,11 +5963,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
     duckdb_v2_aggregate_function_destroy_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the user data pointer, or null if none was set.
@@ -5967,12 +5978,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_user_data(
     duckdb_v2_aggregate_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the bind data set by the function's bind callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the bind data pointer, or null if none was set.
@@ -5982,7 +5995,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_user_data(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_bind_data(
     duckdb_v2_aggregate_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Returns how many arguments the call site has, split into the four parts of the argument list.
  *
@@ -5991,7 +6006,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_bind_data(
  * sum of the four counts). Every out-parameter may be NULL, in which case nothing is written to it.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param positional_fixed Optional. Receives the number of positional-only and standard parameters.
@@ -6006,7 +6021,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_bind_data(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_arg_count(
     duckdb_v2_aggregate_function_stats_info_handle info, idx_t *positional_fixed, idx_t *positional_variadic,
     idx_t *named_fixed, idx_t *named_variadic, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the statistics of the argument at the given index.
  *
@@ -6014,7 +6031,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_arg_count(
  * of bounds. Borrowed; valid only for the duration of the callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param index The index of the argument.
@@ -6026,7 +6043,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_arg_count(
 DUCKDB_C_API DUCKDB_V2_ERROR
 duckdb_v2_aggregate_function_stats_get_arg_stats(duckdb_v2_aggregate_function_stats_info_handle info, idx_t index,
                                                  duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the statistics of the call site's result, for the callback to narrow.
  *
@@ -6035,7 +6054,7 @@ duckdb_v2_aggregate_function_stats_get_arg_stats(duckdb_v2_aggregate_function_st
  * Borrowed; valid only for the duration of the callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param stats Receives the borrowed, writable statistics of the call site's result.
@@ -6046,6 +6065,7 @@ duckdb_v2_aggregate_function_stats_get_arg_stats(duckdb_v2_aggregate_function_st
 DUCKDB_C_API DUCKDB_V2_ERROR
 duckdb_v2_aggregate_function_stats_get_result_stats(duckdb_v2_aggregate_function_stats_info_handle info,
                                                     duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -10863,6 +10883,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
     duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the optional stats callback of the scalar function.
  *
@@ -10872,7 +10893,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
  * the engine no statistics for its result.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param function The function to set the stats callback of.
  * @param callback The stats callback to set.
@@ -10883,6 +10904,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_stats_callback(
     duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_stats_callback_fn callback,
     duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -11124,11 +11146,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
                                                                        duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the user data pointer, or null if none was set.
@@ -11138,12 +11161,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_user_data(
     duckdb_v2_scalar_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the bind data set by the function's bind callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the bind data pointer, or null if none was set.
@@ -11153,7 +11178,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_user_data(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_bind_data(
     duckdb_v2_scalar_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Returns how many arguments the call site has, split into the four parts of the argument list.
  *
@@ -11162,7 +11189,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_bind_data(
  * sum of the four counts). Every out-parameter may be NULL, in which case nothing is written to it.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param positional_fixed Optional. Receives the number of positional-only and standard parameters.
@@ -11177,7 +11204,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_bind_data(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_arg_count(
     duckdb_v2_scalar_function_stats_info_handle info, idx_t *positional_fixed, idx_t *positional_variadic,
     idx_t *named_fixed, idx_t *named_variadic, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the statistics of the argument at the given index.
  *
@@ -11185,7 +11214,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_arg_count(
  * of bounds. Borrowed; valid only for the duration of the callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param index The index of the argument.
@@ -11197,7 +11226,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_arg_count(
 DUCKDB_C_API DUCKDB_V2_ERROR
 duckdb_v2_scalar_function_stats_get_arg_stats(duckdb_v2_scalar_function_stats_info_handle info, idx_t index,
                                               duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the statistics of the call site's result, for the callback to narrow.
  *
@@ -11205,7 +11236,7 @@ duckdb_v2_scalar_function_stats_get_arg_stats(duckdb_v2_scalar_function_stats_in
  * callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param stats Receives the borrowed, writable statistics of the call site's result.
@@ -11215,6 +11246,7 @@ duckdb_v2_scalar_function_stats_get_arg_stats(duckdb_v2_scalar_function_stats_in
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_stats_get_result_stats(
     duckdb_v2_scalar_function_stats_info_handle info, duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -12945,13 +12977,13 @@ typedef void (*duckdb_v2_table_function_claim_batch_callback_fn)(duckdb_v2_table
                                                                  duckdb_v2_context_handle context,
                                                                  duckdb_v2_error_info_handle *err);
 
-typedef void (*duckdb_v2_table_function_stats_callback_fn)(duckdb_v2_table_function_stats_info_handle info,
-                                                           duckdb_v2_context_handle context,
-                                                           duckdb_v2_error_info_handle *err);
-
 typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
     duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_context_handle context,
     duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_stats_callback_fn)(duckdb_v2_table_function_stats_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -13279,6 +13311,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
     duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Sets the optional stats callback of the table function.
  *
@@ -13287,7 +13320,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
  * simplify the query. A function without a stats callback gives the engine no statistics for its columns.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param function The function to set the stats callback of.
  * @param callback The stats callback to set.
@@ -13298,6 +13331,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_stats_callback(
     duckdb_v2_table_function_handle function, duckdb_v2_table_function_stats_callback_fn callback,
     duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
@@ -14278,11 +14312,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_set_partition
     duckdb_v2_error_info_handle *err);
 #endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the user data pointer, or null if none was set.
@@ -14292,12 +14327,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_set_partition
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_user_data(
     duckdb_v2_table_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the bind data set by the function's bind callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param data Receives the bind data pointer, or null if none was set.
@@ -14307,7 +14344,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_user_data(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_bind_data(
     duckdb_v2_table_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Returns which declared column the statistics describe.
  *
@@ -14315,7 +14354,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_bind_data(
  * order.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param column_index Receives the index of the declared column.
@@ -14325,7 +14364,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_bind_data(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_column_index(
     duckdb_v2_table_function_stats_info_handle info, idx_t *column_index, duckdb_v2_error_info_handle *err);
+#endif
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
  * Retrieves the statistics of the column, for the callback to narrow.
  *
@@ -14333,7 +14374,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_column_index(
  * the column. Borrowed; valid only for the duration of the callback.
  *
  * history:
- * - stable: v2.0.0
+ * - unstable: v2.0.0
  *
  * @param info The stats info handle.
  * @param stats Receives the borrowed, writable statistics of the column.
@@ -14343,6 +14384,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_column_index(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_result_stats(
     duckdb_v2_table_function_stats_info_handle info, duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
+#endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!

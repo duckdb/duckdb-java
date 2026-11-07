@@ -1359,7 +1359,7 @@ PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &tra
 			auto expression_type = OperatorToExpressionType(op_string);
 
 			auto subquery_expr = make_uniq<SubqueryExpression>();
-			if (other_operator_expr.is_subquery) {
+			if (right_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
 				if (expression_type == ExpressionType::INVALID) {
 					throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
 				}
@@ -1433,22 +1433,9 @@ PEGTransformerFactory::TransformCustomPrefixExpression(PEGTransformer &transform
 	return TransformOperatorFunction(operator_literal, std::move(children));
 }
 
-OtherOperatorTail PEGTransformerFactory::TransformAnyAllSubqueryTail(PEGTransformer &transformer,
-                                                                     ParsedOperator any_all_parsed_operator,
-                                                                     unique_ptr<TableRef> subquery_reference) {
-	auto subquery = make_uniq<SubqueryExpression>();
-	subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
-	subquery->SubqueryMutable() = std::move(subquery_reference->Cast<SubqueryRef>().subquery);
-	OtherOperatorTail result;
-	result.op = std::move(any_all_parsed_operator);
-	result.expression = std::move(subquery);
-	result.is_subquery = true;
-	return result;
-}
-
-OtherOperatorTail
-PEGTransformerFactory::TransformOtherOperatorExpressionTail(PEGTransformer &transformer, ParsedOperator other_operator,
-                                                            unique_ptr<ParsedExpression> bitwise_expression) {
+OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransformer &transformer,
+                                                                    ParsedOperator other_operator,
+                                                                    unique_ptr<ParsedExpression> bitwise_expression) {
 	OtherOperatorTail result;
 	result.op = std::move(other_operator);
 	result.expression = std::move(bitwise_expression);
