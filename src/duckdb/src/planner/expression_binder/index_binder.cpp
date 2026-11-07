@@ -9,6 +9,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -105,8 +106,10 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	for (auto &expr : create_index_info->expressions) {
 		properties.always_require_rebind = false;
 		expressions.push_back(Bind(expr));
-		if (properties.always_require_rebind) {
-			throw BinderException("Index keys cannot contain expressions with side effects.");
+		// casts are bound without the binder, so a cast that reads settings such as TimeZone is found in the key
+		if (properties.always_require_rebind || expressions.back()->RequiresRebind()) {
+			throw BinderException("Index keys cannot contain expressions with side effects. They also cannot depend on "
+			                      "settings such as TimeZone.");
 		}
 	}
 	properties.always_require_rebind = statement_requires_rebind;

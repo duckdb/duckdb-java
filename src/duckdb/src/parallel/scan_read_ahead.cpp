@@ -297,9 +297,9 @@ void ScanReadAhead::SetDone() {
 
 idx_t ScanReadAhead::ReservationDepth() const {
 	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
-	const bool over_memory_budget = pending_io_bytes.load() >= backlog_budget.load();
-	const bool over_open_file_budget = ReadAheadOpenFile::Count() >= open_file_budget;
-	return over_memory_budget || over_open_file_budget ? 1 : read_ahead_depth;
+	const bool over_budget =
+	    pending_io_bytes.load() >= backlog_budget.load() || ReadAheadOpenFile::Count() >= open_file_budget;
+	return over_budget ? 1 : read_ahead_depth;
 }
 
 bool ScanReadAhead::TryReserveSlot() {
@@ -307,7 +307,6 @@ bool ScanReadAhead::TryReserveSlot() {
 	const bool over_memory_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
 	// queued jobs keep their files open, so the open file budget bounds the queue too
 	const bool over_budget = over_memory_budget || ReadAheadOpenFile::Count() >= open_file_budget;
-	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
 	const idx_t depth = over_budget ? 1 : read_ahead_depth;
 	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
