@@ -268,7 +268,7 @@ public class TestAppender {
                 assertEquals(rs.getObject(2, LocalDateTime.class).toString(), "2025-06-25T12:34:46");
                 assertEquals(rs.getObject(3, LocalDateTime.class).toString(), "2025-06-25T12:34:45.679");
                 assertEquals(rs.getObject(4, LocalDateTime.class).toString(), "2025-06-25T12:34:45.678901");
-                assertEquals(rs.getObject(5, LocalDateTime.class).toString(), "2025-06-25T12:34:45.678901");
+                assertEquals(rs.getObject(5, LocalDateTime.class).toString(), "2025-06-25T12:34:45.678901234");
                 assertTrue(rs.next());
                 assertEquals(rs.getInt(1), 42);
                 assertEquals(rs.getObject(2, LocalDateTime.class).toString(), "2025-06-25T12:34:45");

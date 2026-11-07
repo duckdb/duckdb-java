@@ -478,6 +478,16 @@
       ]
     },
     {
+      "type": "org.duckdb.DuckDBTimestampNS",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getNanosEpoch",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "org.duckdb.DuckDBTimestampTZ",
       "jniAccessible": true,
       "methods": [

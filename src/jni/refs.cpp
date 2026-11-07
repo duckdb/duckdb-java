@@ -31,6 +31,7 @@ jclass J_String;
 jclass J_Timestamp;
 jmethodID J_Timestamp_valueOf;
 jclass J_TimestampTZ;
+jclass J_TimestampNS;
 jclass J_BigDecimal;
 jclass J_HugeInt;
 jclass J_ByteArray;
@@ -44,6 +45,7 @@ jmethodID J_Float_floatValue;
 jmethodID J_Double_doubleValue;
 jmethodID J_Timestamp_getMicrosEpoch;
 jmethodID J_TimestampTZ_getMicrosEpoch;
+jmethodID J_TimestampNS_getNanosEpoch;
 jmethodID J_BigDecimal_precision;
 jmethodID J_BigDecimal_scale;
 jmethodID J_BigDecimal_scaleByPowTen;
@@ -218,6 +220,7 @@ void create_refs(JNIEnv *env) {
 	J_Timestamp = make_class_ref(env, "org/duckdb/DuckDBTimestamp");
 	J_Timestamp_valueOf = get_static_method_id(env, J_Timestamp, "valueOf", "(Ljava/lang/Object;)Ljava/lang/Object;");
 	J_TimestampTZ = make_class_ref(env, "org/duckdb/DuckDBTimestampTZ");
+	J_TimestampNS = make_class_ref(env, "org/duckdb/DuckDBTimestampNS");
 
 	J_DuckDBDate = make_class_ref(env, "org/duckdb/DuckDBDate");
 	J_DuckDBDate_getDaysSinceEpoch = get_method_id(env, J_DuckDBDate, "getDaysSinceEpoch", "()J");
@@ -271,6 +274,7 @@ void create_refs(JNIEnv *env) {
 	J_Double_doubleValue = get_method_id(env, J_Double, "doubleValue", "()D");
 	J_Timestamp_getMicrosEpoch = get_method_id(env, J_Timestamp, "getMicrosEpoch", "()J");
 	J_TimestampTZ_getMicrosEpoch = get_method_id(env, J_TimestampTZ, "getMicrosEpoch", "()J");
+	J_TimestampNS_getNanosEpoch = get_method_id(env, J_TimestampNS, "getNanosEpoch", "()J");
 	J_BigDecimal_precision = get_method_id(env, J_BigDecimal, "precision", "()I");
 	J_BigDecimal_scale = get_method_id(env, J_BigDecimal, "scale", "()I");
 	J_BigDecimal_scaleByPowTen = get_method_id(env, J_BigDecimal, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;");
