@@ -224,6 +224,10 @@ duckdb::Value to_duckdb_value(JNIEnv *env, jobject param, duckdb::ClientContext 
 		jlong val = env->CallLongMethod(param, J_Timestamp_getMicrosEpoch);
 		check_java_exception_and_rethrow(env);
 		return duckdb::Value::TIME(static_cast<duckdb::dtime_t>(val));
+	} else if (env->IsInstanceOf(param, J_TimestampNS)) { // Check for subclass before superclass!
+		jlong val = env->CallLongMethod(param, J_TimestampNS_getNanosEpoch);
+		check_java_exception_and_rethrow(env);
+		return duckdb::Value::TIMESTAMPNS(static_cast<duckdb::timestamp_ns_t>(val));
 	} else if (env->IsInstanceOf(param, J_Timestamp)) {
 		jlong val = env->CallLongMethod(param, J_Timestamp_getMicrosEpoch);
 		check_java_exception_and_rethrow(env);
