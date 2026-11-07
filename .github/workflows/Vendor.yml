@@ -36,11 +36,21 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Check DuckDB version
+        id: check_duckdb_version
+        env:
+          DUCKDB_VERSION: ${{ inputs.duckdb-version }}
+        run: |
+          if [[ "${DUCKDB_VERSION}" != v2.1.0-* ]]; then
+            echo "Invalid DuckDB version: '${DUCKDB_VERSION}', expected it to start with 'v2.1.0-', aborting."
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         id: setup_python
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Checkout
         id: checkout
