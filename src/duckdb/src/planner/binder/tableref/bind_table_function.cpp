@@ -149,7 +149,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		}
 
 		TableFunctionBinder binder(*this, context, table_function.name.GetIdentifierName());
+		// a NULL argument keeps the NULL type, so that it can still match any overload
+		auto prev_can_contain_nulls = CanContainNulls();
+		SetCanContainNulls(true);
 		auto expr = binder.Bind(child);
+		SetCanContainNulls(prev_can_contain_nulls);
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -421,7 +425,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// it names an attached database, and otherwise the outermost schema of a (possibly nested) schema path.
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(fexpr.FunctionName()),
 	                                      error_context);
-	auto bound_name = BindTableName(fexpr.GetQualifiedName());
+	auto bound_name = BindTableName(entry_retriever, fexpr.GetQualifiedName());
 	auto &func_catalog =
 	    *GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
 

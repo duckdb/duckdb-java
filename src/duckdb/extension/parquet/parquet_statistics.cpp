@@ -492,6 +492,15 @@ unique_ptr<BaseStatistics>
 ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
                                                    optional_ptr<const ColumnChunk> column_chunk) {
+	// INT96 has no defined sort order: a column is only ordered chronologically when the file declares
+	// INT96_TIMESTAMP_ORDER for it. Under the default TYPE_ORDER the statistics bound the values by byte comparison,
+	// which is a different order, so pruning on them silently drops rows - the specification requires readers to
+	// ignore all statistics of such a column, whether it declares TYPE_ORDER or no column order at all.
+	// See test/sql/copy/parquet/int96_invalid_stats.test
+	if (schema.parquet_type == Type::INT96) {
+		auto unknown_stats = BaseStatistics::CreateUnknown(type);
+		return unknown_stats.ToUnique();
+	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::UTINYINT:
@@ -547,6 +556,10 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		    max_stats_type == StringStatsType::EXACT_STATS && min_stats == max_stats) {
 			auto constant_stats = StringStats::CreateEmpty(type);
 			StringStats::FromConstant(constant_stats, string_t(min_stats));
+			// min/max statistics do not tell us whether the chunk also contains NULL values. CreateEmpty
+			// leaves the validity mask as "no rows at all", which lets an IS NULL filter prune pages that
+			// do contain nulls. Keep the validity unknown here; callers that know the null count refine it.
+			constant_stats.Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 			return constant_stats.ToUnique();
 		}
 		auto string_stats = StringStats::CreateUnknown(type);
@@ -600,7 +613,9 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 				if (!types.empty()) {
 					stats_types.Clear();
 					for (auto &geom_type : types) {
-						stats_types.AddWKBType(geom_type);
+						if (!stats_types.TryAddWKBType(geom_type)) {
+							throw DataCorruptionException("Invalid geometry type in Parquet file");
+						}
 					}
 				}
 			}
@@ -856,7 +871,7 @@ static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumn
 		}
 	}
 	case LogicalTypeId::TIME_TZ: {
-		auto value = ParquetTimeTZToUTCMicros(constant.GetValue<dtime_tz_t>());
+		auto value = Time::NormalizeTimeTZ(constant.GetValue<dtime_tz_t>()).value;
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
 			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
