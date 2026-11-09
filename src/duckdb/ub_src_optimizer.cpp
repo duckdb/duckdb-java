@@ -32,6 +32,8 @@
 
 #include "src/optimizer/cte_join_filter_pusher.cpp"
 
+#include "src/optimizer/cte_runtime_filter_pushdown.cpp"
+
 #include "src/optimizer/deliminator.cpp"
 
 #include "src/optimizer/disjunctive_join_rewriter.cpp"
@@ -100,7 +102,11 @@
 
 #include "src/optimizer/sampling_pushdown.cpp"
 
+#include "src/optimizer/scalar_aggregate_merger.cpp"
+
 #include "src/optimizer/scalar_fn_pushdown.cpp"
+
+#include "src/optimizer/self_join_aggregate.cpp"
 
 #include "src/optimizer/statistics_propagator.cpp"
 
