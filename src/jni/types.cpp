@@ -10,8 +10,8 @@ std::string type_to_jduckdb_type(duckdb::LogicalType logical_type) {
 	switch (logical_type.id()) {
 	case duckdb::LogicalTypeId::DECIMAL: {
 
-		uint8_t width = 0;
-		uint8_t scale = 0;
+		uint32_t width = 0;
+		uint32_t scale = 0;
 		logical_type.GetDecimalProperties(width, scale);
 		std::string width_scale = std::to_string(width) + std::string(";") + std::to_string(scale);
 
