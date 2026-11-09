@@ -61,6 +61,7 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionArgument;
 class FunctionSignature;
 class TableFunction;
 class BoundTableFunction;
@@ -217,6 +218,8 @@ struct GlobalBinderState {
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
+	//! The parameters declared by the statement text, as found by the parser
+	identifier_map_t<idx_t> statement_parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
 	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
@@ -417,6 +420,9 @@ public:
 	}
 	optional_ptr<BoundParameterMap> GetParameters();
 	void SetParameters(BoundParameterMap &parameters);
+	void SetStatementParameters(const identifier_map_t<idx_t> &statement_parameters);
+	//! Whether the statement text declares a parameter with this identifier
+	bool StatementHasParameter(const Identifier &identifier) const;
 	//! Returns a ColumnRefExpression after it was resolved (i.e. past the STAR expression/USING clauses)
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
@@ -425,6 +431,9 @@ public:
 	void SetAlwaysRequireRebind();
 	void SetInsideSubquery();
 	bool IsInsideSubquery() const;
+	//! Set while binding the key expressions of an index
+	void SetBindingIndexKey(bool binding_index_key);
+	bool IsBindingIndexKey() const;
 	void SetBindingTrySubquery();
 	bool IsBindingTrySubquery() const;
 	const TrySubqueryPlanIndexes &GetTrySubqueryPlanIndexes() const;
@@ -461,6 +470,8 @@ private:
 	bool legacy_can_contain_nulls = false;
 	//! Whether this binder is inside a subquery boundary
 	bool inside_subquery = false;
+	//! Whether the key expressions of an index are being bound
+	bool binding_index_key = false;
 	//! Whether this binder binds a TRY subquery, which lowers TRY onto the bound plan after binding
 	bool binding_try_subquery = false;
 	//! The plan indexes of the TRY subquery's top select node, recorded while planning it
@@ -630,8 +641,7 @@ private:
 
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
-	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function, vector<FunctionArgument> &arguments,
 	                                 vector<unique_ptr<Expression>> &positional_arguments,
 	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
 	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
