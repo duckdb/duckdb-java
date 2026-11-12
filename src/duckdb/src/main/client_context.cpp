@@ -163,7 +163,11 @@ ClientContext::~ClientContext() {
 	}
 	// destroy the client context and rollback if there is an active transaction
 	// but only if we are not destroying this client context as part of an exception stack unwind
-	Destroy();
+	try {
+		Destroy();
+	} catch (...) {
+		// a destructor cannot throw, and locking the context allocates
+	}
 }
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
@@ -1531,7 +1535,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const Identifier &key, V
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// setting is not set - get the default value
-	return DBConfig::TryGetDefaultValue(option, result);
+	return db_config.TryGetDefaultValue(key, option, result);
 }
 
 SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
@@ -1548,7 +1552,7 @@ ParserOptions ClientContext::GetParserOptions() {
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.compiled_grammar = CompiledGrammar::Get(*this);
-	options.context = *this;
+	options.context = GetContext();
 	return options;
 }
 

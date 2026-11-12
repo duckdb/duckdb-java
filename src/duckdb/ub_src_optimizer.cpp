@@ -38,6 +38,8 @@
 
 #include "src/optimizer/disjunctive_join_rewriter.cpp"
 
+#include "src/optimizer/duplicate_eliminated_domain_optimizer.cpp"
+
 #include "src/optimizer/empty_result_pullup.cpp"
 
 #include "src/optimizer/expression_heuristics.cpp"
@@ -55,6 +57,8 @@
 #include "src/optimizer/grouping_sets_optimizer.cpp"
 
 #include "src/optimizer/in_clause_rewriter.cpp"
+
+#include "src/optimizer/join_build_properties.cpp"
 
 #include "src/optimizer/join_elimination.cpp"
 
@@ -81,6 +85,8 @@
 #include "src/optimizer/projection_placement.cpp"
 
 #include "src/optimizer/projection_pullup.cpp"
+
+#include "src/optimizer/recursive_join_planning.cpp"
 
 #include "src/optimizer/regex_range_filter.cpp"
 

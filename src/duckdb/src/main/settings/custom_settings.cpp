@@ -58,6 +58,7 @@ namespace duckdb {
 constexpr const char *LoggingMode::Name;
 constexpr const char *LoggingLevel::Name;
 constexpr const char *EnableLogging::Name;
+constexpr const char *LoggingSink::Name;
 constexpr const char *LoggingStorage::Name;
 constexpr const char *EnabledLogTypes::Name;
 constexpr const char *DisabledLogTypes::Name;
@@ -389,6 +390,17 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 		allowed_paths.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
+}
+
+//===----------------------------------------------------------------------===//
+// Buffer Manager Track Eviction Timestamps
+//===----------------------------------------------------------------------===//
+void BufferManagerTrackEvictionTimestampsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	// the buffer pool reads the setting once, when the database starts
+	if (info.db) {
+		throw InvalidInputException("Cannot change %s setting while database is running",
+		                            BufferManagerTrackEvictionTimestampsSetting::Name);
+	}
 }
 
 //===----------------------------------------------------------------------===//
@@ -987,19 +999,36 @@ void LoggingLevel::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
-// Logging Storage
+// Logging Sink
 //===----------------------------------------------------------------------===//
-Value LoggingStorage::GetSetting(const ClientContext &context) {
+Value LoggingSink::GetSetting(const ClientContext &context) {
 	return context.db->GetLogManager().GetConfig().storage;
 }
+void LoggingSink::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+	auto &db = GetDB<LoggingSink>(db_p);
+	db.GetLogManager().SetLogSink(db, parameter.GetValue<string>());
+}
+
+void LoggingSink::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
+	auto &db = GetDB<LoggingSink>(db_p);
+	db.GetLogManager().SetLogSink(db, LogConfig::DEFAULT_LOG_STORAGE);
+}
+
+//===----------------------------------------------------------------------===//
+// Logging Storage (deprecated, use logging_sink)
+//===----------------------------------------------------------------------===//
+Value LoggingStorage::GetSetting(const ClientContext &context) {
+	return LoggingSink::GetSetting(context);
+}
+
 void LoggingStorage::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingStorage>(db_p);
-	db.GetLogManager().SetLogStorage(db, parameter.GetValue<string>());
+	DUCKDB_LOG_WARNING(db, "the logging_storage setting is deprecated: use logging_sink instead");
+	LoggingSink::SetGlobal(db_p, config, parameter);
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
-	auto &db = GetDB<LoggingStorage>(db_p);
-	db.GetLogManager().SetLogStorage(db, LogConfig::DEFAULT_LOG_STORAGE);
+	LoggingSink::ResetGlobal(db_p, config);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1096,50 +1125,34 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 	return Value(config.profiler_print_format);
 }
 
+//! The progress bar settings are per connection: setting them without a client context (e.g. on a DBConfig) fails
+static ClientContext &GetProgressBarSettingContext(SettingCallbackInfo &info, const char *setting_name) {
+	if (!info.context) {
+		throw InvalidInputException("Could not set option \"%s\" as a global option", setting_name);
+	}
+	return *info.context;
+}
+
 //===----------------------------------------------------------------------===//
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
-void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+void EnableProgressBarPrintSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto &context = GetProgressBarSettingContext(info, EnableProgressBarPrintSetting::Name);
 	if (input.IsNull()) {
 		throw InvalidInputException("enable_progress_bar_print setting cannot be NULL");
 	}
-	if (input.type().id() != LogicalTypeId::BOOLEAN) {
-		throw InvalidInputException("enable_progress_bar_print setting must be a boolean value");
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	config.print_progress_bar = input.GetValue<bool>();
-}
-
-void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	config.print_progress_bar = ClientConfig().print_progress_bar;
-}
-
-Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
+	ProgressBar::SystemOverrideCheck(ClientConfig::GetConfig(context));
 }
 
 //===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
-bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
+void EnableProgressBarSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto &context = GetProgressBarSettingContext(info, EnableProgressBarSetting::Name);
 	if (input.IsNull()) {
 		throw InvalidInputException("enable_progress_bar setting cannot be NULL");
 	}
-	if (input.type().id() != LogicalTypeId::BOOLEAN) {
-		throw InvalidInputException("enable_progress_bar setting must be a boolean value");
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	return true;
-}
-
-bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	return true;
+	ProgressBar::SystemOverrideCheck(ClientConfig::GetConfig(context));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1598,29 +1611,20 @@ Value ProfilingCoverageSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Progress Bar Time
 //===----------------------------------------------------------------------===//
-void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
+void ProgressBarTimeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto &context = GetProgressBarSettingContext(info, ProgressBarTimeSetting::Name);
+	ProgressBar::SystemOverrideCheck(ClientConfig::GetConfig(context));
+	if (info.is_reset) {
+		ClientConfig::GetConfig(context).user_settings.ClearSetting(EnableProgressBarSetting::SettingIndex);
+		return;
+	}
 	if (input.IsNull()) {
 		throw InvalidInputException("%s setting cannot be NULL", ProgressBarTimeSetting::Name);
 	}
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	auto wait_time = input.GetValue<int32_t>();
-	if (wait_time < 0) {
+	if (input.GetValue<int32_t>() < 0) {
 		throw InvalidInputException("%s setting cannot be negative", ProgressBarTimeSetting::Name);
 	}
-	config.wait_time = wait_time;
-	config.enable_progress_bar = true;
-}
-
-void ProgressBarTimeSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	ProgressBar::SystemOverrideCheck(config);
-	config.wait_time = ClientConfig().wait_time;
-	config.enable_progress_bar = ClientConfig().enable_progress_bar;
-}
-
-Value ProgressBarTimeSetting::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(ClientConfig::GetConfig(context).wait_time);
+	Settings::Set<EnableProgressBarSetting>(context, SetScope::SESSION, Value::BOOLEAN(true));
 }
 
 //===----------------------------------------------------------------------===//
