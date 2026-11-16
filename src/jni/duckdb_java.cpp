@@ -1117,15 +1117,18 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	auto state = make_shared_ptr<JavaRegisteredArrowStream>(arrow_array_stream);
 	conn_holder->track_arrow_stream(state);
 	auto factory = make_shared_ptr<JavaArrowScanFactory>(std::move(state));
+	// construct the `arrow_scan_dumb(...)` function expression
 	auto scan = make_uniq<TableFunctionRef>();
 	scan->function =
 	    make_uniq<FunctionExpression>("arrow_scan_dumb", duckdb::vector<duckdb::unique_ptr<ParsedExpression>>());
 	scan->bind_info = std::move(factory);
+	// construct the `SELECT * FROM arrow_scan_dumb(...)` statement
 	auto node = make_uniq<SelectNode>();
 	node->select_list.push_back(make_uniq<StarExpression>());
 	node->from_table = std::move(scan);
 	auto select = make_uniq<SelectStatement>();
 	select->node = std::move(node);
+	// construct the `CREATE TEMP VIEW AS` statement using the select statement
 	auto info = make_uniq<CreateViewInfo>();
 	info->query = std::move(select);
 	info->temporary = true;
@@ -1133,6 +1136,7 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 	auto statement = make_uniq<CreateStatement>();
 	statement->info = std::move(info);
+	// execute the CREATE VIEW
 	conn->Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
 }
 
