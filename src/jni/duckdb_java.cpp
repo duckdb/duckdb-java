@@ -1117,11 +1117,6 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	auto state = make_shared_ptr<JavaRegisteredArrowStream>(arrow_array_stream);
 	conn_holder->track_arrow_stream(state);
 	auto factory = make_shared_ptr<JavaArrowScanFactory>(std::move(state));
-	// a CONNECT-ed connection routes a statement as its SQL text, which a statement built from parser nodes lacks
-	if (conn->context->IsConnected()) {
-		throw InvalidInputException("Failed to create view '%s': cannot register an Arrow stream while CONNECT-ed",
-		                            name);
-	}
 	auto scan = make_uniq<TableFunctionRef>();
 	scan->function =
 	    make_uniq<FunctionExpression>("arrow_scan_dumb", duckdb::vector<duckdb::unique_ptr<ParsedExpression>>());
