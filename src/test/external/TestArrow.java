@@ -416,6 +416,114 @@ public class TestArrow {
         }
     }
 
+    public static void test_arrow_register_replace_releases_replaced_stream() throws Exception {
+        try (BufferAllocator allocator = new RootAllocator();
+             DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            TrackingReader reader1 = new TrackingReader(allocator, peopleIpc(allocator, person(1, "a", 1.0, true)));
+            TrackingReader reader2 = new TrackingReader(allocator, numbersIpc(allocator, 1, 10));
+            try (ArrowArrayStream stream1 = ArrowArrayStream.allocateNew(allocator);
+                 ArrowArrayStream stream2 = ArrowArrayStream.allocateNew(allocator)) {
+                Data.exportArrayStream(allocator, reader1, stream1);
+                conn.registerArrowStream("tab1", stream1);
+                Data.exportArrayStream(allocator, reader2, stream2);
+                conn.registerArrowStream("tab1", stream2);
+            }
+            assertTrue(reader1.closed);
+            assertFalse(reader2.closed);
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(*) FROM duckdb_views() WHERE view_name = 'tab1' AND temporary")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 1L);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*), sum(v) FROM tab1")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 10L);
+                assertEquals(rs.getLong(2), 45L);
+            }
+        }
+    }
+
+    public static void test_arrow_register_stream_without_columns() throws Exception {
+        try (BufferAllocator allocator = new RootAllocator();
+             DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            byte[] ipc = writeIpc(allocator, new Schema(new ArrayList<>()), 0, (root, b) -> {});
+            TrackingReader reader = new TrackingReader(allocator, ipc);
+            String msg;
+            try (ArrowArrayStream stream = ArrowArrayStream.allocateNew(allocator)) {
+                Data.exportArrayStream(allocator, reader, stream);
+                msg = assertThrows(() -> { conn.registerArrowStream("no_columns", stream); }, RuntimeException.class);
+            }
+            assertTrue(msg.contains("Provided table/dataframe must have at least one column"), msg);
+            assertTrue(reader.closed);
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT count(*) FROM duckdb_views() WHERE view_name = 'no_columns'")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 0L);
+            }
+            assertTrue(msg.contains("Failed to create view 'no_columns': "), msg);
+        }
+    }
+
+    public static void test_arrow_register_name_taken_by_table() throws Exception {
+        try (BufferAllocator allocator = new RootAllocator();
+             DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TEMPORARY TABLE taken (id INTEGER)");
+            stmt.execute("INSERT INTO taken VALUES (42)");
+            TrackingReader reader = new TrackingReader(allocator, peopleIpc(allocator, person(1, "a", 1.0, true)));
+            String msg;
+            try (ArrowArrayStream stream = ArrowArrayStream.allocateNew(allocator)) {
+                Data.exportArrayStream(allocator, reader, stream);
+                msg = assertThrows(() -> { conn.registerArrowStream("taken", stream); }, RuntimeException.class);
+            }
+            assertTrue(msg.contains("Failed to create view 'taken': "), msg);
+            assertTrue(reader.closed);
+
+            try (ResultSet rs = stmt.executeQuery("SELECT id FROM taken")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertFalse(rs.next());
+            }
+        }
+    }
+
+    public static void test_arrow_register_with_open_streaming_result() throws Exception {
+        Properties config = new Properties();
+        config.put(JDBC_STREAM_RESULTS, true);
+        try (BufferAllocator allocator = new RootAllocator();
+             DuckDBConnection conn = DriverManager.getConnection(JDBC_URL, config).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT i FROM range(0, 100000) t(i)")) {
+                assertTrue(rs.next());
+                TrackingReader reader = new TrackingReader(allocator, peopleIpc(allocator, person(1, "a", 1.0, true)));
+                String msg;
+                try (ArrowArrayStream stream = ArrowArrayStream.allocateNew(allocator)) {
+                    Data.exportArrayStream(allocator, reader, stream);
+                    msg = assertThrows(() -> { conn.registerArrowStream("people", stream); }, RuntimeException.class);
+                }
+                assertTrue(msg.contains("Failed to create view 'people': connection has an open result"), msg);
+                assertTrue(reader.closed);
+
+                long sum = rs.getLong(1);
+                long count = 1;
+                while (rs.next()) {
+                    sum += rs.getLong(1);
+                    count++;
+                }
+                assertEquals(count, 100000L);
+                assertEquals(sum, 99999L * 100000L / 2);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM duckdb_views() WHERE view_name = 'people'")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 0L);
+            }
+        }
+    }
+
     // arrowExportStream
 
     public static void test_arrow_export_values() throws Exception {
