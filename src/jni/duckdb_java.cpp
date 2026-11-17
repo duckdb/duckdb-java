@@ -19,7 +19,14 @@ extern "C" {
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
@@ -1110,7 +1117,27 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	auto state = make_shared_ptr<JavaRegisteredArrowStream>(arrow_array_stream);
 	conn_holder->track_arrow_stream(state);
 	auto factory = make_shared_ptr<JavaArrowScanFactory>(std::move(state));
-	conn->TableFunction("arrow_scan_dumb", {}, {}, std::move(factory))->CreateView(Identifier(name), true, true);
+	// construct the `arrow_scan_dumb(...)` function expression
+	auto scan = make_uniq<TableFunctionRef>();
+	scan->function =
+	    make_uniq<FunctionExpression>("arrow_scan_dumb", duckdb::vector<duckdb::unique_ptr<ParsedExpression>>());
+	scan->bind_info = std::move(factory);
+	// construct the `SELECT * FROM arrow_scan_dumb(...)` statement
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(scan);
+	auto select = make_uniq<SelectStatement>();
+	select->node = std::move(node);
+	// construct the `CREATE TEMP VIEW AS` statement using the select statement
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
+	info->temporary = true;
+	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
+	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto statement = make_uniq<CreateStatement>();
+	statement->info = std::move(info);
+	// execute the CREATE VIEW
+	conn->Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
 }
 
 void _duckdb_jdbc_arrow_close_streams(JNIEnv *env, jclass, jobject conn_ref_buf) {
