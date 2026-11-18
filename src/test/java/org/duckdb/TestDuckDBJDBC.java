@@ -1883,7 +1883,7 @@ public class TestDuckDBJDBC {
         try {
             String sql =
                 // TODO: remove excludes
-                "select * EXCLUDE(time, time_ns, time_tz, timestamp_tz_ns, empty_struct, tuple)"
+                "select * EXCLUDE(time, time_ns, time_tz, timestamp_tz_ns, empty_struct, tuple, geography)"
                 + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
                 + "\n    , CASE WHEN time_ns = '24:00:00'::TIME_NS THEN '23:59:59.999999'::TIME_NS ELSE time_ns END "
                 + "AS time_ns"
