@@ -44,8 +44,6 @@
 
 #include "src/parser/statement/prepare_statement.cpp"
 
-#include "src/parser/statement/relation_statement.cpp"
-
 #include "src/parser/statement/select_statement.cpp"
 
 #include "src/parser/statement/set_statement.cpp"

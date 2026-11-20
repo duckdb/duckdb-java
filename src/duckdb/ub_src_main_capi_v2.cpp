@@ -62,6 +62,8 @@
 
 #include "src/main/capi/v2/capi_v2_logical_type.cpp"
 
+#include "src/main/capi/v2/capi_v2_object_cache.cpp"
+
 #include "src/main/capi/v2/capi_v2_option.cpp"
 
 #include "src/main/capi/v2/capi_v2_prepared_statement.cpp"

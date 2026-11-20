@@ -2,6 +2,8 @@
 
 #include "src/planner/subquery/flatten_dependent_join.cpp"
 
+#include "src/planner/subquery/has_volatile_expressions.cpp"
+
 #include "src/planner/subquery/pair_dependent_full_outer_join.cpp"
 
 #include "src/planner/subquery/pair_dependent_join.cpp"

@@ -456,7 +456,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_main_capi_v2.cpp
   src/duckdb/ub_src_main_http.cpp
   src/duckdb/ub_src_main_profiler.cpp
-  src/duckdb/ub_src_main_relation.cpp
   src/duckdb/ub_src_main_secret.cpp
   src/duckdb/ub_src_main_settings.cpp
   src/duckdb/ub_src_optimizer.cpp
