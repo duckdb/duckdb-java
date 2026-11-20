@@ -78,6 +78,8 @@
 
 #include "src/optimizer/limit_pushdown.cpp"
 
+#include "src/optimizer/mark_join_simplifier.cpp"
+
 #include "src/optimizer/materialized_aggregate_reuse.cpp"
 
 #include "src/optimizer/multi_stage_aggregate_rewriter.cpp"

@@ -4,8 +4,6 @@
 
 #include "src/planner/binder/tableref/bind_column_data_ref.cpp"
 
-#include "src/planner/binder/tableref/bind_delimgetref.cpp"
-
 #include "src/planner/binder/tableref/bind_emptytableref.cpp"
 
 #include "src/planner/binder/tableref/bind_expressionlistref.cpp"
