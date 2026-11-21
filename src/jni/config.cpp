@@ -80,6 +80,36 @@ static duckdb::Value jobj_to_value(JNIEnv *env, const std::string &key, jobject 
 	}
 }
 
+static bool is_allowed_paths_option(const std::string &key) {
+	return duckdb::StringUtil::CIEquals(key, "allowed_directories") ||
+	       duckdb::StringUtil::CIEquals(key, "allowed_paths");
+}
+
+// DuckDB refuses to set 'allowed_directories' and 'allowed_paths' through
+// SetOptionByName before the database is started. Set them directly on the
+// DBConfig instead, its options are copied to the database on startup.
+// The check of 'enable_external_access' is skipped intentionally, at startup
+// these options are commonly used together with 'enable_external_access=false'
+// and the order in which properties are applied is not defined.
+static void set_allowed_paths_option(duckdb::DBConfig &config, const std::string &key, const duckdb::Value &value) {
+	if (value.IsNull()) {
+		throw duckdb::InvalidInputException("%s setting cannot be NULL", key);
+	}
+	auto list_value = value.DefaultCastAs(duckdb::LogicalType::LIST(duckdb::LogicalType::VARCHAR));
+	duckdb::vector<std::string> paths;
+	for (auto &val : duckdb::ListValue::GetChildren(list_value)) {
+		paths.push_back(val.GetValue<std::string>());
+	}
+	if (duckdb::StringUtil::CIEquals(key, "allowed_directories")) {
+		config.SetAllowedDirectories(paths);
+	} else {
+		config.SetAllowedPaths(paths);
+	}
+	// keep the option in 'user_options' like SetOptionByName does for a user config,
+	// it is used by the instance cache to compare configs
+	config.options.user_options[duckdb::Identifier(key)] = value;
+}
+
 std::unique_ptr<duckdb::DBConfig> create_db_config(JNIEnv *env, jboolean read_only, jobject java_config) {
 	auto config = std::unique_ptr<duckdb::DBConfig>(new duckdb::DBConfig());
 	// Required for setting like 'allowed_directories' that use
@@ -117,6 +147,10 @@ std::unique_ptr<duckdb::DBConfig> create_db_config(JNIEnv *env, jboolean read_on
 		env->DeleteLocalRef(value);
 
 		try {
+			if (is_allowed_paths_option(key_str)) {
+				set_allowed_paths_option(*config, key_str, dvalue);
+				continue;
+			}
 			config->SetOptionByName(duckdb::Identifier(key_str), dvalue);
 		} catch (const std::exception &e) {
 			duckdb::ErrorData error(e);
