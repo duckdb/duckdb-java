@@ -682,6 +682,7 @@ public class TestClosure {
         }
     }
 
+    @SuppressWarnings("try")
     public static void test_closed_connection_getMetaData_throws() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             conn.close();
@@ -696,6 +697,7 @@ public class TestClosure {
         }
     }
 
+    @SuppressWarnings("try")
     public static void test_closed_connection_createArrayOf_throws() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             conn.close();
@@ -710,6 +712,7 @@ public class TestClosure {
         }
     }
 
+    @SuppressWarnings("try")
     public static void test_closed_connection_createStruct_throws() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             conn.close();
