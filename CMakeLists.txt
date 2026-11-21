@@ -706,7 +706,8 @@ endif()
 if(MSVC)
   target_compile_options(duckdb_java PRIVATE
     /bigobj
-    /utf-8)
+    /utf-8
+    /Zc:__cplusplus)
 else()
   target_compile_options(duckdb_java PRIVATE
     -fexceptions)
