@@ -8,6 +8,8 @@
 
 #include "src/function/scalar/generic/has_error.cpp"
 
+#include "src/function/scalar/generic/hash.cpp"
+
 #include "src/function/scalar/generic/invoke.cpp"
 
 #include "src/function/scalar/generic/try_rethrow.cpp"
