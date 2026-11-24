@@ -14,6 +14,8 @@
 
 #include "src/optimizer/rule/date_part_simplification.cpp"
 
+#include "src/optimizer/rule/date_part_to_func.cpp"
+
 #include "src/optimizer/rule/date_trunc_simplification.cpp"
 
 #include "src/optimizer/rule/distinct_aggregate_optimizer.cpp"
