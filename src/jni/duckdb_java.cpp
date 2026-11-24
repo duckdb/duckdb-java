@@ -1,6 +1,3 @@
-extern "C" {
-#include "duckdb.h"
-}
 #include "arrow.hpp"
 #include "config.hpp"
 #include "duckdb.hpp"
@@ -13,7 +10,8 @@ extern "C" {
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -195,9 +193,18 @@ jobject _duckdb_jdbc_query_progress(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	if (!conn_ref) {
 		return nullptr;
 	}
-	duckdb_query_progress_type qpc = duckdb_query_progress(reinterpret_cast<duckdb_connection>(conn_ref));
-	return env->NewObject(J_QueryProgress, J_QueryProgress_init, static_cast<jdouble>(qpc.percentage),
-	                      uint64_to_jlong(qpc.rows_processed), uint64_to_jlong(qpc.total_rows_to_process));
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	auto conn = duckdb::capiv2::Convert(conn_holder->connection.get());
+	double percentage = -1;
+	uint64_t rows_processed = 0;
+	uint64_t total_rows_to_process = 0;
+	v2_error err;
+	if (duckdb_v2_connection_progress_get(conn, &percentage, &rows_processed, &total_rows_to_process, err.out()) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		throw InvalidInputException(err.message());
+	}
+	return env->NewObject(J_QueryProgress, J_QueryProgress_init, static_cast<jdouble>(percentage),
+	                      uint64_to_jlong(rows_processed), uint64_to_jlong(total_rows_to_process));
 }
 
 void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
@@ -402,21 +409,38 @@ jobject _duckdb_jdbc_execute_capi(JNIEnv *env, jclass, jobject stmt_ref_buf, job
 	}
 
 	bool stream_results = StreamsByDefault(stmt_ref->stmt->GetStatementType(), *pending);
-	auto out = make_uniq<duckdb_result>();
 
+	// The completed result is adopted into the result state machine of the C API v2 (in the same state
+	// it gets into when it is ready to be consumed) and is read through the C API v2. There is no way to
+	// construct a C API v2 result from an engine result using C API v2.
+	auto wrapper = make_uniq<duckdb::capiv2::ResultWrapperV2>();
+	wrapper->context = stmt_ref->stmt->TryGetContext();
+	wrapper->statement_type = stmt_ref->stmt->GetStatementType();
 	if (stream_results) {
 		auto stream = complete_query_streaming(env, std::move(pending));
 		if (!stream) {
 			return nullptr;
 		}
-		DuckDBTranslateStreamResult(std::move(stream), out.get());
+		wrapper->types = stream->GetTypes();
+		wrapper->names = stream->GetNames();
+		wrapper->properties = stream->GetStatementProperties();
+		wrapper->stream = std::move(stream);
+		wrapper->stream_when_ready = true;
 	} else {
 		auto res = complete_query_materialized(env, std::move(pending));
 		if (!res) {
 			return nullptr;
 		}
-		DuckDBTranslateResult(std::move(res), out.get());
+		wrapper->types = res->GetTypes();
+		wrapper->names = res->GetNames();
+		wrapper->properties = res->GetStatementProperties();
+		wrapper->handle = std::move(res);
+		wrapper->stream_when_ready = false;
 	}
+	wrapper->metadata_available = true;
+	wrapper->state = duckdb::capiv2::ResultWrapperV2::State::STREAMING;
+
+	auto out = make_uniq<ChunkedResultHolder>(duckdb::capiv2::Convert(wrapper.release()));
 
 	return env->NewDirectByteBuffer(out.release(), 0);
 }

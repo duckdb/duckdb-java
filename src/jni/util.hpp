@@ -1,21 +1,14 @@
 #pragma once
 
-extern "C" {
-#include "duckdb.h"
-}
+#include "capi_v2.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <jni.h>
 #include <memory>
 #include <string>
 
 using jbyteArray_ptr = std::unique_ptr<char, std::function<void(char *)>>;
-
-using varchar_ptr = std::unique_ptr<char, void (*)(char *)>;
-
-inline void varchar_deleter(char *val) {
-	duckdb_free(val);
-}
 
 void check_java_exception_and_rethrow(JNIEnv *env);
 
