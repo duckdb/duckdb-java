@@ -78,6 +78,8 @@
 
 #include "src/main/capi/v2/capi_v2_schema.cpp"
 
+#include "src/main/capi/v2/capi_v2_secret.cpp"
+
 #include "src/main/capi/v2/capi_v2_statement.cpp"
 
 #include "src/main/capi/v2/capi_v2_stats.cpp"
