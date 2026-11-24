@@ -2,6 +2,30 @@
 #include "holders.hpp"
 #include "util.hpp"
 
+/*
+ * The C API v2 does not have an appender, the appender of the C API v1 is used. The connection, data chunks and
+ * logical types are passed between Java and JNI as C API v2 handles, they are converted to and from C API v1 handles
+ * here. In both APIs these handles point to the same engine objects, except logical types that are copied.
+ */
+extern "C" {
+#include "duckdb.h"
+}
+
+static duckdb_data_chunk v2_chunk_to_v1_chunk(duckdb_v2_data_chunk_handle chunk) {
+	duckdb::DataChunk *engine_chunk = duckdb::capiv2::Convert(chunk);
+	return reinterpret_cast<duckdb_data_chunk>(engine_chunk);
+}
+
+static duckdb_v2_logical_type_handle v1_logical_type_to_v2_logical_type(duckdb_logical_type logical_type) {
+	if (logical_type == nullptr) {
+		return nullptr;
+	}
+	auto engine_type = reinterpret_cast<duckdb::LogicalType *>(logical_type);
+	auto res = duckdb::capiv2::Convert(engine_type->Copy());
+	duckdb_destroy_logical_type(&logical_type);
+	return res;
+}
+
 static duckdb_appender appender_buf_to_appender(JNIEnv *env, jobject appender_buf) {
 
 	if (appender_buf == nullptr) {
@@ -29,10 +53,11 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1
                                                                                     jbyteArray schema, jbyteArray table,
                                                                                     jobjectArray out_appender) {
 
-	duckdb_connection conn = conn_ref_buf_to_conn(env, connection);
+	duckdb::Connection *engine_conn = conn_ref_buf_to_engine_conn(env, connection);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
+	auto conn = reinterpret_cast<duckdb_connection>(engine_conn);
 
 	std::string catalog_str = jbyteArray_to_string(env, catalog);
 	if (env->ExceptionCheck()) {
@@ -182,7 +207,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1colum
 
 	duckdb_logical_type logical_type = duckdb_appender_column_type(app, idx);
 
-	return make_ptr_buf(env, logical_type);
+	return make_logical_type_buf(env, v1_logical_type_to_v2_logical_type(logical_type));
 }
 
 /*
@@ -198,7 +223,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1append_1data_1chun
 		return -1;
 	}
 
-	duckdb_data_chunk dc = chunk_buf_to_chunk(env, chunk);
+	duckdb_data_chunk dc = v2_chunk_to_v1_chunk(chunk_buf_to_chunk(env, chunk));
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
@@ -222,7 +247,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1append_1default_1t
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	duckdb_data_chunk dc = chunk_buf_to_chunk(env, chunk);
+	duckdb_data_chunk dc = v2_chunk_to_v1_chunk(chunk_buf_to_chunk(env, chunk));
 	if (env->ExceptionCheck()) {
 		return -1;
 	}

@@ -1,9 +1,5 @@
 #pragma once
 
-extern "C" {
-#include "duckdb.h"
-}
-
 #include "duckdb.hpp"
 
 #include <jni.h>

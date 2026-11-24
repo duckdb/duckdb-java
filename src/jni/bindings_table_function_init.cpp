@@ -1,14 +1,13 @@
-#include "bindings.hpp"
-#include "holders.hpp"
+#include "bindings_table_function.hpp"
 #include "refs.hpp"
 #include "util.hpp"
 
-static duckdb_init_info init_info_buf_to_init_info(JNIEnv *env, jobject init_info_buf) {
+static TableFunctionInitInfoHolder *init_info_buf_to_init_info(JNIEnv *env, jobject init_info_buf) {
 	if (init_info_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid table function init info buffer");
 		return nullptr;
 	}
-	auto init_info = reinterpret_cast<duckdb_init_info>(env->GetDirectBufferAddress(init_info_buf));
+	auto init_info = reinterpret_cast<TableFunctionInitInfoHolder *>(env->GetDirectBufferAddress(init_info_buf));
 	if (init_info == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid table function init info");
 		return nullptr;
@@ -24,18 +23,22 @@ static duckdb_init_info init_info_buf_to_init_info(JNIEnv *env, jobject init_inf
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1get_1bind_1data(JNIEnv *env, jclass,
                                                                                        jobject init_info) {
 
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
 
-	void *bind_data = duckdb_init_get_bind_data(ii);
-	if (bind_data == nullptr) {
+	void *bind_data = nullptr;
+	v2_error err;
+	auto state = ii->global_info != nullptr
+	                 ? duckdb_v2_table_function_init_global_get_bind_data(ii->global_info, &bind_data, err.out())
+	                 : duckdb_v2_table_function_init_local_get_bind_data(ii->local_info, &bind_data, err.out());
+	if (state != DUCKDB_V2_ERROR_NONE) {
+		throw_sql_exception(env, err);
 		return nullptr;
 	}
 
-	GlobalRefHolder *holder = reinterpret_cast<GlobalRefHolder *>(bind_data);
-	return holder->global_ref;
+	return TableFunctionState::get_object(bind_data);
 }
 
 /*
@@ -50,7 +53,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1init_1d
 		return;
 	}
 
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return;
 	}
@@ -60,7 +63,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1init_1d
 		return;
 	}
 
-	duckdb_init_set_init_data(ii, init_data_holder.release(), GlobalRefHolder::destroy_table_function_state);
+	ii->init_data = std::unique_ptr<TableFunctionState>(new TableFunctionState(init_data_holder.release()));
 }
 
 /*
@@ -71,12 +74,20 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1init_1d
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1get_1column_1count(JNIEnv *env, jclass,
                                                                                         jobject init_info) {
 
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return 0;
 	}
 
-	idx_t count = duckdb_init_get_column_count(ii);
+	idx_t count = 0;
+	v2_error err;
+	auto state = ii->global_info != nullptr
+	                 ? duckdb_v2_table_function_init_global_get_column_count(ii->global_info, &count, err.out())
+	                 : duckdb_v2_table_function_init_local_get_column_count(ii->local_info, &count, err.out());
+	if (state != DUCKDB_V2_ERROR_NONE) {
+		throw_sql_exception(env, err);
+		return 0;
+	}
 	return uint64_to_jlong(count);
 }
 
@@ -89,7 +100,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1get_1column
                                                                                         jobject init_info,
                                                                                         jlong column_index) {
 
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return 0;
 	}
@@ -99,7 +110,22 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1get_1column
 		return 0;
 	}
 
-	idx_t idx = duckdb_init_get_column_index(ii, column_index_idx);
+	// same as in C API v1, 0 is returned for an invalid index
+	idx_t count = 0;
+	idx_t idx = 0;
+	if (ii->global_info != nullptr) {
+		if (duckdb_v2_table_function_init_global_get_column_count(ii->global_info, &count, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE &&
+		    column_index_idx < count) {
+			duckdb_v2_table_function_init_global_get_column_index(ii->global_info, column_index_idx, &idx, nullptr);
+		}
+	} else {
+		if (duckdb_v2_table_function_init_local_get_column_count(ii->local_info, &count, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE &&
+		    column_index_idx < count) {
+			duckdb_v2_table_function_init_local_get_column_index(ii->local_info, column_index_idx, &idx, nullptr);
+		}
+	}
 	return uint64_to_jlong(idx);
 }
 
@@ -112,7 +138,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1max_1th
                                                                                       jobject init_info,
                                                                                       jlong max_threads) {
 
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return;
 	}
@@ -121,7 +147,14 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1max_1th
 		return;
 	}
 
-	duckdb_init_set_max_threads(ii, mt);
+	// the number of threads can only be set in the global init
+	if (ii->global_info == nullptr) {
+		return;
+	}
+	v2_error err;
+	if (duckdb_v2_table_function_init_global_set_max_threads(ii->global_info, mt, err.out()) != DUCKDB_V2_ERROR_NONE) {
+		throw_sql_exception(env, err);
+	}
 }
 
 /*
@@ -131,7 +164,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1max_1th
  */
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1error(JNIEnv *env, jclass, jobject init_info,
                                                                                jbyteArray error) {
-	duckdb_init_info ii = init_info_buf_to_init_info(env, init_info);
+	auto ii = init_info_buf_to_init_info(env, init_info);
 	if (env->ExceptionCheck()) {
 		return;
 	}
@@ -140,5 +173,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1init_1set_1error(J
 		return;
 	}
 
-	duckdb_init_set_error(ii, error_str.c_str());
+	ii->has_error = true;
+	ii->error = error_str;
 }

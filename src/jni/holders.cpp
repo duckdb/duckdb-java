@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
 	if (!conn_ref_buf) {
@@ -54,7 +55,7 @@ duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 	return conn_ref;
 }
 
-duckdb_connection conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
+static duckdb::capiv2::CV2Connection *conn_ref_buf_to_v2_conn(JNIEnv *env, jobject conn_ref_buf) {
 	if (conn_ref_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid connection buffer");
 		return nullptr;
@@ -69,8 +70,42 @@ duckdb_connection conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
 		return nullptr;
 	}
+	return conn_ref;
+}
 
-	return reinterpret_cast<duckdb_connection>(conn_ref);
+duckdb_v2_connection_handle conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
+	auto conn_ref = conn_ref_buf_to_v2_conn(env, conn_ref_buf);
+	if (conn_ref == nullptr) {
+		return nullptr;
+	}
+	return duckdb::capiv2::Convert(conn_ref);
+}
+
+duckdb::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf) {
+	return conn_ref_buf_to_v2_conn(env, conn_ref_buf);
+}
+
+ChunkedResultHolder::ChunkedResultHolder(duckdb_v2_result_handle result_p) : result(result_p) {
+	v2_schema schema;
+	v2_error err;
+	if (duckdb_v2_result_get_schema(result.get(), schema.out(), err.out()) != DUCKDB_V2_ERROR_NONE) {
+		throw std::runtime_error(err.message());
+	}
+	idx_t count = 0;
+	if (duckdb_v2_schema_get_count(schema.get(), &count, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		throw std::runtime_error("Unable to read result schema");
+	}
+	for (idx_t i = 0; i < count; i++) {
+		const char *name = nullptr;
+		idx_t name_length = 0;
+		// the field type is borrowed from the schema
+		duckdb_v2_logical_type_handle type = nullptr;
+		if (duckdb_v2_schema_get_field(schema.get(), i, &name, &name_length, &type, nullptr) != DUCKDB_V2_ERROR_NONE) {
+			throw std::runtime_error("Unable to read result schema");
+		}
+		column_names.emplace_back(name, name_length);
+		column_types.push_back(logical_type_to_capi(type));
+	}
 }
 
 AttachedJNIEnv::AttachedJNIEnv() {
