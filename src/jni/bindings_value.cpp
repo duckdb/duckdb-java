@@ -272,6 +272,38 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1get_1bignum(JNI
 }
 
 /*
+ * Reads a DECIMAL that is stored as a BIGNUM blob (wider than 38 digits), returns nullptr for other values.
+ */
+static jobject get_wide_decimal(JNIEnv *env, duckdb_v2_value_handle val) {
+	v2_logical_type lt;
+	if (duckdb_v2_value_get_logical_type(val, lt.out(), nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return nullptr;
+	}
+	if (logical_type_to_capi(lt.get()) != capi_type::DECIMAL) {
+		return nullptr;
+	}
+	const char *name_ptr = nullptr;
+	idx_t name_length = 0;
+	v2_value scale_value;
+	uint32_t scale = 0;
+	if (duckdb_v2_logical_type_get_param(lt.get(), 1, &name_ptr, &name_length, scale_value.out(), nullptr) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_value_get_uint(scale_value.get(), &scale, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return nullptr;
+	}
+	const char *blob_ptr = nullptr;
+	idx_t blob_length = 0;
+	if (duckdb_v2_value_get_blob(val, &blob_ptr, &blob_length, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return nullptr;
+	}
+	jbyteArray blob = make_jbyteArray(env, blob_ptr, blob_length);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	return env->CallStaticObjectMethod(J_Bignum, J_Bignum_toBigDecimal, blob, static_cast<jint>(scale));
+}
+
+/*
  * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_get_decimal
  * Signature: (Ljava/nio/ByteBuffer;)Ljava/math/BigDecimal;
@@ -282,12 +314,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1get_1decimal(JN
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
-	// same as in C API v1, zero is returned for non-decimal and NULL values and for the decimals
-	// that cannot be represented
+	// same as in C API v1, zero is returned for non-decimal and NULL values
 	duckdb_v2_hugeint_t dec_value = {0, 0};
 	uint8_t dec_width = 0;
 	uint8_t dec_scale = 0;
 	if (duckdb_v2_value_get_decimal(val, &dec_value, &dec_width, &dec_scale, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		// a decimal that is wider than 255 digits, or whose unscaled value does not fit in 128 bits, is read
+		// exactly from its BIGNUM storage
+		jobject wide = get_wide_decimal(env, val);
+		if (wide != nullptr || env->ExceptionCheck()) {
+			return wide;
+		}
 		dec_value = {0, 0};
 		dec_scale = 0;
 	}

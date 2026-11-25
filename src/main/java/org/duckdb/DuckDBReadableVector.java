@@ -254,6 +254,8 @@ public final class DuckDBReadableVector {
                 .add(new BigDecimal(Long.toUnsignedString(lower)))
                 .scaleByPowerOfTen(typeInfo.decimalMeta.scale * -1);
         }
+        case DUCKDB_TYPE_VARINT:
+            return DuckDBBignum.toBigDecimal(getBytes(row), typeInfo.decimalMeta.scale);
         default:
             throw new FunctionException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
         }
@@ -318,23 +320,26 @@ public final class DuckDBReadableVector {
         if (isNull(row)) {
             return null;
         }
+        byte[] bytes = getBytes(row);
+        if (bytes == null) {
+            return null;
+        }
+        return new String(bytes, UTF_8);
+    }
+
+    private byte[] getBytes(long row) {
         if (null != chunkNullable) {
             chunkNullable.checkOpen();
             chunkNullable.chunkRefLock.lock();
             chunkNullable.checkOpen();
         }
-        byte[] bytes = null;
         try {
-            bytes = duckdb_vector_get_string(data, row);
+            return duckdb_vector_get_string(data, row);
         } finally {
             if (null != chunkNullable) {
                 chunkNullable.chunkRefLock.unlock();
             }
         }
-        if (bytes == null) {
-            return null;
-        }
-        return new String(bytes, UTF_8);
     }
 
     private void requireType(DuckDBColumnType expected) {

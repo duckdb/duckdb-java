@@ -467,6 +467,18 @@ public final class DuckDBWritableVector {
             data.putLong(offset + Long.BYTES, unscaled.shiftRight(Long.SIZE).longValue());
             break;
         }
+        case DUCKDB_TYPE_VARINT: {
+            byte[] blob = DuckDBBignum.fromBigInteger(scaled.unscaledValue());
+            checkOpen();
+            vectorRefLock.lock();
+            try {
+                checkOpen();
+                duckdb_vector_assign_string_element_len(vectorRef, row, blob);
+            } finally {
+                vectorRefLock.unlock();
+            }
+            break;
+        }
         default:
             throw new FunctionException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
         }

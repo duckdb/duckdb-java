@@ -325,6 +325,19 @@
       "type": "org.duckdb.DuckDBArray[]"
     },
     {
+      "type": "org.duckdb.DuckDBBignum",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "toBigDecimal",
+          "parameterTypes": [
+            "byte[]",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
       "type": "org.duckdb.DuckDBDate",
       "jniAccessible": true,
       "methods": [

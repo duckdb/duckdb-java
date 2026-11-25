@@ -367,8 +367,8 @@ public class DuckDBBindings {
         DUCKDB_TYPE_TIMESTAMP_TZ(31, 8),
         // enum type, only useful as logical type
         DUCKDB_TYPE_ANY(34),
-        // duckdb_varint
-        DUCKDB_TYPE_VARINT(35),
+        // duckdb_bignum, also the storage of the decimals wider than 38 digits
+        DUCKDB_TYPE_VARINT(35, 16),
         // enum type, only useful as logical type
         DUCKDB_TYPE_SQLNULL(36),
         // enum type, only useful as logical type

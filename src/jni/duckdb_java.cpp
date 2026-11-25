@@ -704,6 +704,28 @@ static jobject make_vec_data_buf(JNIEnv *env, Vector &vec, idx_t row_count) {
 	return make_data_buf(env, vec_data, len);
 }
 
+static jobjectArray make_vec_byte_arrays(JNIEnv *env, Vector &vec, idx_t row_count) {
+	jobjectArray varlen_data = env->NewObjectArray(row_count, J_ByteArray, nullptr);
+	const string_t *vec_data = FlatVector::GetData<string_t>(vec);
+
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		if (FlatVector::IsNull(vec, row_idx)) {
+			continue;
+		}
+
+		const string_t d_str = vec_data[row_idx];
+
+		auto j_arr = env->NewByteArray(d_str.GetSize());
+		auto j_arr_el = env->GetByteArrayElements(j_arr, nullptr);
+		memcpy(j_arr_el, d_str.GetData(), d_str.GetSize());
+		env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
+
+		env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
+		env->DeleteLocalRef(j_arr);
+	}
+	return varlen_data;
+}
+
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
 	if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
 		vec.Flatten();
@@ -776,6 +798,10 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			break;
 		case PhysicalType::INT128:
 			constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
+			break;
+		case PhysicalType::VARCHAR:
+			// wider than 38 digits, the BIGNUM blobs of the unscaled values are decoded on the Java side
+			varlen_data = make_vec_byte_arrays(env, vec, row_count);
 			break;
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
@@ -850,24 +876,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::GEOMETRY:
-		varlen_data = env->NewObjectArray(row_count, J_ByteArray, nullptr);
-
-		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
-				continue;
-			}
-
-			const string_t *vec_data = FlatVector::GetData<string_t>(vec);
-			const string_t d_str = vec_data[row_idx];
-
-			auto j_arr = env->NewByteArray(d_str.GetSize());
-			auto j_arr_el = env->GetByteArrayElements(j_arr, nullptr);
-			memcpy(j_arr_el, d_str.GetData(), d_str.GetSize());
-			env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
-
-			env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
-			env->DeleteLocalRef(j_arr);
-		}
+		varlen_data = make_vec_byte_arrays(env, vec, row_count);
 		break;
 	case LogicalTypeId::UUID:
 		constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);

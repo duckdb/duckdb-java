@@ -71,8 +71,8 @@ public final class DuckDBLogicalType implements AutoCloseable {
     }
 
     public static DuckDBLogicalType decimal(int width, int scale) throws SQLException {
-        if (width < 1 || width > 38) {
-            throw createSQLException("DECIMAL width must be between 1 and 38, got: " + width,
+        if (width < 1) {
+            throw createSQLException("DECIMAL width must be at least 1, got: " + width,
                                      ErrorCode.LOGICAL_TYPE_DECIMAL_WIDTH);
         }
         if (scale < 0 || scale > width) {

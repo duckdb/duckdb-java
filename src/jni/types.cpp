@@ -33,6 +33,11 @@ std::string type_to_jduckdb_type(duckdb::LogicalType logical_type) {
 			std::string res = std::string("DECIMAL128;") + width_scale;
 			return res;
 		}
+		case duckdb::PhysicalType::VARCHAR: {
+			// wider than 38 digits, the unscaled value is stored as a BIGNUM blob
+			std::string res = std::string("DECIMALBIGNUM;") + width_scale;
+			return res;
+		}
 		default:
 			return std::string("no physical type found");
 		}
@@ -72,13 +77,13 @@ duckdb::Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
 		jlong result = env->CallLongMethod(no_point_dec, J_BigDecimal_longValue);
 		check_java_exception_and_rethrow(env);
 		val = duckdb::Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
-	} else if (precision <= 38) { // larger than int64 -> get string and cast
+	} else { // larger than int64 -> get string and cast, the widths above 38 digits are exact too
 		jobject str_val = env->CallObjectMethod(decimal, J_BigDecimal_toPlainString);
 		check_java_exception_and_rethrow(env);
-		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
-		val = duckdb::Value(str_char);
-		val = val.DefaultCastAs(duckdb::LogicalType::DECIMAL(precision, scale));
-		env->ReleaseStringUTFChars((jstring)str_val, str_char);
+		auto str = jstring_to_string(env, (jstring)str_val);
+		val = duckdb::Value(str);
+		val = val.DefaultCastAs(
+		    duckdb::LogicalType::DECIMAL(static_cast<uint32_t>(precision), static_cast<uint32_t>(scale)));
 	}
 
 	return val;

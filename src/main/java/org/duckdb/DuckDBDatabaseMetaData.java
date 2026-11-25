@@ -1122,6 +1122,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         return ps.executeQuery();
     }
 
+    // The maximum DECIMAL width is a session setting, the values that do not fit the result columns are clamped
+    private static final String TYPE_INFO_DECIMAL_PRECISION =
+        "least(current_setting('max_decimal_width')::UBIGINT, " + Integer.MAX_VALUE + ")";
+    private static final String TYPE_INFO_DECIMAL_MAX_SCALE =
+        "least(current_setting('max_decimal_width')::UBIGINT, " + Short.MAX_VALUE + ")";
+
     @Override
     public ResultSet getTypeInfo() throws SQLException {
         List<TypeInfoEntry> entries = Arrays.asList(new TypeInfoEntry("BOOLEAN", Types.BIT, typePredBasic),
@@ -1133,8 +1139,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
                                                     new TypeInfoEntry("FLOAT", Types.FLOAT, typePredBasic),
                                                     new TypeInfoEntry("REAL", Types.REAL, typePredBasic),
                                                     new TypeInfoEntry("DOUBLE", Types.DOUBLE, typePredBasic),
-                                                    new TypeInfoEntry("DECIMAL", Types.NUMERIC, typePredBasic, 0, 38),
-                                                    new TypeInfoEntry("DECIMAL", Types.DECIMAL, typePredBasic, 0, 38),
+                                                    new TypeInfoEntry("DECIMAL", Types.NUMERIC, typePredBasic, true),
+                                                    new TypeInfoEntry("DECIMAL", Types.DECIMAL, typePredBasic, true),
                                                     new TypeInfoEntry("VARCHAR", Types.CHAR, typePredChar),
                                                     new TypeInfoEntry("VARCHAR", Types.VARCHAR, typePredChar),
                                                     new TypeInfoEntry("VARCHAR", Types.LONGVARCHAR, typePredChar),
@@ -1157,7 +1163,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             }
             sb.append("  '" + en.name + "'::VARCHAR AS TYPE_NAME").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  " + en.sqlType + "::INTEGER AS DATA_TYPE").append(TRAILING_COMMA).append(lineSeparator());
-            sb.append("  0::INTEGER AS PRECISION").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  " + (en.decimal ? TYPE_INFO_DECIMAL_PRECISION : "0") + "::INTEGER AS PRECISION")
+                .append(TRAILING_COMMA)
+                .append(lineSeparator());
             sb.append("  NULL::VARCHAR AS LITERAL_PREFIX").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  NULL::VARCHAR AS LITERAL_SUFFIX").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  NULL::VARCHAR AS CREATE_PARAMS").append(TRAILING_COMMA).append(lineSeparator());
@@ -1171,7 +1179,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             sb.append("  FALSE::BOOL AS AUTO_INCREMENT").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  NULL::VARCHAR AS LOCAL_TYPE_NAME").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  0::SMALLINT AS MINIMUM_SCALE").append(TRAILING_COMMA).append(lineSeparator());
-            sb.append("  0::SMALLINT AS MAXIMUM_SCALE").append(TRAILING_COMMA).append(lineSeparator());
+            sb.append("  " + (en.decimal ? TYPE_INFO_DECIMAL_MAX_SCALE : "0") + "::SMALLINT AS MAXIMUM_SCALE")
+                .append(TRAILING_COMMA)
+                .append(lineSeparator());
             sb.append("  0::INTEGER AS SQL_DATA_TYPE").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  0::INTEGER AS SQL_DATETIME_SUB").append(TRAILING_COMMA).append(lineSeparator());
             sb.append("  10::INTEGER AS NUM_PREC_RADIX").append(TRAILING_COMMA).append(lineSeparator());
@@ -1621,23 +1631,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         final String name;
         final int sqlType;
         final int searchable;
-        final int precision;
-        final int scale;
+        final boolean decimal;
 
         private TypeInfoEntry(String name, int sqlType, int searchable) {
-            this.name = name;
-            this.sqlType = sqlType;
-            this.searchable = searchable;
-            this.precision = 0;
-            this.scale = 0;
+            this(name, sqlType, searchable, false);
         }
 
-        public TypeInfoEntry(String name, int sqlType, int searchable, int precision, int scale) {
+        private TypeInfoEntry(String name, int sqlType, int searchable, boolean decimal) {
             this.name = name;
             this.sqlType = sqlType;
             this.searchable = searchable;
-            this.precision = precision;
-            this.scale = scale;
+            this.decimal = decimal;
         }
     }
 }
