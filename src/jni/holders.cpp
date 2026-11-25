@@ -57,6 +57,27 @@ void ConnectionHolder::close_arrow_streams() {
 	}
 }
 
+void copy_session_settings(cxx::Connection &src, cxx::Connection &dst) {
+	auto &src_config = src.GetConfig();
+	auto &dst_config = dst.GetConfig();
+	for (size_t i = 0; i < src_config.GetOptionCount(); i++) {
+		auto description = src_config.DescribeOption(i);
+		if (!description.SupportsScope(cxx::SettingScope::SESSION)) {
+			continue;
+		}
+		std::string name(description.GetName());
+		// the catalog and the schema of the connection are not a part of its settings
+		if (name == "schema" || name == "search_path") {
+			continue;
+		}
+		auto option = src_config.GetOption(name);
+		if (option.scope != cxx::SettingScope::SESSION || option.value.IsNull()) {
+			continue;
+		}
+		dst_config.SetOption(name, option.value, cxx::SettingScope::SESSION);
+	}
+}
+
 cxx::Connection &get_connection(JNIEnv *env, jobject conn_ref_buf) {
 	auto conn_holder = get_connection_ref(env, conn_ref_buf);
 	if (!conn_holder->connection) {

@@ -231,6 +231,11 @@ struct JdbcException : public std::runtime_error {
 	}
 };
 
+/**
+ * Copies the session settings of the connection to the other one, the catalog and the schema are not copied.
+ */
+void copy_session_settings(cxx::Connection &src, cxx::Connection &dst);
+
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf);
 
 /**

@@ -1983,29 +1983,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Borrows the context of a connection.
- *
- * The context is the handle that the functions which a callback runs under take, such as the Arrow exporter and
- * importer, so it lets a client use them outside of a callback, for the queries of one connection. Each call that is
- * made with it joins the connection's transaction, or runs in a transaction of its own when none is open. The returned
- * handle is borrowed: it is valid for as long as the connection is, and must not be destroyed.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param conn The connection.
- * @param out_context Receives the borrowed context.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle conn,
-                                                              duckdb_v2_context_handle *out_context,
-                                                              duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
  * Interrupts the query currently executing on the connection.
  *
  * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any

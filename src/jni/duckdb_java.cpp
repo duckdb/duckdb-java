@@ -142,24 +142,7 @@ jobject _duckdb_jdbc_connect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn = std::make_unique<ConnectionHolder>(conn_ref->db);
 
 	// the session settings of the new connection are the same as the ones of this connection
-	auto &src_config = conn_ref->connection->GetConfig();
-	auto &dst_config = conn->connection->GetConfig();
-	for (size_t i = 0; i < src_config.GetOptionCount(); i++) {
-		auto description = src_config.DescribeOption(i);
-		if (!description.SupportsScope(cxx::SettingScope::SESSION)) {
-			continue;
-		}
-		std::string name(description.GetName());
-		// the catalog and the schema of the connection are not a part of its settings
-		if (name == "schema" || name == "search_path") {
-			continue;
-		}
-		auto option = src_config.GetOption(name);
-		if (option.scope != cxx::SettingScope::SESSION || option.value.IsNull()) {
-			continue;
-		}
-		dst_config.SetOption(name, option.value, cxx::SettingScope::SESSION);
-	}
+	copy_session_settings(*conn_ref->connection, *conn->connection);
 	return env->NewDirectByteBuffer(conn.release(), 0);
 }
 
@@ -1264,6 +1247,7 @@ jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 		throw JdbcException("Invalid Input Error: Arrow batch size must be greater than 0");
 	}
 	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
 	res_ref.chunk.reset();
 	return reinterpret_cast<jlong>(create_result_arrow_stream(*conn_holder, res_ref, static_cast<idx_t>(batch_size)));
 }

@@ -306,13 +306,6 @@ auto GetConfigHandle(GETTER getter, void *source) -> duckdb_v2_config_handle {
 	return config;
 }
 
-// Borrows the context of a connection handle.
-auto GetContextHandle(void *connection) -> duckdb_v2_context_handle {
-	duckdb_v2_context_handle context = nullptr;
-	CheckedAPICall(duckdb_v2_connection_get_context, static_cast<duckdb_v2_connection_handle>(connection), &context);
-	return context;
-}
-
 // Borrow a string as a length-delimited view for the C API.
 auto ToStr(const std::string &s) -> std::string_view {
 	return s;
@@ -1013,7 +1006,7 @@ Connection::Connection(void *impl, bool owned)
           GetFactoryHandle<duckdb_v2_connection_handle>(duckdb_v2_connection_get_factory, impl))),
       config(detail::HandleFactory::Make<Config>(
           GetConfigHandle<duckdb_v2_connection_handle>(duckdb_v2_connection_get_config, impl))),
-      context(detail::HandleFactory::Make<Context>(GetContextHandle(impl))), owned(owned) {
+      owned(owned) {
 }
 
 Connection::~Connection() {
