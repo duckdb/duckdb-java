@@ -2,9 +2,15 @@
 
 #include "src/optimizer/join_order/cost_model.cpp"
 
+#include "src/optimizer/join_order/dphyp_enumerator.cpp"
+
 #include "src/optimizer/join_order/filter_info.cpp"
 
+#include "src/optimizer/join_order/greedy_join_enumerator.cpp"
+
 #include "src/optimizer/join_order/join_node.cpp"
+
+#include "src/optimizer/join_order/join_order_candidate.cpp"
 
 #include "src/optimizer/join_order/join_order_operator.cpp"
 
