@@ -1107,7 +1107,7 @@ jobs:
             jdbc-artifacts
 
   maven-snapshot-deploy:
-    if: ${{ github.repository == 'duckdb/duckdb-java' && (github.ref == 'refs/heads/v2.0-cyanoptera' || github.ref == 'refs/heads/vendoring-v2.0-cyanoptera') && github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.repository == 'duckdb/duckdb-java' && startsWith(github.ref, 'refs/heads/v') && github.event_name == 'workflow_dispatch' }}
     name: Maven S3 Deploy
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-latest' }}
     needs:
