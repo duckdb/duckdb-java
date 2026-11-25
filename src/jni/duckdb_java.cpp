@@ -232,13 +232,11 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 		throw InvalidInputException("No statements to execute.");
 	}
 
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = conn_ref->Query(std::move(statements[i]));
-		if (res->HasError()) {
-			res->ThrowError();
-		}
+	// preparing must not have side effects, so multiple statements are rejected instead of
+	// executing all statements besides the last one
+	if (statements.size() > 1) {
+		throw InvalidInputException("Cannot prepare multiple statements at once, statements count: " +
+		                            std::to_string(statements.size()));
 	}
 
 	auto stmt_ref = make_uniq<StatementHolder>();
