@@ -2,38 +2,66 @@
 #include "holders.hpp"
 #include "util.hpp"
 
+#include <cstring>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <vector>
+
 /*
- * The C API v2 does not have an appender, the appender of the C API v1 is used. The connection, data chunks and
- * logical types are passed between Java and JNI as C API v2 handles, they are converted to and from C API v1 handles
- * here. In both APIs these handles point to the same engine objects, except logical types that are copied.
+ * The C API v2 does not have an appender, the appender of the stable C++ API is used. The connection, data chunks and
+ * logical types are passed between Java and JNI as C API v2 handles.
  */
-extern "C" {
-#include "duckdb.h"
-}
 
-static duckdb_data_chunk v2_chunk_to_v1_chunk(duckdb_v2_data_chunk_handle chunk) {
-	duckdb::DataChunk *engine_chunk = duckdb::capiv2::Convert(chunk);
-	return reinterpret_cast<duckdb_data_chunk>(engine_chunk);
-}
+namespace {
 
-static duckdb_v2_logical_type_handle v1_logical_type_to_v2_logical_type(duckdb_logical_type logical_type) {
-	if (logical_type == nullptr) {
-		return nullptr;
+struct AppenderHolder {
+	//! The appender does not outlive the connection that it is created on
+	std::shared_ptr<cxx::Connection> connection;
+	std::optional<cxx::Appender> appender;
+	std::string error;
+	//! The qualified name of the table, to look up the default values of its columns
+	std::string catalog;
+	std::string schema;
+	std::string table;
+	//! The SQL texts of the default values of the columns, the lookup is done when the first default is appended
+	std::vector<std::optional<std::string>> defaults;
+	bool defaults_loaded = false;
+};
+
+std::string quote_identifier(const std::string &name) {
+	std::string res = "\"";
+	for (char c : name) {
+		if (c == '"') {
+			res += "\"\"";
+		} else {
+			res += c;
+		}
 	}
-	auto engine_type = reinterpret_cast<duckdb::LogicalType *>(logical_type);
-	auto res = duckdb::capiv2::Convert(engine_type->Copy());
-	duckdb_destroy_logical_type(&logical_type);
+	res += "\"";
 	return res;
 }
 
-static duckdb_appender appender_buf_to_appender(JNIEnv *env, jobject appender_buf) {
+std::string quote_literal(const std::string &value) {
+	std::string res = "'";
+	for (char c : value) {
+		if (c == '\'') {
+			res += "''";
+		} else {
+			res += c;
+		}
+	}
+	res += "'";
+	return res;
+}
 
+AppenderHolder *appender_buf_to_appender(JNIEnv *env, jobject appender_buf) {
 	if (appender_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid appender buffer");
 		return nullptr;
 	}
 
-	duckdb_appender appender = reinterpret_cast<duckdb_appender>(env->GetDirectBufferAddress(appender_buf));
+	auto appender = reinterpret_cast<AppenderHolder *>(env->GetDirectBufferAddress(appender_buf));
 	if (appender == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid appender");
 		return nullptr;
@@ -41,6 +69,46 @@ static duckdb_appender appender_buf_to_appender(JNIEnv *env, jobject appender_bu
 
 	return appender;
 }
+
+//! Wraps the chunk that is owned by the Java side, it is not destroyed with the wrapper
+cxx::DataChunk borrow_chunk(duckdb_v2_data_chunk_handle chunk) {
+	return cxx::detail::HandleFactory::Make<cxx::DataChunk>(static_cast<void *>(chunk), false);
+}
+
+void load_defaults(AppenderHolder &app) {
+	if (app.defaults_loaded) {
+		return;
+	}
+	auto &conn = *app.connection;
+	// the default values of all columns of the table, in the order of the columns
+	std::string sql = "SELECT column_default FROM duckdb_columns() WHERE table_name = " + quote_literal(app.table);
+	if (!app.schema.empty()) {
+		sql += " AND schema_name = " + quote_literal(app.schema);
+	}
+	if (!app.catalog.empty()) {
+		sql += " AND database_name = " + quote_literal(app.catalog);
+	}
+	sql += " ORDER BY column_index";
+	auto result = conn.Execute(sql);
+	while (true) {
+		auto chunk = result.FetchChunk();
+		if (!chunk) {
+			break;
+		}
+		auto vec = chunk.GetVector(0);
+		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
+			auto value = vec.GetValue(i);
+			if (value.IsNull()) {
+				app.defaults.emplace_back(std::nullopt);
+			} else {
+				app.defaults.emplace_back(value.ToText());
+			}
+		}
+	}
+	app.defaults_loaded = true;
+}
+
+} // namespace
 
 /*
  * Class:     org_duckdb_DuckDBBindings
@@ -53,45 +121,61 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1
                                                                                     jbyteArray schema, jbyteArray table,
                                                                                     jobjectArray out_appender) {
 
-	duckdb::Connection *engine_conn = conn_ref_buf_to_engine_conn(env, connection);
+	ConnectionHolder *conn_holder = get_connection_ref(env, connection);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	auto conn = reinterpret_cast<duckdb_connection>(engine_conn);
 
 	std::string catalog_str = jbyteArray_to_string(env, catalog);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	const char *catalog_ptr = nullptr != catalog ? catalog_str.c_str() : nullptr;
-
 	std::string schema_str = jbyteArray_to_string(env, schema);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	const char *schema_ptr = nullptr != schema ? schema_str.c_str() : nullptr;
-
 	std::string table_str = jbyteArray_to_string(env, table);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	const char *table_ptr = nullptr != table ? table_str.c_str() : nullptr;
+	if (nullptr == table) {
+		return CAPI_STATE_ERROR;
+	}
 
 	check_out_param(env, out_appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	duckdb_appender appender = nullptr;
+	auto holder = std::make_unique<AppenderHolder>();
+	holder->connection = conn_holder->connection;
+	if (nullptr != catalog) {
+		holder->catalog = catalog_str;
+	}
+	if (nullptr != schema) {
+		holder->schema = schema_str;
+	}
+	holder->table = table_str;
 
-	duckdb_state state = duckdb_appender_create_ext(conn, catalog_ptr, schema_ptr, table_ptr, &appender);
+	std::string qualified_name;
+	if (nullptr != catalog) {
+		qualified_name += quote_identifier(catalog_str) + ".";
+	}
+	if (nullptr != schema) {
+		qualified_name += quote_identifier(schema_str) + ".";
+	}
+	qualified_name += quote_identifier(table_str);
 
-	if (state == DuckDBSuccess) {
-		jobject appender_ref_buf = env->NewDirectByteBuffer(appender, 0);
-		set_out_param(env, out_appender, appender_ref_buf);
+	try {
+		holder->appender.emplace(*holder->connection, qualified_name);
+	} catch (const std::exception &) {
+		return CAPI_STATE_ERROR;
 	}
 
-	return static_cast<jint>(state);
+	jobject appender_ref_buf = env->NewDirectByteBuffer(holder.release(), 0);
+	set_out_param(env, out_appender, appender_ref_buf);
+
+	return CAPI_STATE_SUCCESS;
 }
 
 /*
@@ -102,19 +186,16 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1
 JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1error(JNIEnv *env, jclass,
                                                                                     jobject appender) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
 
-	const char *error_msg = duckdb_appender_error(app);
-	if (error_msg == nullptr) {
+	if (app->error.empty()) {
 		return nullptr;
 	}
 
-	idx_t len = static_cast<idx_t>(std::strlen(error_msg));
-
-	return make_jbyteArray(env, error_msg, len);
+	return make_jbyteArray(env, app->error.c_str(), static_cast<idx_t>(app->error.size()));
 }
 
 /*
@@ -124,14 +205,18 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1er
  */
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1flush(JNIEnv *env, jclass, jobject appender) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	duckdb_state state = duckdb_appender_flush(app);
-
-	return static_cast<jint>(state);
+	try {
+		app->appender->Flush();
+	} catch (const std::exception &e) {
+		app->error = e.what();
+		return CAPI_STATE_ERROR;
+	}
+	return CAPI_STATE_SUCCESS;
 }
 
 /*
@@ -141,14 +226,18 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1flush(JN
  */
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1close(JNIEnv *env, jclass, jobject appender) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	duckdb_state state = duckdb_appender_close(app);
-
-	return static_cast<jint>(state);
+	try {
+		app->appender->Flush();
+	} catch (const std::exception &e) {
+		app->error = e.what();
+		return CAPI_STATE_ERROR;
+	}
+	return CAPI_STATE_SUCCESS;
 }
 
 /*
@@ -158,14 +247,14 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1close(JN
  */
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1destroy(JNIEnv *env, jclass, jobject appender) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	duckdb_state state = duckdb_appender_destroy(&app);
+	delete app;
 
-	return static_cast<jint>(state);
+	return CAPI_STATE_SUCCESS;
 }
 
 /*
@@ -176,14 +265,12 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1destroy(
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1column_1count(JNIEnv *env, jclass,
                                                                                        jobject appender) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	idx_t count = duckdb_appender_column_count(app);
-
-	return static_cast<jlong>(count);
+	return static_cast<jlong>(app->appender->ColumnTypes().size());
 }
 
 /*
@@ -195,7 +282,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1colum
                                                                                         jobject appender,
                                                                                         jlong col_idx) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
@@ -205,9 +292,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1colum
 		return nullptr;
 	}
 
-	duckdb_logical_type logical_type = duckdb_appender_column_type(app, idx);
+	auto &types = app->appender->ColumnTypes();
+	if (idx >= types.size()) {
+		return make_logical_type_buf(env, nullptr);
+	}
 
-	return make_logical_type_buf(env, v1_logical_type_to_v2_logical_type(logical_type));
+	// the type is passed to Java as an owned handle
+	duckdb_v2_logical_type_handle copy = nullptr;
+	if (duckdb_v2_logical_type_copy(types[idx].handle(), &copy, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return make_logical_type_buf(env, nullptr);
+	}
+	return make_logical_type_buf(env, copy);
 }
 
 /*
@@ -218,19 +313,24 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1appender_1colum
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1append_1data_1chunk(JNIEnv *env, jclass, jobject appender,
                                                                                   jobject chunk) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
 
-	duckdb_data_chunk dc = v2_chunk_to_v1_chunk(chunk_buf_to_chunk(env, chunk));
+	auto raw_chunk = chunk_buf_to_chunk(env, chunk);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
+	auto dc = borrow_chunk(raw_chunk);
 
-	duckdb_state state = duckdb_append_data_chunk(app, dc);
-
-	return static_cast<jint>(state);
+	try {
+		app->appender->AppendChunk(dc);
+	} catch (const std::exception &e) {
+		app->error = e.what();
+		return CAPI_STATE_ERROR;
+	}
+	return CAPI_STATE_SUCCESS;
 }
 
 /*
@@ -243,11 +343,11 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1append_1default_1t
                                                                                          jobject chunk, jlong col,
                                                                                          jlong row) {
 
-	duckdb_appender app = appender_buf_to_appender(env, appender);
+	auto app = appender_buf_to_appender(env, appender);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
-	duckdb_data_chunk dc = v2_chunk_to_v1_chunk(chunk_buf_to_chunk(env, chunk));
+	auto raw_chunk = chunk_buf_to_chunk(env, chunk);
 	if (env->ExceptionCheck()) {
 		return -1;
 	}
@@ -260,7 +360,31 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1append_1default_1t
 		return -1;
 	}
 
-	duckdb_state state = duckdb_append_default_to_chunk(app, dc, col_idx, row_idx);
-
-	return static_cast<jint>(state);
+	try {
+		load_defaults(*app);
+		auto dc = borrow_chunk(raw_chunk);
+		auto vec = dc.GetVector(col_idx);
+		// the size of the vector is set by the caller when the chunk is complete
+		if (vec.GetSize() <= row_idx) {
+			vec.SetSize(row_idx + 1);
+		}
+		if (col_idx < app->defaults.size() && app->defaults[col_idx]) {
+			// the default value is an expression, that is evaluated every time as it can be volatile
+			auto result = app->connection->Execute("SELECT " + *app->defaults[col_idx]);
+			auto value_chunk = result.FetchChunk();
+			if (!value_chunk || value_chunk.GetRowCount() == 0) {
+				throw JdbcException("Invalid Input Error: Unable to evaluate the default value");
+			}
+			auto value = value_chunk.GetVector(0).GetValue(0);
+			result.Drain();
+			vec.SetValue(row_idx, value);
+		} else {
+			// a column without a default value gets the NULL default
+			vec.SetNull(row_idx);
+		}
+	} catch (const std::exception &e) {
+		app->error = e.what();
+		return CAPI_STATE_ERROR;
+	}
+	return CAPI_STATE_SUCCESS;
 }

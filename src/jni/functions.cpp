@@ -8,8 +8,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	try {
 		return _duckdb_jdbc_startup(env, param0, param1, param2, param3, param4);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -19,8 +18,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 	try {
 		return _duckdb_jdbc_connect(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -30,8 +28,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_
 	try {
 		return _duckdb_jdbc_create_db_ref(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -41,8 +38,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address(J
 	try {
 		return _duckdb_jdbc_db_address(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return 0;
 	}
@@ -52,8 +48,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1r
 	try {
 		return _duckdb_jdbc_destroy_db_ref(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -62,8 +57,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1com
 	try {
 		return _duckdb_jdbc_set_auto_commit(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -72,8 +66,7 @@ JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_
 	try {
 		return _duckdb_jdbc_get_auto_commit(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return false;
 	}
@@ -83,8 +76,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNI
 	try {
 		return _duckdb_jdbc_disconnect(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -93,8 +85,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JN
 	try {
 		return _duckdb_jdbc_set_schema(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -103,8 +94,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(J
 	try {
 		return _duckdb_jdbc_set_catalog(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -113,8 +103,7 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	try {
 		return _duckdb_jdbc_get_schema(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -124,8 +113,7 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalo
 	try {
 		return _duckdb_jdbc_get_catalog(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -135,8 +123,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	try {
 		return _duckdb_jdbc_prepare(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -146,8 +133,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1pending_1qu
 	try {
 		return _duckdb_jdbc_pending_query(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -157,8 +143,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv
 	try {
 		return _duckdb_jdbc_release(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -167,8 +152,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release_1pendi
 	try {
 		_duckdb_jdbc_release_pending(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -177,8 +161,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1resu
 	try {
 		return _duckdb_jdbc_query_result_meta(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -188,8 +171,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1s
 	try {
 		return _duckdb_jdbc_prepared_statement_meta(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -199,8 +181,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	try {
 		return _duckdb_jdbc_execute(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -210,8 +191,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1ca
 	try {
 		return _duckdb_jdbc_execute_capi(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -221,8 +201,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pe
 	try {
 		return _duckdb_jdbc_execute_pending(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -232,8 +211,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(J
 	try {
 		return _duckdb_jdbc_free_result(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -242,8 +220,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	try {
 		return _duckdb_jdbc_fetch(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -253,8 +230,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1
 	try {
 		return _duckdb_jdbc_cast_result_to_strings(env, param0, param1, param2, param3);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -264,8 +240,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JN
 	try {
 		return _duckdb_jdbc_fetch_size(env, param0);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return -1;
 	}
@@ -275,8 +250,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 	try {
 		return _duckdb_jdbc_arrow_stream(env, param0, param1, param2, param3);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return -1;
 	}
@@ -286,8 +260,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
 	try {
 		return _duckdb_jdbc_arrow_register(env, param0, param1, param2, param3);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -296,8 +269,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1close_1
 	try {
 		return _duckdb_jdbc_arrow_close_streams(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -306,8 +278,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1app
 	try {
 		return _duckdb_jdbc_create_appender(env, param0, param1, param2, param3);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}
@@ -317,8 +288,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1begi
 	try {
 		return _duckdb_jdbc_appender_begin_row(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -327,8 +297,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1end_
 	try {
 		return _duckdb_jdbc_appender_end_row(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -337,8 +306,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1flus
 	try {
 		return _duckdb_jdbc_appender_flush(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -347,8 +315,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt(JNIE
 	try {
 		return _duckdb_jdbc_interrupt(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -357,8 +324,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1prog
 	try {
 		return _duckdb_jdbc_query_progress(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 		return nullptr;
 	}
 }
@@ -367,8 +333,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1clos
 	try {
 		return _duckdb_jdbc_appender_close(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -377,8 +342,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_boolean(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -387,8 +351,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_byte(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -397,8 +360,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_short(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -407,8 +369,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_int(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -417,8 +378,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_long(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -427,8 +387,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_float(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -437,8 +396,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_double(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -447,8 +405,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_string(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -457,8 +414,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_bytes(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -467,8 +423,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_timestamp(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -477,8 +432,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_decimal(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -487,8 +441,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	try {
 		return _duckdb_jdbc_appender_append_null(env, param0, param1);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 	}
 }
@@ -497,8 +450,7 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profil
 	try {
 		return _duckdb_jdbc_get_profiling_information(env, param0, param1, param2);
 	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
+		ThrowJNIException(env, e);
 
 		return nullptr;
 	}

@@ -1,14 +1,46 @@
 #pragma once
 
 #include "capi_v2.hpp"
-#include "duckdb.hpp"
-#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "cxx_handles.hpp"
 #include "refs.hpp"
 
 #include <jni.h>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+namespace cxx = duckdb::cxx;
+
+/**
+ * A database instance of the stable C++ API. The instances that are opened with the instance cache enabled are shared
+ * between connections to the same database file.
+ */
+struct InstanceHolder {
+	explicit InstanceHolder(cxx::Instance instance_p) : instance(std::move(instance_p)) {
+	}
+
+	//! The instances that are not shared are opened in an environment of their own, same named in-memory databases of
+	//! such instances are isolated from each other
+	InstanceHolder(std::unique_ptr<cxx::Environment> environment_p, cxx::Instance instance_p)
+	    : environment(std::move(environment_p)), instance(std::move(instance_p)) {
+	}
+
+	InstanceHolder(const InstanceHolder &) = delete;
+
+	InstanceHolder &operator=(const InstanceHolder &) = delete;
+
+	//! The cache key (the normalized database path), is empty for instances that are not cached
+	std::string key;
+	//! The configuration the instance was opened with, only used to check the compatibility with the new connections
+	std::vector<std::pair<std::string, std::string>> options;
+	bool read_only = false;
+	//! Declared before the instance, as the environment must outlive it
+	std::unique_ptr<cxx::Environment> environment;
+	cxx::Instance instance;
+};
 
 /**
  * Holds a copy of a shared_ptr to an existing DB instance.
@@ -16,9 +48,9 @@
  * even after the last connection to this DB is closed.
  */
 struct DBHolder {
-	duckdb::shared_ptr<duckdb::DuckDB> db;
+	std::shared_ptr<InstanceHolder> db;
 
-	DBHolder(duckdb::shared_ptr<duckdb::DuckDB> _db) : db(std::move(_db)) {};
+	DBHolder(std::shared_ptr<InstanceHolder> _db) : db(std::move(_db)) {};
 
 	DBHolder(const DBHolder &) = delete;
 
@@ -37,29 +69,48 @@ struct ArrowStreamState {
 };
 
 /**
- * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
- * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
- * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing a DuckDB is freed, the
- * DuckDB is released as well.
+ * Associates a connection with a database instance. The instance may be shared amongst many ConnectionHolders, but the
+ * connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
+ * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing an instance is freed,
+ * the instance is released as well.
  *
- * The connection is created as a capiv2::CV2Connection (that is a duckdb::Connection) so it can also be used as
- * a connection handle of the C API v2.
+ * The connection handle is also used as a connection handle of the C API v2 by the bindings.
  */
 struct ConnectionHolder {
-	const duckdb::shared_ptr<duckdb::DuckDB> db;
-	const duckdb::unique_ptr<duckdb::capiv2::CV2Connection> connection;
+private:
+	struct State {
+		explicit State(cxx::Connection connection_p) : connection(std::move(connection_p)) {
+		}
 
-	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db)
-	    : db(_db), connection(duckdb::make_uniq<duckdb::capiv2::CV2Connection>(*_db)) {
+		cxx::Connection connection;
+		//! A connection can be used by one thread at a time, the Java side can share a connection between threads
+		std::mutex lock;
+	};
+
+	std::shared_ptr<State> state;
+
+public:
+	const std::shared_ptr<InstanceHolder> db;
+	//! Shared with the statements of this connection, so they can find out that the connection was closed
+	const std::shared_ptr<cxx::Connection> connection;
+	const std::shared_ptr<std::mutex> lock;
+
+	explicit ConnectionHolder(std::shared_ptr<InstanceHolder> _db)
+	    : state(std::make_shared<State>(_db->instance.Connect())), db(_db), connection(state, &state->connection),
+	      lock(state, &state->lock) {
 	}
 
 	~ConnectionHolder() {
 		close_arrow_streams();
 	}
 
-	void track_arrow_stream(duckdb::shared_ptr<ArrowStreamState> state);
+	void track_arrow_stream(std::shared_ptr<ArrowStreamState> state);
 
 	void close_arrow_streams();
+
+	//! Remembers the stream that is registered with the name, returns the stream that was registered with it before
+	std::shared_ptr<ArrowStreamState> replace_registered_stream(const std::string &name,
+	                                                            std::shared_ptr<ArrowStreamState> state);
 
 	DBHolder *create_db_ref() {
 		return new DBHolder(db);
@@ -68,22 +119,52 @@ struct ConnectionHolder {
 private:
 	std::mutex arrow_streams_lock;
 	//! Streams are untracked implicitly when they are released by their consumers
-	duckdb::vector<duckdb::weak_ptr<ArrowStreamState>> arrow_streams;
+	std::vector<std::weak_ptr<ArrowStreamState>> arrow_streams;
+	//! The streams of the views that are created for the registered streams
+	std::unordered_map<std::string, std::shared_ptr<ArrowStreamState>> registered_streams;
 };
 
 struct StatementHolder {
-	duckdb::unique_ptr<duckdb::PreparedStatement> stmt;
+	std::weak_ptr<cxx::Connection> connection;
+	std::weak_ptr<std::mutex> lock;
+	std::optional<cxx::SqlStatement> statement;
+	std::optional<cxx::PreparedStatement> stmt;
+	//! The columns of the result and the parameters of the statement
+	std::optional<cxx::Signature> signature;
+	cxx::StatementType statement_type = cxx::StatementType::INVALID;
 };
 
+/**
+ * A query that is submitted but is not yet completed, the execution of the query is deferred until it is read.
+ */
 struct PendingHolder {
-	duckdb::unique_ptr<duckdb::QueryResult> pending;
+	std::weak_ptr<cxx::Connection> connection;
+	std::weak_ptr<std::mutex> lock;
+	std::optional<cxx::QueryResult> pending;
 	bool streaming = false;
 };
 
+/**
+ * Column data of a result that is read into memory, it does not hold the connection that the result was created on.
+ */
+struct MaterializedData {
+	std::optional<cxx::ColumnDataCollection> collection;
+	std::optional<cxx::ColumnDataCollection::SharedScanState> shared_state;
+	std::optional<cxx::ColumnDataCollection::WorkerScanState> worker_state;
+};
+
 struct ResultHolder {
-	duckdb::unique_ptr<duckdb::QueryResult> res;
-	duckdb::unique_ptr<duckdb::QueryResultStream<>> stream;
-	duckdb::unique_ptr<duckdb::DataChunk> chunk;
+	std::weak_ptr<cxx::Connection> connection;
+	std::vector<std::string> names;
+	std::vector<cxx::LogicalType> types;
+	cxx::ResultType result_type = cxx::ResultType::QUERY_RESULT;
+	//! Set for the results that are streamed, the connection is busy until the result is freed
+	std::optional<cxx::QueryResult> stream;
+	//! Set for the results that are read into memory
+	std::unique_ptr<MaterializedData> materialized;
+	//! The first chunk of a streamed result, that was read to check that the query is running without errors
+	std::optional<cxx::DataChunk> first_chunk;
+	std::optional<cxx::DataChunk> chunk;
 };
 
 /**
@@ -97,6 +178,9 @@ struct ChunkedResultHolder {
 	std::vector<capi_type> column_types;
 	bool has_error = false;
 	std::string error;
+	//! The first chunk of the result, that was read to check that the query is running without errors
+	v2_data_chunk first_chunk;
+	bool has_first_chunk = false;
 
 	//! Takes ownership of the result, throws if the result schema cannot be read
 	explicit ChunkedResultHolder(duckdb_v2_result_handle result_p);
@@ -139,17 +223,28 @@ struct LocalRefHolder {
 	~LocalRefHolder() noexcept;
 };
 
+/**
+ * Thrown for the errors that are detected by the driver itself.
+ */
+struct JdbcException : public std::runtime_error {
+	explicit JdbcException(const std::string &message) : std::runtime_error(message) {
+	}
+};
+
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf);
 
-duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf);
+/**
+ * Throws if a valid connection can't be retrieved from the buffer.
+ */
+cxx::Connection &get_connection(JNIEnv *env, jobject conn_ref_buf);
 
 /**
  * Returns the C API v2 handle of the connection of the specified holder. Throws a SQLException and returns nullptr
- * if a valid Connection can't be retrieved from the buffer.
+ * if a valid connection can't be retrieved from the buffer.
  */
 duckdb_v2_connection_handle conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf);
 
 /**
- * Same as conn_ref_buf_to_conn, returns the engine connection.
+ * Same as conn_ref_buf_to_conn, returns the connection of the stable C++ API.
  */
-duckdb::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf);
+cxx::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf);

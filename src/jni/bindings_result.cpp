@@ -49,6 +49,12 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1fetch_1chunk(JN
 		return nullptr;
 	}
 
+	if (res->has_first_chunk) {
+		// the chunk that was read when the result was created, an empty handle marks the end of the result
+		res->has_first_chunk = false;
+		return make_data_chunk_buf(env, res->first_chunk.release());
+	}
+
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	v2_error err;
 	if (duckdb_v2_result_fetch_chunk(res->result.get(), &chunk, err.out()) != DUCKDB_V2_ERROR_NONE) {

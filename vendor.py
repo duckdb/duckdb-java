@@ -14,6 +14,7 @@ parser.add_argument('--duckdb', action='store',
                     help='Path to the DuckDB Version to be vendored in', required=True, type=str)
 
 args = parser.parse_args()
+args.duckdb = os.path.abspath(args.duckdb)
 
 # list of extensions to bundle
 extensions = ['core_functions', 'parquet', 'icu', 'json']
@@ -39,6 +40,14 @@ include_list = [sanitize_path(x) for x in include_list]
 # process jemalloc separately with its own CMake vars
 jemalloc_source_list = [x for x in source_list if x.startswith("duckdb/third_party/jemalloc/")]
 jemalloc_include_list = [x for x in include_list if x.startswith("third_party/jemalloc/")]
+
+# the stable C++ API is compiled into the driver, it is not a part of the engine sources
+import shutil
+cpp_api_dir = os.path.join(target_dir, 'tools', 'cpp')
+shutil.rmtree(cpp_api_dir, ignore_errors=True)
+os.makedirs(cpp_api_dir)
+for cpp_api_file in ['duckdb_cpp.cpp', 'duckdb_cpp.hpp', 'duckdb_cpp_extension.hpp']:
+    shutil.copyfile(os.path.join(args.duckdb, 'tools', 'cpp', cpp_api_file), os.path.join(cpp_api_dir, cpp_api_file))
 
 # clean up paths
 source_list = [os.path.relpath(x, basedir) if os.path.isabs(x) else os.path.join('src', x)

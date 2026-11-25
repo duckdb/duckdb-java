@@ -680,11 +680,13 @@ add_library(duckdb_java SHARED
   src/jni/refs.cpp
   src/jni/types.cpp
   src/jni/util.cpp
+  src/duckdb/tools/cpp/duckdb_cpp.cpp
   ${DUCKDB_SRC_FILES})
 
 target_include_directories(duckdb_java PRIVATE
   ${JAVA_INCLUDE_PATH}
   ${JAVA_INCLUDE_PATH2}
+  src/duckdb/tools/cpp
   ${DUCKDB_INCLUDE_DIRS})
 
 if(JEMALLOC_ENABLED)
