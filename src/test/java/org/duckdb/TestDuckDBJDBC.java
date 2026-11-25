@@ -498,6 +498,22 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_multiple_statements_prepare_rejected() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            assertThrows(() -> { conn.prepareStatement("CREATE TABLE z(i int); SELECT 1 AS x"); }, SQLException.class);
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'z'")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 0);
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("CREATE TABLE z(i int); SELECT 1 AS x")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 1);
+            }
+        }
+    }
+
     public static void test_crash_bug496() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
