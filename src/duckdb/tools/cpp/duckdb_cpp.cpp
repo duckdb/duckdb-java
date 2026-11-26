@@ -1832,9 +1832,9 @@ auto Value::GetChild(idx_t index) const -> Value {
 	return detail::HandleFactory::Make<Value>(child);
 }
 
-auto Value::GetVariantContent() const -> Value {
+auto Value::VariantToValue() const -> Value {
 	duckdb_v2_value_handle unpacked = nullptr;
-	CheckedAPICall(duckdb_v2_value_get_variant_content, handle(), &unpacked);
+	CheckedAPICall(duckdb_v2_value_variant_to_value, handle(), &unpacked);
 	return detail::HandleFactory::Make<Value>(unpacked);
 }
 

@@ -957,7 +957,7 @@ static jobject process_vector_with_type(JNIEnv *env, cxx::Factory &factory, cxx:
 	case LogicalTypeId::VARIANT: {
 		varlen_data = env->NewObjectArray(row_count, J_Object, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			auto variant_val = vec.GetValue(row_idx).GetVariantContent();
+			auto variant_val = vec.GetValue(row_idx).VariantToValue();
 			if (variant_val.IsNull()) {
 				continue;
 			}
