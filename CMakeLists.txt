@@ -180,12 +180,12 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/common/vector_operations/null_operations.cpp
   src/duckdb/src/common/vector_operations/numeric_inplace_operators.cpp
   src/duckdb/src/common/vector_operations/scalar_executor.cpp
+  src/duckdb/src/common/vector_operations/string_comparison.cpp
   src/duckdb/src/common/vector_operations/vector_cast.cpp
   src/duckdb/src/common/vector_operations/vector_copy.cpp
   src/duckdb/src/common/vector_operations/vector_hash.cpp
   src/duckdb/src/common/vector_operations/vector_storage.cpp
   src/duckdb/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
-  src/duckdb/src/execution/operator/filter/physical_filter.cpp
   src/duckdb/src/function/aggregate/sorted_aggregate_function.cpp
   src/duckdb/src/function/cast/union/from_struct.cpp
   src/duckdb/src/function/scalar/date/strftime.cpp
@@ -420,6 +420,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_execution_operator_csv_scanner_state_machine.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_table_function.cpp
   src/duckdb/ub_src_execution_operator_csv_scanner_util.cpp
+  src/duckdb/ub_src_execution_operator_filter.cpp
   src/duckdb/ub_src_execution_operator_helper.cpp
   src/duckdb/ub_src_execution_operator_join.cpp
   src/duckdb/ub_src_execution_operator_order.cpp

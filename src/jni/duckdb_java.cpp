@@ -224,8 +224,9 @@ void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	}
 }
 
-//! Parses the query and runs all its statements but the last one, returns the last statement
-static cxx::SqlStatement extract_last_statement(cxx::Connection &conn, const std::string &query) {
+//! Parses the query and returns its last statement. The statements before it are run, unless the query is prepared:
+//! preparing must not have side effects, so a query with multiple statements is rejected then.
+static cxx::SqlStatement extract_last_statement(cxx::Connection &conn, const std::string &query, bool is_prepare) {
 	auto iterator = conn.ParseSQL(query);
 	std::vector<cxx::SqlStatement> statements;
 	while (true) {
@@ -237,6 +238,11 @@ static cxx::SqlStatement extract_last_statement(cxx::Connection &conn, const std
 	}
 	if (statements.empty()) {
 		throw JdbcException("Invalid Input Error: No statements to execute.");
+	}
+
+	if (is_prepare && statements.size() > 1) {
+		throw JdbcException("Invalid Input Error: Cannot prepare multiple statements at once, statements count: " +
+		                    std::to_string(statements.size()));
 	}
 
 	// if there are multiple statements, we directly execute the statements besides the last one
@@ -257,7 +263,7 @@ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArr
 	auto stmt_ref = std::make_unique<StatementHolder>();
 	stmt_ref->connection = conn_holder->connection;
 	stmt_ref->lock = conn_holder->lock;
-	stmt_ref->statement.emplace(extract_last_statement(conn, query));
+	stmt_ref->statement.emplace(extract_last_statement(conn, query, true));
 	stmt_ref->statement_type = stmt_ref->statement->GetStatementType();
 	stmt_ref->stmt.emplace(conn.Prepare(*stmt_ref->statement));
 	stmt_ref->signature.emplace(conn.Bind(*stmt_ref->statement));
@@ -271,7 +277,7 @@ jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jb
 
 	auto query = jbyteArray_to_string(env, query_j);
 
-	auto statement = extract_last_statement(conn, query);
+	auto statement = extract_last_statement(conn, query, false);
 
 	bool stream_results = conn.GetConfig().GetOption("jdbc_stream_results").value.Get<bool>();
 

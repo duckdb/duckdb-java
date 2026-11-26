@@ -12,15 +12,25 @@
 
 #include "src/optimizer/join_order/join_order_candidate.cpp"
 
+#include "src/optimizer/join_order/join_order_linearizer.cpp"
+
 #include "src/optimizer/join_order/join_order_operator.cpp"
 
 #include "src/optimizer/join_order/join_order_optimizer.cpp"
+
+#include "src/optimizer/join_order/join_order_plan.cpp"
+
+#include "src/optimizer/join_order/join_order_precedence.cpp"
+
+#include "src/optimizer/join_order/join_order_rank.cpp"
 
 #include "src/optimizer/join_order/join_order_source_stats.cpp"
 
 #include "src/optimizer/join_order/join_predicate.cpp"
 
 #include "src/optimizer/join_order/join_relation_set.cpp"
+
+#include "src/optimizer/join_order/linearized_plan_enumerator.cpp"
 
 #include "src/optimizer/join_order/plan_enumerator.cpp"
 
