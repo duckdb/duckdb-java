@@ -4069,7 +4069,7 @@ typedef struct {
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_value_unpack_variant duckdb_ext_api.duckdb_v2_value_unpack_variant
+#define duckdb_v2_value_get_variant_content duckdb_ext_api.duckdb_v2_value_get_variant_content
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

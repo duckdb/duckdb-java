@@ -2231,7 +2231,7 @@ public:
 	/// The value that a VARIANT value holds, with the type that it was stored with: a TINYINT, a VARCHAR, a LIST of
 	/// STRUCTs, ... A nested value is unpacked all the way down. A NULL VARIANT gives a NULL value.
 	/// @throws InvalidInputException When the value is not a VARIANT.
-	auto UnpackVariant() const -> Value;
+	auto GetVariantContent() const -> Value;
 
 	/// Shorthand for `GetChild`.
 	auto operator[](idx_t index) const -> Value {

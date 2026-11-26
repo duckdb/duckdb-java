@@ -18990,12 +18990,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
  * - unstable: v2.0.0
  *
  * @param value The VARIANT value to unpack.
- * @param out_unpacked Receives the owned value.
+ * @param out_content Receives the owned value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_unpack_variant(duckdb_v2_value_handle value,
-                                                            duckdb_v2_value_handle *out_unpacked,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_variant_content(duckdb_v2_value_handle value,
+                                                            duckdb_v2_value_handle *out_content,
                                                             duckdb_v2_error_info_handle *err);
 #endif
 
