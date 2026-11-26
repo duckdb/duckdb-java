@@ -285,8 +285,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1get_1decimal(JN
 	// same as in C API v1, zero is returned for non-decimal and NULL values and for the decimals
 	// that cannot be represented
 	duckdb_v2_hugeint_t dec_value = {0, 0};
-	uint8_t dec_width = 0;
-	uint8_t dec_scale = 0;
+	uint32_t dec_width = 0;
+	uint32_t dec_scale = 0;
 	if (duckdb_v2_value_get_decimal(val, &dec_value, &dec_width, &dec_scale, nullptr) != DUCKDB_V2_ERROR_NONE) {
 		dec_value = {0, 0};
 		dec_scale = 0;

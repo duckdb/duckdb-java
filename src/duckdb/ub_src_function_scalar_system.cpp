@@ -6,6 +6,8 @@
 
 #include "src/function/scalar/system/current_transaction_id.cpp"
 
+#include "src/function/scalar/system/extension_repository_url.cpp"
+
 #include "src/function/scalar/system/parse_log_message.cpp"
 
 #include "src/function/scalar/system/write_log.cpp"

@@ -92,6 +92,8 @@
 
 #include "src/execution/physical_plan/plan_set_operation.cpp"
 
+#include "src/execution/physical_plan/plan_top_key_filter.cpp"
+
 #include "src/execution/physical_plan/plan_top_n.cpp"
 
 #include "src/execution/physical_plan/plan_transaction.cpp"
