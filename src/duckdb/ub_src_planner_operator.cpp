@@ -94,6 +94,8 @@
 
 #include "src/planner/operator/logical_set_operation.cpp"
 
+#include "src/planner/operator/logical_top_key_filter.cpp"
+
 #include "src/planner/operator/logical_top_n.cpp"
 
 #include "src/planner/operator/logical_transaction.cpp"

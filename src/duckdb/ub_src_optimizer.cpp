@@ -58,6 +58,8 @@
 
 #include "src/optimizer/filter_statistics.cpp"
 
+#include "src/optimizer/group_by_top_key.cpp"
+
 #include "src/optimizer/grouping_sets_optimizer.cpp"
 
 #include "src/optimizer/in_clause_rewriter.cpp"
