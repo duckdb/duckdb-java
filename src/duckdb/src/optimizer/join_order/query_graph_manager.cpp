@@ -308,7 +308,12 @@ void QueryGraphManager::PreparePredicateModel(LogicalOperator &op) {
 	filters_and_bindings = std::move(extraction.filters);
 	join_operators = std::move(extraction.join_operators);
 	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
+	candidate_constraints.clear();
 	for (auto &join_operator : join_operators) {
+		if (join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT ||
+		    JoinOrderConflictDetector::MustApplyAsOperator(*join_operator)) {
+			candidate_constraints.push_back(*join_operator);
+		}
 		for (auto predicate_index : join_operator->costing_predicate_indices) {
 			filters_and_bindings[predicate_index]->semantic_left_set =
 			    optional_ptr<JoinRelationSet>(join_operator->left_total_set.get());
@@ -662,6 +667,35 @@ void QueryGraphManager::ClearExtractedExpressions() {
 	}
 }
 
+vector<reference<FilterInfo>> QueryGraphManager::GetPendingFilters(JoinRelationSet &root) const {
+	vector<bool> assigned(filters_and_bindings.size(), false);
+	vector<reference<JoinRelationSet>> pending {root};
+	while (!pending.empty()) {
+		auto &set = pending.back().get();
+		pending.pop_back();
+		auto entry = plans->find(set);
+		if (entry == plans->end()) {
+			throw InternalException("Join Order Optimizer Error: No full plan was created");
+		}
+		auto &node = *entry->second;
+		for (auto &predicate : node.predicates) {
+			assigned[predicate.get().GetIndex()] = true;
+		}
+		if (!node.is_leaf) {
+			pending.push_back(node.left_set);
+			pending.push_back(node.right_set);
+		}
+	}
+	vector<reference<FilterInfo>> result;
+	for (auto &filter : filters_and_bindings) {
+		// Selected join conditions are consumed by their assigned node, not by filter pushdown.
+		if (!assigned[filter->filter_index] && !operator_costing_predicates.count(filter->filter_index)) {
+			result.push_back(*filter);
+		}
+	}
+	return result;
+}
+
 GenerateJoinRelation QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan,
                                                     const vector<RelationStats> &relation_stats) {
 	// now we have to rewrite the plan
@@ -699,7 +733,8 @@ GenerateJoinRelation QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> 
 	}
 
 	// now we generate the actual joins
-	auto join_tree = GenerateJoins(extracted_relations, total_relation, relation_stats);
+	auto pending_filters = GetPendingFilters(total_relation);
+	auto join_tree = GenerateJoins(extracted_relations, total_relation, relation_stats, pending_filters);
 	for (auto &join_operator : join_operators) {
 		if (JoinOrderConflictDetector::MustApplyAsOperator(*join_operator) &&
 		    !reconstructed_operators.count(join_operator->index)) {
@@ -822,8 +857,8 @@ static void OrientInnerConditions(RelationManager &relation_manager, JoinRelatio
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
-                                                      JoinRelationSet &set,
-                                                      const vector<RelationStats> &relation_stats) {
+                                                      JoinRelationSet &set, const vector<RelationStats> &relation_stats,
+                                                      const vector<reference<FilterInfo>> &pending_filters) {
 	optional_ptr<JoinRelationSet> left_node;
 	optional_ptr<JoinRelationSet> right_node;
 	optional_ptr<JoinRelationSet> result_relation;
@@ -838,8 +873,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	auto result_cardinality = node->cardinality.GetIndex();
 	if (!dp_entry->second->is_leaf) {
 		// generate the left and right children
-		auto left = GenerateJoins(extracted_relations, node->left_set, relation_stats);
-		auto right = GenerateJoins(extracted_relations, node->right_set, relation_stats);
+		auto left = GenerateJoins(extracted_relations, node->left_set, relation_stats, pending_filters);
+		auto right = GenerateJoins(extracted_relations, node->right_set, relation_stats, pending_filters);
 		auto descriptor = node->join_operator;
 		if (descriptor) {
 			D_ASSERT(descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT ||
@@ -981,11 +1016,11 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	// belong to a must-apply operator occurrence are consumed by that occurrence during reconstruction, instead
 	// of being added to unused_residual_predicates.
 	vector<unique_ptr<Expression>> unused_residual_predicates;
-	for (auto &filter_info : filters_and_bindings) {
-		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter &&
-		    !operator_costing_predicates.count(filter_info->filter_index) && filter_info->set.get().count > 0 &&
-		    JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
-			unused_residual_predicates.push_back(std::move(filters_and_bindings[filter_info->filter_index]->filter));
+	for (auto &filter_ref : pending_filters) {
+		auto &filter = filter_ref.get();
+		if (filter.from_residual_predicate && filter.filter && filter.set.get().count > 0 &&
+		    JoinRelationSet::IsSubset(*result_relation, filter.set)) {
+			unused_residual_predicates.push_back(std::move(filter.filter));
 		}
 	}
 	if (!unused_residual_predicates.empty()) {
@@ -1005,12 +1040,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
-	for (auto &filter_info : filters_and_bindings) {
+	for (auto &filter_ref : pending_filters) {
 		// check if the filter has already been extracted
-		auto &info = *filter_info;
-		if (operator_costing_predicates.count(info.filter_index)) {
-			continue;
-		}
+		auto &info = filter_ref.get();
 		if (filters_and_bindings[info.filter_index]->filter) {
 			if (info.from_residual_predicate) {
 				continue;
@@ -1221,6 +1253,9 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	if (generated_cross_product && !CanCreateCrossProduct(left, right)) {
 		return false;
 	}
+	if (!selected_operator && candidate_constraints.empty()) {
+		return true;
+	}
 	auto &combined = set_manager.Union(left, right);
 	if (selected_operator && (!JoinOrderConflictDetector::IsApplicable(*selected_operator, left, right) ||
 	                          JoinOrderConflictDetector::IsCompletedBy(*selected_operator, left) ||
@@ -1228,11 +1263,8 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 	                          !JoinOrderConflictDetector::IsCompletedBy(*selected_operator, combined))) {
 		return false;
 	}
-	for (auto &operator_ptr : join_operators) {
-		auto &op = *operator_ptr;
-		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT && !JoinOrderConflictDetector::MustApplyAsOperator(op)) {
-			continue;
-		}
+	for (auto &constraint : candidate_constraints) {
+		auto &op = constraint.get();
 		if (JoinOrderConflictDetector::IsCompletedBy(op, left) || JoinOrderConflictDetector::IsCompletedBy(op, right) ||
 		    !JoinOrderConflictDetector::IsCompletedBy(op, combined)) {
 			continue;
@@ -1241,7 +1273,7 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 				return false;
 			}
-		} else if (selected_operator != &op) {
+		} else if (selected_operator.get() != &op) {
 			return false;
 		}
 	}
