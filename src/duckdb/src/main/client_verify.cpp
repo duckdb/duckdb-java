@@ -14,7 +14,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -32,18 +31,6 @@ struct PreparedStatementVerification {
 
 	identifier_map_t<unique_ptr<ParsedExpression>> values;
 };
-
-//! The offset of a MATCH_RECOGNIZE navigation (FIRST, LAST, PREV or NEXT), which must stay a constant
-static optional_ptr<unique_ptr<ParsedExpression>> MatchRecognizeNavigationOffset(FunctionExpression &function) {
-	if (function.GetArguments().size() != 2 || function.GetQualifiedName().Path().size() > 1) {
-		return nullptr;
-	}
-	auto name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
-	if (name != "FIRST" && name != "LAST" && name != "PREV" && name != "NEXT") {
-		return nullptr;
-	}
-	return &function.GetArgumentsMutable()[1].GetExpressionMutable();
-}
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
@@ -80,15 +67,8 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		auto &subquery = expr->Cast<SubqueryExpression>().Subquery();
 		ConvertConstants(*subquery->node);
 	}
-	optional_ptr<unique_ptr<ParsedExpression>> constant_child;
-	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		constant_child = MatchRecognizeNavigationOffset(expr->Cast<FunctionExpression>());
-	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		if (&child != constant_child.get()) {
-			ConvertConstants(child);
-		}
-	});
+	ParsedExpressionIterator::EnumerateChildren(*expr,
+	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 }
 
 //! Swap in a statement produced by verification, carrying over the source text of the statement the user

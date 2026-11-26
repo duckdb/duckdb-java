@@ -1838,8 +1838,6 @@ WindowFunction FillFun::GetFunction() {
 
 	//! Never ignore nulls (that's the point!)
 	fun.SetCanIgnoreNulls(false);
-	//! The ORDER BY values are the X axis of the interpolation
-	fun.SetRequiresOrdering(true);
 
 	return fun;
 }
