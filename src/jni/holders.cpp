@@ -6,26 +6,40 @@
 
 ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
 	if (!conn_ref_buf) {
-		throw duckdb::ConnectionException("Invalid connection buffer ref");
+		throw JdbcException("Invalid connection buffer ref");
 	}
 	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
 	if (!conn_holder) {
-		throw duckdb::ConnectionException("Invalid connection buffer");
+		throw JdbcException("Invalid connection buffer");
 	}
 	return conn_holder;
 }
 
-void ConnectionHolder::track_arrow_stream(duckdb::shared_ptr<ArrowStreamState> state) {
+void ConnectionHolder::track_arrow_stream(std::shared_ptr<ArrowStreamState> state) {
 	std::lock_guard<std::mutex> guard(arrow_streams_lock);
-	auto expired = [](const duckdb::weak_ptr<ArrowStreamState> &weak) {
+	auto expired = [](const std::weak_ptr<ArrowStreamState> &weak) {
 		return weak.expired();
 	};
 	arrow_streams.erase(std::remove_if(arrow_streams.begin(), arrow_streams.end(), expired), arrow_streams.end());
 	arrow_streams.emplace_back(std::move(state));
 }
 
+std::shared_ptr<ArrowStreamState> ConnectionHolder::replace_registered_stream(const std::string &name,
+                                                                              std::shared_ptr<ArrowStreamState> state) {
+	std::lock_guard<std::mutex> guard(arrow_streams_lock);
+	std::shared_ptr<ArrowStreamState> replaced;
+	auto it = registered_streams.find(name);
+	if (it != registered_streams.end()) {
+		replaced = std::move(it->second);
+		it->second = std::move(state);
+	} else {
+		registered_streams.emplace(name, std::move(state));
+	}
+	return replaced;
+}
+
 void ConnectionHolder::close_arrow_streams() {
-	duckdb::vector<duckdb::shared_ptr<ArrowStreamState>> live;
+	std::vector<std::shared_ptr<ArrowStreamState>> live;
 	{
 		std::lock_guard<std::mutex> guard(arrow_streams_lock);
 		// Last stream created is first closed
@@ -36,26 +50,43 @@ void ConnectionHolder::close_arrow_streams() {
 			}
 		}
 		arrow_streams.clear();
+		registered_streams.clear();
 	}
 	for (auto &state : live) {
 		state->Close();
 	}
 }
 
-/**
- * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
- */
-duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	auto conn_holder = get_connection_ref(env, conn_ref_buf);
-	auto conn_ref = conn_holder->connection.get();
-	if (!conn_ref || !conn_ref->context) {
-		throw duckdb::ConnectionException("Invalid connection");
+void copy_session_settings(cxx::Connection &src, cxx::Connection &dst) {
+	auto &src_config = src.GetConfig();
+	auto &dst_config = dst.GetConfig();
+	for (size_t i = 0; i < src_config.GetOptionCount(); i++) {
+		auto description = src_config.DescribeOption(i);
+		if (!description.SupportsScope(cxx::SettingScope::SESSION)) {
+			continue;
+		}
+		std::string name(description.GetName());
+		// the catalog and the schema of the connection are not a part of its settings
+		if (name == "schema" || name == "search_path") {
+			continue;
+		}
+		auto option = src_config.GetOption(name);
+		if (option.scope != cxx::SettingScope::SESSION || option.value.IsNull()) {
+			continue;
+		}
+		dst_config.SetOption(name, option.value, cxx::SettingScope::SESSION);
 	}
-
-	return conn_ref;
 }
 
-static duckdb::capiv2::CV2Connection *conn_ref_buf_to_v2_conn(JNIEnv *env, jobject conn_ref_buf) {
+cxx::Connection &get_connection(JNIEnv *env, jobject conn_ref_buf) {
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	if (!conn_holder->connection) {
+		throw JdbcException("Invalid connection");
+	}
+	return *conn_holder->connection;
+}
+
+cxx::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf) {
 	if (conn_ref_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid connection buffer");
 		return nullptr;
@@ -65,24 +96,19 @@ static duckdb::capiv2::CV2Connection *conn_ref_buf_to_v2_conn(JNIEnv *env, jobje
 		env->ThrowNew(J_SQLException, "Invalid connection holder");
 		return nullptr;
 	}
-	auto conn_ref = conn_holder->connection.get();
-	if (conn_ref == nullptr || conn_ref->context == nullptr) {
+	if (!conn_holder->connection) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
 		return nullptr;
 	}
-	return conn_ref;
+	return conn_holder->connection.get();
 }
 
 duckdb_v2_connection_handle conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
-	auto conn_ref = conn_ref_buf_to_v2_conn(env, conn_ref_buf);
-	if (conn_ref == nullptr) {
+	auto conn = conn_ref_buf_to_engine_conn(env, conn_ref_buf);
+	if (conn == nullptr) {
 		return nullptr;
 	}
-	return duckdb::capiv2::Convert(conn_ref);
-}
-
-duckdb::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf) {
-	return conn_ref_buf_to_v2_conn(env, conn_ref_buf);
+	return conn->handle();
 }
 
 ChunkedResultHolder::ChunkedResultHolder(duckdb_v2_result_handle result_p) : result(result_p) {

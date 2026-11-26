@@ -2469,7 +2469,7 @@ public class TestDuckDBJDBC {
             assertThrows(()
                              -> stmt.executeQuery("WITH RECURSIVE cte AS NOT MATERIALIZED ("
                                                   + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, "
-                                                  + "cte.p + cte.f from cte WHERE cte.i < 1000000) "
+                                                  + "cte.p + cte.f from cte WHERE cte.i < 1000000000) "
                                                   + "SELECT avg(f) FROM cte"),
                          SQLException.class);
 

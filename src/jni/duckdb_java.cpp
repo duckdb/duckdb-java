@@ -1,48 +1,33 @@
 #include "arrow.hpp"
+#include "bindings.hpp"
 #include "config.hpp"
-#include "duckdb.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/common/vector/array_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/function/table/arrow.hpp"
-#include "duckdb/main/appender.hpp"
-#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
-#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/db_instance_cache.hpp"
-#include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "types.hpp"
 #include "util.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 
-using namespace duckdb;
 using namespace std;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
 
 void ThrowJNI(JNIEnv *env, const char *message) {
-	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
+}
+
+void ThrowJNIException(JNIEnv *env, const std::exception &e) {
+	if (dynamic_cast<const cxx::InterruptException *>(&e) != nullptr) {
+		env->ThrowNew(J_SQLTimeoutException, e.what());
+		return;
+	}
+	env->ThrowNew(J_SQLException, e.what());
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -74,26 +59,91 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	delete_global_refs(env);
 }
 
-//! The database instance cache, used so that multiple connections to the same file point to the same database object
-duckdb::DBInstanceCache instance_cache;
+//! Quotes the string for the use in SQL
+static std::string quote_literal(const std::string &value) {
+	std::string res = "'";
+	for (char c : value) {
+		if (c == '\'') {
+			res += "''";
+		} else {
+			res += c;
+		}
+	}
+	res += "'";
+	return res;
+}
+
+//! Quotes the identifier for the use in SQL
+static std::string quote_identifier(const std::string &name) {
+	std::string res = "\"";
+	for (char c : name) {
+		if (c == '"') {
+			res += "\"\"";
+		} else {
+			res += c;
+		}
+	}
+	res += "\"";
+	return res;
+}
+
+//! The connection of the statement or result, throws if it was closed
+static std::shared_ptr<cxx::Connection> lock_connection(const std::weak_ptr<cxx::Connection> &connection) {
+	auto res = connection.lock();
+	if (!res) {
+		throw JdbcException("Invalid Input Error: Attempting to use a result or a statement after its connection was "
+		                    "closed!");
+	}
+	return res;
+}
+
+//! The lock of the connection of the statement or result, throws if the connection was closed
+static std::shared_ptr<std::mutex> lock_connection_mutex(const std::weak_ptr<std::mutex> &lock) {
+	auto res = lock.lock();
+	if (!res) {
+		throw JdbcException("Invalid Input Error: Attempting to use a result or a statement after its connection was "
+		                    "closed!");
+	}
+	return res;
+}
+
+//! Reads the value of the first row and the first column of the query result as a string
+static std::string query_single_string(cxx::Connection &conn, const std::string &sql) {
+	auto result = conn.Execute(sql);
+	std::string res;
+	bool found = false;
+	while (true) {
+		auto chunk = result.FetchChunk();
+		if (!chunk) {
+			break;
+		}
+		if (!found && chunk.GetRowCount() > 0) {
+			auto value = chunk.GetVector(0).GetValue(0);
+			if (!value.IsNull()) {
+				res = value.ToText();
+			}
+			found = true;
+		}
+	}
+	return res;
+}
 
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props,
                              jboolean cache_instance) {
 	auto database = jbyteArray_to_string(env, database_j);
-	std::unique_ptr<DBConfig> config = create_db_config(env, read_only, props);
-	bool should_cache = cache_instance && database != ":memory:" && !database.empty();
-	auto shared_db = instance_cache.GetOrCreateInstance(database, *config, should_cache);
-	auto conn_ref = new ConnectionHolder(shared_db);
+	auto instance = open_instance(env, database, read_only, props, cache_instance);
+	auto conn_ref = new ConnectionHolder(std::move(instance));
 
 	return env->NewDirectByteBuffer(conn_ref, 0);
 }
 
 jobject _duckdb_jdbc_connect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = get_connection_ref(env, conn_ref_buf);
-	auto config = ClientConfig::GetConfig(*conn_ref->connection->context);
-	auto conn = new ConnectionHolder(conn_ref->db);
-	ClientConfig::GetConfig(*conn->connection->context) = config;
-	return env->NewDirectByteBuffer(conn, 0);
+	auto conn = std::make_unique<ConnectionHolder>(conn_ref->db);
+
+	// the session settings of the new connection are the same as the ones of this connection
+	copy_session_settings(*conn_ref->connection, *conn->connection);
+	return env->NewDirectByteBuffer(conn.release(), 0);
 }
 
 jobject _duckdb_jdbc_create_db_ref(JNIEnv *env, jclass, jobject conn_ref_buf) {
@@ -104,8 +154,7 @@ jobject _duckdb_jdbc_create_db_ref(JNIEnv *env, jclass, jobject conn_ref_buf) {
 
 jlong _duckdb_jdbc_db_address(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = get_connection_ref(env, conn_ref_buf);
-	// the instance cache returns a new DuckDB handle for every cache hit, the DatabaseInstance is the shared object
-	return (jlong)conn_ref->db->instance.get();
+	return instance_address(*conn_ref->db);
 }
 
 void _duckdb_jdbc_destroy_db_ref(JNIEnv *env, jclass, jobject db_ref_buf) {
@@ -119,92 +168,50 @@ void _duckdb_jdbc_destroy_db_ref(JNIEnv *env, jclass, jobject db_ref_buf) {
 }
 
 jstring _duckdb_jdbc_get_schema(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
-
-	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
-
-	return env->NewStringUTF(entry.GetSchema().c_str());
-}
-
-static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
-	}
-
-	conn_ref->context->RunFunctionInTransaction([&]() {
-		ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, CatalogSetPathType::SET_SCHEMA);
-	});
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+	auto schema = query_single_string(*conn_holder->connection, "SELECT current_schema()");
+	return env->NewStringUTF(schema.c_str());
 }
 
 void _duckdb_jdbc_set_schema(JNIEnv *env, jclass, jobject conn_ref_buf, jstring schema) {
-	set_catalog_search_path(
-	    env, conn_ref_buf, CatalogSearchEntry(Identifier(INVALID_CATALOG), Identifier(jstring_to_string(env, schema))));
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+	conn_holder->connection->Execute("SET schema = " + quote_literal(jstring_to_string(env, schema))).Drain();
 }
 
 void _duckdb_jdbc_set_catalog(JNIEnv *env, jclass, jobject conn_ref_buf, jstring catalog) {
-	set_catalog_search_path(
-	    env, conn_ref_buf, CatalogSearchEntry(Identifier(jstring_to_string(env, catalog)), Identifier(DEFAULT_SCHEMA)));
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+	conn_holder->connection->Execute("USE " + quote_identifier(jstring_to_string(env, catalog))).Drain();
 }
 
 jstring _duckdb_jdbc_get_catalog(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
-
-	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
-	if (entry.GetCatalog() == INVALID_CATALOG) {
-		entry.SetCatalog(DatabaseManager::GetDefaultDatabase(*conn_ref->context));
-	}
-
-	return env->NewStringUTF(entry.GetCatalog().c_str());
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+	auto catalog = query_single_string(*conn_holder->connection, "SELECT current_database()");
+	return env->NewStringUTF(catalog.c_str());
 }
 
 void _duckdb_jdbc_set_auto_commit(JNIEnv *env, jclass, jobject conn_ref_buf, jboolean auto_commit) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
-	}
-	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->SetAutoCommit(auto_commit); });
+	// the auto-commit mode is handled by the Java side with the explicit transactions, the connection is always in
+	// the auto-commit mode here
+	get_connection(env, conn_ref_buf);
 }
 
 jboolean _duckdb_jdbc_get_auto_commit(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return false;
-	}
-	return conn_ref->IsAutoCommit();
+	get_connection(env, conn_ref_buf);
+	return true;
 }
 
 void _duckdb_jdbc_interrupt(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return;
-	}
-	conn_ref->Interrupt();
+	get_connection(env, conn_ref_buf).Interrupt();
 }
 
 jobject _duckdb_jdbc_query_progress(JNIEnv *env, jclass, jobject conn_ref_buf) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
-	auto conn_holder = get_connection_ref(env, conn_ref_buf);
-	auto conn = duckdb::capiv2::Convert(conn_holder->connection.get());
-	double percentage = -1;
-	uint64_t rows_processed = 0;
-	uint64_t total_rows_to_process = 0;
-	v2_error err;
-	if (duckdb_v2_connection_progress_get(conn, &percentage, &rows_processed, &total_rows_to_process, err.out()) !=
-	    DUCKDB_V2_ERROR_NONE) {
-		throw InvalidInputException(err.message());
-	}
-	return env->NewObject(J_QueryProgress, J_QueryProgress_init, static_cast<jdouble>(percentage),
-	                      uint64_to_jlong(rows_processed), uint64_to_jlong(total_rows_to_process));
+	auto progress = get_connection(env, conn_ref_buf).GetQueryProgress();
+	return env->NewObject(J_QueryProgress, J_QueryProgress_init, static_cast<jdouble>(progress.percentage),
+	                      uint64_to_jlong(progress.rows_processed), uint64_to_jlong(progress.total_rows_to_process));
 }
 
 void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
@@ -217,263 +224,235 @@ void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	}
 }
 
-#include "utf8proc_wrapper.hpp"
-
-jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
+//! Parses the query and returns its last statement. The statements before it are run, unless the query is prepared:
+//! preparing must not have side effects, so a query with multiple statements is rejected then.
+static cxx::SqlStatement extract_last_statement(cxx::Connection &conn, const std::string &query, bool is_prepare) {
+	auto iterator = conn.ParseSQL(query);
+	std::vector<cxx::SqlStatement> statements;
+	while (true) {
+		auto statement = iterator.Next();
+		if (!statement) {
+			break;
+		}
+		statements.push_back(std::move(statement));
 	}
-
-	auto query = jbyteArray_to_string(env, query_j);
-
-	auto statements = conn_ref->ExtractStatements(query.c_str());
 	if (statements.empty()) {
-		throw InvalidInputException("No statements to execute.");
+		throw JdbcException("Invalid Input Error: No statements to execute.");
 	}
 
-	// preparing must not have side effects, so multiple statements are rejected instead of
-	// executing all statements besides the last one
-	if (statements.size() > 1) {
-		throw InvalidInputException("Cannot prepare multiple statements at once, statements count: " +
-		                            std::to_string(statements.size()));
-	}
-
-	auto stmt_ref = make_uniq<StatementHolder>();
-	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
-	if (stmt_ref->stmt->HasError()) {
-		string error_msg = string(stmt_ref->stmt->GetError());
-		stmt_ref->stmt = nullptr;
-		ThrowJNI(env, error_msg.c_str());
-		return nullptr;
-	}
-	return env->NewDirectByteBuffer(stmt_ref.release(), 0);
-}
-
-jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
-
-	auto query = jbyteArray_to_string(env, query_j);
-
-	auto statements = conn_ref->ExtractStatements(query.c_str());
-	if (statements.empty()) {
-		throw InvalidInputException("No statements to execute.");
+	if (is_prepare && statements.size() > 1) {
+		throw JdbcException("Invalid Input Error: Cannot prepare multiple statements at once, statements count: " +
+		                    std::to_string(statements.size()));
 	}
 
 	// if there are multiple statements, we directly execute the statements besides the last one
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = conn_ref->Query(std::move(statements[i]));
-		if (res->HasError()) {
-			res->ThrowError();
-		}
+	for (size_t i = 0; i + 1 < statements.size(); i++) {
+		conn.Execute(statements[i]).Drain();
 	}
+	return std::move(statements.back());
+}
 
-	Value result;
-	bool stream_results =
-	    conn_ref->context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
+jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	auto &conn = get_connection(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
 
-	auto pending_ref = make_uniq<PendingHolder>();
-	pending_ref->pending = conn_ref->Submit(std::move(statements.back()));
+	auto query = jbyteArray_to_string(env, query_j);
+
+	auto stmt_ref = std::make_unique<StatementHolder>();
+	stmt_ref->connection = conn_holder->connection;
+	stmt_ref->lock = conn_holder->lock;
+	stmt_ref->statement.emplace(extract_last_statement(conn, query, true));
+	stmt_ref->statement_type = stmt_ref->statement->GetStatementType();
+	stmt_ref->stmt.emplace(conn.Prepare(*stmt_ref->statement));
+	stmt_ref->signature.emplace(conn.Bind(*stmt_ref->statement));
+	return env->NewDirectByteBuffer(stmt_ref.release(), 0);
+}
+
+jobject _duckdb_jdbc_pending_query(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	auto &conn = get_connection(env, conn_ref_buf);
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+
+	auto query = jbyteArray_to_string(env, query_j);
+
+	auto statement = extract_last_statement(conn, query, false);
+
+	bool stream_results = conn.GetConfig().GetOption("jdbc_stream_results").value.Get<bool>();
+
+	auto pending_ref = std::make_unique<PendingHolder>();
+	pending_ref->connection = conn_holder->connection;
+	pending_ref->lock = conn_holder->lock;
+	pending_ref->pending.emplace(conn.Execute(statement));
 	pending_ref->streaming = stream_results;
 
 	return env->NewDirectByteBuffer(pending_ref.release(), 0);
 }
 
-template <typename T>
-static void throw_execution_java_error(JNIEnv *env, T *res) {
-	std::string error_msg = std::string(res->GetError());
-	duckdb::ExceptionType error_type = res->GetErrorType();
-	jclass exc_type = duckdb::ExceptionType::INTERRUPT == error_type ? J_SQLTimeoutException : J_SQLException;
-	env->ThrowNew(exc_type, error_msg.c_str());
+static std::string result_type_to_string(cxx::ResultType type) {
+	switch (type) {
+	case cxx::ResultType::QUERY_RESULT:
+		return "QUERY_RESULT";
+	case cxx::ResultType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	default:
+		return "NOTHING";
+	}
 }
 
-static duckdb::unique_ptr<QueryResult> execute_prepared_statement(JNIEnv *env, jobject stmt_ref_buf,
-                                                                  jobjectArray params, bool stream_results) {
-	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref || !stmt_ref->stmt) {
-		throw InvalidInputException("Invalid statement");
+//! Reads the schema and the result type of the result, fails if the result has an error
+static void read_result_metadata(ResultHolder &holder, cxx::QueryResult &result) {
+	auto schema = result.GetSchema();
+	holder.names.clear();
+	holder.types.clear();
+	for (idx_t i = 0; i < schema.GetFieldCount(); i++) {
+		holder.names.emplace_back(schema.GetFieldName(i));
+		holder.types.push_back(schema.GetFieldType(i));
+	}
+	holder.result_type = result.GetResultType();
+}
+
+//! Whether the result is streamed instead of being read into the memory, streaming is only used for
+//! the SELECT statements
+static bool streams_by_default(cxx::StatementType written_type, cxx::ResultType result_type) {
+	return written_type == cxx::StatementType::SELECT && result_type == cxx::ResultType::QUERY_RESULT;
+}
+
+//! Completes the execution of the result into the holder: the rows are read into the memory, or the result is kept
+//! to be streamed
+static std::unique_ptr<ResultHolder> complete_result(cxx::Connection &conn,
+                                                     const std::weak_ptr<cxx::Connection> &conn_weak,
+                                                     cxx::QueryResult result, cxx::StatementType written_type,
+                                                     bool stream_results_user) {
+	auto holder = std::make_unique<ResultHolder>();
+	holder->connection = conn_weak;
+
+	// the first chunk is read to find out if the query is running without errors, also to complete the metadata
+	auto first_chunk = result.FetchChunk();
+	read_result_metadata(*holder, result);
+
+	bool stream_results = stream_results_user && streams_by_default(written_type, holder->result_type);
+	if (stream_results) {
+		if (first_chunk) {
+			holder->first_chunk.emplace(std::move(first_chunk));
+		}
+		holder->stream.emplace(std::move(result));
+		return holder;
 	}
 
-	duckdb::vector<Value> duckdb_params;
+	auto &factory = conn.GetFactory();
+	holder->materialized = std::make_unique<MaterializedData>();
+	auto &data = *holder->materialized;
+	data.collection.emplace(factory.CreateColumnDataCollection(holder->types));
+	auto append_state = data.collection->CreateAppendState();
+	auto chunk = std::move(first_chunk);
+	while (chunk) {
+		data.collection->Append(append_state, chunk);
+		chunk = result.FetchChunk();
+	}
+	data.shared_state.emplace(data.collection->CreateSharedScanState());
+	data.worker_state.emplace(data.collection->CreateWorkerScanState());
+	return holder;
+}
 
+static cxx::QueryResult execute_prepared_statement(JNIEnv *env, StatementHolder &stmt_ref, jobjectArray params,
+                                                   cxx::Connection &conn) {
 	idx_t param_len = env->GetArrayLength(params);
 
-	if (param_len != stmt_ref->stmt->GetParameterCount()) {
-		throw InvalidInputException("Parameter count mismatch");
+	if (param_len != stmt_ref.signature->parameters.GetFieldCount()) {
+		throw JdbcException("Invalid Input Error: Parameter count mismatch");
 	}
 
-	auto context = stmt_ref->stmt->TryGetContext();
-	if (!context) {
-		throw InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
+	std::vector<cxx::Value> duckdb_params;
+	for (idx_t i = 0; i < param_len; i++) {
+		auto param = env->GetObjectArrayElement(params, i);
+		auto val = to_duckdb_value(env, param, conn.GetFactory());
+		env->DeleteLocalRef(param);
+		duckdb_params.push_back(std::move(val));
 	}
 
-	if (param_len > 0) {
-		for (idx_t i = 0; i < param_len; i++) {
-			auto param = env->GetObjectArrayElement(params, i);
-			duckdb::Value val = to_duckdb_value(env, param, *context);
-			env->DeleteLocalRef(param);
-			duckdb_params.push_back(std::move(val));
-		}
-	}
-
-	duckdb::unique_ptr<QueryResult> res;
-	if (stream_results) {
-		res = stmt_ref->stmt->Submit(duckdb_params);
-	} else {
-		res = stmt_ref->stmt->Execute(duckdb_params);
-	}
-
-	if (res->HasError()) {
-		throw_execution_java_error(env, res.get());
-		return nullptr;
-	}
-
-	return res;
+	return stmt_ref.stmt->Execute(duckdb_params);
 }
 
-duckdb::unique_ptr<QueryResultStream<>> complete_query_streaming(JNIEnv *env, duckdb::unique_ptr<QueryResult> pending) {
-	auto stream = make_uniq<QueryResultStream<>>(std::move(pending));
-	while (!duckdb::IsObservable(stream->ExecuteTask())) {
+static StatementHolder &get_statement(JNIEnv *env, jobject stmt_ref_buf) {
+	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
+	if (!stmt_ref || !stmt_ref->stmt) {
+		throw JdbcException("Invalid Input Error: Invalid statement");
 	}
-	if (stream->HasError()) {
-		throw_execution_java_error(env, stream.get());
-		return nullptr;
-	}
-	return stream;
-}
-
-duckdb::unique_ptr<QueryResult> complete_query_materialized(JNIEnv *env, duckdb::unique_ptr<QueryResult> pending) {
-	pending->Complete();
-	if (pending->HasError()) {
-		throw_execution_java_error(env, pending.get());
-		return nullptr;
-	}
-	return pending;
+	return *stmt_ref;
 }
 
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
-	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref || !stmt_ref->stmt) {
-		throw InvalidInputException("Invalid statement");
+	auto &stmt_ref = get_statement(env, stmt_ref_buf);
+	auto conn = stmt_ref.connection.lock();
+	if (!conn) {
+		throw JdbcException("Invalid Input Error: Attempting to execute a prepared statement after its connection was "
+		                    "closed!");
 	}
-	auto context = stmt_ref->stmt->TryGetContext();
-	if (!context) {
-		throw InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
-	}
-	Value result;
-	bool stream_results_user =
-	    context->TryGetCurrentSetting("jdbc_stream_results", result) ? result.GetValue<bool>() : false;
+	auto conn_lock = lock_connection_mutex(stmt_ref.lock);
+	std::lock_guard<std::mutex> guard(*conn_lock);
+	bool stream_results_user = conn->GetConfig().GetOption("jdbc_stream_results").value.Get<bool>();
 
-	auto pending = execute_prepared_statement(env, stmt_ref_buf, params, stream_results_user);
-	if (pending == nullptr) {
-		return nullptr;
-	}
-
-	bool stream_results_stmt = StreamsByDefault(stmt_ref->stmt->GetStatementType(), *pending);
-	bool stream_results = stream_results_user && stream_results_stmt;
-
-	auto res_ref = make_uniq<ResultHolder>();
-
-	if (stream_results) {
-		auto stream = complete_query_streaming(env, std::move(pending));
-		if (!stream) {
-			return nullptr;
-		}
-		res_ref->stream = std::move(stream);
-	} else {
-		auto res = complete_query_materialized(env, std::move(pending));
-		if (!res) {
-			return nullptr;
-		}
-		res_ref->res = std::move(res);
-	}
-
-	return env->NewDirectByteBuffer(res_ref.release(), 0);
+	auto result = execute_prepared_statement(env, stmt_ref, params, *conn);
+	auto holder =
+	    complete_result(*conn, stmt_ref.connection, std::move(result), stmt_ref.statement_type, stream_results_user);
+	return env->NewDirectByteBuffer(holder.release(), 0);
 }
 
 jobject _duckdb_jdbc_execute_capi(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
-	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref || !stmt_ref->stmt) {
-		throw InvalidInputException("Invalid statement");
+	auto &stmt_ref = get_statement(env, stmt_ref_buf);
+	auto conn = lock_connection(stmt_ref.connection);
+	auto conn_lock = lock_connection_mutex(stmt_ref.lock);
+	std::lock_guard<std::mutex> guard(*conn_lock);
+
+	idx_t param_len = env->GetArrayLength(params);
+	if (param_len != stmt_ref.signature->parameters.GetFieldCount()) {
+		throw JdbcException("Invalid Input Error: Parameter count mismatch");
+	}
+	std::vector<cxx::Value> values;
+	std::vector<duckdb_v2_value_handle> value_handles;
+	for (idx_t i = 0; i < param_len; i++) {
+		auto param = env->GetObjectArrayElement(params, i);
+		values.push_back(to_duckdb_value(env, param, conn->GetFactory()));
+		env->DeleteLocalRef(param);
+		value_handles.push_back(values.back().handle());
 	}
 
-	auto pending = execute_prepared_statement(env, stmt_ref_buf, params, true);
-	if (!pending) {
-		return nullptr;
+	// the result is read through the C API v2 by the Java side
+	v2_result result;
+	v2_error err;
+	if (duckdb_v2_prepared_statement_execute(stmt_ref.stmt->handle(), nullptr, nullptr, value_handles.data(),
+	                                         static_cast<idx_t>(value_handles.size()), result.out(),
+	                                         err.out()) != DUCKDB_V2_ERROR_NONE) {
+		throw JdbcException(err.message());
 	}
-
-	bool stream_results = StreamsByDefault(stmt_ref->stmt->GetStatementType(), *pending);
-
-	// The completed result is adopted into the result state machine of the C API v2 (in the same state
-	// it gets into when it is ready to be consumed) and is read through the C API v2. There is no way to
-	// construct a C API v2 result from an engine result using C API v2.
-	auto wrapper = make_uniq<duckdb::capiv2::ResultWrapperV2>();
-	wrapper->context = stmt_ref->stmt->TryGetContext();
-	wrapper->statement_type = stmt_ref->stmt->GetStatementType();
-	if (stream_results) {
-		auto stream = complete_query_streaming(env, std::move(pending));
-		if (!stream) {
-			return nullptr;
-		}
-		wrapper->types = stream->GetTypes();
-		wrapper->names = stream->GetNames();
-		wrapper->properties = stream->GetStatementProperties();
-		wrapper->stream = std::move(stream);
-		wrapper->stream_when_ready = true;
-	} else {
-		auto res = complete_query_materialized(env, std::move(pending));
-		if (!res) {
-			return nullptr;
-		}
-		wrapper->types = res->GetTypes();
-		wrapper->names = res->GetNames();
-		wrapper->properties = res->GetStatementProperties();
-		wrapper->handle = std::move(res);
-		wrapper->stream_when_ready = false;
+	auto out = std::make_unique<ChunkedResultHolder>(result.release());
+	// the first chunk is read to find out if the query is running without errors
+	if (duckdb_v2_result_fetch_chunk(out->result.get(), out->first_chunk.out(), err.out()) != DUCKDB_V2_ERROR_NONE) {
+		throw JdbcException(err.message());
 	}
-	wrapper->metadata_available = true;
-	wrapper->state = duckdb::capiv2::ResultWrapperV2::State::STREAMING;
-
-	auto out = make_uniq<ChunkedResultHolder>(duckdb::capiv2::Convert(wrapper.release()));
-
+	out->has_first_chunk = true;
 	return env->NewDirectByteBuffer(out.release(), 0);
 }
 
 jobject _duckdb_jdbc_execute_pending(JNIEnv *env, jclass, jobject pending_ref_buf) {
 	auto pending_ref = reinterpret_cast<PendingHolder *>(env->GetDirectBufferAddress(pending_ref_buf));
 	if (!pending_ref || !pending_ref->pending) {
-		throw InvalidInputException("Invalid pending query");
+		throw JdbcException("Invalid Input Error: Invalid pending query");
 	}
 
-	if (pending_ref->pending->HasError()) {
-		throw_execution_java_error(env, pending_ref->pending.get());
-		pending_ref->pending = nullptr;
-		return nullptr;
-	}
+	auto conn = lock_connection(pending_ref->connection);
+	auto conn_lock = lock_connection_mutex(pending_ref->lock);
+	std::lock_guard<std::mutex> guard(*conn_lock);
+	auto result = std::move(*pending_ref->pending);
+	pending_ref->pending.reset();
 
 	// the pending result was submitted from the SQL statement as written, so its type is the written type
-	bool stream_results = StreamsByDefault(pending_ref->pending->GetStatementType(), *pending_ref->pending);
-	auto res_ref = make_uniq<ResultHolder>();
-
-	if (pending_ref->streaming && stream_results) {
-		auto stream = complete_query_streaming(env, std::move(pending_ref->pending));
-		if (!stream) {
-			return nullptr;
-		}
-		res_ref->stream = std::move(stream);
-	} else {
-		auto res = complete_query_materialized(env, std::move(pending_ref->pending));
-		if (!res) {
-			return nullptr;
-		}
-		res_ref->res = std::move(res);
-	}
-
-	return env->NewDirectByteBuffer(res_ref.release(), 0);
+	auto written_type = result.GetStatementType();
+	auto holder =
+	    complete_result(*conn, pending_ref->connection, std::move(result), written_type, pending_ref->streaming);
+	return env->NewDirectByteBuffer(holder.release(), 0);
 }
 
 void _duckdb_jdbc_release(JNIEnv *env, jclass, jobject stmt_ref_buf) {
@@ -506,22 +485,22 @@ void _duckdb_jdbc_free_result(JNIEnv *env, jclass, jobject res_ref_buf) {
 	}
 }
 
-static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<Identifier> &names,
-                          const duckdb::vector<LogicalType> &types, StatementProperties properties,
-                          const duckdb::vector<LogicalType> &param_types) {
+static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const std::vector<std::string> &names,
+                          const std::vector<cxx::LogicalType> &types, const std::string &return_type_str,
+                          const std::vector<cxx::LogicalType> &param_types) {
 	auto name_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_detail_array = env->NewObjectArray(column_count, J_String, nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		std::string col_name;
-		if (types[col_idx].id() == LogicalTypeId::ENUM) {
+		if (types[col_idx].GetTypeId() == cxx::LogicalTypeId::ENUM) {
 			col_name = "ENUM";
 		} else {
-			col_name = types[col_idx].ToString();
+			col_name = types[col_idx].ToText();
 		}
 
-		const std::string &sname = names[col_idx].GetIdentifierName();
+		const std::string &sname = names[col_idx];
 		jstring jname = decode_charbuffer_to_jstring(env, sname.c_str(), sname.length());
 		env->SetObjectArrayElement(name_array, col_idx, jname);
 		env->DeleteLocalRef(jname);
@@ -538,10 +517,10 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 
 	for (idx_t param_idx = 0; param_idx < n_param; param_idx++) {
 		std::string param_name;
-		if (param_types[param_idx].id() == LogicalTypeId::ENUM) {
+		if (param_types[param_idx].GetTypeId() == cxx::LogicalTypeId::ENUM) {
 			param_name = "ENUM";
 		} else {
-			param_name = param_types[param_idx].ToString();
+			param_name = param_types[param_idx].ToText();
 		}
 
 		jstring jname = env->NewStringUTF(param_name.c_str());
@@ -552,7 +531,7 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 		env->DeleteLocalRef(jdetail);
 	}
 
-	jstring return_type = env->NewStringUTF(StatementReturnTypeToString(properties.return_type).c_str());
+	jstring return_type = env->NewStringUTF(return_type_str.c_str());
 
 	jobject res = env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, n_param, column_count, name_array,
 	                             type_array, type_detail_array, return_type, param_type_array, param_type_detail_array);
@@ -565,92 +544,101 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 	return res;
 }
 
-jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
-	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || (!res_ref->res && !res_ref->stream) || (res_ref->res && res_ref->res->HasError()) ||
-	    (res_ref->stream && res_ref->stream->HasError())) {
-		throw InvalidInputException("Invalid result set");
+static ResultHolder &get_result(JNIEnv *env, jobject res_ref_buf) {
+	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
+	if (!res_ref || (!res_ref->stream && !res_ref->materialized)) {
+		throw JdbcException("Invalid Input Error: Invalid result set");
 	}
-	auto n_param = 0; // no params now
-	duckdb::vector<LogicalType> param_types(n_param);
+	return *res_ref;
+}
 
-	if (res_ref->res) {
-		auto &res = res_ref->res;
-		return build_meta(env, res->ColumnCount(), n_param, res->GetNames(), res->GetTypes(),
-		                  res->GetStatementProperties(), param_types);
-	} else if (res_ref->stream) {
-		auto &res = res_ref->stream;
-		return build_meta(env, res->ColumnCount(), n_param, res->GetNames(), res->GetTypes(),
-		                  res->GetStatementProperties(), param_types);
-	} else {
-		throw InvalidInputException("Invalid result set");
+jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
+	auto &res_ref = get_result(env, res_ref_buf);
+	std::vector<cxx::LogicalType> param_types; // no params now
+	std::vector<cxx::LogicalType> types;
+	for (auto &type : res_ref.types) {
+		types.push_back(type.Copy());
 	}
+	return build_meta(env, res_ref.types.size(), 0, res_ref.names, types, result_type_to_string(res_ref.result_type),
+	                  param_types);
+}
+
+//! The return type of a prepared statement is not known before it is executed, it is derived from its columns
+static std::string prepared_return_type(const StatementHolder &stmt_ref) {
+	auto &output = stmt_ref.signature->output;
+	if (output.GetFieldCount() == 0) {
+		return "NOTHING";
+	}
+	if (output.GetFieldCount() == 1 && output.GetFieldName(0) == "Count" &&
+	    output.GetFieldType(0).GetTypeId() == cxx::LogicalTypeId::BIGINT) {
+		switch (stmt_ref.statement_type) {
+		case cxx::StatementType::INSERT:
+		case cxx::StatementType::UPDATE:
+		case cxx::StatementType::DELETE:
+		case cxx::StatementType::COPY:
+		case cxx::StatementType::MERGE_INTO:
+			return "CHANGED_ROWS";
+		default:
+			break;
+		}
+	}
+	return "QUERY_RESULT";
 }
 
 jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
+	auto &stmt_ref = get_statement(env, stmt_ref_buf);
 
-	auto stmt_ref = reinterpret_cast<StatementHolder *>(env->GetDirectBufferAddress(stmt_ref_buf));
-	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		throw InvalidInputException("Invalid statement");
+	auto &signature = *stmt_ref.signature;
+	auto n_param = signature.parameters.GetFieldCount();
+	std::vector<cxx::LogicalType> param_types;
+	for (idx_t i = 0; i < n_param; i++) {
+		param_types.push_back(signature.parameters.GetFieldType(i));
+	}
+	std::vector<std::string> names;
+	std::vector<cxx::LogicalType> types;
+	for (idx_t i = 0; i < signature.output.GetFieldCount(); i++) {
+		names.emplace_back(signature.output.GetFieldName(i));
+		types.push_back(signature.output.GetFieldType(i));
 	}
 
-	auto &stmt = stmt_ref->stmt;
-	auto n_param = stmt->GetParameterCount();
-	duckdb::vector<LogicalType> param_types(n_param);
-	if (n_param > 0) {
-		for (auto &it : stmt->GetNamedParameterMap()) {
-			LogicalType type;
-			if (stmt->TryGetParameterType(it.first, type)) {
-				param_types[it.second - 1] = type;
-			}
-		}
-	}
-
-	return build_meta(env, stmt->ColumnCount(), n_param, stmt->GetNames(), stmt->GetTypes(),
-	                  stmt->GetStatementProperties(), param_types);
+	return build_meta(env, types.size(), n_param, names, types, prepared_return_type(stmt_ref), param_types);
 }
 
-jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
+jobject ProcessVector(JNIEnv *env, cxx::Factory &factory, cxx::Vector &vec, idx_t row_count);
 
 jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf) {
-	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
-	if (!res_ref || (!res_ref->res && !res_ref->stream) || (res_ref->res && res_ref->res->HasError()) ||
-	    (res_ref->stream && res_ref->stream->HasError())) {
-		throw InvalidInputException("Invalid result set");
-	}
+	auto &res_ref = get_result(env, res_ref_buf);
+	auto &conn = get_connection(env, conn_ref_buf);
+	auto &factory = conn.GetFactory();
 
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (conn_ref == nullptr) {
-		return nullptr;
-	}
-
-	if (res_ref->res) {
-		res_ref->chunk = res_ref->res->Fetch();
-		if (res_ref->res->HasError()) {
-			throw_execution_java_error(env, res_ref->res.get());
-			return nullptr;
+	res_ref.chunk.reset();
+	if (res_ref.materialized) {
+		auto &data = *res_ref.materialized;
+		auto chunk = factory.CreateDataChunk(res_ref.types);
+		if (data.collection->Scan(*data.shared_state, *data.worker_state, chunk) && chunk.GetRowCount() > 0) {
+			res_ref.chunk.emplace(std::move(chunk));
 		}
-	} else if (res_ref->stream) {
-		res_ref->chunk = res_ref->stream->Fetch();
-		if (res_ref->stream->HasError()) {
-			throw_execution_java_error(env, res_ref->stream.get());
-			return nullptr;
-		}
+	} else if (res_ref.first_chunk) {
+		res_ref.chunk.emplace(std::move(*res_ref.first_chunk));
+		res_ref.first_chunk.reset();
 	} else {
-		throw InvalidInputException("Invalid result set");
+		auto chunk = res_ref.stream->FetchChunk();
+		if (chunk) {
+			res_ref.chunk.emplace(std::move(chunk));
+		}
 	}
 
-	if (!res_ref->chunk) {
-		res_ref->chunk = make_uniq<DataChunk>();
+	if (!res_ref.chunk) {
+		return env->NewObjectArray(0, J_DuckVector, nullptr);
 	}
-	auto row_count = res_ref->chunk->size();
-	jobjectArray vec_array =
-	    reinterpret_cast<jobjectArray>(env->NewObjectArray(res_ref->chunk->ColumnCount(), J_DuckVector, nullptr));
+	auto row_count = res_ref.chunk->GetRowCount();
+	auto column_count = res_ref.chunk->GetVectorCount();
+	jobjectArray vec_array = reinterpret_cast<jobjectArray>(env->NewObjectArray(column_count, J_DuckVector, nullptr));
 
-	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
-		auto &vec = res_ref->chunk->data[col_idx];
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		auto vec = res_ref.chunk->GetVector(col_idx);
 
-		jobject jvec = ProcessVector(env, conn_ref, vec, row_count);
+		jobject jvec = ProcessVector(env, factory, vec, row_count);
 
 		env->SetObjectArrayElement(vec_array, col_idx, jvec);
 		env->DeleteLocalRef(jvec);
@@ -659,36 +647,38 @@ jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobjec
 	return vec_array;
 }
 
+//! Casts the vector to strings, the chunk that holds the result vector is returned to keep the result alive
+static cxx::DataChunk cast_to_strings(cxx::Factory &factory, const cxx::Vector &vec) {
+	std::vector<cxx::LogicalType> types;
+	types.push_back(factory.CreateType(cxx::LogicalTypeId::VARCHAR));
+	auto chunk = factory.CreateDataChunk(types);
+	auto target = chunk.GetVector(0);
+	vec.Cast(factory, target);
+	target.Flatten();
+	return chunk;
+}
+
 jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf,
                                                  jlong col_idx) {
-	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
-	if (!res_ref || (!res_ref->res && !res_ref->stream) || (res_ref->res && res_ref->res->HasError()) ||
-	    (res_ref->stream && res_ref->stream->HasError())) {
-		throw InvalidInputException("Invalid result set");
-	}
-
-	if (!res_ref->chunk) {
+	auto &res_ref = get_result(env, res_ref_buf);
+	if (!res_ref.chunk) {
 		return nullptr;
 	}
+	auto &conn = get_connection(env, conn_ref_buf);
 
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (conn_ref == nullptr) {
-		return nullptr;
-	}
-
-	auto row_count = res_ref->chunk->size();
-	auto &complex_vec = res_ref->chunk->data[col_idx];
-	Vector vec(LogicalType::VARCHAR);
-	VectorOperations::Cast(*conn_ref->context, complex_vec, vec, row_count);
+	auto row_count = res_ref.chunk->GetRowCount();
+	auto complex_vec = res_ref.chunk->GetVector(static_cast<idx_t>(col_idx));
+	auto cast_chunk = cast_to_strings(conn.GetFactory(), complex_vec);
+	auto vec = cast_chunk.GetVector(0);
+	auto view = vec.GetView();
 
 	jobjectArray string_data = env->NewObjectArray(row_count, J_String, nullptr);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(vec, row_idx)) {
+		if (!view.IsValid(row_idx)) {
 			continue;
 		}
-		const string_t *vec_data = FlatVector::GetData<string_t>(vec);
-		auto d_str = vec_data[row_idx];
-		auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
+		auto d_str = view.Data<cxx::varchar_t>()[view.SelAt(row_idx)].view();
+		auto j_str = decode_charbuffer_to_jstring(env, d_str.data(), d_str.size());
 		env->SetObjectArrayElement(string_data, row_idx, j_str);
 	}
 
@@ -696,22 +686,51 @@ jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv *env, jclass, jobject re
 }
 
 template <typename T>
-static jobject make_vec_data_buf(JNIEnv *env, Vector &vec, idx_t row_count) {
-	T *vec_data = FlatVector::GetDataMutable<T>(vec);
+static jobject make_vec_data_buf(JNIEnv *env, cxx::Vector &vec, idx_t row_count) {
+	T *vec_data = vec.GetDataMutable<T>();
 	idx_t len = row_count * sizeof(T);
 	return make_data_buf(env, vec_data, len);
 }
 
-jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
-	if (vec.GetVectorType() != VectorType::FLAT_VECTOR) {
+//! The type of the entries of a MAP, that are STRUCTs of the keys and the values
+static cxx::LogicalType map_entry_type(cxx::Factory &factory, const cxx::LogicalType &map_type) {
+	return factory.ParseType("STRUCT(\"key\" " + map_type.GetMapKeyType().ToText() + ", \"value\" " +
+	                         map_type.GetMapValueType().ToText() + ")");
+}
+
+//! Creates a Java vector of the specified type from a single value
+static jobject process_value(JNIEnv *env, cxx::Factory &factory, const cxx::Value &value);
+
+static jobject process_vector_with_type(JNIEnv *env, cxx::Factory &factory, cxx::Vector &vec,
+                                        const cxx::LogicalType &type, idx_t row_count);
+
+jobject ProcessVector(JNIEnv *env, cxx::Factory &factory, cxx::Vector &vec, idx_t row_count) {
+	auto type = vec.GetLogicalType();
+	return process_vector_with_type(env, factory, vec, type, row_count);
+}
+
+static jobject process_vector_with_type(JNIEnv *env, cxx::Factory &factory, cxx::Vector &vec,
+                                        const cxx::LogicalType &type, idx_t row_count) {
+	using cxx::LogicalTypeId;
+	auto type_id = type.GetTypeId();
+	bool is_variant = type_id == LogicalTypeId::VARIANT;
+	if (vec.GetVectorType() != cxx::VectorType::FLAT && !is_variant) {
 		vec.Flatten();
 	}
-	jstring type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
+	cxx::VectorView view {};
+	if (!is_variant) {
+		view = vec.GetView();
+	}
+	jstring type_str = env->NewStringUTF(type_to_jduckdb_type(type).c_str());
 	// construct nullmask
 	jbooleanArray null_array = env->NewBooleanArray(row_count);
 	jboolean *null_unique_array = env->GetBooleanArrayElements(null_array, nullptr);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		null_unique_array[row_idx] = FlatVector::IsNull(vec, row_idx);
+		if (is_variant) {
+			null_unique_array[row_idx] = vec.GetValue(row_idx).IsNull();
+		} else {
+			null_unique_array[row_idx] = !view.IsValid(row_idx);
+		}
 	}
 	env->ReleaseBooleanArrayElements(null_array, null_unique_array, 0);
 
@@ -719,10 +738,13 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
-	Vector *string_vec = &vec;
-	duckdb::unique_ptr<Vector> cast_vec;
+	// the source vector must not be modified, it is a part of the result chunk that can be cast again
+	// in getString() (with this vector as a child of a nested type)
+	std::optional<cxx::DataChunk> cast_chunk;
+	std::optional<cxx::Vector> cast_vec;
+	cxx::VectorView string_view_data = view;
 
-	switch (vec.GetType().id()) {
+	switch (type_id) {
 	case LogicalTypeId::BOOLEAN:
 		constlen_data = make_vec_data_buf<bool>(env, vec, row_count);
 		break;
@@ -751,32 +773,30 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		constlen_data = make_vec_data_buf<uint64_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::HUGEINT:
-		constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::int128_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::UHUGEINT:
-		constlen_data = make_vec_data_buf<uhugeint_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::uint128_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::FLOAT:
 		constlen_data = make_vec_data_buf<float>(env, vec, row_count);
 		break;
 	case LogicalTypeId::DECIMAL: {
-		auto physical_type = vec.GetType().InternalType();
-
-		switch (physical_type) {
-		case PhysicalType::INT16:
+		switch (type.GetDecimalInternalTypeId()) {
+		case LogicalTypeId::SMALLINT:
 			constlen_data = make_vec_data_buf<int16_t>(env, vec, row_count);
 			break;
-		case PhysicalType::INT32:
+		case LogicalTypeId::INTEGER:
 			constlen_data = make_vec_data_buf<int32_t>(env, vec, row_count);
 			break;
-		case PhysicalType::INT64:
+		case LogicalTypeId::BIGINT:
 			constlen_data = make_vec_data_buf<int64_t>(env, vec, row_count);
 			break;
-		case PhysicalType::INT128:
-			constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
+		case LogicalTypeId::HUGEINT:
+			constlen_data = make_vec_data_buf<cxx::int128_t>(env, vec, row_count);
 			break;
 		default:
-			throw InternalException("Unimplemented physical type for decimal");
+			throw JdbcException("Internal Error: Unimplemented physical type for decimal");
 		}
 		break;
 	}
@@ -784,31 +804,31 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		constlen_data = make_vec_data_buf<double>(env, vec, row_count);
 		break;
 	case LogicalTypeId::DATE:
-		constlen_data = make_vec_data_buf<date_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::date_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME:
-		constlen_data = make_vec_data_buf<dtime_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::dtime_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME_NS:
-		constlen_data = make_vec_data_buf<dtime_ns_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::dtime_ns_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIME_TZ:
-		constlen_data = make_vec_data_buf<dtime_tz_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::dtime_tz_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		constlen_data = make_vec_data_buf<timestamp_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::timestamp_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::ENUM:
 		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
+			if (!view.IsValid(row_idx)) {
 				continue;
 			}
-			auto dstr = vec.GetValue(row_idx).ToString();
+			auto dstr = vec.GetValue(row_idx).ToText();
 			jstring jstr = env->NewStringUTF(dstr.c_str());
 			env->SetObjectArrayElement(varlen_data, row_idx, jstr);
 			env->DeleteLocalRef(jstr);
@@ -819,23 +839,33 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::TUPLE: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckStruct, nullptr);
 
-		auto &entries = StructVector::GetEntries(vec);
-		auto columns = env->NewObjectArray(entries.size(), J_DuckVector, nullptr);
-		auto names = env->NewObjectArray(entries.size(), J_String, nullptr);
+		idx_t child_count = vec.GetChildCount();
+		auto columns = env->NewObjectArray(child_count, J_DuckVector, nullptr);
+		auto names = env->NewObjectArray(child_count, J_String, nullptr);
 
-		for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-			jobject j_vec = ProcessVector(env, conn_ref, entries[entry_i], row_count);
+		for (idx_t entry_i = 0; entry_i < child_count; entry_i++) {
+			auto child = vec.GetChild(entry_i);
+			std::string name;
+			if (type_id == LogicalTypeId::UNION) {
+				// the first entry of a union is its tag, that has no name
+				name = entry_i == 0 ? "" : type.GetUnionMemberName(entry_i - 1);
+			} else {
+				name = type.GetStructChildName(entry_i);
+				// TUPLE members are unnamed, use the positional names synthesized by DuckDB: "element1", ...
+				if (name.empty() && type_id == LogicalTypeId::TUPLE) {
+					name = "element" + std::to_string(entry_i + 1);
+				}
+			}
+			jobject j_vec = ProcessVector(env, factory, child, row_count);
 			env->SetObjectArrayElement(columns, entry_i, j_vec);
 			env->DeleteLocalRef(j_vec);
-			// TUPLE members are unnamed, use the positional names synthesized by DuckDB: "element1", "element2", ...
-			auto &child_name = StructType::GetChildName(vec.GetType(), entry_i);
-			std::string name = child_name.empty() ? TupleType::GetChildName(entry_i) : child_name.GetIdentifierName();
 			jstring jstr = env->NewStringUTF(name.c_str());
 			env->SetObjectArrayElement(names, entry_i, jstr);
 			env->DeleteLocalRef(jstr);
 		}
+		auto type_text = type.ToText();
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			jstring jstr = env->NewStringUTF(vec.GetType().ToString().c_str());
+			jstring jstr = env->NewStringUTF(type_text.c_str());
 			jobject jstruct = env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx, jstr);
 			env->SetObjectArrayElement(varlen_data, row_idx, jstruct);
 			env->DeleteLocalRef(jstruct);
@@ -851,16 +881,15 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		varlen_data = env->NewObjectArray(row_count, J_ByteArray, nullptr);
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
+			if (!view.IsValid(row_idx)) {
 				continue;
 			}
 
-			const string_t *vec_data = FlatVector::GetData<string_t>(vec);
-			const string_t d_str = vec_data[row_idx];
+			auto d_str = view.Data<cxx::blob_t>()[view.SelAt(row_idx)].view();
 
-			auto j_arr = env->NewByteArray(d_str.GetSize());
+			auto j_arr = env->NewByteArray(d_str.size());
 			auto j_arr_el = env->GetByteArrayElements(j_arr, nullptr);
-			memcpy(j_arr_el, d_str.GetData(), d_str.GetSize());
+			memcpy(j_arr_el, d_str.data(), d_str.size());
 			env->ReleaseByteArrayElements(j_arr, j_arr_el, 0);
 
 			env->SetObjectArrayElement(varlen_data, row_idx, j_arr);
@@ -868,18 +897,17 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		}
 		break;
 	case LogicalTypeId::UUID:
-		constlen_data = make_vec_data_buf<hugeint_t>(env, vec, row_count);
+		constlen_data = make_vec_data_buf<cxx::uuid_t>(env, vec, row_count);
 		break;
 	case LogicalTypeId::ARRAY: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
-		auto &array_vector = ArrayVector::GetChildMutable(vec);
-		auto total_size = row_count * ArrayType::GetSize(vec.GetType());
-		jobject j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
-
-		auto limit = ArrayType::GetSize(vec.GetType());
+		auto array_vector = vec.GetChild(0);
+		auto limit = type.GetArraySize();
+		auto total_size = row_count * limit;
+		jobject j_vec = ProcessVector(env, factory, array_vector, total_size);
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
+			if (!view.IsValid(row_idx)) {
 				continue;
 			}
 
@@ -897,19 +925,32 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::LIST: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
 
-		auto list_entries = FlatVector::GetData<list_entry_t>(vec);
+		auto list_entries = view.Data<cxx::list_entry_t>();
 
-		auto list_size = ListVector::GetListSize(vec);
-		auto &list_vector = ListVector::GetChildMutable(vec);
-		auto j_vec = ProcessVector(env, conn_ref, list_vector, list_size);
+		// the child vector has the capacity of the list, the size is the end of the last list
+		idx_t list_size = 0;
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (!view.IsValid(row_idx)) {
+				continue;
+			}
+			auto &entry = list_entries[view.SelAt(row_idx)];
+			list_size = std::max<idx_t>(list_size, entry.offset + entry.length);
+		}
+		auto list_vector = vec.GetChild(0);
+		jobject j_vec;
+		if (type_id == LogicalTypeId::MAP) {
+			j_vec = process_vector_with_type(env, factory, list_vector, map_entry_type(factory, type), list_size);
+		} else {
+			j_vec = process_vector_with_type(env, factory, list_vector, type.GetListChildType(), list_size);
+		}
 
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(vec, row_idx)) {
+			if (!view.IsValid(row_idx)) {
 				continue;
 			}
 
-			auto offset = list_entries[row_idx].offset;
-			auto limit = list_entries[row_idx].length;
+			auto offset = list_entries[view.SelAt(row_idx)].offset;
+			auto limit = list_entries[view.SelAt(row_idx)].length;
 
 			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
 
@@ -920,45 +961,32 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	}
 	case LogicalTypeId::VARIANT: {
-		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(vec, format);
-		UnifiedVariantVectorData vector_data(format);
 		varlen_data = env->NewObjectArray(row_count, J_Object, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, row_idx, 0);
+			auto variant_val = vec.GetValue(row_idx).VariantToValue();
 			if (variant_val.IsNull()) {
 				continue;
 			}
-			Vector variant_vec(variant_val.type());
-			variant_vec.SetValue(0, variant_val);
-			jobject variant_j_vec = ProcessVector(env, conn_ref, variant_vec, 1);
-			env->CallVoidMethod(variant_j_vec, J_DuckVector_retainConstlenData);
-			check_java_exception_and_rethrow(env);
+			jobject variant_j_vec = process_value(env, factory, variant_val);
 			env->SetObjectArrayElement(varlen_data, row_idx, variant_j_vec);
 			env->DeleteLocalRef(variant_j_vec);
 		}
 		break;
 	}
 	default: {
-		// the source vector must not be modified, it is a part of the result chunk that can be cast again
-		// in getString() (with this vector as a child of a nested type)
-		cast_vec = make_uniq<Vector>(LogicalType::VARCHAR);
-		VectorOperations::Cast(*conn_ref->context, vec, *cast_vec, row_count);
-		if (cast_vec->GetVectorType() != VectorType::FLAT_VECTOR) {
-			cast_vec->Flatten();
-		}
-		string_vec = cast_vec.get();
+		cast_chunk.emplace(cast_to_strings(factory, vec));
+		cast_vec.emplace(cast_chunk->GetVector(0));
+		string_view_data = cast_vec->GetView();
 		// fall through on purpose
 	}
 	case LogicalTypeId::VARCHAR:
 		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			if (FlatVector::IsNull(*string_vec, row_idx)) {
+			if (!string_view_data.IsValid(row_idx)) {
 				continue;
 			}
-			const string_t *vec_data = FlatVector::GetData<string_t>(*string_vec);
-			const string_t d_str = vec_data[row_idx];
-			auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
+			auto d_str = string_view_data.Data<cxx::varchar_t>()[string_view_data.SelAt(row_idx)].view();
+			auto j_str = decode_charbuffer_to_jstring(env, d_str.data(), d_str.size());
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			env->DeleteLocalRef(j_str);
 		}
@@ -980,205 +1008,276 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	return jvec;
 }
 
-jint _duckdb_jdbc_fetch_size(JNIEnv *, jclass) {
-	return STANDARD_VECTOR_SIZE;
+static jobject process_value(JNIEnv *env, cxx::Factory &factory, const cxx::Value &value) {
+	auto type = value.GetLogicalType();
+	std::vector<cxx::LogicalType> types;
+	types.push_back(type.Copy());
+	auto chunk = factory.CreateDataChunk(types);
+	auto vec = chunk.GetVector(0);
+	vec.SetSize(1);
+	vec.SetValue(0, value);
+	jobject j_vec = ProcessVector(env, factory, vec, 1);
+	// the fixed-size data of the Java vector points into the chunk, that is destroyed here, so it is copied
+	env->CallVoidMethod(j_vec, J_DuckVector_retainConstlenData);
+	check_java_exception_and_rethrow(env);
+	return j_vec;
 }
+
+jint _duckdb_jdbc_fetch_size(JNIEnv *env, jclass cls) {
+	// the size of the chunks of the engine
+	return static_cast<jint>(Java_org_duckdb_DuckDBBindings_duckdb_1vector_1size(env, cls));
+}
+
+/**
+ * An appender of the rows that are appended one value at a time. The values are collected into a data chunk
+ * that is appended to the table when it is full or the appender is flushed.
+ */
+struct RowAppender {
+	std::shared_ptr<cxx::Connection> connection;
+	std::optional<cxx::Appender> appender;
+	std::optional<cxx::DataChunk> chunk;
+	std::vector<cxx::LogicalTypeId> column_ids;
+	idx_t capacity = 0;
+	//! The index of the row that is being appended, and of the column to append to
+	idx_t row = 0;
+	idx_t column = 0;
+	bool in_row = false;
+	bool closed = false;
+
+	cxx::Factory &factory() {
+		return connection->GetFactory();
+	}
+
+	void reset_chunk() {
+		chunk->Clear();
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			chunk->GetVector(i).SetSize(capacity);
+		}
+		row = 0;
+		column = 0;
+	}
+
+	//! Appends the collected rows to the table
+	void collect() {
+		if (row == 0) {
+			return;
+		}
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			chunk->GetVector(i).SetSize(row);
+		}
+		try {
+			appender->AppendChunk(*chunk);
+		} catch (...) {
+			reset_chunk();
+			throw;
+		}
+		reset_chunk();
+	}
+};
 
 jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray schema_name_j,
                                      jbyteArray table_name_j) {
-
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
+	auto conn_holder = get_connection_ref(env, conn_ref_buf);
+	auto &conn = get_connection(env, conn_ref_buf);
 	auto schema_name = jbyteArray_to_string(env, schema_name_j);
 	auto table_name = jbyteArray_to_string(env, table_name_j);
-	auto appender = new Appender(*conn_ref, Identifier(schema_name), Identifier(table_name));
-	return env->NewDirectByteBuffer(appender, 0);
+
+	auto appender = std::make_unique<RowAppender>();
+	appender->connection = conn_holder->connection;
+	std::string table = schema_name.empty() ? quote_identifier(table_name)
+	                                        : quote_identifier(schema_name) + "." + quote_identifier(table_name);
+	appender->appender.emplace(conn, table);
+	auto &types = appender->appender->ColumnTypes();
+	for (auto &type : types) {
+		appender->column_ids.push_back(type.GetTypeId());
+	}
+	appender->chunk.emplace(conn.GetFactory().CreateDataChunk(types));
+	appender->capacity = appender->chunk->GetCapacity();
+	appender->reset_chunk();
+	return env->NewDirectByteBuffer(appender.release(), 0);
 }
 
-static Appender *get_appender(JNIEnv *env, jobject appender_ref_buf) {
-	auto appender_ref = (Appender *)env->GetDirectBufferAddress(appender_ref_buf);
-	if (!appender_ref) {
-		throw InvalidInputException("Invalid appender");
+static RowAppender &get_appender(JNIEnv *env, jobject appender_ref_buf) {
+	auto appender_ref = (RowAppender *)env->GetDirectBufferAddress(appender_ref_buf);
+	if (!appender_ref || appender_ref->closed) {
+		throw JdbcException("Invalid Input Error: Invalid appender");
 	}
-	return appender_ref;
+	return *appender_ref;
 }
 
 void _duckdb_jdbc_appender_begin_row(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->BeginRow();
+	// the values are appended to the columns in order, no matter how many times the row is begun
+	get_appender(env, appender_ref_buf).in_row = true;
 }
 
 void _duckdb_jdbc_appender_end_row(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->EndRow();
+	auto &appender = get_appender(env, appender_ref_buf);
+	if (appender.column != appender.column_ids.size()) {
+		// the values of the incomplete row are dropped
+		appender.column = 0;
+		appender.in_row = false;
+		throw JdbcException("Invalid Input Error: Call to EndRow before all columns have been appended to");
+	}
+	appender.in_row = false;
+	appender.column = 0;
+	appender.row++;
+	if (appender.row == appender.capacity) {
+		appender.collect();
+	}
 }
 
 void _duckdb_jdbc_appender_flush(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->Flush();
+	auto &appender = get_appender(env, appender_ref_buf);
+	appender.collect();
+	appender.appender->Flush();
 }
 
 void _duckdb_jdbc_appender_close(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	auto appender = get_appender(env, appender_ref_buf);
-	appender->Close();
-	delete appender;
+	auto appender = (RowAppender *)env->GetDirectBufferAddress(appender_ref_buf);
+	if (!appender) {
+		throw JdbcException("Invalid Input Error: Invalid appender");
+	}
+	std::unique_ptr<RowAppender> owned(appender);
+	if (owned->closed) {
+		return;
+	}
+	owned->closed = true;
+	owned->collect();
+	owned->appender->Flush();
+}
+
+//! The vector of the column that is appended to
+static cxx::Vector appender_vector(RowAppender &appender) {
+	if (appender.column >= appender.column_ids.size()) {
+		throw JdbcException("Invalid Input Error: Too many appends for chunk!");
+	}
+	return appender.chunk->GetVector(appender.column);
+}
+
+//! Appends the value to the column, that is cast to the type of the column
+static void append_value(RowAppender &appender, const cxx::Value &value) {
+	auto vec = appender_vector(appender);
+	vec.SetValue(appender.row, value);
+	appender.column++;
+}
+
+//! Appends the primitive value directly if the column has the same type, otherwise the value is cast
+template <typename T>
+static void append_primitive(RowAppender &appender, cxx::LogicalTypeId id, T value) {
+	if (appender.column < appender.column_ids.size() && appender.column_ids[appender.column] == id) {
+		auto vec = appender.chunk->GetVector(appender.column);
+		vec.GetDataMutable<T>()[appender.row] = value;
+		vec.GetValidityMutable().SetValid(appender.row);
+		appender.column++;
+		return;
+	}
+	append_value(appender, cxx::Value::Create(appender.factory(), value));
 }
 
 void _duckdb_jdbc_appender_append_boolean(JNIEnv *env, jclass, jobject appender_ref_buf, jboolean value) {
-	get_appender(env, appender_ref_buf)->Append((bool)value);
+	append_primitive<bool>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::BOOLEAN, value != 0);
 }
 
 void _duckdb_jdbc_appender_append_byte(JNIEnv *env, jclass, jobject appender_ref_buf, jbyte value) {
-	get_appender(env, appender_ref_buf)->Append((int8_t)value);
+	append_primitive<int8_t>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::TINYINT, (int8_t)value);
 }
 
 void _duckdb_jdbc_appender_append_short(JNIEnv *env, jclass, jobject appender_ref_buf, jshort value) {
-	get_appender(env, appender_ref_buf)->Append((int16_t)value);
+	append_primitive<int16_t>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::SMALLINT, (int16_t)value);
 }
 
 void _duckdb_jdbc_appender_append_int(JNIEnv *env, jclass, jobject appender_ref_buf, jint value) {
-	get_appender(env, appender_ref_buf)->Append((int32_t)value);
+	append_primitive<int32_t>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::INTEGER, (int32_t)value);
 }
 
 void _duckdb_jdbc_appender_append_long(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
-	get_appender(env, appender_ref_buf)->Append((int64_t)value);
+	append_primitive<int64_t>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::BIGINT, (int64_t)value);
 }
 
 void _duckdb_jdbc_appender_append_float(JNIEnv *env, jclass, jobject appender_ref_buf, jfloat value) {
-	get_appender(env, appender_ref_buf)->Append((float)value);
+	append_primitive<float>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::FLOAT, (float)value);
 }
 
 void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_ref_buf, jdouble value) {
-	get_appender(env, appender_ref_buf)->Append((double)value);
+	append_primitive<double>(get_appender(env, appender_ref_buf), cxx::LogicalTypeId::DOUBLE, (double)value);
 }
 
 void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
-	timestamp_t timestamp = timestamp_t((int64_t)value);
-	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
+	auto &appender = get_appender(env, appender_ref_buf);
+	append_value(appender, cxx::Value::Create(appender.factory(), cxx::timestamp_t {static_cast<int64_t>(value)}));
 }
 
 void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass, jobject appender_ref_buf, jobject value) {
-	Value val = create_value_from_bigdecimal(env, value);
-	get_appender(env, appender_ref_buf)->Append(val);
+	auto &appender = get_appender(env, appender_ref_buf);
+	append_value(appender, create_value_from_bigdecimal(env, value, appender.factory()));
+}
+
+static void append_null(RowAppender &appender) {
+	auto vec = appender_vector(appender);
+	vec.SetNull(appender.row);
+	appender.column++;
 }
 
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
+	auto &appender = get_appender(env, appender_ref_buf);
 	if (env->IsSameObject(value, NULL)) {
-		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+		append_null(appender);
 		return;
 	}
 
 	auto string_value = jbyteArray_to_string(env, value);
-	get_appender(env, appender_ref_buf)->Append(string_value.c_str());
+	append_value(appender, cxx::Value::Create(appender.factory(), cxx::varchar_t(string_value)));
 }
 
 void _duckdb_jdbc_appender_append_bytes(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
+	auto &appender = get_appender(env, appender_ref_buf);
 	if (env->IsSameObject(value, NULL)) {
-		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+		append_null(appender);
 		return;
 	}
 
 	auto string_value = jbyteArray_to_string(env, value);
-	get_appender(env, appender_ref_buf)->Append(Value::BLOB_RAW(string_value));
+	append_value(appender, cxx::Value::Create(appender.factory(), cxx::blob_t(string_value)));
 }
 
 void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+	append_null(get_appender(env, appender_ref_buf));
 }
 
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf, jlong batch_size) {
 	if (!res_ref_buf) {
-		throw InvalidInputException("Invalid result set");
+		throw JdbcException("Invalid Input Error: Invalid result set");
 	}
-	auto res_ref = reinterpret_cast<ResultHolder *>(env->GetDirectBufferAddress(res_ref_buf));
-	if (!res_ref || (!res_ref->res && !res_ref->stream) || (res_ref->res && res_ref->res->HasError()) ||
-	    (res_ref->stream && res_ref->stream->HasError())) {
-		throw InvalidInputException("Invalid result set");
-	}
+	auto &res_ref = get_result(env, res_ref_buf);
 	if (batch_size <= 0) {
-		throw InvalidInputException("Arrow batch size must be greater than 0");
+		throw JdbcException("Invalid Input Error: Arrow batch size must be greater than 0");
 	}
 	auto conn_holder = get_connection_ref(env, conn_ref_buf);
-
-	auto state = make_shared_ptr<JavaResultArrowStream>(std::move(res_ref->res), std::move(res_ref->stream),
-	                                                    static_cast<idx_t>(batch_size));
-	res_ref->chunk = nullptr;
-	conn_holder->track_arrow_stream(state);
-	return reinterpret_cast<jlong>(JavaResultArrowStream::Export(std::move(state)));
+	std::lock_guard<std::mutex> guard(*conn_holder->lock);
+	res_ref.chunk.reset();
+	return reinterpret_cast<jlong>(create_result_arrow_stream(*conn_holder, res_ref, static_cast<idx_t>(batch_size)));
 }
-
-class JavaArrowScanFactory : public ArrowScanFactory {
-public:
-	explicit JavaArrowScanFactory(duckdb::shared_ptr<JavaRegisteredArrowStream> state_p) : state(std::move(state_p)) {
-	}
-
-	void GetSchema(ArrowSchema &schema) override {
-		state->GetSchema(schema);
-	}
-
-	duckdb::unique_ptr<ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &) override {
-		return state->Take();
-	}
-
-private:
-	duckdb::shared_ptr<JavaRegisteredArrowStream> state;
-};
 
 void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlong arrow_array_stream_pointer,
                                  jbyteArray name_j) {
-	auto conn = get_connection(env, conn_ref_buf);
-	if (conn == nullptr) {
-		return;
-	}
 	auto conn_holder = get_connection_ref(env, conn_ref_buf);
 	auto name = jbyteArray_to_string(env, name_j);
 	auto arrow_array_stream = reinterpret_cast<ArrowArrayStream *>(arrow_array_stream_pointer);
 	if (!arrow_array_stream || !arrow_array_stream->release) {
-		throw InvalidInputException("This stream has been released");
+		throw JdbcException("Invalid Input Error: This stream has been released");
 	}
-
-	auto state = make_shared_ptr<JavaRegisteredArrowStream>(arrow_array_stream);
-	conn_holder->track_arrow_stream(state);
-	auto factory = make_shared_ptr<JavaArrowScanFactory>(std::move(state));
-	// construct the `arrow_scan_dumb(...)` function expression
-	auto scan = make_uniq<TableFunctionRef>();
-	scan->function =
-	    make_uniq<FunctionExpression>("arrow_scan_dumb", duckdb::vector<duckdb::unique_ptr<ParsedExpression>>());
-	scan->bind_info = std::move(factory);
-	// construct the `SELECT * FROM arrow_scan_dumb(...)` statement
-	auto node = make_uniq<SelectNode>();
-	node->select_list.push_back(make_uniq<StarExpression>());
-	node->from_table = std::move(scan);
-	auto select = make_uniq<SelectStatement>();
-	select->node = std::move(node);
-	// construct the `CREATE TEMP VIEW AS` statement using the select statement
-	auto info = make_uniq<CreateViewInfo>();
-	info->query = std::move(select);
-	info->temporary = true;
-	info->SetQualifiedName(QualifiedName(Identifier(), Identifier::InvalidSchema(), Identifier(name)));
-	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-	auto statement = make_uniq<CreateStatement>();
-	statement->info = std::move(info);
-	// execute the CREATE VIEW
-	conn->Query(std::move(statement))->ThrowIfError("Failed to create view '" + name + "': ");
+	register_arrow_stream(*conn_holder, arrow_array_stream, name);
 }
 
 void _duckdb_jdbc_arrow_close_streams(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	get_connection_ref(env, conn_ref_buf)->close_arrow_streams();
 }
 
-static ProfilerPrintFormat GetProfilerPrintFormat(JNIEnv *env, jobject format) {
-	jobject jname = env->CallObjectMethod(format, J_ProfilerPrintFormat_getName);
+jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
+	auto &conn = get_connection(env, conn_ref_buf);
+	jobject jname = env->CallObjectMethod(j_format, J_ProfilerPrintFormat_getName);
 	check_java_exception_and_rethrow(env);
 	const std::string name = jstring_to_string(env, static_cast<jstring>(jname));
-	return ProfilerPrintFormat(name);
-}
-
-jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass, jobject conn_ref_buf, jobject j_format) {
-	auto connection = get_connection(env, conn_ref_buf);
-	if (!connection) {
-		throw InvalidInputException("Invalid connection");
-	}
-	auto format = GetProfilerPrintFormat(env, j_format);
-	auto profiling_info = connection->GetProfilingInformation(format);
+	auto profiling_info = conn.GetProfilingInformation(name == "default" ? std::string() : name);
 	return env->NewStringUTF(profiling_info.c_str());
 }

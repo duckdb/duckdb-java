@@ -2,12 +2,13 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
-#include "duckdb/common/error_data.hpp"
 #include "org_duckdb_DuckDBNative.h"
 #include <exception>
 
 void ThrowJNI(JNIEnv* env, const char* message);
+
+//! Throws a SQLTimeoutException for the interrupted queries and a SQLException for all other errors
+void ThrowJNIException(JNIEnv* env, const std::exception& e);
 {% for function in header.functions %}
 
 {{function.return_type or 'void'}} {{function.short_name}}({{function.params}});

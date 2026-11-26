@@ -657,7 +657,13 @@ public class TestArrow {
                     sum += vec.get(i);
                 }
             }
-            assertListsEqual(batchSizes, asList(4096, 4096, 1808));
+            // batches are filled by the threads of the query, so they can be smaller than the batch size
+            int rows = 0;
+            for (int size : batchSizes) {
+                assertTrue(size > 0 && size <= 4096, "batch size: " + size);
+                rows += size;
+            }
+            assertEquals(rows, 10000);
             assertEquals(sum, 9999L * 10000L / 2);
         }
     }
@@ -687,7 +693,7 @@ public class TestArrow {
             }
             assertEquals(count, 100000L);
             assertEquals(sum, 99999L * 100000L / 2);
-            assertEquals(batches, 10);
+            assertTrue(batches >= 10);
         }
     }
 
