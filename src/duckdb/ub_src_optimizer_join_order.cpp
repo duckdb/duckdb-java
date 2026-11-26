@@ -20,6 +20,10 @@
 
 #include "src/optimizer/join_order/join_order_plan.cpp"
 
+#include "src/optimizer/join_order/join_order_precedence.cpp"
+
+#include "src/optimizer/join_order/join_order_rank.cpp"
+
 #include "src/optimizer/join_order/join_order_source_stats.cpp"
 
 #include "src/optimizer/join_order/join_predicate.cpp"
