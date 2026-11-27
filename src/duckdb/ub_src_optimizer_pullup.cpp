@@ -1,5 +1,7 @@
 #include "src/optimizer/pullup/pullup_both_side.cpp"
 
+#include "src/optimizer/pullup/pullup_constraints.cpp"
+
 #include "src/optimizer/pullup/pullup_filter.cpp"
 
 #include "src/optimizer/pullup/pullup_from_left.cpp"

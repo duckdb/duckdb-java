@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/hash.hpp"
 
 #include <algorithm>
@@ -26,8 +25,9 @@ JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, i
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ",
-	                           [](const RelationIndex &relation) { return to_string(relation.index); });
+	result += StringUtil::Join(relations, count, ", ", [](const RelationIndex &relation) {
+		return StringUtil::Format("%llu", relation.index);
+	});
 	result += "]";
 	return result;
 }
@@ -35,6 +35,11 @@ string JoinRelationSet::ToString() const {
 
 bool JoinRelationSet::Empty() const {
 	return count == 0;
+}
+
+bool JoinRelationSet::Contains(RelationIndex relation) const {
+	auto word = relation.index / BITMASK_WORD_SIZE;
+	return word < bitmask.size() && (bitmask[word] & (idx_t(1) << (relation.index % BITMASK_WORD_SIZE))) != 0;
 }
 
 //! Returns true if sub is a subset of super
@@ -82,6 +87,13 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<Rel
 
 //! Create or get a JoinRelationSet from a single node with the given index
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
+	auto entries = relation_sets.equal_range(CombineHash(0, Hash(index.index)));
+	for (auto entry = entries.first; entry != entries.second; ++entry) {
+		auto &set = *entry->second;
+		if (set.count == 1 && set.relations[0] == index) {
+			return set;
+		}
+	}
 	// create a sorted vector of the relations
 	auto relations = make_unsafe_uniq_array<RelationIndex>(1);
 	relations[0] = index;

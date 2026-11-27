@@ -186,7 +186,6 @@ set(DUCKDB_SRC_FILES
   src/duckdb/src/common/vector_operations/vector_hash.cpp
   src/duckdb/src/common/vector_operations/vector_storage.cpp
   src/duckdb/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
-  src/duckdb/src/function/aggregate/sorted_aggregate_function.cpp
   src/duckdb/src/function/cast/union/from_struct.cpp
   src/duckdb/src/function/scalar/date/strftime.cpp
   src/duckdb/src/function/scalar/geometry/geometry_functions.cpp
@@ -432,6 +431,7 @@ set(DUCKDB_SRC_FILES
   src/duckdb/ub_src_execution_physical_plan.cpp
   src/duckdb/ub_src_execution_sample.cpp
   src/duckdb/ub_src_function.cpp
+  src/duckdb/ub_src_function_aggregate.cpp
   src/duckdb/ub_src_function_aggregate_distributive.cpp
   src/duckdb/ub_src_function_cast.cpp
   src/duckdb/ub_src_function_cast_variant.cpp

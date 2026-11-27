@@ -1,5 +1,7 @@
 #include "src/common/assert.cpp"
 
+#include "src/common/base_file_system.cpp"
+
 #include "src/common/bignum.cpp"
 
 #include "src/common/bind_helpers.cpp"
@@ -69,8 +71,6 @@
 #include "src/common/memory_safety.cpp"
 
 #include "src/common/open_file_info.cpp"
-
-#include "src/common/opener_file_system.cpp"
 
 #include "src/common/optional_idx.cpp"
 

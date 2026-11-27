@@ -20,6 +20,8 @@
 
 #include "src/main/capi/v2/capi_v2_data_chunk.cpp"
 
+#include "src/main/capi/v2/capi_v2_data_source.cpp"
+
 #include "src/main/capi/v2/capi_v2_environment.cpp"
 
 #include "src/main/capi/v2/capi_v2_error.cpp"
