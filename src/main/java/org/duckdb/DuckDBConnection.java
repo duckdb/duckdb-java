@@ -37,6 +37,9 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     ByteBuffer connRef;
     DuckDBInstances.InstanceRef instanceRef;
+    // The config and the factory of the connection, that are borrowed from it
+    private ByteBuffer configRef;
+    private ByteBuffer factoryRef;
     // The ids of the Arrow streams that are registered with the connection, by the names of their views
     final java.util.HashMap<String, Long> arrowStreams = new java.util.HashMap<>();
     final ReentrantLock connRefLock = new ReentrantLock();
@@ -105,6 +108,24 @@ public final class DuckDBConnection implements java.sql.Connection {
         if (this.monitorName != null) {
             JfrMemoryMonitor.connectionOpened(this);
         }
+    }
+
+    ByteBuffer config() throws SQLException {
+        ByteBuffer res = configRef;
+        if (res == null) {
+            res = DuckDBBindings.duckdb_v2_connection_get_config(connRef);
+            configRef = res;
+        }
+        return res;
+    }
+
+    ByteBuffer factory() throws SQLException {
+        ByteBuffer res = factoryRef;
+        if (res == null) {
+            res = DuckDBBindings.duckdb_v2_connection_get_factory(connRef);
+            factoryRef = res;
+        }
+        return res;
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
@@ -225,6 +246,8 @@ public final class DuckDBConnection implements java.sql.Connection {
 
             DuckDBInstances.disconnect(connRef, instanceRef);
             connRef = null;
+            configRef = null;
+            factoryRef = null;
             notifyMonitor = (monitorName != null);
         } finally {
             connRefLock.unlock();

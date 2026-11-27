@@ -80,16 +80,22 @@ final class DuckDBCore {
         final int statementType;
         final long parameterCount;
         ByteBuffer prepared;
+        // the parsed statement, it is bound when the metadata is asked
+        ByteBuffer statement;
         ByteBuffer outputSchema;
         ByteBuffer parametersSchema;
+        // The metadata of the last result, it is the same for the next results of the statement if the types are
+        int[] metaTypeIds;
+        String[] metaNames;
+        int metaResultType;
+        DuckDBResultSetMetaData meta;
 
-        StatementRef(DuckDBConnection conn, int statementType, ByteBuffer prepared, ByteBuffer outputSchema,
-                     ByteBuffer parametersSchema, long parameterCount) {
+        StatementRef(DuckDBConnection conn, int statementType, ByteBuffer prepared, ByteBuffer statement,
+                     long parameterCount) {
             this.conn = conn;
             this.statementType = statementType;
             this.prepared = prepared;
-            this.outputSchema = outputSchema;
-            this.parametersSchema = parametersSchema;
+            this.statement = statement;
             this.parameterCount = parameterCount;
         }
     }
@@ -114,9 +120,13 @@ final class DuckDBCore {
      * completed.
      */
     static final class ResultRef {
-        final ByteBuffer connRef;
+        final DuckDBConnection connection;
         final int resultType;
         final String[] names;
+        // the type IDs (of the C API v1) of the columns
+        final int[] typeIds;
+        // the statement that is executed to get this result, if any
+        StatementRef statement;
         // the result that is streamed, null if the result is in the memory
         ByteBuffer streamResult;
         // the chunks that are read but are not consumed yet
@@ -124,9 +134,13 @@ final class DuckDBCore {
         // the chunk that is being consumed, it keeps the memory of the vectors of the fetched DuckDBVector-s
         ByteBuffer currentChunk;
         ByteBuffer schema;
+        // the type details of the columns, they are the same for all the chunks
+        String[] detailCache;
 
-        ResultRef(ByteBuffer connRef, ByteBuffer streamResult, ByteBuffer schema, int resultType, String[] names) {
-            this.connRef = connRef;
+        ResultRef(DuckDBConnection connection, ByteBuffer streamResult, ByteBuffer schema, int resultType,
+                  String[] names, int[] typeIds) {
+            this.connection = connection;
+            this.typeIds = typeIds;
             this.streamResult = streamResult;
             this.schema = schema;
             this.resultType = resultType;
@@ -149,15 +163,9 @@ final class DuckDBCore {
         return schema == null ? 0 : duckdb_v2_schema_get_count(schema);
     }
 
-    private static boolean streamResultsOption(ByteBuffer conn) {
+    private static boolean streamResultsOption(DuckDBConnection connection) {
         try {
-            ByteBuffer config = duckdb_v2_connection_get_config(conn);
-            ByteBuffer value = duckdb_v2_config_get_option_value(config, STREAM_RESULTS_OPTION);
-            try {
-                return duckdb_get_bool(value);
-            } finally {
-                duckdb_v2_value_destroy(value);
-            }
+            return duckdb_v2_config_get_bool_option(connection.config(), STREAM_RESULTS_OPTION) == 1;
         } catch (SQLException e) {
             return false;
         }
@@ -241,28 +249,21 @@ final class DuckDBCore {
         ByteBuffer conn = conn(connection.connRef);
         ByteBuffer statement = extractLastStatement(conn, query, true);
         ByteBuffer prepared = null;
-        ByteBuffer[] schemas = null;
         try {
             int statementType = duckdb_v2_sql_statement_get_type(statement);
+            long parameterCount = duckdb_v2_sql_statement_get_parameter_count(statement);
             prepared = duckdb_v2_prepared_statement_create(conn, statement, false);
-            schemas = duckdb_v2_statement_bind(conn, statement);
-            long parameterCount = fieldCount(schemas[1]);
-            StatementRef ref =
-                new StatementRef(connection, statementType, prepared, schemas[0], schemas[1], parameterCount);
+            StatementRef ref = new StatementRef(connection, statementType, prepared, statement, parameterCount);
             prepared = null;
-            schemas = null;
+            statement = null;
             return ref;
         } finally {
             if (prepared != null) {
                 duckdb_v2_prepared_statement_destroy(prepared);
             }
-            if (schemas != null) {
-                duckdb_v2_schema_destroy(schemas[0]);
-                if (schemas[1] != null) {
-                    duckdb_v2_schema_destroy(schemas[1]);
-                }
+            if (statement != null) {
+                duckdb_v2_sql_statement_destroy(statement);
             }
-            duckdb_v2_sql_statement_destroy(statement);
         }
     }
 
@@ -275,6 +276,10 @@ final class DuckDBCore {
         try {
             duckdb_v2_prepared_statement_destroy(prepared);
         } finally {
+            if (ref.statement != null) {
+                duckdb_v2_sql_statement_destroy(ref.statement);
+                ref.statement = null;
+            }
             if (ref.outputSchema != null) {
                 duckdb_v2_schema_destroy(ref.outputSchema);
                 ref.outputSchema = null;
@@ -283,6 +288,21 @@ final class DuckDBCore {
                 duckdb_v2_schema_destroy(ref.parametersSchema);
                 ref.parametersSchema = null;
             }
+        }
+    }
+
+    // Binds the statement to get the types of its columns and parameters, the types are not needed to execute it
+    private static void bind(StatementRef ref) throws SQLException {
+        if (ref.outputSchema != null) {
+            return;
+        }
+        ref.conn.queryGate.acquireUninterruptibly();
+        try {
+            ByteBuffer[] schemas = duckdb_v2_statement_bind(conn(ref.conn.connRef), ref.statement);
+            ref.outputSchema = schemas[0];
+            ref.parametersSchema = schemas[1];
+        } finally {
+            ref.conn.queryGate.release();
         }
     }
 
@@ -295,7 +315,7 @@ final class DuckDBCore {
             ByteBuffer statement = extractLastStatement(conn, query, false);
             try {
                 int statementType = duckdb_v2_sql_statement_get_type(statement);
-                boolean streaming = streamResultsOption(conn);
+                boolean streaming = streamResultsOption(connection);
                 ByteBuffer result = duckdb_v2_statement_execute(conn, statement, null);
                 PendingRef ref = new PendingRef(connection, statementType, streaming, result);
                 ok = true;
@@ -331,7 +351,7 @@ final class DuckDBCore {
         ref.result = null;
         try {
             // the pending result was submitted from the SQL statement as written, so its type is the written type
-            return completeResult(ref.conn.connRef, result, ref.statementType, ref.streaming);
+            return completeResult(ref.conn, result, ref.statementType, ref.streaming);
         } finally {
             ref.conn.queryGate.release();
         }
@@ -486,7 +506,7 @@ final class DuckDBCore {
         if (paramLen != ref.parameterCount) {
             throw invalid("Parameter count mismatch");
         }
-        ByteBuffer factory = duckdb_v2_connection_get_factory(conn);
+        ByteBuffer factory = ref.conn.factory();
         ByteBuffer[] values = new ByteBuffer[paramLen];
         try {
             for (int i = 0; i < paramLen; i++) {
@@ -506,9 +526,11 @@ final class DuckDBCore {
         checkStatement(ref);
         ref.conn.queryGate.acquireUninterruptibly();
         try {
-            boolean streamResults = streamResultsOption(conn(ref.conn.connRef));
+            boolean streamResults = streamResultsOption(ref.conn);
             ByteBuffer result = executePrepared(ref, params);
-            return completeResult(ref.conn.connRef, result, ref.statementType, streamResults);
+            ResultRef res = completeResult(ref.conn, result, ref.statementType, streamResults);
+            res.statement = ref;
+            return res;
         } finally {
             ref.conn.queryGate.release();
         }
@@ -534,7 +556,7 @@ final class DuckDBCore {
      * Completes the execution of the result: the rows are read into the memory, or the result is kept to be streamed.
      * The result is owned by the returned reference (or is destroyed on failure).
      */
-    private static ResultRef completeResult(ByteBuffer connRef, ByteBuffer result, int writtenType,
+    private static ResultRef completeResult(DuckDBConnection connection, ByteBuffer result, int writtenType,
                                             boolean streamResultsUser) throws SQLException {
         ByteBuffer firstChunk = null;
         ByteBuffer schema = null;
@@ -544,13 +566,14 @@ final class DuckDBCore {
             firstChunk = duckdb_v2_result_fetch_chunk(result);
             schema = duckdb_v2_result_get_schema(result);
             int resultType = duckdb_v2_result_get_result_type(result);
-            long count = fieldCount(schema);
-            String[] names = new String[(int) count];
-            for (int i = 0; i < count; i++) {
-                names[i] = new String(duckdb_v2_schema_get_field_name(schema, i), UTF_8);
+            byte[][] nameBytes = duckdb_v2_schema_get_field_names(schema);
+            String[] names = new String[nameBytes.length];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = new String(nameBytes[i], UTF_8);
             }
+            int[] typeIds = duckdb_v2_schema_get_field_type_ids(schema);
             boolean stream = streamResultsUser && streamsByDefault(writtenType, resultType);
-            ref = new ResultRef(connRef, stream ? result : null, schema, resultType, names);
+            ref = new ResultRef(connection, stream ? result : null, schema, resultType, names, typeIds);
             // the reference owns the schema and the streamed result now
             schema = null;
             ByteBuffer ownedResult = result;
@@ -867,13 +890,87 @@ final class DuckDBCore {
         }
     }
 
-    private static DuckDBResultSetMetaData buildMeta(ByteBuffer factory, String[] names, ByteBuffer schema,
-                                                     ByteBuffer parametersSchema, String returnType)
+    // The name of the types that have no parameters, their text is the same as their detail. Returns null for
+    // the other types.
+    private static String simpleTypeName(int id) {
+        switch (id) {
+        case TYPE_BOOLEAN:
+            return "BOOLEAN";
+        case TYPE_TINYINT:
+            return "TINYINT";
+        case TYPE_SMALLINT:
+            return "SMALLINT";
+        case TYPE_INTEGER:
+            return "INTEGER";
+        case TYPE_BIGINT:
+            return "BIGINT";
+        case TYPE_UTINYINT:
+            return "UTINYINT";
+        case TYPE_USMALLINT:
+            return "USMALLINT";
+        case TYPE_UINTEGER:
+            return "UINTEGER";
+        case TYPE_UBIGINT:
+            return "UBIGINT";
+        case TYPE_HUGEINT:
+            return "HUGEINT";
+        case TYPE_UHUGEINT:
+            return "UHUGEINT";
+        case TYPE_FLOAT:
+            return "FLOAT";
+        case TYPE_DOUBLE:
+            return "DOUBLE";
+        case TYPE_TIMESTAMP:
+            return "TIMESTAMP";
+        case TYPE_TIMESTAMP_S:
+            return "TIMESTAMP_S";
+        case TYPE_TIMESTAMP_MS:
+            return "TIMESTAMP_MS";
+        case TYPE_TIMESTAMP_NS:
+            return "TIMESTAMP_NS";
+        case TYPE_TIMESTAMP_TZ:
+            return "TIMESTAMP WITH TIME ZONE";
+        case TYPE_DATE:
+            return "DATE";
+        case TYPE_TIME:
+            return "TIME";
+        case TYPE_TIME_NS:
+            return "TIME_NS";
+        case TYPE_TIME_TZ:
+            return "TIME WITH TIME ZONE";
+        case TYPE_BLOB:
+            return "BLOB";
+        case TYPE_UUID:
+            return "UUID";
+        case TYPE_INTERVAL:
+            return "INTERVAL";
+        default:
+            return null;
+        }
+    }
+
+    private static boolean allSimpleTypes(int[] typeIds) {
+        for (int id : typeIds) {
+            if (simpleTypeName(id) == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static DuckDBResultSetMetaData buildMeta(ByteBuffer factory, String[] names, int[] typeIds,
+                                                     ByteBuffer schema, ByteBuffer parametersSchema, String returnType)
         throws SQLException {
         int columnCount = names.length;
         String[] typeNames = new String[columnCount];
         String[] typeDetails = new String[columnCount];
         for (int i = 0; i < columnCount; i++) {
+            String simple = typeIds == null ? null : simpleTypeName(typeIds[i]);
+            if (simple != null) {
+                typeNames[i] = simple;
+                typeDetails[i] = simple;
+                continue;
+            }
             ByteBuffer type = duckdb_v2_schema_get_field_type(schema, i);
             typeNames[i] = typeText(factory, type);
             typeDetails[i] = typeDetail(factory, type);
@@ -894,19 +991,35 @@ final class DuckDBCore {
         if (ref == null || ref.schema == null) {
             throw invalid("Invalid result set");
         }
-        ByteBuffer factory = duckdb_v2_connection_get_factory(conn(ref.connRef));
-        return buildMeta(factory, ref.names, ref.schema, null, returnTypeName(ref.resultType));
+        // the metadata of a statement that has only the types without parameters is the same for all its results
+        StatementRef stmt = ref.statement;
+        boolean cacheable = stmt != null && allSimpleTypes(ref.typeIds);
+        if (cacheable && stmt.meta != null && stmt.metaResultType == ref.resultType &&
+            java.util.Arrays.equals(stmt.metaTypeIds, ref.typeIds) &&
+            java.util.Arrays.equals(stmt.metaNames, ref.names)) {
+            return stmt.meta;
+        }
+        DuckDBResultSetMetaData meta = buildMeta(ref.connection.factory(), ref.names, ref.typeIds, ref.schema, null,
+                                                 returnTypeName(ref.resultType));
+        if (cacheable) {
+            stmt.metaTypeIds = ref.typeIds;
+            stmt.metaNames = ref.names;
+            stmt.metaResultType = ref.resultType;
+            stmt.meta = meta;
+        }
+        return meta;
     }
 
     static DuckDBResultSetMetaData preparedStatementMeta(StatementRef ref) throws SQLException {
         checkStatement(ref);
-        ByteBuffer factory = duckdb_v2_connection_get_factory(conn(ref.conn.connRef));
+        bind(ref);
+        ByteBuffer factory = ref.conn.factory();
         int count = (int) fieldCount(ref.outputSchema);
         String[] names = new String[count];
         for (int i = 0; i < count; i++) {
             names[i] = new String(duckdb_v2_schema_get_field_name(ref.outputSchema, i), UTF_8);
         }
-        return buildMeta(factory, names, ref.outputSchema, ref.parametersSchema, preparedReturnType(ref));
+        return buildMeta(factory, names, null, ref.outputSchema, ref.parametersSchema, preparedReturnType(ref));
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -917,7 +1030,7 @@ final class DuckDBCore {
         if (ref == null || ref.schema == null) {
             throw invalid("Invalid result set");
         }
-        ByteBuffer connHandle = conn(ref.connRef);
+        conn(ref.connection.connRef);
         if (ref.currentChunk != null) {
             duckdb_destroy_data_chunk(ref.currentChunk);
             ref.currentChunk = null;
@@ -931,11 +1044,15 @@ final class DuckDBCore {
         }
         ref.currentChunk = chunk;
         int rowCount = (int) duckdb_data_chunk_get_size(chunk);
-        int columnCount = (int) duckdb_data_chunk_get_column_count(chunk);
-        ByteBuffer factory = duckdb_v2_connection_get_factory(connHandle);
+        int columnCount = ref.typeIds.length;
+        ByteBuffer factory = ref.connection.factory();
         DuckDBVector[] vectors = new DuckDBVector[columnCount];
         for (int col = 0; col < columnCount; col++) {
-            vectors[col] = processVector(factory, duckdb_data_chunk_get_vector(chunk, col), rowCount);
+            if (ref.detailCache == null || ref.detailCache.length != columnCount) {
+                ref.detailCache = new String[columnCount];
+            }
+            vectors[col] = processVector(factory, duckdb_data_chunk_get_vector(chunk, col), rowCount, ref.detailCache,
+                                         col, ref.typeIds);
         }
         return vectors;
     }
@@ -949,11 +1066,7 @@ final class DuckDBCore {
         }
         int rowCount = (int) duckdb_data_chunk_get_size(ref.currentChunk);
         ByteBuffer vec = duckdb_data_chunk_get_vector(ref.currentChunk, colIdx);
-        String[] res = new String[rowCount];
-        for (int row = 0; row < rowCount; row++) {
-            res[row] = valueToString(vec, row);
-        }
-        return res;
+        return castToStrings(ref.connection.factory(), vec, rowCount);
     }
 
     // Returns null for a NULL value
@@ -982,6 +1095,19 @@ final class DuckDBCore {
         return nulls;
     }
 
+    // The width of the DECIMAL of the detail "DECIMAL64;18;3"
+    private static int decimalWidth(String detail) {
+        if (detail.startsWith("DECIMAL16")) {
+            return 2;
+        } else if (detail.startsWith("DECIMAL32")) {
+            return 4;
+        } else if (detail.startsWith("DECIMAL64")) {
+            return 8;
+        }
+        return 16;
+    }
+
+    // The type is needed only for DECIMAL, can be null for the other types
     private static int fixedWidth(int typeId, ByteBuffer type) throws SQLException {
         switch (typeId) {
         case TYPE_BOOLEAN:
@@ -1013,6 +1139,9 @@ final class DuckDBCore {
         case TYPE_UUID:
             return 16;
         case TYPE_DECIMAL:
+            if (type == null) {
+                return 0;
+            }
             switch (duckdb_decimal_internal_type(type)) {
             case TYPE_SMALLINT:
                 return 2;
@@ -1031,12 +1160,46 @@ final class DuckDBCore {
     }
 
     static DuckDBVector processVector(ByteBuffer factory, ByteBuffer vec, int rowCount) throws SQLException {
+        return processVector(factory, vec, rowCount, null, 0, null);
+    }
+
+    // The details of the types of the columns are cached in the array if it is given
+    private static DuckDBVector processVector(ByteBuffer factory, ByteBuffer vec, int rowCount, String[] details,
+                                              int detailIdx, int[] typeIds) throws SQLException {
         duckdb_v2_vector_flatten(vec);
+        if (typeIds != null && details != null && details[detailIdx] != null) {
+            // the type of the column is known from the previous chunks, no need to read it
+            int id = typeIds[detailIdx];
+            int width = id == TYPE_DECIMAL ? decimalWidth(details[detailIdx]) : fixedWidth(id, null);
+            if (width > 0 || id == TYPE_VARCHAR || id == TYPE_BLOB) {
+                boolean[] nulls = nullMask(vec, rowCount);
+                DuckDBVector jvec = new DuckDBVector(details[detailIdx], rowCount, nulls);
+                if (width > 0) {
+                    jvec.constlen_data = duckdb_vector_get_data(vec, (long) rowCount * width);
+                } else if (id == TYPE_VARCHAR) {
+                    String[] strings = new String[rowCount];
+                    readStringData(duckdb_vector_get_data(vec, (long) rowCount * 16), nulls, rowCount, strings, null);
+                    jvec.varlen_data = strings;
+                } else {
+                    byte[][] blobs = new byte[rowCount][];
+                    readStringData(duckdb_vector_get_data(vec, (long) rowCount * 16), nulls, rowCount, null, blobs);
+                    jvec.varlen_data = blobs;
+                }
+                return jvec;
+            }
+        }
         ByteBuffer type = duckdb_vector_get_column_type(vec);
         try {
             int typeId = duckdb_get_type_id(type);
             boolean[] nulls = nullMask(vec, rowCount);
-            DuckDBVector jvec = new DuckDBVector(typeDetail(factory, type), rowCount, nulls);
+            String detail = details == null ? null : details[detailIdx];
+            if (detail == null) {
+                detail = typeDetail(factory, type);
+                if (details != null) {
+                    details[detailIdx] = detail;
+                }
+            }
+            DuckDBVector jvec = new DuckDBVector(detail, rowCount, nulls);
 
             int width = fixedWidth(typeId, type);
             if (width > 0) {
@@ -1052,12 +1215,7 @@ final class DuckDBCore {
             case TYPE_BLOB:
             case TYPE_GEOMETRY: {
                 byte[][] blobs = new byte[rowCount][];
-                ByteBuffer data = duckdb_vector_get_data(vec, (long) rowCount * 16);
-                for (int row = 0; row < rowCount; row++) {
-                    if (!nulls[row]) {
-                        blobs[row] = duckdb_vector_get_string(data, row);
-                    }
-                }
+                readStringData(duckdb_vector_get_data(vec, (long) rowCount * 16), nulls, rowCount, null, blobs);
                 jvec.varlen_data = blobs;
                 return jvec;
             }
@@ -1102,29 +1260,95 @@ final class DuckDBCore {
             }
             case TYPE_VARCHAR: {
                 String[] strings = new String[rowCount];
-                ByteBuffer data = duckdb_vector_get_data(vec, (long) rowCount * 16);
-                for (int row = 0; row < rowCount; row++) {
-                    if (!nulls[row]) {
-                        strings[row] = new String(duckdb_vector_get_string(data, row), UTF_8);
-                    }
-                }
+                readStringData(duckdb_vector_get_data(vec, (long) rowCount * 16), nulls, rowCount, strings, null);
                 jvec.varlen_data = strings;
                 return jvec;
             }
             default: {
                 // ENUM and the types that have no special representation are read as strings
-                String[] strings = new String[rowCount];
-                for (int row = 0; row < rowCount; row++) {
-                    if (!nulls[row]) {
-                        strings[row] = valueToString(vec, row);
-                    }
-                }
-                jvec.varlen_data = strings;
+                jvec.varlen_data = castToStrings(factory, vec, rowCount);
                 return jvec;
             }
             }
         } finally {
             duckdb_destroy_logical_type(type);
+        }
+    }
+
+    /**
+     * Reads the strings (strings are written to the strings array) or the BLOBs (written to the blobs array) of the
+     * vector data. An entry is 16 bytes: the length, and the bytes themselves for the strings of up to 12 bytes (that
+     * are read here without any call) or a prefix and the pointer to the bytes for the longer ones (that are copied
+     * by one call for all of them).
+     */
+    private static void readStringData(ByteBuffer data, boolean[] nulls, int rowCount, String[] strings, byte[][] blobs)
+        throws SQLException {
+        if (data == null) {
+            // a vector without rows has no data
+            return;
+        }
+        data.order(NATIVE_ORDER);
+        byte[] inlined = new byte[12];
+        int[] longRows = null;
+        int longCount = 0;
+        for (int row = 0; row < rowCount; row++) {
+            if (nulls[row]) {
+                continue;
+            }
+            int pos = row << 4;
+            int len = data.getInt(pos);
+            if (len <= 12) {
+                if (strings != null) {
+                    for (int i = 0; i < len; i++) {
+                        inlined[i] = data.get(pos + 4 + i);
+                    }
+                    strings[row] = new String(inlined, 0, len, UTF_8);
+                } else {
+                    byte[] blob = new byte[len];
+                    for (int i = 0; i < len; i++) {
+                        blob[i] = data.get(pos + 4 + i);
+                    }
+                    blobs[row] = blob;
+                }
+            } else {
+                if (longRows == null) {
+                    longRows = new int[rowCount];
+                }
+                longRows[longCount++] = row;
+            }
+        }
+        if (longCount > 0) {
+            int[] offsets = new int[longCount + 1];
+            byte[] bytes = duckdb_v2_vector_get_long_strings(data, longRows, longCount, offsets);
+            for (int i = 0; i < longCount; i++) {
+                int row = longRows[i];
+                int len = offsets[i + 1] - offsets[i];
+                if (strings != null) {
+                    strings[row] = new String(bytes, offsets[i], len, UTF_8);
+                } else {
+                    blobs[row] = java.util.Arrays.copyOfRange(bytes, offsets[i], offsets[i + 1]);
+                }
+            }
+        }
+    }
+
+    // Casts the vector to strings, the NULL values are null
+    private static String[] castToStrings(ByteBuffer factory, ByteBuffer vec, int rowCount) throws SQLException {
+        ByteBuffer varchar = duckdb_create_logical_type(CAPIType.DUCKDB_TYPE_VARCHAR.typeId);
+        ByteBuffer target = null;
+        try {
+            target = duckdb_create_vector(varchar);
+            duckdb_v2_vector_cast(factory, vec, target);
+            duckdb_v2_vector_flatten(target);
+            String[] res = new String[rowCount];
+            readStringData(duckdb_vector_get_data(target, (long) rowCount * 16), nullMask(target, rowCount), rowCount,
+                           res, null);
+            return res;
+        } finally {
+            if (target != null) {
+                duckdb_destroy_vector(target);
+            }
+            duckdb_destroy_logical_type(varchar);
         }
     }
 

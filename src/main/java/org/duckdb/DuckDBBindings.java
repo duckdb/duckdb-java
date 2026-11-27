@@ -584,6 +584,28 @@ public class DuckDBBindings {
     static native byte[] duckdb_v2_connection_get_profiling_information(ByteBuffer conn, byte[] format)
         throws SQLException;
 
+    // reading strings
+
+    // Copies the strings (BLOBs) of the rows of the vector data that do not fit into the 16 bytes of the entry into one
+    // array, the string of the i-th row is at [offsets_out[i], offsets_out[i + 1]) of the result
+    static native byte[] duckdb_v2_vector_get_long_strings(ByteBuffer data, int[] rows, int count, int[] offsets_out)
+        throws SQLException;
+
+    // casts the rows of the source vector to the type of the target vector, the target is replaced by the result
+    static native void duckdb_v2_vector_cast(ByteBuffer factory, ByteBuffer source, ByteBuffer target)
+        throws SQLException;
+
+    // bulk reads
+
+    // the names of all the fields of the schema
+    static native byte[][] duckdb_v2_schema_get_field_names(ByteBuffer schema) throws SQLException;
+
+    // the type IDs (of the C API v1) of all the fields of the schema
+    static native int[] duckdb_v2_schema_get_field_type_ids(ByteBuffer schema) throws SQLException;
+
+    // reads a BOOLEAN option: 1 or 0, or -1 if the option is not set or is not a BOOLEAN
+    static native int duckdb_v2_config_get_bool_option(ByteBuffer config, byte[] name) throws SQLException;
+
     // DUCKDB_V2_RESULT_STEP_STATUS
     static final int RESULT_STEP_WAITING = 0;
     static final int RESULT_STEP_CHUNK = 1;

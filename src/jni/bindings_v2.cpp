@@ -5,6 +5,7 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstring>
 #include <vector>
 
 template <class H>
@@ -1225,4 +1226,135 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connecti
 	    duckdb_v2_connection_get_profiling_information(conn, format.data(), format.size(), text_sink, &text, ERR_OUT),
 	    nullptr);
 	return make_jbyteArray(env, text.data(), text.size());
+}
+
+/* --- reading strings --- */
+
+// Copies the strings (or BLOBs) of the rows of the vector data, that do not fit into the 16 bytes of the entry, into
+// one array. The string of the i-th row is at [offsets_out[i], offsets_out[i + 1]) of the result. The short strings are
+// read from the data buffer on Java side, without any call.
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1long_1strings(
+    JNIEnv *env, jclass, jobject data_buf, jintArray rows_j, jint count, jintArray offsets_out) {
+	if (data_buf == nullptr || rows_j == nullptr || offsets_out == nullptr || count < 0) {
+		env->ThrowNew(J_SQLException, "Invalid strings buffer");
+		return nullptr;
+	}
+	auto data = reinterpret_cast<duckdb_v2_bytes *>(env->GetDirectBufferAddress(data_buf));
+	if (data == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid vector data");
+		return nullptr;
+	}
+	std::vector<jint> rows(static_cast<size_t>(count));
+	env->GetIntArrayRegion(rows_j, 0, count, rows.data());
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	std::vector<jint> offsets(static_cast<size_t>(count) + 1);
+	uint64_t total = 0;
+	for (jint i = 0; i < count; i++) {
+		offsets[static_cast<size_t>(i)] = static_cast<jint>(total);
+		total += v2_bytes_length(data[rows[static_cast<size_t>(i)]]);
+		if (total > static_cast<uint64_t>(INT32_MAX)) {
+			env->ThrowNew(J_SQLException, "The strings of the vector are too large");
+			return nullptr;
+		}
+	}
+	offsets[static_cast<size_t>(count)] = static_cast<jint>(total);
+	jbyteArray res = env->NewByteArray(static_cast<jsize>(total));
+	if (res == nullptr) {
+		return nullptr;
+	}
+	if (total > 0) {
+		auto dst = static_cast<char *>(env->GetPrimitiveArrayCritical(res, nullptr));
+		if (dst == nullptr) {
+			return nullptr;
+		}
+		for (jint i = 0; i < count; i++) {
+			auto &bytes = data[rows[static_cast<size_t>(i)]];
+			std::memcpy(dst + offsets[static_cast<size_t>(i)], v2_bytes_data(bytes), v2_bytes_length(bytes));
+		}
+		env->ReleasePrimitiveArrayCritical(res, dst, 0);
+	}
+	env->SetIntArrayRegion(offsets_out, 0, count + 1, offsets.data());
+	return res;
+}
+
+// Casts the rows of the source vector to the type of the target vector, the target is replaced by the result
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1cast(JNIEnv *env, jclass, jobject factory_buf,
+                                                                               jobject source_buf, jobject target_buf) {
+	CHECK_BUF(factory, factory_buf, duckdb_v2_factory_handle, "factory");
+	CHECK_BUF(source, source_buf, duckdb_v2_vector_handle, "vector");
+	CHECK_BUF(target, target_buf, duckdb_v2_vector_handle, "vector");
+	bool converted = false;
+	CALL_V2(duckdb_v2_vector_cast(factory, source, target, DUCKDB_V2_CAST_MODE_NORMAL, &converted, nullptr, ERR_OUT), );
+}
+
+/* --- bulk reads --- */
+
+// The names of all the fields of the schema
+JNIEXPORT jobjectArray JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1names(JNIEnv *env, jclass, jobject schema_buf) {
+	CHECK_BUF_RET(schema, schema_buf, duckdb_v2_schema_handle, "schema", nullptr);
+	idx_t count = 0;
+	CALL_V2(duckdb_v2_schema_get_count(schema, &count, ERR_OUT), nullptr);
+	jobjectArray res = env->NewObjectArray(static_cast<jsize>(count), J_ByteArray, nullptr);
+	if (res == nullptr) {
+		return nullptr;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		const char *name = nullptr;
+		idx_t name_len = 0;
+		duckdb_v2_logical_type_handle type = nullptr;
+		CALL_V2(duckdb_v2_schema_get_field(schema, i, &name, &name_len, &type, ERR_OUT), nullptr);
+		jbyteArray name_j = make_jbyteArray(env, name, name_len);
+		if (name_j == nullptr) {
+			return nullptr;
+		}
+		env->SetObjectArrayElement(res, static_cast<jsize>(i), name_j);
+		env->DeleteLocalRef(name_j);
+	}
+	return res;
+}
+
+// The type IDs (of the C API v1) of all the fields of the schema
+JNIEXPORT jintArray JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1type_1ids(JNIEnv *env, jclass, jobject schema_buf) {
+	CHECK_BUF_RET(schema, schema_buf, duckdb_v2_schema_handle, "schema", nullptr);
+	idx_t count = 0;
+	CALL_V2(duckdb_v2_schema_get_count(schema, &count, ERR_OUT), nullptr);
+	std::vector<jint> ids(count);
+	for (idx_t i = 0; i < count; i++) {
+		const char *name = nullptr;
+		idx_t name_len = 0;
+		duckdb_v2_logical_type_handle type = nullptr;
+		CALL_V2(duckdb_v2_schema_get_field(schema, i, &name, &name_len, &type, ERR_OUT), nullptr);
+		ids[i] = static_cast<jint>(logical_type_to_capi(type));
+	}
+	jintArray res = env->NewIntArray(static_cast<jsize>(count));
+	if (res != nullptr && count > 0) {
+		env->SetIntArrayRegion(res, 0, static_cast<jsize>(count), ids.data());
+	}
+	return res;
+}
+
+// Reads a BOOLEAN option, returns 1 or 0, or -1 if the option is not set or is not a BOOLEAN
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1bool_1option(JNIEnv *env, jclass,
+                                                                                            jobject config_buf,
+                                                                                            jbyteArray name_j) {
+	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", -1);
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return -1;
+	}
+	v2_value value;
+	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	if (duckdb_v2_config_get_option_value(config, name.data(), name.size(), value.out(), &scope, nullptr) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return -1;
+	}
+	bool res = false;
+	if (duckdb_v2_value_get_bool(value.get(), &res, nullptr) != DUCKDB_V2_ERROR_NONE) {
+		return -1;
+	}
+	return res ? 1 : 0;
 }

@@ -176,8 +176,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             } finally {
                 conn.connRefLock.unlock();
             }
-
-            meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmtRef);
         } catch (SQLException e) {
             close();
             throw e;
@@ -412,14 +410,28 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public ResultSetMetaData getMetaData() throws SQLException {
         checkOpen();
         checkPrepared();
-        return meta;
+        return loadMeta();
+    }
+
+    // The metadata of the prepared statement is read when it is asked
+    private DuckDBResultSetMetaData loadMeta() throws SQLException {
+        stmtRefLock.lock();
+        try {
+            checkOpen();
+            if (meta == null) {
+                meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmtRef);
+            }
+            return meta;
+        } finally {
+            stmtRefLock.unlock();
+        }
     }
 
     @Override
     public ParameterMetaData getParameterMetaData() throws SQLException {
         checkOpen();
         checkPrepared();
-        return meta.param_meta;
+        return loadMeta().param_meta;
     }
 
     @Override
