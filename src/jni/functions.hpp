@@ -5,70 +5,14 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "org_duckdb_DuckDBNative.h"
+
 #include <exception>
 
-void ThrowJNI(JNIEnv* env, const char* message);
+void ThrowJNI(JNIEnv *env, const char *message);
 
-jobject _duckdb_jdbc_startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3, jboolean param4);
+jstring _duckdb_jdbc_get_profiling_information(JNIEnv *env, jclass param0, jobject param1, jobject param2);
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv * env, jclass param0, jbyteArray param1, jboolean param2, jobject param3, jboolean param4);
-
-jobject _duckdb_jdbc_connect(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv * env, jclass param0, jobject param1);
-
-jobject _duckdb_jdbc_create_db_ref(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_1ref(JNIEnv * env, jclass param0, jobject param1);
-
-jlong _duckdb_jdbc_db_address(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_destroy_db_ref(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_set_auto_commit(JNIEnv * env, jclass param0, jobject param1, jboolean param2);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv * env, jclass param0, jobject param1, jboolean param2);
-
-jboolean _duckdb_jdbc_get_auto_commit(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_disconnect(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_set_schema(JNIEnv * env, jclass param0, jobject param1, jstring param2);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv * env, jclass param0, jobject param1, jstring param2);
-
-void _duckdb_jdbc_set_catalog(JNIEnv * env, jclass param0, jobject param1, jstring param2);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv * env, jclass param0, jobject param1, jstring param2);
-
-jstring _duckdb_jdbc_get_schema(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema(JNIEnv * env, jclass param0, jobject param1);
-
-jstring _duckdb_jdbc_get_catalog(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv * env, jclass param0, jobject param1);
-
-jint _duckdb_jdbc_fetch_size(JNIEnv * env, jclass param0);
-
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv * env, jclass param0);
-
-void _duckdb_jdbc_arrow_register(JNIEnv * env, jclass param0, jobject param1, jlong param2, jbyteArray param3);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1register(JNIEnv * env, jclass param0, jobject param1, jlong param2, jbyteArray param3);
-
-void _duckdb_jdbc_arrow_close_streams(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1close_1streams(JNIEnv * env, jclass param0, jobject param1);
-
-jstring _duckdb_jdbc_get_profiling_information(JNIEnv * env, jclass param0, jobject param1, jobject param2);
-
-JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information(JNIEnv * env, jclass param0, jobject param1, jobject param2);
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information(JNIEnv *env,
+                                                                                                 jclass param0,
+                                                                                                 jobject param1,
+                                                                                                 jobject param2);

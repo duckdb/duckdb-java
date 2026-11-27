@@ -36,6 +36,9 @@ public final class DuckDBConnection implements java.sql.Connection {
     public static final String DEFAULT_SCHEMA = "main";
 
     ByteBuffer connRef;
+    DuckDBInstances.InstanceRef instanceRef;
+    // The ids of the Arrow streams that are registered with the connection, by the names of their views
+    final java.util.HashMap<String, Long> arrowStreams = new java.util.HashMap<>();
     final ReentrantLock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPendingQuery> pendingQueries = new LinkedHashSet<>();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
@@ -85,22 +88,20 @@ public final class DuckDBConnection implements java.sql.Connection {
         String monitorName = removeOption(properties, DuckDBDriver.JDBC_JFR_MEMORY_MONITOR);
         String instanceCacheStr = removeOption(properties, DuckDBDriver.JDBC_INSTANCE_CACHE);
         boolean instanceCache = isStringTruish(instanceCacheStr, true);
-        ByteBuffer nativeReference =
-            DuckDBNative.duckdb_jdbc_startup(dbName.getBytes(UTF_8), readOnly, properties, instanceCache);
-        return new DuckDBConnection(nativeReference, url, readOnly, sessionInitSQL, autoCommit, monitorName);
+        DuckDBInstances.Connected connected = DuckDBInstances.startup(dbName, readOnly, properties, instanceCache);
+        return new DuckDBConnection(connected, url, readOnly, sessionInitSQL, autoCommit, monitorName);
     }
 
-    private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly, String sessionInitSQL,
+    private DuckDBConnection(DuckDBInstances.Connected connected, String url, boolean readOnly, String sessionInitSQL,
                              boolean autoCommit, String monitorName) throws SQLException {
-        this.connRef = connectionReference;
+        this.connRef = connected.conn;
+        this.instanceRef = connected.instanceRef;
         this.url = url;
         this.readOnly = readOnly;
         this.autoCommit = autoCommit;
         this.sessionInitSQL = sessionInitSQL;
         this.monitorName = (monitorName != null && !monitorName.isEmpty()) ? monitorName : null;
-        this.dbAddress = DuckDBNative.duckdb_jdbc_db_address(connectionReference);
-        // Hardcoded 'true' here is intentional, autocommit is handled in stmt#execute()
-        DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
+        this.dbAddress = connected.instanceRef.address;
         if (this.monitorName != null) {
             JfrMemoryMonitor.connectionOpened(this);
         }
@@ -146,8 +147,8 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            ByteBuffer dupRef = DuckDBNative.duckdb_jdbc_connect(connRef);
-            return new DuckDBConnection(dupRef, url, readOnly, sessionInitSQL, autoCommit, monitorName);
+            DuckDBInstances.Connected dup = DuckDBInstances.connect(this);
+            return new DuckDBConnection(dup, url, readOnly, sessionInitSQL, autoCommit, monitorName);
         } finally {
             connRefLock.unlock();
         }
@@ -222,7 +223,7 @@ public final class DuckDBConnection implements java.sql.Connection {
             // on Java side, last stream created is first closed on native side
             DuckDBNative.duckdb_jdbc_arrow_close_streams(connRef);
 
-            DuckDBNative.duckdb_jdbc_disconnect(connRef);
+            DuckDBInstances.disconnect(connRef, instanceRef);
             connRef = null;
             notifyMonitor = (monitorName != null);
         } finally {
@@ -293,9 +294,6 @@ public final class DuckDBConnection implements java.sql.Connection {
             }
         }
         return;
-
-        // Native method is not working as one would expect ... uncomment maybe later
-        // DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, autoCommit);
     }
 
     public boolean getAutoCommit() throws SQLException {
@@ -303,9 +301,6 @@ public final class DuckDBConnection implements java.sql.Connection {
             throw createSQLException("Connection was closed", ErrorCode.CONNECTION_CLOSED);
         }
         return this.autoCommit;
-
-        // Native method is not working as one would expect ... uncomment maybe later
-        // return DuckDBNative.duckdb_jdbc_get_auto_commit(conn_ref);
     }
 
     public PreparedStatement prepareStatement(String sql) throws SQLException {
@@ -327,7 +322,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBNative.duckdb_jdbc_set_catalog(connRef, catalog);
+            DuckDBCore.setCatalog(this, catalog);
         } finally {
             connRefLock.unlock();
         }
@@ -338,7 +333,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            return DuckDBNative.duckdb_jdbc_get_catalog(connRef);
+            return DuckDBCore.getCatalog(this);
         } finally {
             connRefLock.unlock();
         }
@@ -349,7 +344,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBNative.duckdb_jdbc_set_schema(connRef, schema);
+            DuckDBCore.setSchema(this, schema);
         } finally {
             connRefLock.unlock();
         }
@@ -360,7 +355,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            return DuckDBNative.duckdb_jdbc_get_schema(connRef);
+            return DuckDBCore.getSchema(this);
         } finally {
             connRefLock.unlock();
         }
@@ -585,7 +580,7 @@ public final class DuckDBConnection implements java.sql.Connection {
             connRefLock.lock();
             try {
                 checkOpen();
-                DuckDBNative.duckdb_jdbc_arrow_register(connRef, array_stream_address, name.getBytes(UTF_8));
+                DuckDBNative.duckdb_jdbc_arrow_register(this, array_stream_address, name);
             } finally {
                 connRefLock.unlock();
             }

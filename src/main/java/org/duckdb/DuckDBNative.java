@@ -131,34 +131,6 @@ final class DuckDBNative {
      * the C header. CMake does this as well
      */
 
-    // results ConnectionHolder reference object
-    static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props,
-                                                 boolean cache_instance) throws SQLException;
-
-    // returns conn_ref connection reference object
-    static native ByteBuffer duckdb_jdbc_connect(ByteBuffer conn_ref) throws SQLException;
-
-    static native ByteBuffer duckdb_jdbc_create_db_ref(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_destroy_db_ref(ByteBuffer db_ref) throws SQLException;
-
-    /** Returns the native address of the underlying DuckDB instance as a stable identity key. */
-    static native long duckdb_jdbc_db_address(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
-
-    static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
-
-    static native void duckdb_jdbc_set_schema(ByteBuffer conn_ref, String schema);
-
-    static native void duckdb_jdbc_set_catalog(ByteBuffer conn_ref, String catalog);
-
-    static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
-
-    static native String duckdb_jdbc_get_catalog(ByteBuffer conn_ref);
-
     // The statements, queries and results are implemented in Java on top of the C API v2 entry points of
     // DuckDBBindings, see DuckDBCore
 
@@ -223,24 +195,30 @@ final class DuckDBNative {
         return DuckDBCore.castResultToStrings(res_ref, col_idx);
     }
 
-    static native int duckdb_jdbc_fetch_size();
-
-    // TODO: the Arrow export is not ported to the C API v2 yet
-    static long duckdb_jdbc_arrow_stream(DuckDBCore.ResultRef res_ref, ByteBuffer conn_ref, long batch_size)
+    static long duckdb_jdbc_arrow_stream(DuckDBCore.ResultRef res_ref, DuckDBConnection conn, long batch_size)
         throws SQLException {
-        throw new java.sql.SQLFeatureNotSupportedException("Arrow export is not supported yet");
+        return DuckDBCore.exportArrow(res_ref, conn, batch_size);
     }
 
-    static native void duckdb_jdbc_arrow_register(ByteBuffer conn_ref, long arrow_array_stream_pointer, byte[] name);
+    static void duckdb_jdbc_arrow_register(DuckDBConnection conn, long arrow_array_stream_pointer, String name)
+        throws SQLException {
+        DuckDBCore.registerArrowStream(conn, arrow_array_stream_pointer, name);
+    }
 
-    static native void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref);
+    static void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref) {
+        DuckDBBindings.duckdb_v2_arrow_close_streams(conn_ref);
+    }
+
+    static int duckdb_jdbc_fetch_size() {
+        return (int) DuckDBBindings.duckdb_vector_size();
+    }
 
     static void duckdb_jdbc_interrupt(ByteBuffer conn_ref) throws SQLException {
-        DuckDBBindings.duckdb_v2_connection_interrupt(DuckDBBindings.duckdb_v2_connection_from_ref(conn_ref));
+        DuckDBBindings.duckdb_v2_connection_interrupt(conn_ref);
     }
 
     static QueryProgress duckdb_jdbc_query_progress(ByteBuffer conn_ref) throws SQLException {
-        return DuckDBBindings.duckdb_v2_connection_progress_get(DuckDBBindings.duckdb_v2_connection_from_ref(conn_ref));
+        return DuckDBBindings.duckdb_v2_connection_progress_get(conn_ref);
     }
 
     protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,

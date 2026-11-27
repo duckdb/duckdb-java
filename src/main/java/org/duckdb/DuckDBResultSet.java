@@ -130,7 +130,7 @@ public class DuckDBResultSet implements ResultSet {
      * When the connection is closed before the reader, the reader fails to load next batches.
      *
      * @param arrow_buffer_allocator an instance of {@link org.apache.arrow.memory.BufferAllocator}
-     * @param arrow_batch_size batch size of arrow vectors to return
+     * @param arrow_batch_size maximum number of rows of the arrow vectors to return, the batches can be smaller
      * @return an instance of {@link org.apache.arrow.vector.ipc.ArrowReader}
      */
     public synchronized Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size)
@@ -149,7 +149,7 @@ public class DuckDBResultSet implements ResultSet {
                 resultRefLock.lock();
                 try {
                     checkOpen();
-                    stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(resultRef, conn.connRef, arrow_batch_size);
+                    stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(resultRef, conn, arrow_batch_size);
                 } finally {
                     resultRefLock.unlock();
                 }

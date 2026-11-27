@@ -3,22 +3,7 @@ DUCKDB_JAVA {
     JNI_OnLoad;
     JNI_OnUnload;
 
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1close_1streams;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1register;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_1ref;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profiling_1information;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup;
 
     Java_org_duckdb_DuckDBBindings_duckdb_1vector_1size;
     Java_org_duckdb_DuckDBBindings_duckdb_1create_1scalar_1function;
@@ -145,7 +130,6 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1result_1error;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1chunked_1result_1create;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value;
-    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1from_1ref;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1config;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1factory;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1interrupt;
@@ -218,6 +202,37 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1copy;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1add_1collection;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1size;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1by_1index;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1count;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value_1scoped;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1set_1option_1text;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1set_1option_1value;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1create;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1register_1custom_1option;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1create;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1default_1scope;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1default_1value;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1description;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1name;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1supports_1scope;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1type;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1environment_1create;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1environment_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1attach;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1create_1with_1options;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1get_1config;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1open_1shared;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1get_1name;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1supports_1scope;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1arrow_1close_1streams;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1arrow_1export_1stream;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1arrow_1register_1scan_1function;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1arrow_1register_1stream;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1arrow_1release_1stream;
 
     /* ADBC entry point */
     duckdb_adbc_init;

@@ -142,7 +142,7 @@ final class DuckDBCore {
         if (connRef == null) {
             throw invalid("Invalid connection");
         }
-        return duckdb_v2_connection_from_ref(connRef);
+        return connRef;
     }
 
     private static long fieldCount(ByteBuffer schema) throws SQLException {
@@ -425,6 +425,49 @@ final class DuckDBCore {
         }
     }
 
+    /** Runs the statement and discards its result. */
+    static void executeSql(DuckDBConnection connection, String sql) throws SQLException {
+        connection.queryGate.acquireUninterruptibly();
+        try {
+            ByteBuffer conn = conn(connection.connRef);
+            ByteBuffer statement = parseSingleStatement(conn, sql);
+            ByteBuffer result;
+            try {
+                result = duckdb_v2_statement_execute(conn, statement, null);
+            } finally {
+                duckdb_v2_sql_statement_destroy(statement);
+            }
+            try {
+                duckdb_v2_result_drain(result);
+            } finally {
+                duckdb_v2_result_destroy(result);
+            }
+        } finally {
+            connection.queryGate.release();
+        }
+    }
+
+    private static String queryString(DuckDBConnection connection, String sql) throws SQLException {
+        List<String> res = queryStrings(connection, sql);
+        return res.isEmpty() ? null : res.get(0);
+    }
+
+    static String getSchema(DuckDBConnection connection) throws SQLException {
+        return queryString(connection, "SELECT current_schema()");
+    }
+
+    static String getCatalog(DuckDBConnection connection) throws SQLException {
+        return queryString(connection, "SELECT current_database()");
+    }
+
+    static void setSchema(DuckDBConnection connection, String schema) throws SQLException {
+        executeSql(connection, "SET schema = " + DuckDBV2Appender.quoteLiteral(schema));
+    }
+
+    static void setCatalog(DuckDBConnection connection, String catalog) throws SQLException {
+        executeSql(connection, "USE " + DuckDBV2Appender.quoteIdentifier(catalog));
+    }
+
     // ---------------------------------------------------------------------------------------------------------
     // Execution
     // ---------------------------------------------------------------------------------------------------------
@@ -564,6 +607,115 @@ final class DuckDBCore {
             ByteBuffer schema = ref.schema;
             ref.schema = null;
             duckdb_v2_schema_destroy(schema);
+        }
+    }
+
+    /**
+     * Registers the Arrow stream (the address of an ArrowArrayStream) with the connection as a view with the name. The
+     * stream is moved out of its struct, it is released when it is consumed by a scan, when the view is replaced or
+     * when the connection is closed.
+     */
+    static void registerArrowStream(DuckDBConnection connection, long streamAddress, String name) throws SQLException {
+        long id = duckdb_v2_arrow_register_stream(conn(connection.connRef), streamAddress);
+        try {
+            executeSql(connection, "CREATE OR REPLACE TEMPORARY VIEW " + DuckDBV2Appender.quoteIdentifier(name) +
+                                       " AS SELECT * FROM __jdbc_arrow_stream_scan(" + id + ")");
+        } catch (SQLException e) {
+            duckdb_v2_arrow_release_stream(id);
+            throw new SQLException("Failed to create view '" + name +
+                                   "': " + DuckDBInstances.rawMessage(e.getMessage()));
+        }
+        // the stream of the view that is replaced is released
+        Long replaced = connection.arrowStreams.put(name, id);
+        if (replaced != null) {
+            duckdb_v2_arrow_release_stream(replaced);
+        }
+    }
+
+    private static final byte[] ARROW_ROWS_NAME = "__jdbc_result_rows".getBytes(UTF_8);
+
+    /**
+     * Exports the rows of the result that are not read yet as an Arrow stream of record batches of at most
+     * batchSize rows, returns the address of the ArrowArrayStream. The rows are moved into the stream, a result that is
+     * streamed is read into the memory first. The rows are bound to a statement (SELECT * FROM the rows) that runs on
+     * a connection of its own, so that the connection of the result stays usable while the stream is open.
+     */
+    static long exportArrow(ResultRef ref, DuckDBConnection connection, long batchSize) throws SQLException {
+        if (ref == null || ref.schema == null) {
+            throw invalid("Invalid result set");
+        }
+        if (batchSize <= 0) {
+            throw invalid("Arrow batch size must be greater than 0");
+        }
+        connection.queryGate.acquireUninterruptibly();
+        ByteBuffer collection = null;
+        ByteBuffer helper = null;
+        ByteBuffer statement = null;
+        try {
+            ByteBuffer connHandle = conn(connection.connRef);
+            ByteBuffer factory = duckdb_v2_connection_get_factory(connHandle);
+            if (ref.currentChunk != null) {
+                duckdb_destroy_data_chunk(ref.currentChunk);
+                ref.currentChunk = null;
+            }
+            int columnCount = ref.names.length;
+            ByteBuffer[] types = new ByteBuffer[columnCount];
+            byte[][] names = new byte[columnCount][];
+            for (int i = 0; i < columnCount; i++) {
+                types[i] = duckdb_v2_schema_get_field_type(ref.schema, i);
+                names[i] = ref.names[i].getBytes(UTF_8);
+            }
+            collection = duckdb_v2_column_data_collection_create(factory, types);
+            ByteBuffer appendState = duckdb_v2_column_data_collection_append_state_create(collection);
+            try {
+                ByteBuffer chunk;
+                while ((chunk = ref.chunks.poll()) != null) {
+                    try {
+                        duckdb_v2_column_data_collection_append(collection, appendState, chunk);
+                    } finally {
+                        duckdb_destroy_data_chunk(chunk);
+                    }
+                }
+                if (ref.streamResult != null) {
+                    ByteBuffer result = ref.streamResult;
+                    ref.streamResult = null;
+                    try {
+                        while ((chunk = duckdb_v2_result_fetch_chunk(result)) != null) {
+                            try {
+                                duckdb_v2_column_data_collection_append(collection, appendState, chunk);
+                            } finally {
+                                duckdb_destroy_data_chunk(chunk);
+                            }
+                        }
+                    } finally {
+                        duckdb_v2_result_destroy(result);
+                    }
+                }
+            } finally {
+                duckdb_v2_column_data_collection_append_state_destroy(appendState);
+            }
+
+            helper = duckdb_v2_connection_create(connection.instanceRef.instance());
+            DuckDBInstances.copySessionSettings(connHandle, helper);
+            statement = parseSingleStatement(helper, "SELECT * FROM " + new String(ARROW_ROWS_NAME, UTF_8));
+            duckdb_v2_statement_add_collection(statement, ARROW_ROWS_NAME, collection, names);
+            long address = duckdb_v2_arrow_export_stream(connHandle, helper, statement, collection, batchSize);
+            // the stream owns them now
+            statement = null;
+            collection = null;
+            helper = null;
+            return address;
+        } finally {
+            if (statement != null) {
+                duckdb_v2_sql_statement_destroy(statement);
+            }
+            if (collection != null) {
+                duckdb_v2_column_data_collection_destroy(collection);
+            }
+            if (helper != null) {
+                duckdb_v2_connection_destroy(helper);
+            }
+            connection.queryGate.release();
         }
     }
 

@@ -58,7 +58,7 @@ final class DuckDBV2Appender {
         }
         qualified.append(quoteIdentifier(table));
 
-        ByteBuffer connHandle = duckdb_v2_connection_from_ref(conn.connRef);
+        ByteBuffer connHandle = conn.connRef;
         ByteBuffer factory = duckdb_v2_connection_get_factory(connHandle);
 
         // the columns of the table: binding reports them without reading a row
@@ -179,7 +179,7 @@ final class DuckDBV2Appender {
             }
             conn.queryGate.acquireUninterruptibly();
             try {
-                ByteBuffer connHandle = duckdb_v2_connection_from_ref(conn.connRef);
+                ByteBuffer connHandle = conn.connRef;
                 ByteBuffer result = duckdb_v2_statement_execute(connHandle, statement, null);
                 try {
                     duckdb_v2_result_drain(result);
@@ -234,8 +234,7 @@ final class DuckDBV2Appender {
                 value = DuckDBCore.queryValue(conn, "SELECT " + defaultSql);
             } else {
                 // a column without a default value gets the NULL default
-                value =
-                    DuckDBCore.nullValue(duckdb_v2_connection_get_factory(duckdb_v2_connection_from_ref(conn.connRef)));
+                value = DuckDBCore.nullValue(duckdb_v2_connection_get_factory(conn.connRef));
             }
             try {
                 duckdb_v2_vector_set_value(vec, row, value);

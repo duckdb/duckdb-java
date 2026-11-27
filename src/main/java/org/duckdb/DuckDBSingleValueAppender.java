@@ -132,7 +132,7 @@ public class DuckDBSingleValueAppender implements AutoCloseable {
     }
 
     private ByteBuffer factory() throws SQLException {
-        return duckdb_v2_connection_get_factory(duckdb_v2_connection_from_ref(conn.connRef));
+        return duckdb_v2_connection_get_factory(conn.connRef);
     }
 
     private void appendObject(Object value) throws SQLException {

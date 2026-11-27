@@ -56,16 +56,6 @@ static void throw_v2_error(JNIEnv *env, const v2_error &err) {
 
 /* --- connection --- */
 
-// Transitional: the C API v2 handle of the connection of a connection holder
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1from_1ref(JNIEnv *env, jclass,
-                                                                                           jobject conn_ref) {
-	auto conn = conn_ref_buf_to_conn(env, conn_ref);
-	if (env->ExceptionCheck()) {
-		return nullptr;
-	}
-	return make_ptr_buf(env, conn);
-}
-
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1interrupt(JNIEnv *env, jclass,
                                                                                         jobject conn_buf) {
 	CHECK_BUF(conn, conn_buf, duckdb_v2_connection_handle, "connection");
@@ -865,4 +855,353 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1add
 	}
 	CALL_V2(duckdb_v2_statement_add_collection(st, name.data(), name.size(), collection, name_ptrs.data(),
 	                                           name_lens.data(), names.size(), ERR_OUT), );
+}
+
+/* --- environments, instances and connections --- */
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1environment_1create(JNIEnv *env, jclass) {
+	duckdb_v2_environment_handle environment = nullptr;
+	CALL_V2(duckdb_v2_environment_create(&environment, ERR_OUT), nullptr);
+	return make_ptr_buf(env, environment);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1environment_1destroy(JNIEnv *env, jclass,
+                                                                                       jobject env_buf) {
+	CHECK_BUF(environment, env_buf, duckdb_v2_environment_handle, "environment");
+	CALL_V2(duckdb_v2_environment_destroy(&environment), );
+}
+
+// Reads the byte arrays of the startup options
+static bool read_options(JNIEnv *env, jobjectArray names_j, jobjectArray values_j, std::vector<std::string> &names,
+                         std::vector<std::string> &values) {
+	jsize count = names_j == nullptr ? 0 : env->GetArrayLength(names_j);
+	for (jsize i = 0; i < count; i++) {
+		auto name_arr = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(names_j, i));
+		auto value_arr = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(values_j, i));
+		names.push_back(jbyteArray_to_string(env, name_arr));
+		values.push_back(jbyteArray_to_string(env, value_arr));
+		env->DeleteLocalRef(name_arr);
+		env->DeleteLocalRef(value_arr);
+		if (env->ExceptionCheck()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+struct OptionPointers {
+	std::vector<const char *> name_ptrs;
+	std::vector<idx_t> name_lens;
+	std::vector<const char *> value_ptrs;
+	std::vector<idx_t> value_lens;
+
+	OptionPointers(const std::vector<std::string> &names, const std::vector<std::string> &values) {
+		for (size_t i = 0; i < names.size(); i++) {
+			name_ptrs.push_back(names[i].data());
+			name_lens.push_back(names[i].size());
+			value_ptrs.push_back(values[i].data());
+			value_lens.push_back(values[i].size());
+		}
+	}
+};
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1create_1with_1options(
+    JNIEnv *env, jclass, jobject env_buf, jobjectArray names_j, jobjectArray values_j) {
+	CHECK_BUF_RET(environment, env_buf, duckdb_v2_environment_handle, "environment", nullptr);
+	std::vector<std::string> names;
+	std::vector<std::string> values;
+	if (!read_options(env, names_j, values_j, names, values)) {
+		return nullptr;
+	}
+	OptionPointers options(names, values);
+	duckdb_v2_instance_handle instance = nullptr;
+	CALL_V2(duckdb_v2_instance_create_with_options(environment, options.name_ptrs.data(), options.name_lens.data(),
+	                                               options.value_ptrs.data(), options.value_lens.data(), names.size(),
+	                                               &instance, ERR_OUT),
+	        nullptr);
+	return make_ptr_buf(env, instance);
+}
+
+// The call of the Java initializer of a new shared instance
+struct InstanceInitContext {
+	JNIEnv *env;
+	jobject callback;
+};
+
+static void instance_init_trampoline(duckdb_v2_instance_handle instance, void *user_data,
+                                     duckdb_v2_error_info_handle *err) {
+	auto ctx = reinterpret_cast<InstanceInitContext *>(user_data);
+	JNIEnv *env = ctx->env;
+	jclass callback_class = env->GetObjectClass(ctx->callback);
+	jmethodID init_method = env->GetMethodID(callback_class, "init", "(Ljava/nio/ByteBuffer;)V");
+	env->DeleteLocalRef(callback_class);
+	if (init_method == nullptr) {
+		env->ExceptionClear();
+		set_callback_error(err, DUCKDB_V2_ERROR_API, "Instance initializer not found");
+		return;
+	}
+	jobject instance_buf = make_ptr_buf(env, instance);
+	env->CallVoidMethod(ctx->callback, init_method, instance_buf);
+	env->DeleteLocalRef(instance_buf);
+	if (env->ExceptionCheck()) {
+		jthrowable exception = env->ExceptionOccurred();
+		env->ExceptionClear();
+		std::string message = "Instance initializer failed";
+		jmethodID get_message = env->GetMethodID(env->GetObjectClass(exception), "getMessage", "()Ljava/lang/String;");
+		if (get_message != nullptr) {
+			auto message_j = reinterpret_cast<jstring>(env->CallObjectMethod(exception, get_message));
+			if (env->ExceptionCheck()) {
+				env->ExceptionClear();
+			} else if (message_j != nullptr) {
+				message = jstring_to_string(env, message_j);
+			}
+		}
+		env->DeleteLocalRef(exception);
+		set_callback_error(err, DUCKDB_V2_ERROR_DATABASE_CATALOG, message);
+	}
+}
+
+// Opens the shared instance of the path, the initializer is called with the instance when it is created
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1open_1shared(
+    JNIEnv *env, jclass, jobject env_buf, jbyteArray path_j, jobjectArray names_j, jobjectArray values_j,
+    jobject init) {
+	CHECK_BUF_RET(environment, env_buf, duckdb_v2_environment_handle, "environment", nullptr);
+	auto path = jbyteArray_to_string(env, path_j);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	std::vector<std::string> names;
+	std::vector<std::string> values;
+	if (!read_options(env, names_j, values_j, names, values)) {
+		return nullptr;
+	}
+	OptionPointers options(names, values);
+	InstanceInitContext ctx {env, init};
+	duckdb_v2_instance_handle instance = nullptr;
+	v2_error err;
+	if (duckdb_v2_instance_open_shared(environment, path.data(), path.size(), options.name_ptrs.data(),
+	                                   options.name_lens.data(), options.value_ptrs.data(), options.value_lens.data(),
+	                                   names.size(), init == nullptr ? nullptr : instance_init_trampoline,
+	                                   init == nullptr ? nullptr : &ctx, &instance,
+	                                   err.out()) != DUCKDB_V2_ERROR_NONE) {
+		throw_v2_error(env, err);
+		return nullptr;
+	}
+	return make_ptr_buf(env, instance);
+}
+
+// The name can be null
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1attach(JNIEnv *env, jclass,
+                                                                                   jobject instance_buf,
+                                                                                   jbyteArray name_j, jbyteArray path_j,
+                                                                                   jboolean make_default) {
+	CHECK_BUF(instance, instance_buf, duckdb_v2_instance_handle, "instance");
+	std::string name;
+	if (name_j != nullptr) {
+		name = jbyteArray_to_string(env, name_j);
+	}
+	auto path = jbyteArray_to_string(env, path_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_instance_attach(instance, name_j == nullptr ? nullptr : name.data(), name.size(), path.data(),
+	                                  path.size(), nullptr, make_default == JNI_TRUE, ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1destroy(JNIEnv *env, jclass,
+                                                                                    jobject instance_buf) {
+	CHECK_BUF(instance, instance_buf, duckdb_v2_instance_handle, "instance");
+	duckdb_v2_instance_destroy(&instance);
+}
+
+// The returned config is borrowed from the instance
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1instance_1get_1config(JNIEnv *env, jclass,
+                                                                                           jobject instance_buf) {
+	CHECK_BUF_RET(instance, instance_buf, duckdb_v2_instance_handle, "instance", nullptr);
+	duckdb_v2_config_handle config = nullptr;
+	CALL_V2(duckdb_v2_instance_get_config(instance, &config, ERR_OUT), nullptr);
+	return make_ptr_buf(env, config);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1create(JNIEnv *env, jclass,
+                                                                                        jobject instance_buf) {
+	CHECK_BUF_RET(instance, instance_buf, duckdb_v2_instance_handle, "instance", nullptr);
+	duckdb_v2_connection_handle conn = nullptr;
+	CALL_V2(duckdb_v2_connection_create(instance, &conn, ERR_OUT), nullptr);
+	return make_ptr_buf(env, conn);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1destroy(JNIEnv *env, jclass,
+                                                                                      jobject conn_buf) {
+	CHECK_BUF(conn, conn_buf, duckdb_v2_connection_handle, "connection");
+	duckdb_v2_connection_destroy(&conn);
+}
+
+/* --- configuration --- */
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1set_1option_1text(
+    JNIEnv *env, jclass, jobject config_buf, jbyteArray name_j, jbyteArray value_j, jint scope) {
+	CHECK_BUF(config, config_buf, duckdb_v2_config_handle, "config");
+	auto name = jbyteArray_to_string(env, name_j);
+	auto value = jbyteArray_to_string(env, value_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_config_set_option_text(config, name.data(), name.size(), value.data(), value.size(),
+	                                         static_cast<DUCKDB_V2_SETTING_SCOPE>(scope), ERR_OUT), );
+}
+
+// The value is borrowed for the call
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1set_1option_1value(
+    JNIEnv *env, jclass, jobject config_buf, jbyteArray name_j, jobject value_buf, jint scope) {
+	CHECK_BUF(config, config_buf, duckdb_v2_config_handle, "config");
+	CHECK_BUF(value, value_buf, duckdb_v2_value_handle, "value");
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_config_set_option_value(config, name.data(), name.size(), value,
+	                                          static_cast<DUCKDB_V2_SETTING_SCOPE>(scope), ERR_OUT), );
+}
+
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1count(JNIEnv *env, jclass,
+                                                                                              jobject config_buf) {
+	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", 0);
+	idx_t count = 0;
+	CALL_V2(duckdb_v2_config_get_option_count(config, &count, ERR_OUT), 0);
+	return uint64_to_jlong(count);
+}
+
+// The returned option is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1by_1index(JNIEnv *env, jclass,
+                                                                                                    jobject config_buf,
+                                                                                                    jlong index) {
+	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", nullptr);
+	idx_t idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_option_handle option = nullptr;
+	CALL_V2(duckdb_v2_config_get_option_by_index(config, idx, &option, ERR_OUT), nullptr);
+	return make_ptr_buf(env, option);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1get_1name(JNIEnv *env, jclass,
+                                                                                          jobject option_buf) {
+	CHECK_BUF_RET(option, option_buf, duckdb_v2_option_handle, "option", nullptr);
+	const char *name = nullptr;
+	idx_t name_len = 0;
+	CALL_V2(duckdb_v2_option_get_name(option, &name, &name_len, ERR_OUT), nullptr);
+	return make_jbyteArray(env, name, name_len);
+}
+
+JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1supports_1scope(JNIEnv *env, jclass,
+                                                                                              jobject option_buf,
+                                                                                              jint scope) {
+	CHECK_BUF_RET(option, option_buf, duckdb_v2_option_handle, "option", JNI_FALSE);
+	bool supported = false;
+	CALL_V2(duckdb_v2_option_supports_scope(option, static_cast<DUCKDB_V2_SETTING_SCOPE>(scope), &supported, ERR_OUT),
+	        JNI_FALSE);
+	return supported ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1option_1destroy(JNIEnv *env, jclass,
+                                                                                  jobject option_buf) {
+	CHECK_BUF(option, option_buf, duckdb_v2_option_handle, "option");
+	duckdb_v2_option_destroy(&option);
+}
+
+// Reads the option value, the scope that the value comes from is written to scope_out[0] when it is given
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value_1scoped(
+    JNIEnv *env, jclass, jobject config_buf, jbyteArray name_j, jintArray scope_out) {
+	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", nullptr);
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	CALL_V2(duckdb_v2_config_get_option_value(config, name.data(), name.size(), &value, &scope, ERR_OUT), nullptr);
+	if (scope_out != nullptr) {
+		jint scope_j = static_cast<jint>(scope);
+		env->SetIntArrayRegion(scope_out, 0, 1, &scope_j);
+	}
+	return make_ptr_buf(env, value);
+}
+
+/* --- custom options --- */
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1create(JNIEnv *env, jclass,
+                                                                                            jobject factory_buf) {
+	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
+	duckdb_v2_custom_option_handle option = nullptr;
+	CALL_V2(duckdb_v2_custom_option_create(factory, &option, ERR_OUT), nullptr);
+	return make_ptr_buf(env, option);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1destroy(JNIEnv *env, jclass,
+                                                                                          jobject option_buf) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	duckdb_v2_custom_option_destroy(&option);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1name(JNIEnv *env, jclass,
+                                                                                            jobject option_buf,
+                                                                                            jbyteArray name_j) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_custom_option_set_name(option, name.data(), name.size(), ERR_OUT), );
+}
+
+// The type is borrowed for the call
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1type(JNIEnv *env, jclass,
+                                                                                            jobject option_buf,
+                                                                                            jobject type_buf) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_custom_option_set_type(option, type, ERR_OUT), );
+}
+
+// The value is borrowed for the call
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1default_1value(
+    JNIEnv *env, jclass, jobject option_buf, jobject value_buf) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	CHECK_BUF(value, value_buf, duckdb_v2_value_handle, "value");
+	CALL_V2(duckdb_v2_custom_option_set_default_value(option, value, ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1description(
+    JNIEnv *env, jclass, jobject option_buf, jbyteArray description_j) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	auto description = jbyteArray_to_string(env, description_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_custom_option_set_description(option, description.data(), description.size(), ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1default_1scope(
+    JNIEnv *env, jclass, jobject option_buf, jint scope) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	CALL_V2(duckdb_v2_custom_option_set_default_scope(option, static_cast<DUCKDB_V2_SETTING_SCOPE>(scope), ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1custom_1option_1set_1supports_1scope(
+    JNIEnv *env, jclass, jobject option_buf, jint scope, jboolean supported) {
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	CALL_V2(duckdb_v2_custom_option_set_supports_scope(option, static_cast<DUCKDB_V2_SETTING_SCOPE>(scope),
+	                                                   supported == JNI_TRUE, ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1register_1custom_1option(
+    JNIEnv *env, jclass, jobject conn_buf, jobject option_buf) {
+	CHECK_BUF(conn, conn_buf, duckdb_v2_connection_handle, "connection");
+	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
+	CALL_V2(duckdb_v2_connection_register_custom_option(conn, option, ERR_OUT), );
 }
