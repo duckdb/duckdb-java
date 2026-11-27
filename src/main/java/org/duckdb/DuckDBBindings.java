@@ -297,6 +297,140 @@ public class DuckDBBindings {
 
     static native byte[] duckdb_result_error(ByteBuffer result);
 
+    // C API v2
+
+    // transitional: the C API v2 connection of a connection reference
+    static native ByteBuffer duckdb_v2_connection_from_ref(ByteBuffer conn_ref) throws SQLException;
+
+    static native void duckdb_v2_connection_interrupt(ByteBuffer conn) throws SQLException;
+
+    static native QueryProgress duckdb_v2_connection_progress_get(ByteBuffer conn) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_parse_sql(ByteBuffer conn, byte[] sql) throws SQLException;
+
+    // returns null when there are no more statements
+    static native ByteBuffer duckdb_v2_statement_iterator_next(ByteBuffer iterator) throws SQLException;
+
+    static native void duckdb_v2_statement_iterator_destroy(ByteBuffer iterator) throws SQLException;
+
+    static native void duckdb_v2_sql_statement_destroy(ByteBuffer statement) throws SQLException;
+
+    static native int duckdb_v2_sql_statement_get_type(ByteBuffer statement) throws SQLException;
+
+    static native long duckdb_v2_sql_statement_get_parameter_count(ByteBuffer statement) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_prepared_statement_create(ByteBuffer conn, ByteBuffer statement,
+                                                                 boolean require_cacheable) throws SQLException;
+
+    static native void duckdb_v2_prepared_statement_destroy(ByteBuffer prepared) throws SQLException;
+
+    // the values are borrowed for the call
+    static native ByteBuffer duckdb_v2_prepared_statement_execute(ByteBuffer prepared, ByteBuffer[] values)
+        throws SQLException;
+
+    static native ByteBuffer duckdb_v2_statement_execute(ByteBuffer conn, ByteBuffer statement, ByteBuffer[] values)
+        throws SQLException;
+
+    // returns the output schema and the parameters schema
+    static native ByteBuffer[] duckdb_v2_statement_bind(ByteBuffer conn, ByteBuffer statement) throws SQLException;
+
+    static native void duckdb_v2_schema_destroy(ByteBuffer schema) throws SQLException;
+
+    static native long duckdb_v2_schema_get_count(ByteBuffer schema) throws SQLException;
+
+    static native byte[] duckdb_v2_schema_get_field_name(ByteBuffer schema, long index) throws SQLException;
+
+    // the returned type is borrowed from the schema and must not be destroyed
+    static native ByteBuffer duckdb_v2_schema_get_field_type(ByteBuffer schema, long index) throws SQLException;
+
+    static native void duckdb_v2_result_destroy(ByteBuffer result) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_result_get_schema(ByteBuffer result) throws SQLException;
+
+    static native int duckdb_v2_result_get_result_type(ByteBuffer result) throws SQLException;
+
+    static native int duckdb_v2_result_get_statement_type(ByteBuffer result) throws SQLException;
+
+    static native void duckdb_v2_result_wait(ByteBuffer result) throws SQLException;
+
+    static native long duckdb_v2_result_drain(ByteBuffer result) throws SQLException;
+
+    // the step status is written to status_out[0], the chunk is null unless the status is RESULT_STEP_CHUNK
+    static native ByteBuffer duckdb_v2_result_step(ByteBuffer result, int[] status_out) throws SQLException;
+
+    // returns null at the end of the result
+    static native ByteBuffer duckdb_v2_result_fetch_chunk(ByteBuffer result) throws SQLException;
+
+    // factory and values
+
+    // the returned factory is borrowed from the connection
+    static native ByteBuffer duckdb_v2_connection_get_factory(ByteBuffer conn) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_factory_create_type_from_text(ByteBuffer factory, byte[] text)
+        throws SQLException;
+
+    static native void duckdb_v2_value_destroy(ByteBuffer value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_null(ByteBuffer factory, ByteBuffer type) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_bool(ByteBuffer factory, boolean value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_tinyint(ByteBuffer factory, byte value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_smallint(ByteBuffer factory, short value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_int(ByteBuffer factory, int value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_bigint(ByteBuffer factory, long value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_float(ByteBuffer factory, float value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_double(ByteBuffer factory, double value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_date(ByteBuffer factory, int days) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_time(ByteBuffer factory, long micros) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_timestamp(ByteBuffer factory, long micros) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_timestamp_ns(ByteBuffer factory, long nanos) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_timestamp_tz(ByteBuffer factory, long micros) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_hugeint(ByteBuffer factory, long lower, long upper)
+        throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_uuid(ByteBuffer factory, long lower, long upper)
+        throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_decimal(ByteBuffer factory, long lower, long upper, int width,
+                                                            int scale) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_varchar(ByteBuffer factory, byte[] value) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_blob(ByteBuffer factory, byte[] value) throws SQLException;
+
+    // the child values are borrowed for the call
+    static native ByteBuffer duckdb_v2_value_create_list(ByteBuffer factory, ByteBuffer childType,
+                                                         ByteBuffer[] children) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_struct(ByteBuffer factory, byte[][] names, ByteBuffer[] children)
+        throws SQLException;
+
+    static native ByteBuffer duckdb_v2_value_create_map(ByteBuffer factory, ByteBuffer keyType, ByteBuffer valueType,
+                                                        ByteBuffer[] keys, ByteBuffer[] values) throws SQLException;
+
+    // DUCKDB_V2_RESULT_STEP_STATUS
+    static final int RESULT_STEP_WAITING = 0;
+    static final int RESULT_STEP_CHUNK = 1;
+    static final int RESULT_STEP_FINISHED = 2;
+    static final int RESULT_STEP_CANCELLED = 3;
+
+    // DUCKDB_V2_RESULT_TYPE
+    static final int RESULT_TYPE_QUERY_RESULT = 0;
+    static final int RESULT_TYPE_CHANGED_ROWS = 1;
+    static final int RESULT_TYPE_NOTHING = 2;
+
     enum CAPIType {
         DUCKDB_TYPE_INVALID(0, 0),
         // bool
