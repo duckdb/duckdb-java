@@ -45,8 +45,8 @@ class DuckDBVector {
     protected final DuckDBColumnType duckdb_type;
     final int length;
     private final boolean[] nullmask;
-    private ByteBuffer constlen_data = null;
-    private Object[] varlen_data = null;
+    ByteBuffer constlen_data = null;
+    Object[] varlen_data = null;
     String[] string_data = null;
 
     DuckDBVector(String duckdb_type, int length, boolean[] nullmask) {
@@ -59,7 +59,7 @@ class DuckDBVector {
         this.nullmask = nullmask;
     }
 
-    private void retainConstlenData() {
+    void retainConstlenData() {
         if (null != constlen_data) {
             byte[] constlenBytes = new byte[constlen_data.capacity()];
             constlen_data.get(constlenBytes);

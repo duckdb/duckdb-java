@@ -503,3 +503,177 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	        nullptr);
 	return make_ptr_buf(env, value);
 }
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1type(JNIEnv *env, jclass, jobject factory_buf, jobject type_buf) {
+	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	CALL_V2(duckdb_v2_value_create_type(factory, type, &value, ERR_OUT), nullptr);
+	return make_ptr_buf(env, value);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1to_1string(JNIEnv *env, jclass, jobject value_buf) {
+	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
+	idx_t length = 0;
+	CALL_V2(duckdb_v2_value_to_string(value, nullptr, 0, &length, ERR_OUT), nullptr);
+	std::vector<char> text(length + 1);
+	CALL_V2(duckdb_v2_value_to_string(value, text.data(), text.size(), &length, ERR_OUT), nullptr);
+	return make_jbyteArray(env, text.data(), length);
+}
+
+/* --- vectors --- */
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1flatten(JNIEnv *env, jclass, jobject vector_buf) {
+	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
+	CALL_V2(duckdb_v2_vector_flatten(vector, ERR_OUT), );
+}
+
+// The returned value is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1value(JNIEnv *env, jclass, jobject vector_buf, jlong row) {
+	CHECK_BUF_RET(vector, vector_buf, duckdb_v2_vector_handle, "vector", nullptr);
+	idx_t idx = jlong_to_idx(env, row);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	CALL_V2(duckdb_v2_vector_get_value(vector, idx, &value, ERR_OUT), nullptr);
+	return make_ptr_buf(env, value);
+}
+
+/* --- logical type parameters --- */
+
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1count(JNIEnv *env, jclass, jobject type_buf) {
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return 0;
+	}
+	idx_t count = 0;
+	CALL_V2(duckdb_v2_logical_type_get_param_count(type, &count, ERR_OUT), 0);
+	return uint64_to_jlong(count);
+}
+
+// The returned value is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1value(JNIEnv *env, jclass, jobject type_buf, jlong index) {
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	idx_t idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	const char *name = nullptr;
+	idx_t name_len = 0;
+	duckdb_v2_value_handle value = nullptr;
+	CALL_V2(duckdb_v2_logical_type_get_param(type, idx, &name, &name_len, &value, ERR_OUT), nullptr);
+	return make_ptr_buf(env, value);
+}
+
+// Returns null for a positional parameter
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1name(JNIEnv *env, jclass, jobject type_buf,
+                                                                     jlong index) {
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	idx_t idx = jlong_to_idx(env, index);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	const char *name = nullptr;
+	idx_t name_len = 0;
+	duckdb_v2_value_handle value = nullptr;
+	CALL_V2(duckdb_v2_logical_type_get_param(type, idx, &name, &name_len, &value, ERR_OUT), nullptr);
+	duckdb_v2_value_destroy(&value);
+	if (name == nullptr || name_len == 0) {
+		return nullptr;
+	}
+	return make_jbyteArray(env, name, name_len);
+}
+
+// Unwraps the type of a TYPE value, the returned type is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1type(JNIEnv *env, jclass, jobject value_buf) {
+	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
+	duckdb_v2_logical_type_handle type = nullptr;
+	CALL_V2(duckdb_v2_value_get_type(value, &type, ERR_OUT), nullptr);
+	return make_logical_type_buf(env, type);
+}
+
+/* --- configuration --- */
+
+// The returned config is borrowed from the connection
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1config(JNIEnv *env, jclass, jobject conn_buf) {
+	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
+	duckdb_v2_config_handle config = nullptr;
+	CALL_V2(duckdb_v2_connection_get_config(conn, &config, ERR_OUT), nullptr);
+	return make_ptr_buf(env, config);
+}
+
+// The returned value is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value(JNIEnv *env, jclass, jobject config_buf,
+                                                              jbyteArray name_j) {
+	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", nullptr);
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	CALL_V2(duckdb_v2_config_get_option_value(config, name.data(), name.size(), &value, &scope, ERR_OUT), nullptr);
+	return make_ptr_buf(env, value);
+}
+
+/* --- transitional --- */
+
+// Wraps the result into a chunked result of the bindings API, the holder takes the ownership of the result
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1chunked_1result_1create(JNIEnv *env, jclass, jobject result_buf) {
+	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", nullptr);
+	try {
+		return env->NewDirectByteBuffer(new ChunkedResultHolder(result), 0);
+	} catch (const std::exception &e) {
+		duckdb_v2_result_destroy(&result);
+		env->ThrowNew(J_SQLException, e.what());
+		return nullptr;
+	}
+}
+
+/* --- variants --- */
+
+// The returned value is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1variant_1to_1value(JNIEnv *env, jclass, jobject value_buf) {
+	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
+	duckdb_v2_value_handle out_value = nullptr;
+	CALL_V2(duckdb_v2_value_variant_to_value(value, &out_value, ERR_OUT), nullptr);
+	return make_ptr_buf(env, out_value);
+}
+
+// The returned type is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1logical_1type(JNIEnv *env, jclass, jobject value_buf) {
+	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
+	duckdb_v2_logical_type_handle type = nullptr;
+	CALL_V2(duckdb_v2_value_get_logical_type(value, &type, ERR_OUT), nullptr);
+	return make_logical_type_buf(env, type);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1value(JNIEnv *env, jclass, jobject vector_buf, jlong row,
+                                                    jobject value_buf) {
+	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
+	CHECK_BUF(value, value_buf, duckdb_v2_value_handle, "value");
+	idx_t idx = jlong_to_idx(env, row);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_vector_set_value(vector, idx, value, ERR_OUT), );
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1size(JNIEnv *env, jclass, jobject vector_buf, jlong size) {
+	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
+	idx_t sz = jlong_to_idx(env, size);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_vector_set_size(vector, sz, ERR_OUT), );
+}

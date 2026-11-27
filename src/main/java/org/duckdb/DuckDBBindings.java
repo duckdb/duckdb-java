@@ -420,6 +420,54 @@ public class DuckDBBindings {
     static native ByteBuffer duckdb_v2_value_create_map(ByteBuffer factory, ByteBuffer keyType, ByteBuffer valueType,
                                                         ByteBuffer[] keys, ByteBuffer[] values) throws SQLException;
 
+    static native ByteBuffer duckdb_v2_value_create_type(ByteBuffer factory, ByteBuffer type) throws SQLException;
+
+    static native byte[] duckdb_v2_value_to_string(ByteBuffer value) throws SQLException;
+
+    // vectors
+
+    // forces the vector (not its children) into the flat representation, in place
+    static native void duckdb_v2_vector_flatten(ByteBuffer vector) throws SQLException;
+
+    // the returned value is owned by the caller
+    static native ByteBuffer duckdb_v2_vector_get_value(ByteBuffer vector, long row) throws SQLException;
+
+    // logical type parameters: the child types of nested types come back as TYPE values
+
+    static native long duckdb_v2_logical_type_get_param_count(ByteBuffer type) throws SQLException;
+
+    // the returned value is owned by the caller
+    static native ByteBuffer duckdb_v2_logical_type_get_param_value(ByteBuffer type, long index) throws SQLException;
+
+    // returns null for a positional parameter
+    static native byte[] duckdb_v2_logical_type_get_param_name(ByteBuffer type, long index) throws SQLException;
+
+    // unwraps the type of a TYPE value, the returned type is owned by the caller
+    static native ByteBuffer duckdb_v2_value_get_type(ByteBuffer value) throws SQLException;
+
+    // configuration
+
+    // the returned config is borrowed from the connection
+    static native ByteBuffer duckdb_v2_connection_get_config(ByteBuffer conn) throws SQLException;
+
+    // the returned value is owned by the caller
+    static native ByteBuffer duckdb_v2_config_get_option_value(ByteBuffer config, byte[] name) throws SQLException;
+
+    // transitional: wraps the result into a chunked result of the bindings API that takes the ownership of the result
+    static native ByteBuffer duckdb_v2_chunked_result_create(ByteBuffer result) throws SQLException;
+
+    // variants
+
+    // the returned value is owned by the caller
+    static native ByteBuffer duckdb_v2_value_variant_to_value(ByteBuffer value) throws SQLException;
+
+    // the returned type is owned by the caller
+    static native ByteBuffer duckdb_v2_value_get_logical_type(ByteBuffer value) throws SQLException;
+
+    static native void duckdb_v2_vector_set_value(ByteBuffer vector, long row, ByteBuffer value) throws SQLException;
+
+    static native void duckdb_v2_vector_set_size(ByteBuffer vector, long size) throws SQLException;
+
     // DUCKDB_V2_RESULT_STEP_STATUS
     static final int RESULT_STEP_WAITING = 0;
     static final int RESULT_STEP_CHUNK = 1;
