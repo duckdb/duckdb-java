@@ -1205,3 +1205,24 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1re
 	CHECK_BUF(option, option_buf, duckdb_v2_custom_option_handle, "custom option");
 	CALL_V2(duckdb_v2_connection_register_custom_option(conn, option, ERR_OUT), );
 }
+
+/* --- profiling --- */
+
+static void text_sink(const char *text, idx_t text_length, void *user_data, duckdb_v2_error_info_handle *) {
+	static_cast<std::string *>(user_data)->assign(text, text_length);
+}
+
+// The profiling information of the last query of the connection in the format ("" is the default one)
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1profiling_1information(
+    JNIEnv *env, jclass, jobject conn_buf, jbyteArray format_j) {
+	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
+	auto format = jbyteArray_to_string(env, format_j);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	std::string text;
+	CALL_V2(
+	    duckdb_v2_connection_get_profiling_information(conn, format.data(), format.size(), text_sink, &text, ERR_OUT),
+	    nullptr);
+	return make_jbyteArray(env, text.data(), text.size());
+}

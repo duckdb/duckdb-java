@@ -674,7 +674,6 @@ add_library(duckdb_java SHARED
   src/jni/bindings_value.cpp
   src/jni/capi_v2.cpp
   src/jni/duckdb_java.cpp
-  src/jni/functions.cpp
   src/jni/holders.cpp
   src/jni/refs.cpp
   src/jni/util.cpp

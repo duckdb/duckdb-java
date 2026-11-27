@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import java.io.FileNotFoundException;
@@ -221,7 +222,10 @@ final class DuckDBNative {
         return DuckDBBindings.duckdb_v2_connection_progress_get(conn_ref);
     }
 
-    protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
-                                                                         ProfilerPrintFormat format)
-        throws SQLException;
+    protected static String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref, ProfilerPrintFormat format)
+        throws SQLException {
+        String name = "default".equals(format.getName()) ? "" : format.getName();
+        return new String(DuckDBBindings.duckdb_v2_connection_get_profiling_information(conn_ref, name.getBytes(UTF_8)),
+                          UTF_8);
+    }
 }

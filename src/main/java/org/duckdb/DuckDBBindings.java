@@ -578,6 +578,12 @@ public class DuckDBBindings {
     // closes the exported and the registered streams of the connection that are not released by their consumers yet
     static native void duckdb_v2_arrow_close_streams(ByteBuffer conn);
 
+    // profiling
+
+    // the profiling information of the last query of the connection, the format is "" for the default one
+    static native byte[] duckdb_v2_connection_get_profiling_information(ByteBuffer conn, byte[] format)
+        throws SQLException;
+
     // DUCKDB_V2_RESULT_STEP_STATUS
     static final int RESULT_STEP_WAITING = 0;
     static final int RESULT_STEP_CHUNK = 1;
