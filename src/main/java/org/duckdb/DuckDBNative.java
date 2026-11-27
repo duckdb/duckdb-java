@@ -235,15 +235,6 @@ final class DuckDBNative {
 
     static native void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref);
 
-    static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name)
-        throws SQLException;
-
-    static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref) throws SQLException;
-
     static void duckdb_jdbc_interrupt(ByteBuffer conn_ref) throws SQLException {
         DuckDBBindings.duckdb_v2_connection_interrupt(DuckDBBindings.duckdb_v2_connection_from_ref(conn_ref));
     }
@@ -251,33 +242,6 @@ final class DuckDBNative {
     static QueryProgress duckdb_jdbc_query_progress(ByteBuffer conn_ref) throws SQLException {
         return DuckDBBindings.duckdb_v2_connection_progress_get(DuckDBBindings.duckdb_v2_connection_from_ref(conn_ref));
     }
-
-    static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_byte(ByteBuffer appender_ref, byte value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_short(ByteBuffer appender_ref, short value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_float(ByteBuffer appender_ref, float value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_bytes(ByteBuffer appender_ref, byte[] value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_decimal(ByteBuffer appender_ref, BigDecimal value)
-        throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
 
     protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
                                                                          ProfilerPrintFormat format)

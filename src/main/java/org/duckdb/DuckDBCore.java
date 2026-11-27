@@ -338,6 +338,94 @@ final class DuckDBCore {
     }
 
     // ---------------------------------------------------------------------------------------------------------
+    // Internal queries
+    // ---------------------------------------------------------------------------------------------------------
+
+    /** Parses exactly one statement, the statement is owned by the caller. */
+    static ByteBuffer parseSingleStatement(ByteBuffer conn, String sql) throws SQLException {
+        List<ByteBuffer> statements = parse(conn, sql.getBytes(UTF_8));
+        if (statements.size() != 1) {
+            destroyStatements(statements);
+            throw invalid("The query must contain exactly one statement");
+        }
+        return statements.get(0);
+    }
+
+    /** Runs the query and returns the first column of the result as strings, NULL values are null. */
+    static List<String> queryStrings(DuckDBConnection connection, String sql) throws SQLException {
+        connection.queryGate.acquireUninterruptibly();
+        try {
+            ByteBuffer conn = conn(connection.connRef);
+            ByteBuffer statement = parseSingleStatement(conn, sql);
+            ByteBuffer result;
+            try {
+                result = duckdb_v2_statement_execute(conn, statement, null);
+            } finally {
+                duckdb_v2_sql_statement_destroy(statement);
+            }
+            try {
+                List<String> res = new ArrayList<>();
+                ByteBuffer chunk;
+                while ((chunk = duckdb_v2_result_fetch_chunk(result)) != null) {
+                    try {
+                        int rowCount = (int) duckdb_data_chunk_get_size(chunk);
+                        ByteBuffer vec = duckdb_data_chunk_get_vector(chunk, 0);
+                        for (int row = 0; row < rowCount; row++) {
+                            res.add(valueToString(vec, row));
+                        }
+                    } finally {
+                        duckdb_destroy_data_chunk(chunk);
+                    }
+                }
+                return res;
+            } finally {
+                duckdb_v2_result_destroy(result);
+            }
+        } finally {
+            connection.queryGate.release();
+        }
+    }
+
+    /** Runs the query and returns the first value of its result, that is owned by the caller. */
+    static ByteBuffer queryValue(DuckDBConnection connection, String sql) throws SQLException {
+        connection.queryGate.acquireUninterruptibly();
+        try {
+            ByteBuffer conn = conn(connection.connRef);
+            ByteBuffer statement = parseSingleStatement(conn, sql);
+            ByteBuffer result;
+            try {
+                result = duckdb_v2_statement_execute(conn, statement, null);
+            } finally {
+                duckdb_v2_sql_statement_destroy(statement);
+            }
+            try {
+                ByteBuffer chunk = duckdb_v2_result_fetch_chunk(result);
+                if (chunk == null) {
+                    throw invalid("Unable to evaluate the query: " + sql);
+                }
+                try {
+                    if (duckdb_data_chunk_get_size(chunk) == 0) {
+                        throw invalid("Unable to evaluate the query: " + sql);
+                    }
+                    ByteBuffer value = duckdb_v2_vector_get_value(duckdb_data_chunk_get_vector(chunk, 0), 0);
+                    // the rest of the result is read to complete the query
+                    ByteBuffer rest;
+                    while ((rest = duckdb_v2_result_fetch_chunk(result)) != null) {
+                        duckdb_destroy_data_chunk(rest);
+                    }
+                    return value;
+                } finally {
+                    duckdb_destroy_data_chunk(chunk);
+                }
+            } finally {
+                duckdb_v2_result_destroy(result);
+            }
+        } finally {
+            connection.queryGate.release();
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
     // Execution
     // ---------------------------------------------------------------------------------------------------------
 
@@ -947,7 +1035,7 @@ final class DuckDBCore {
         return duckdb_v2_factory_create_type_from_text(factory, text.getBytes(UTF_8));
     }
 
-    private static ByteBuffer nullValue(ByteBuffer factory) throws SQLException {
+    static ByteBuffer nullValue(ByteBuffer factory) throws SQLException {
         ByteBuffer type = parseType(factory, "NULL");
         try {
             return duckdb_v2_value_create_null(factory, type);

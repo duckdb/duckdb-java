@@ -204,27 +204,6 @@ public class DuckDBBindings {
 
     static native void duckdb_data_chunk_set_size(ByteBuffer chunk, long size);
 
-    // appender
-
-    static native int duckdb_appender_create_ext(ByteBuffer connection, byte[] catalog, byte[] schema, byte[] table,
-                                                 ByteBuffer[] out_appender);
-
-    static native byte[] duckdb_appender_error(ByteBuffer appender);
-
-    static native int duckdb_appender_flush(ByteBuffer appender);
-
-    static native int duckdb_appender_close(ByteBuffer appender);
-
-    static native int duckdb_appender_destroy(ByteBuffer appender);
-
-    static native long duckdb_appender_column_count(ByteBuffer appender);
-
-    static native ByteBuffer duckdb_appender_column_type(ByteBuffer appender, long col_idx);
-
-    static native int duckdb_append_data_chunk(ByteBuffer appender, ByteBuffer chunk);
-
-    static native int duckdb_append_default_to_chunk(ByteBuffer appender, ByteBuffer chunk, long col, long row);
-
     // value
 
     static native boolean duckdb_is_null_value(ByteBuffer value);
@@ -467,6 +446,35 @@ public class DuckDBBindings {
     static native void duckdb_v2_vector_set_value(ByteBuffer vector, long row, ByteBuffer value) throws SQLException;
 
     static native void duckdb_v2_vector_set_size(ByteBuffer vector, long size) throws SQLException;
+
+    // appending
+
+    // the returned type is owned by the caller
+    static native ByteBuffer duckdb_v2_logical_type_copy(ByteBuffer type) throws SQLException;
+
+    static native long duckdb_v2_vector_get_size(ByteBuffer vector) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_column_data_collection_create(ByteBuffer factory, ByteBuffer[] types)
+        throws SQLException;
+
+    static native void duckdb_v2_column_data_collection_destroy(ByteBuffer collection) throws SQLException;
+
+    static native void duckdb_v2_column_data_collection_clear(ByteBuffer collection) throws SQLException;
+
+    static native long duckdb_v2_column_data_collection_row_count(ByteBuffer collection) throws SQLException;
+
+    static native ByteBuffer duckdb_v2_column_data_collection_append_state_create(ByteBuffer collection)
+        throws SQLException;
+
+    static native void duckdb_v2_column_data_collection_append_state_destroy(ByteBuffer state) throws SQLException;
+
+    // the chunk is borrowed for the call
+    static native void duckdb_v2_column_data_collection_append(ByteBuffer collection, ByteBuffer state,
+                                                               ByteBuffer chunk) throws SQLException;
+
+    // binds the collection to the statement under the name, the collection must outlive the statement executions
+    static native void duckdb_v2_statement_add_collection(ByteBuffer statement, byte[] name, ByteBuffer collection,
+                                                          byte[][] column_names) throws SQLException;
 
     // DUCKDB_V2_RESULT_STEP_STATUS
     static final int RESULT_STEP_WAITING = 0;

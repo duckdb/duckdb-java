@@ -3,26 +3,9 @@ DUCKDB_JAVA {
     JNI_OnLoad;
     JNI_OnUnload;
 
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1boolean;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1byte;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1bytes;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1decimal;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1double;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1float;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1int;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1long;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1null;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1short;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1timestamp;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1begin_1row;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1close;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1end_1row;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1flush;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1close_1streams;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1register;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect;
-    Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1db_1ref;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1destroy_1db_1ref;
     Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1db_1address;
@@ -92,15 +75,6 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1data_1chunk_1get_1vector;
     Java_org_duckdb_DuckDBBindings_duckdb_1data_1chunk_1get_1size;
     Java_org_duckdb_DuckDBBindings_duckdb_1data_1chunk_1set_1size;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1ext;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1error;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1flush;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1close;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1destroy;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1column_1count;
-    Java_org_duckdb_DuckDBBindings_duckdb_1appender_1column_1type;
-    Java_org_duckdb_DuckDBBindings_duckdb_1append_1data_1chunk;
-    Java_org_duckdb_DuckDBBindings_duckdb_1append_1default_1to_1chunk;
 
     Java_org_duckdb_DuckDBBindings_duckdb_1bind_1add_1result_1column;
     Java_org_duckdb_DuckDBBindings_duckdb_1bind_1get_1parameter_1count;
@@ -234,6 +208,16 @@ DUCKDB_JAVA {
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1ns;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1tz;
     Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1tinyint;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append_1state_1create;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append_1state_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1clear;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1create;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1destroy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1row_1count;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1copy;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1add_1collection;
+    Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1size;
 
     /* ADBC entry point */
     duckdb_adbc_init;

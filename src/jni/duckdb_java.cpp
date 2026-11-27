@@ -9,7 +9,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/table/arrow.hpp"
-#include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 #include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -194,107 +193,6 @@ void _duckdb_jdbc_disconnect(JNIEnv *env, jclass, jobject conn_ref_buf) {
 
 jint _duckdb_jdbc_fetch_size(JNIEnv *, jclass) {
 	return STANDARD_VECTOR_SIZE;
-}
-
-jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray schema_name_j,
-                                     jbyteArray table_name_j) {
-
-	auto conn_ref = get_connection(env, conn_ref_buf);
-	if (!conn_ref) {
-		return nullptr;
-	}
-	auto schema_name = jbyteArray_to_string(env, schema_name_j);
-	auto table_name = jbyteArray_to_string(env, table_name_j);
-	auto appender = new Appender(*conn_ref, Identifier(schema_name), Identifier(table_name));
-	return env->NewDirectByteBuffer(appender, 0);
-}
-
-static Appender *get_appender(JNIEnv *env, jobject appender_ref_buf) {
-	auto appender_ref = (Appender *)env->GetDirectBufferAddress(appender_ref_buf);
-	if (!appender_ref) {
-		throw InvalidInputException("Invalid appender");
-	}
-	return appender_ref;
-}
-
-void _duckdb_jdbc_appender_begin_row(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->BeginRow();
-}
-
-void _duckdb_jdbc_appender_end_row(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->EndRow();
-}
-
-void _duckdb_jdbc_appender_flush(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->Flush();
-}
-
-void _duckdb_jdbc_appender_close(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	auto appender = get_appender(env, appender_ref_buf);
-	appender->Close();
-	delete appender;
-}
-
-void _duckdb_jdbc_appender_append_boolean(JNIEnv *env, jclass, jobject appender_ref_buf, jboolean value) {
-	get_appender(env, appender_ref_buf)->Append((bool)value);
-}
-
-void _duckdb_jdbc_appender_append_byte(JNIEnv *env, jclass, jobject appender_ref_buf, jbyte value) {
-	get_appender(env, appender_ref_buf)->Append((int8_t)value);
-}
-
-void _duckdb_jdbc_appender_append_short(JNIEnv *env, jclass, jobject appender_ref_buf, jshort value) {
-	get_appender(env, appender_ref_buf)->Append((int16_t)value);
-}
-
-void _duckdb_jdbc_appender_append_int(JNIEnv *env, jclass, jobject appender_ref_buf, jint value) {
-	get_appender(env, appender_ref_buf)->Append((int32_t)value);
-}
-
-void _duckdb_jdbc_appender_append_long(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
-	get_appender(env, appender_ref_buf)->Append((int64_t)value);
-}
-
-void _duckdb_jdbc_appender_append_float(JNIEnv *env, jclass, jobject appender_ref_buf, jfloat value) {
-	get_appender(env, appender_ref_buf)->Append((float)value);
-}
-
-void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_ref_buf, jdouble value) {
-	get_appender(env, appender_ref_buf)->Append((double)value);
-}
-
-void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
-	timestamp_t timestamp = timestamp_t((int64_t)value);
-	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
-}
-
-void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass, jobject appender_ref_buf, jobject value) {
-	Value val = create_value_from_bigdecimal(env, value);
-	get_appender(env, appender_ref_buf)->Append(val);
-}
-
-void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
-	if (env->IsSameObject(value, NULL)) {
-		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
-		return;
-	}
-
-	auto string_value = jbyteArray_to_string(env, value);
-	get_appender(env, appender_ref_buf)->Append(string_value.c_str());
-}
-
-void _duckdb_jdbc_appender_append_bytes(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
-	if (env->IsSameObject(value, NULL)) {
-		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
-		return;
-	}
-
-	auto string_value = jbyteArray_to_string(env, value);
-	get_appender(env, appender_ref_buf)->Append(Value::BLOB_RAW(string_value));
-}
-
-void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref_buf) {
-	get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
 }
 
 class JavaArrowScanFactory : public ArrowScanFactory {

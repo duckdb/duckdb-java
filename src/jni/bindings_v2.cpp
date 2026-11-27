@@ -749,3 +749,120 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1s
 	}
 	CALL_V2(duckdb_v2_vector_set_size(vector, sz, ERR_OUT), );
 }
+
+/* --- appending --- */
+
+// The returned type is owned by the caller
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1copy(JNIEnv *env, jclass,
+                                                                                         jobject type_buf) {
+	auto type = logical_type_buf_to_logical_type(env, type_buf);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	duckdb_v2_logical_type_handle copy = nullptr;
+	CALL_V2(duckdb_v2_logical_type_copy(type, &copy, ERR_OUT), nullptr);
+	return make_logical_type_buf(env, copy);
+}
+
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1size(JNIEnv *env, jclass,
+                                                                                     jobject vector_buf) {
+	CHECK_BUF_RET(vector, vector_buf, duckdb_v2_vector_handle, "vector", 0);
+	idx_t size = 0;
+	CALL_V2(duckdb_v2_vector_get_size(vector, &size, ERR_OUT), 0);
+	return uint64_to_jlong(size);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1create(
+    JNIEnv *env, jclass, jobject factory_buf, jobjectArray types_j) {
+	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
+	std::vector<duckdb_v2_logical_type_handle> types;
+	jsize count = types_j == nullptr ? 0 : env->GetArrayLength(types_j);
+	for (jsize i = 0; i < count; i++) {
+		jobject type_buf = env->GetObjectArrayElement(types_j, i);
+		auto type = logical_type_buf_to_logical_type(env, type_buf);
+		env->DeleteLocalRef(type_buf);
+		if (env->ExceptionCheck()) {
+			return nullptr;
+		}
+		types.push_back(type);
+	}
+	duckdb_v2_column_data_collection_handle collection = nullptr;
+	CALL_V2(duckdb_v2_column_data_collection_create(factory, types.data(), types.size(), &collection, ERR_OUT),
+	        nullptr);
+	return make_ptr_buf(env, collection);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1destroy(
+    JNIEnv *env, jclass, jobject collection_buf) {
+	CHECK_BUF(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection");
+	duckdb_v2_column_data_collection_destroy(&collection);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1clear(
+    JNIEnv *env, jclass, jobject collection_buf) {
+	CHECK_BUF(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection");
+	CALL_V2(duckdb_v2_column_data_collection_clear(collection, ERR_OUT), );
+}
+
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1row_1count(
+    JNIEnv *env, jclass, jobject collection_buf) {
+	CHECK_BUF_RET(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection", 0);
+	idx_t count = 0;
+	CALL_V2(duckdb_v2_column_data_collection_row_count(collection, &count, ERR_OUT), 0);
+	return uint64_to_jlong(count);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append_1state_1create(
+    JNIEnv *env, jclass, jobject collection_buf) {
+	CHECK_BUF_RET(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection", nullptr);
+	duckdb_v2_column_data_collection_append_state_handle state = nullptr;
+	CALL_V2(duckdb_v2_column_data_collection_append_state_create(collection, &state, ERR_OUT), nullptr);
+	return make_ptr_buf(env, state);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append_1state_1destroy(
+    JNIEnv *env, jclass, jobject state_buf) {
+	CHECK_BUF(state, state_buf, duckdb_v2_column_data_collection_append_state_handle, "append state");
+	duckdb_v2_column_data_collection_append_state_destroy(&state);
+}
+
+// The chunk is borrowed for the call
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1column_1data_1collection_1append(
+    JNIEnv *env, jclass, jobject collection_buf, jobject state_buf, jobject chunk_buf) {
+	CHECK_BUF(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection");
+	CHECK_BUF(state, state_buf, duckdb_v2_column_data_collection_append_state_handle, "append state");
+	auto chunk = chunk_buf_to_chunk(env, chunk_buf);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	CALL_V2(duckdb_v2_column_data_collection_append(collection, state, chunk, ERR_OUT), );
+}
+
+// Binds the collection to the statement under the name, the collection must outlive the statement executions
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1add_1collection(
+    JNIEnv *env, jclass, jobject st_buf, jbyteArray name_j, jobject collection_buf, jobjectArray names_j) {
+	CHECK_BUF(st, st_buf, duckdb_v2_sql_statement_handle, "statement");
+	CHECK_BUF(collection, collection_buf, duckdb_v2_column_data_collection_handle, "collection");
+	auto name = jbyteArray_to_string(env, name_j);
+	if (env->ExceptionCheck()) {
+		return;
+	}
+	std::vector<std::string> names;
+	jsize count = names_j == nullptr ? 0 : env->GetArrayLength(names_j);
+	for (jsize i = 0; i < count; i++) {
+		auto name_arr = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(names_j, i));
+		names.push_back(jbyteArray_to_string(env, name_arr));
+		env->DeleteLocalRef(name_arr);
+		if (env->ExceptionCheck()) {
+			return;
+		}
+	}
+	std::vector<const char *> name_ptrs;
+	std::vector<idx_t> name_lens;
+	for (auto &column_name : names) {
+		name_ptrs.push_back(column_name.data());
+		name_lens.push_back(column_name.size());
+	}
+	CALL_V2(duckdb_v2_statement_add_collection(st, name.data(), name.size(), collection, name_ptrs.data(),
+	                                           name_lens.data(), names.size(), ERR_OUT), );
+}
