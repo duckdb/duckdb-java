@@ -57,7 +57,8 @@ static void throw_v2_error(JNIEnv *env, const v2_error &err) {
 /* --- connection --- */
 
 // Transitional: the C API v2 handle of the connection of a connection holder
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1from_1ref(JNIEnv *env, jclass, jobject conn_ref) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1from_1ref(JNIEnv *env, jclass,
+                                                                                           jobject conn_ref) {
 	auto conn = conn_ref_buf_to_conn(env, conn_ref);
 	if (env->ExceptionCheck()) {
 		return nullptr;
@@ -65,12 +66,14 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_
 	return make_ptr_buf(env, conn);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1interrupt(JNIEnv *env, jclass, jobject conn_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1interrupt(JNIEnv *env, jclass,
+                                                                                        jobject conn_buf) {
 	CHECK_BUF(conn, conn_buf, duckdb_v2_connection_handle, "connection");
 	CALL_V2(duckdb_v2_connection_interrupt(conn, ERR_OUT), );
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1progress_1get(JNIEnv *env, jclass, jobject conn_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1progress_1get(JNIEnv *env, jclass,
+                                                                                               jobject conn_buf) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	double percentage = -1;
 	uint64_t rows_processed = 0;
@@ -82,7 +85,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_
 
 /* --- parsing --- */
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1parse_1sql(JNIEnv *env, jclass, jobject conn_buf, jbyteArray sql_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1parse_1sql(JNIEnv *env, jclass, jobject conn_buf,
+                                                                                jbyteArray sql_j) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	auto sql = jbyteArray_to_string(env, sql_j);
 	if (env->ExceptionCheck()) {
@@ -94,31 +98,36 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1parse_1sql(
 }
 
 // Returns null when there are no more statements
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1iterator_1next(JNIEnv *env, jclass, jobject it_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1iterator_1next(JNIEnv *env, jclass,
+                                                                                               jobject it_buf) {
 	CHECK_BUF_RET(it, it_buf, duckdb_v2_statement_iterator_handle, "statement iterator", nullptr);
 	duckdb_v2_sql_statement_handle statement = nullptr;
 	CALL_V2(duckdb_v2_statement_iterator_next(it, &statement, ERR_OUT), nullptr);
 	return make_ptr_buf(env, statement);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1iterator_1destroy(JNIEnv *env, jclass, jobject it_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1iterator_1destroy(JNIEnv *env, jclass,
+                                                                                               jobject it_buf) {
 	CHECK_BUF(it, it_buf, duckdb_v2_statement_iterator_handle, "statement iterator");
 	duckdb_v2_statement_iterator_destroy(&it);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1destroy(JNIEnv *env, jclass, jobject st_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1destroy(JNIEnv *env, jclass,
+                                                                                          jobject st_buf) {
 	CHECK_BUF(st, st_buf, duckdb_v2_sql_statement_handle, "statement");
 	duckdb_v2_sql_statement_destroy(&st);
 }
 
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1get_1type(JNIEnv *env, jclass, jobject st_buf) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1get_1type(JNIEnv *env, jclass,
+                                                                                            jobject st_buf) {
 	CHECK_BUF_RET(st, st_buf, duckdb_v2_sql_statement_handle, "statement", 0);
 	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
 	CALL_V2(duckdb_v2_sql_statement_get_type(st, &type, ERR_OUT), 0);
 	return static_cast<jint>(type);
 }
 
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1get_1parameter_1count(JNIEnv *env, jclass, jobject st_buf) {
+JNIEXPORT jlong JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statement_1get_1parameter_1count(JNIEnv *env, jclass, jobject st_buf) {
 	CHECK_BUF_RET(st, st_buf, duckdb_v2_sql_statement_handle, "statement", 0);
 	idx_t count = 0;
 	CALL_V2(duckdb_v2_sql_statement_get_parameter_count(st, &count, ERR_OUT), 0);
@@ -127,8 +136,8 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1sql_1statemen
 
 /* --- prepared statements --- */
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1create(JNIEnv *env, jclass, jobject conn_buf, jobject st_buf,
-                                                                jboolean require_cacheable) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1create(
+    JNIEnv *env, jclass, jobject conn_buf, jobject st_buf, jboolean require_cacheable) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	CHECK_BUF_RET(st, st_buf, duckdb_v2_sql_statement_handle, "statement", nullptr);
 	duckdb_v2_prepared_statement_handle prepared = nullptr;
@@ -136,7 +145,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1s
 	return make_ptr_buf(env, prepared);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1destroy(JNIEnv *env, jclass, jobject prepared_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1destroy(JNIEnv *env, jclass,
+                                                                                               jobject prepared_buf) {
 	CHECK_BUF(prepared, prepared_buf, duckdb_v2_prepared_statement_handle, "prepared statement");
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
@@ -159,8 +169,8 @@ static bool read_values(JNIEnv *env, jobjectArray values_j, std::vector<duckdb_v
 	return true;
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1execute(JNIEnv *env, jclass, jobject prepared_buf,
-                                                                 jobjectArray values_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1execute(
+    JNIEnv *env, jclass, jobject prepared_buf, jobjectArray values_j) {
 	CHECK_BUF_RET(prepared, prepared_buf, duckdb_v2_prepared_statement_handle, "prepared statement", nullptr);
 	std::vector<duckdb_v2_value_handle> values;
 	if (!read_values(env, values_j, values)) {
@@ -173,8 +183,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1s
 	return make_ptr_buf(env, result);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1execute(JNIEnv *env, jclass, jobject conn_buf, jobject st_buf,
-                                                        jobjectArray values_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1execute(JNIEnv *env, jclass,
+                                                                                        jobject conn_buf,
+                                                                                        jobject st_buf,
+                                                                                        jobjectArray values_j) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	CHECK_BUF_RET(st, st_buf, duckdb_v2_sql_statement_handle, "statement", nullptr);
 	std::vector<duckdb_v2_value_handle> values;
@@ -188,7 +200,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1
 }
 
 // Returns the output schema and the parameters schema
-JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1bind(JNIEnv *env, jclass, jobject conn_buf, jobject st_buf) {
+JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statement_1bind(JNIEnv *env, jclass,
+                                                                                          jobject conn_buf,
+                                                                                          jobject st_buf) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	CHECK_BUF_RET(st, st_buf, duckdb_v2_sql_statement_handle, "statement", nullptr);
 	v2_schema output;
@@ -214,19 +228,23 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1statem
 
 /* --- schemas --- */
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1destroy(JNIEnv *env, jclass, jobject schema_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1destroy(JNIEnv *env, jclass,
+                                                                                  jobject schema_buf) {
 	CHECK_BUF(schema, schema_buf, duckdb_v2_schema_handle, "schema");
 	duckdb_v2_schema_destroy(&schema);
 }
 
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1count(JNIEnv *env, jclass, jobject schema_buf) {
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1count(JNIEnv *env, jclass,
+                                                                                      jobject schema_buf) {
 	CHECK_BUF_RET(schema, schema_buf, duckdb_v2_schema_handle, "schema", 0);
 	idx_t count = 0;
 	CALL_V2(duckdb_v2_schema_get_count(schema, &count, ERR_OUT), 0);
 	return uint64_to_jlong(count);
 }
 
-JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1name(JNIEnv *env, jclass, jobject schema_buf, jlong index) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1name(JNIEnv *env, jclass,
+                                                                                                 jobject schema_buf,
+                                                                                                 jlong index) {
 	CHECK_BUF_RET(schema, schema_buf, duckdb_v2_schema_handle, "schema", nullptr);
 	idx_t idx = jlong_to_idx(env, index);
 	if (env->ExceptionCheck()) {
@@ -240,7 +258,9 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1
 }
 
 // The returned type is borrowed from the schema and must not be destroyed
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1type(JNIEnv *env, jclass, jobject schema_buf, jlong index) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get_1field_1type(JNIEnv *env, jclass,
+                                                                                              jobject schema_buf,
+                                                                                              jlong index) {
 	CHECK_BUF_RET(schema, schema_buf, duckdb_v2_schema_handle, "schema", nullptr);
 	idx_t idx = jlong_to_idx(env, index);
 	if (env->ExceptionCheck()) {
@@ -255,38 +275,44 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1schema_1get
 
 /* --- results --- */
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1destroy(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1destroy(JNIEnv *env, jclass,
+                                                                                  jobject result_buf) {
 	CHECK_BUF(result, result_buf, duckdb_v2_result_handle, "result");
 	duckdb_v2_result_destroy(&result);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1schema(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1schema(JNIEnv *env, jclass,
+                                                                                         jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", nullptr);
 	duckdb_v2_schema_handle schema = nullptr;
 	CALL_V2(duckdb_v2_result_get_schema(result, &schema, ERR_OUT), nullptr);
 	return make_ptr_buf(env, schema);
 }
 
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1result_1type(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1result_1type(JNIEnv *env, jclass,
+                                                                                            jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", 0);
 	DUCKDB_V2_RESULT_TYPE type = DUCKDB_V2_RESULT_TYPE_NOTHING;
 	CALL_V2(duckdb_v2_result_get_result_type(result, &type, ERR_OUT), 0);
 	return static_cast<jint>(type);
 }
 
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1statement_1type(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1get_1statement_1type(JNIEnv *env, jclass,
+                                                                                               jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", 0);
 	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
 	CALL_V2(duckdb_v2_result_get_statement_type(result, &type, ERR_OUT), 0);
 	return static_cast<jint>(type);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1wait(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1wait(JNIEnv *env, jclass,
+                                                                               jobject result_buf) {
 	CHECK_BUF(result, result_buf, duckdb_v2_result_handle, "result");
 	CALL_V2(duckdb_v2_result_wait(result, ERR_OUT), );
 }
 
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1drain(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1drain(JNIEnv *env, jclass,
+                                                                                 jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", 0);
 	idx_t rows_changed = 0;
 	CALL_V2(duckdb_v2_result_drain(result, &rows_changed, ERR_OUT), 0);
@@ -295,7 +321,9 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1drain
 
 // Steps the result once, the status (DUCKDB_V2_RESULT_STEP_STATUS) is written to status_out[0], the returned chunk is
 // null unless the status is CHUNK
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1step(JNIEnv *env, jclass, jobject result_buf, jintArray status_out) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1step(JNIEnv *env, jclass,
+                                                                                  jobject result_buf,
+                                                                                  jintArray status_out) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", nullptr);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
@@ -306,7 +334,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1ste
 }
 
 // Returns null at the end of the result
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1fetch_1chunk(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1fetch_1chunk(JNIEnv *env, jclass,
+                                                                                          jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", nullptr);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	CALL_V2(duckdb_v2_result_fetch_chunk(result, &chunk, ERR_OUT), nullptr);
@@ -316,15 +345,16 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1result_1fet
 /* --- factory and values --- */
 
 // The factory is borrowed from the connection
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1factory(JNIEnv *env, jclass, jobject conn_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1factory(JNIEnv *env, jclass,
+                                                                                              jobject conn_buf) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	duckdb_v2_factory_handle factory = nullptr;
 	CALL_V2(duckdb_v2_connection_get_factory(conn, &factory, ERR_OUT), nullptr);
 	return make_ptr_buf(env, factory);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1factory_1create_1type_1from_1text(JNIEnv *env, jclass, jobject factory_buf,
-                                                                    jbyteArray text_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1factory_1create_1type_1from_1text(
+    JNIEnv *env, jclass, jobject factory_buf, jbyteArray text_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto text = jbyteArray_to_string(env, text_j);
 	if (env->ExceptionCheck()) {
@@ -335,33 +365,48 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1factory_1cr
 	return make_logical_type_buf(env, type);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1destroy(JNIEnv *env, jclass, jobject value_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1destroy(JNIEnv *env, jclass,
+                                                                                 jobject value_buf) {
 	CHECK_BUF(value, value_buf, duckdb_v2_value_handle, "value");
 	duckdb_v2_value_destroy(&value);
 }
 
-#define VALUE_CREATE_SCALAR(FN, JTYPE, CALL)                                                                         \
-	JNIEXPORT jobject JNICALL FN(JNIEnv *env, jclass, jobject factory_buf, JTYPE in_value) {                                           \
+#define VALUE_CREATE_SCALAR(FN, JTYPE, CALL)                                                                           \
+	JNIEXPORT jobject JNICALL FN(JNIEnv *env, jclass, jobject factory_buf, JTYPE in_value) {                           \
 		CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);                             \
 		duckdb_v2_value_handle value = nullptr;                                                                        \
 		CALL_V2(CALL, nullptr);                                                                                        \
 		return make_ptr_buf(env, value);                                                                               \
 	}
 
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1bool, jboolean, duckdb_v2_value_create_bool(factory, in_value == JNI_TRUE, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1tinyint, jbyte, duckdb_v2_value_create_tinyint(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1smallint, jshort, duckdb_v2_value_create_smallint(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1int, jint, duckdb_v2_value_create_int(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1bigint, jlong, duckdb_v2_value_create_bigint(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1float, jfloat, duckdb_v2_value_create_float(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1double, jdouble, duckdb_v2_value_create_double(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1date, jint, duckdb_v2_value_create_date(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1time, jlong, duckdb_v2_value_create_time(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp, jlong, duckdb_v2_value_create_timestamp(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1ns, jlong, duckdb_v2_value_create_timestamp_ns(factory, in_value, &value, ERR_OUT))
-VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1tz, jlong, duckdb_v2_value_create_timestamp_tz(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1bool, jboolean,
+                    duckdb_v2_value_create_bool(factory, in_value == JNI_TRUE, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1tinyint, jbyte,
+                    duckdb_v2_value_create_tinyint(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1smallint, jshort,
+                    duckdb_v2_value_create_smallint(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1int, jint,
+                    duckdb_v2_value_create_int(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1bigint, jlong,
+                    duckdb_v2_value_create_bigint(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1float, jfloat,
+                    duckdb_v2_value_create_float(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1double, jdouble,
+                    duckdb_v2_value_create_double(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1date, jint,
+                    duckdb_v2_value_create_date(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1time, jlong,
+                    duckdb_v2_value_create_time(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp, jlong,
+                    duckdb_v2_value_create_timestamp(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1ns, jlong,
+                    duckdb_v2_value_create_timestamp_ns(factory, in_value, &value, ERR_OUT))
+VALUE_CREATE_SCALAR(Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1timestamp_1tz, jlong,
+                    duckdb_v2_value_create_timestamp_tz(factory, in_value, &value, ERR_OUT))
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1null(JNIEnv *env, jclass, jobject factory_buf, jobject type_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1null(JNIEnv *env, jclass,
+                                                                                         jobject factory_buf,
+                                                                                         jobject type_buf) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
@@ -372,8 +417,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1hugeint(JNIEnv *env, jclass, jobject factory_buf, jlong lower,
-                                                           jlong upper) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1hugeint(JNIEnv *env, jclass,
+                                                                                            jobject factory_buf,
+                                                                                            jlong lower, jlong upper) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	duckdb_v2_hugeint_t in_value {static_cast<uint64_t>(lower), static_cast<int64_t>(upper)};
 	duckdb_v2_value_handle value = nullptr;
@@ -381,8 +427,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1uuid(JNIEnv *env, jclass, jobject factory_buf, jlong lower,
-                                                        jlong upper) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1uuid(JNIEnv *env, jclass,
+                                                                                         jobject factory_buf,
+                                                                                         jlong lower, jlong upper) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	duckdb_v2_hugeint_t in_value {static_cast<uint64_t>(lower), static_cast<int64_t>(upper)};
 	duckdb_v2_value_handle value = nullptr;
@@ -390,8 +437,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1decimal(JNIEnv *env, jclass, jobject factory_buf, jlong lower,
-                                                           jlong upper, jint width, jint scale) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1decimal(JNIEnv *env, jclass,
+                                                                                            jobject factory_buf,
+                                                                                            jlong lower, jlong upper,
+                                                                                            jint width, jint scale) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	duckdb_v2_hugeint_t in_value {static_cast<uint64_t>(lower), static_cast<int64_t>(upper)};
 	duckdb_v2_value_handle value = nullptr;
@@ -401,8 +450,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1varchar(JNIEnv *env, jclass, jobject factory_buf,
-                                                           jbyteArray in_value_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1varchar(JNIEnv *env, jclass,
+                                                                                            jobject factory_buf,
+                                                                                            jbyteArray in_value_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto in_value = jbyteArray_to_string(env, in_value_j);
 	if (env->ExceptionCheck()) {
@@ -413,8 +463,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1blob(JNIEnv *env, jclass, jobject factory_buf,
-                                                        jbyteArray in_value_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1blob(JNIEnv *env, jclass,
+                                                                                         jobject factory_buf,
+                                                                                         jbyteArray in_value_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto in_value = jbyteArray_to_string(env, in_value_j);
 	if (env->ExceptionCheck()) {
@@ -426,8 +477,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 }
 
 // The child values are borrowed for the call
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1list(JNIEnv *env, jclass, jobject factory_buf, jobject type_buf,
-                                                        jobjectArray children_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1list(JNIEnv *env, jclass,
+                                                                                         jobject factory_buf,
+                                                                                         jobject type_buf,
+                                                                                         jobjectArray children_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
@@ -442,8 +495,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1struct(JNIEnv *env, jclass, jobject factory_buf,
-                                                          jobjectArray names_j, jobjectArray children_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1struct(JNIEnv *env, jclass,
+                                                                                           jobject factory_buf,
+                                                                                           jobjectArray names_j,
+                                                                                           jobjectArray children_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	std::vector<duckdb_v2_value_handle> children;
 	if (!read_values(env, children_j, children)) {
@@ -470,15 +525,15 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 		name_lens.push_back(name.size());
 	}
 	duckdb_v2_value_handle value = nullptr;
-	CALL_V2(duckdb_v2_value_create_struct(factory, name_ptrs.data(), name_lens.data(), children.data(),
-	                                      children.size(), &value, ERR_OUT),
+	CALL_V2(duckdb_v2_value_create_struct(factory, name_ptrs.data(), name_lens.data(), children.data(), children.size(),
+	                                      &value, ERR_OUT),
 	        nullptr);
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1map(JNIEnv *env, jclass, jobject factory_buf, jobject key_type_buf,
-                                                       jobject value_type_buf, jobjectArray keys_j,
-                                                       jobjectArray values_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1map(
+    JNIEnv *env, jclass, jobject factory_buf, jobject key_type_buf, jobject value_type_buf, jobjectArray keys_j,
+    jobjectArray values_j) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto key_type = logical_type_buf_to_logical_type(env, key_type_buf);
 	if (env->ExceptionCheck()) {
@@ -504,7 +559,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1type(JNIEnv *env, jclass, jobject factory_buf, jobject type_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1create_1type(JNIEnv *env, jclass,
+                                                                                         jobject factory_buf,
+                                                                                         jobject type_buf) {
 	CHECK_BUF_RET(factory, factory_buf, duckdb_v2_factory_handle, "factory", nullptr);
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
@@ -515,7 +572,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1crea
 	return make_ptr_buf(env, value);
 }
 
-JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1to_1string(JNIEnv *env, jclass, jobject value_buf) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1to_1string(JNIEnv *env, jclass,
+                                                                                          jobject value_buf) {
 	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
 	idx_t length = 0;
 	CALL_V2(duckdb_v2_value_to_string(value, nullptr, 0, &length, ERR_OUT), nullptr);
@@ -526,13 +584,15 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1t
 
 /* --- vectors --- */
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1flatten(JNIEnv *env, jclass, jobject vector_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1flatten(JNIEnv *env, jclass,
+                                                                                  jobject vector_buf) {
 	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
 	CALL_V2(duckdb_v2_vector_flatten(vector, ERR_OUT), );
 }
 
 // The returned value is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1value(JNIEnv *env, jclass, jobject vector_buf, jlong row) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get_1value(JNIEnv *env, jclass,
+                                                                                        jobject vector_buf, jlong row) {
 	CHECK_BUF_RET(vector, vector_buf, duckdb_v2_vector_handle, "vector", nullptr);
 	idx_t idx = jlong_to_idx(env, row);
 	if (env->ExceptionCheck()) {
@@ -545,7 +605,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1get
 
 /* --- logical type parameters --- */
 
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1count(JNIEnv *env, jclass, jobject type_buf) {
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1count(JNIEnv *env, jclass,
+                                                                                                    jobject type_buf) {
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
 		return 0;
@@ -556,7 +617,10 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type
 }
 
 // The returned value is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1value(JNIEnv *env, jclass, jobject type_buf, jlong index) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1value(JNIEnv *env,
+                                                                                                      jclass,
+                                                                                                      jobject type_buf,
+                                                                                                      jlong index) {
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
 		return nullptr;
@@ -573,8 +637,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1ty
 }
 
 // Returns null for a positional parameter
-JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1name(JNIEnv *env, jclass, jobject type_buf,
-                                                                     jlong index) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_1type_1get_1param_1name(
+    JNIEnv *env, jclass, jobject type_buf, jlong index) {
 	auto type = logical_type_buf_to_logical_type(env, type_buf);
 	if (env->ExceptionCheck()) {
 		return nullptr;
@@ -595,7 +659,8 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1logical_
 }
 
 // Unwraps the type of a TYPE value, the returned type is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1type(JNIEnv *env, jclass, jobject value_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1type(JNIEnv *env, jclass,
+                                                                                      jobject value_buf) {
 	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
 	duckdb_v2_logical_type_handle type = nullptr;
 	CALL_V2(duckdb_v2_value_get_type(value, &type, ERR_OUT), nullptr);
@@ -605,7 +670,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_
 /* --- configuration --- */
 
 // The returned config is borrowed from the connection
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1config(JNIEnv *env, jclass, jobject conn_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_1get_1config(JNIEnv *env, jclass,
+                                                                                             jobject conn_buf) {
 	CHECK_BUF_RET(conn, conn_buf, duckdb_v2_connection_handle, "connection", nullptr);
 	duckdb_v2_config_handle config = nullptr;
 	CALL_V2(duckdb_v2_connection_get_config(conn, &config, ERR_OUT), nullptr);
@@ -613,8 +679,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1connection_
 }
 
 // The returned value is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value(JNIEnv *env, jclass, jobject config_buf,
-                                                              jbyteArray name_j) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get_1option_1value(JNIEnv *env, jclass,
+                                                                                                jobject config_buf,
+                                                                                                jbyteArray name_j) {
 	CHECK_BUF_RET(config, config_buf, duckdb_v2_config_handle, "config", nullptr);
 	auto name = jbyteArray_to_string(env, name_j);
 	if (env->ExceptionCheck()) {
@@ -629,7 +696,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1config_1get
 /* --- transitional --- */
 
 // Wraps the result into a chunked result of the bindings API, the holder takes the ownership of the result
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1chunked_1result_1create(JNIEnv *env, jclass, jobject result_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1chunked_1result_1create(JNIEnv *env, jclass,
+                                                                                             jobject result_buf) {
 	CHECK_BUF_RET(result, result_buf, duckdb_v2_result_handle, "result", nullptr);
 	try {
 		return env->NewDirectByteBuffer(new ChunkedResultHolder(result), 0);
@@ -643,7 +711,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1chunked_1re
 /* --- variants --- */
 
 // The returned value is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1variant_1to_1value(JNIEnv *env, jclass, jobject value_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1variant_1to_1value(JNIEnv *env, jclass,
+                                                                                               jobject value_buf) {
 	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
 	duckdb_v2_value_handle out_value = nullptr;
 	CALL_V2(duckdb_v2_value_variant_to_value(value, &out_value, ERR_OUT), nullptr);
@@ -651,15 +720,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1vari
 }
 
 // The returned type is owned by the caller
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1logical_1type(JNIEnv *env, jclass, jobject value_buf) {
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1value_1get_1logical_1type(JNIEnv *env, jclass,
+                                                                                               jobject value_buf) {
 	CHECK_BUF_RET(value, value_buf, duckdb_v2_value_handle, "value", nullptr);
 	duckdb_v2_logical_type_handle type = nullptr;
 	CALL_V2(duckdb_v2_value_get_logical_type(value, &type, ERR_OUT), nullptr);
 	return make_logical_type_buf(env, type);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1value(JNIEnv *env, jclass, jobject vector_buf, jlong row,
-                                                    jobject value_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1value(JNIEnv *env, jclass,
+                                                                                     jobject vector_buf, jlong row,
+                                                                                     jobject value_buf) {
 	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
 	CHECK_BUF(value, value_buf, duckdb_v2_value_handle, "value");
 	idx_t idx = jlong_to_idx(env, row);
@@ -669,7 +740,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1v
 	CALL_V2(duckdb_v2_vector_set_value(vector, idx, value, ERR_OUT), );
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1size(JNIEnv *env, jclass, jobject vector_buf, jlong size) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1vector_1set_1size(JNIEnv *env, jclass,
+                                                                                    jobject vector_buf, jlong size) {
 	CHECK_BUF(vector, vector_buf, duckdb_v2_vector_handle, "vector");
 	idx_t sz = jlong_to_idx(env, size);
 	if (env->ExceptionCheck()) {

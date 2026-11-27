@@ -50,7 +50,7 @@ import org.duckdb.user.DuckDBUserArray;
 public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBConnection conn;
 
-    private ByteBuffer stmtRef = null;
+    private DuckDBCore.StatementRef stmtRef = null;
     private final ReentrantLock stmtRefLock = new ReentrantLock();
     private String query = null;
     volatile boolean closeOnCompletion = false;
@@ -170,7 +170,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
                     startTransaction();
                 }
 
-                stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn.connRef, preparedSql.getBytes(UTF_8));
+                stmtRef = DuckDBNative.duckdb_jdbc_prepare(conn, preparedSql.getBytes(UTF_8));
                 // Track prepared statement inside the parent connection
                 conn.preparedStatements.add(this);
             } finally {
@@ -193,7 +193,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         conn.connRefLock.lock();
         try {
             conn.checkOpen();
-            ByteBuffer pendingRef = DuckDBNative.duckdb_jdbc_pending_query(conn.connRef, query.getBytes(UTF_8));
+            DuckDBCore.PendingRef pendingRef = DuckDBNative.duckdb_jdbc_pending_query(conn, query.getBytes(UTF_8));
             pending = new DuckDBPendingQuery(conn, pendingRef);
             // need to track the statement too to release the results
             conn.preparedStatements.add(this);
@@ -206,7 +206,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             if (pending.pendingRef == null) {
                 throw createSQLException("Connection was closed", ErrorCode.PREPARED_CONN_CLOSED);
             }
-            ByteBuffer resultRef = DuckDBNative.duckdb_jdbc_execute_pending(pending.pendingRef);
+            DuckDBCore.ResultRef resultRef = DuckDBNative.duckdb_jdbc_execute_pending(pending.pendingRef);
             return new DirectQueryResult(resultRef, pending);
         } finally {
             pending.pendingRefLock.unlock();
@@ -223,7 +223,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         connLock.lock();
         connLock.unlock();
 
-        ByteBuffer resultRef = null;
+        DuckDBCore.ResultRef resultRef = null;
         DuckDBPendingQuery pendingQuery = null;
         boolean queryFailed = false;
 
@@ -1598,10 +1598,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private static class DirectQueryResult {
-        final ByteBuffer resultRef;
+        final DuckDBCore.ResultRef resultRef;
         final DuckDBPendingQuery pendingQuery;
 
-        private DirectQueryResult(ByteBuffer resultRef, DuckDBPendingQuery pendingQuery) {
+        private DirectQueryResult(DuckDBCore.ResultRef resultRef, DuckDBPendingQuery pendingQuery) {
             this.resultRef = resultRef;
             this.pendingQuery = pendingQuery;
         }

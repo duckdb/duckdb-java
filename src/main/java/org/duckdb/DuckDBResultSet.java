@@ -42,7 +42,7 @@ public class DuckDBResultSet implements ResultSet {
     /**
      * {@code null} if this result set is closed.
      */
-    private ByteBuffer resultRef;
+    private DuckDBCore.ResultRef resultRef;
     private final Lock resultRefLock = new ReentrantLock();
 
     private DuckDBVector[] currentChunk = {};
@@ -51,7 +51,7 @@ public class DuckDBResultSet implements ResultSet {
     private boolean wasNull;
 
     public DuckDBResultSet(DuckDBConnection conn, DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta,
-                           ByteBuffer resultRef) throws SQLException {
+                           DuckDBCore.ResultRef resultRef) throws SQLException {
         try {
             this.conn = Objects.requireNonNull(conn);
             this.stmt = Objects.requireNonNull(stmt);

@@ -57,61 +57,9 @@ jstring _duckdb_jdbc_get_catalog(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv * env, jclass param0, jobject param1);
 
-jobject _duckdb_jdbc_prepare(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
-
-jobject _duckdb_jdbc_pending_query(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1pending_1query(JNIEnv * env, jclass param0, jobject param1, jbyteArray param2);
-
-void _duckdb_jdbc_release(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_release_pending(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release_1pending(JNIEnv * env, jclass param0, jobject param1);
-
-jobject _duckdb_jdbc_query_result_meta(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1result_1meta(JNIEnv * env, jclass param0, jobject param1);
-
-jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1statement_1meta(JNIEnv * env, jclass param0, jobject param1);
-
-jobject _duckdb_jdbc_execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
-
-jobject _duckdb_jdbc_execute_capi(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1capi(JNIEnv * env, jclass param0, jobject param1, jobjectArray param2);
-
-jobject _duckdb_jdbc_execute_pending(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute_1pending(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_free_result(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(JNIEnv * env, jclass param0, jobject param1);
-
-jobjectArray _duckdb_jdbc_fetch(JNIEnv * env, jclass param0, jobject param1, jobject param2);
-
-JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv * env, jclass param0, jobject param1, jobject param2);
-
-jobjectArray _duckdb_jdbc_cast_result_to_strings(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
-
-JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1cast_1result_1to_1strings(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
-
 jint _duckdb_jdbc_fetch_size(JNIEnv * env, jclass param0);
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv * env, jclass param0);
-
-jlong _duckdb_jdbc_arrow_stream(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
-
-JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream(JNIEnv * env, jclass param0, jobject param1, jobject param2, jlong param3);
 
 void _duckdb_jdbc_arrow_register(JNIEnv * env, jclass param0, jobject param1, jlong param2, jbyteArray param3);
 
@@ -136,14 +84,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1end_
 void _duckdb_jdbc_appender_flush(JNIEnv * env, jclass param0, jobject param1);
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1flush(JNIEnv * env, jclass param0, jobject param1);
-
-void _duckdb_jdbc_interrupt(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt(JNIEnv * env, jclass param0, jobject param1);
-
-jobject _duckdb_jdbc_query_progress(JNIEnv * env, jclass param0, jobject param1);
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1progress(JNIEnv * env, jclass param0, jobject param1);
 
 void _duckdb_jdbc_appender_close(JNIEnv * env, jclass param0, jobject param1);
 

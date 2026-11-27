@@ -24,6 +24,7 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantLock;
 import org.duckdb.user.DuckDBMap;
 import org.duckdb.user.DuckDBUserArray;
@@ -38,6 +39,8 @@ public final class DuckDBConnection implements java.sql.Connection {
     final ReentrantLock connRefLock = new ReentrantLock();
     final LinkedHashSet<DuckDBPendingQuery> pendingQueries = new LinkedHashSet<>();
     final LinkedHashSet<DuckDBPreparedStatement> preparedStatements = new LinkedHashSet<>();
+    // The connection has one live result at a time, the queries are run one by one
+    final Semaphore queryGate = new Semaphore(1);
     final LinkedHashSet<DuckDBAppender> appenders = new LinkedHashSet<>();
     volatile boolean closing;
 

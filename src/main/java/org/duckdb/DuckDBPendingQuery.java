@@ -1,15 +1,14 @@
 package org.duckdb;
 
-import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.concurrent.locks.ReentrantLock;
 
 class DuckDBPendingQuery {
     private DuckDBConnection conn;
-    ByteBuffer pendingRef = null;
+    DuckDBCore.PendingRef pendingRef = null;
     final ReentrantLock pendingRefLock = new ReentrantLock();
 
-    DuckDBPendingQuery(DuckDBConnection conn, ByteBuffer pendingRef) {
+    DuckDBPendingQuery(DuckDBConnection conn, DuckDBCore.PendingRef pendingRef) {
         this.conn = conn;
         this.pendingRef = pendingRef;
         this.conn.connRefLock.lock();
