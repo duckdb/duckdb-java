@@ -13,9 +13,7 @@ if args.check:
 
 hpp_files = set([r.replace("\\", "/") for r in glob('src/jni/*.hpp')])
 
-hpp_files.remove('src/jni/functions.hpp')
 cpp_files = set([r.replace("\\", "/") for r in glob('src/jni/*.cpp')])
-cpp_files.remove('src/jni/functions.cpp')
 java_files = set([r.replace("\\", "/") for r in glob('src/**/*.java', recursive=True)])
 
 for name in [*hpp_files] + [*cpp_files] + [*java_files]:
