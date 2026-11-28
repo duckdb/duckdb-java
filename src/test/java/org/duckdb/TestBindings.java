@@ -559,23 +559,18 @@ public class TestBindings {
         duckdb_destroy_logical_type(intType);
     }
 
-    public static void test_bindings_appender() throws Exception {
+    public static void test_v2_appender() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE tab1(col1 INT, col2 VARCHAR)");
 
-            ByteBuffer[] out = new ByteBuffer[1];
-            int state =
-                duckdb_appender_create_ext(conn.connRef, "memory".getBytes(UTF_8), null, "tab1".getBytes(UTF_8), out);
-
-            assertEquals(state, 0);
-            ByteBuffer appender = out[0];
+            DuckDBV2Appender appender = DuckDBV2Appender.create(conn, "memory", null, "tab1");
             assertNotNull(appender);
 
-            assertEquals(duckdb_appender_column_count(appender), 2L);
-            ByteBuffer col1Type = duckdb_appender_column_type(appender, 0);
+            assertEquals(appender.columnCount(), 2L);
+            ByteBuffer col1Type = appender.columnType(0);
             assertEquals(duckdb_get_type_id(col1Type), DUCKDB_TYPE_INTEGER.typeId);
-            ByteBuffer col2Type = duckdb_appender_column_type(appender, 1);
+            ByteBuffer col2Type = appender.columnType(1);
             assertEquals(duckdb_get_type_id(col2Type), DUCKDB_TYPE_VARCHAR.typeId);
 
             ByteBuffer chunk = duckdb_create_data_chunk(new ByteBuffer[] {col1Type, col2Type});
@@ -585,18 +580,18 @@ public class TestBindings {
             ByteBuffer col1Data = duckdb_vector_get_data(col1Vec, duckdb_vector_size() * 4);
             col1Data.putInt(42);
             col1Data.putInt(43);
-            duckdb_append_default_to_chunk(appender, chunk, 0, 2);
+            assertEquals(appender.appendDefaultToChunk(chunk, 0, 2), 0);
 
             ByteBuffer col2Vec = duckdb_data_chunk_get_vector(chunk, 1);
             duckdb_vector_ensure_validity_writable(col2Vec);
             duckdb_vector_assign_string_element_len(col2Vec, 0, "foo".getBytes(UTF_8));
             duckdb_vector_assign_string_element_len(col2Vec, 1, "bar".getBytes(UTF_8));
-            duckdb_append_default_to_chunk(appender, chunk, 1, 2);
+            assertEquals(appender.appendDefaultToChunk(chunk, 1, 2), 0);
 
             duckdb_data_chunk_set_size(chunk, 3);
-            assertEquals(duckdb_append_data_chunk(appender, chunk), 0);
-            assertEquals(duckdb_appender_flush(appender), 0);
-            assertNull(duckdb_appender_error(appender));
+            assertEquals(appender.appendChunk(chunk), 0);
+            assertEquals(appender.flush(), 0);
+            assertEquals(appender.error().length, 0);
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM tab1 ORDER BY col1")) {
                 assertTrue(rs.next());
@@ -611,8 +606,8 @@ public class TestBindings {
                 assertFalse(rs.next());
             }
 
-            assertEquals(duckdb_appender_close(appender), 0);
-            assertEquals(duckdb_appender_destroy(appender), 0);
+            assertEquals(appender.close(), 0);
+            appender.destroy();
             duckdb_destroy_data_chunk(chunk);
             duckdb_destroy_logical_type(col1Type);
             duckdb_destroy_logical_type(col2Type);
@@ -625,29 +620,25 @@ public class TestBindings {
             stmt.execute(
                 "CREATE TABLE tab1(dec2 DECIMAL(3,1), dec4 DECIMAL(7,3), dec8 DECIMAL(15,5), dec16 DECIMAL(30,10))");
 
-            ByteBuffer[] out = new ByteBuffer[1];
-            int state =
-                duckdb_appender_create_ext(conn.connRef, "memory".getBytes(UTF_8), null, "tab1".getBytes(UTF_8), out);
-            assertEquals(state, 0);
-            ByteBuffer appender = out[0];
+            DuckDBV2Appender appender = DuckDBV2Appender.create(conn, "memory", null, "tab1");
             assertNotNull(appender);
 
-            ByteBuffer dec2Type = duckdb_appender_column_type(appender, 0);
+            ByteBuffer dec2Type = appender.columnType(0);
             assertEquals(duckdb_decimal_width(dec2Type), 3);
             assertEquals(duckdb_decimal_scale(dec2Type), 1);
             assertEquals(duckdb_decimal_internal_type(dec2Type), DUCKDB_TYPE_SMALLINT.typeId);
 
-            ByteBuffer dec4Type = duckdb_appender_column_type(appender, 1);
+            ByteBuffer dec4Type = appender.columnType(1);
             assertEquals(duckdb_decimal_width(dec4Type), 7);
             assertEquals(duckdb_decimal_scale(dec4Type), 3);
             assertEquals(duckdb_decimal_internal_type(dec4Type), DUCKDB_TYPE_INTEGER.typeId);
 
-            ByteBuffer dec8Type = duckdb_appender_column_type(appender, 2);
+            ByteBuffer dec8Type = appender.columnType(2);
             assertEquals(duckdb_decimal_width(dec8Type), 15);
             assertEquals(duckdb_decimal_scale(dec8Type), 5);
             assertEquals(duckdb_decimal_internal_type(dec8Type), DUCKDB_TYPE_BIGINT.typeId);
 
-            ByteBuffer dec16Type = duckdb_appender_column_type(appender, 3);
+            ByteBuffer dec16Type = appender.columnType(3);
             assertEquals(duckdb_decimal_width(dec16Type), 30);
             assertEquals(duckdb_decimal_scale(dec16Type), 10);
             assertEquals(duckdb_decimal_internal_type(dec16Type), DUCKDB_TYPE_HUGEINT.typeId);
@@ -656,8 +647,8 @@ public class TestBindings {
             duckdb_destroy_logical_type(dec8Type);
             duckdb_destroy_logical_type(dec4Type);
             duckdb_destroy_logical_type(dec2Type);
-            assertEquals(duckdb_appender_close(appender), 0);
-            assertEquals(duckdb_appender_destroy(appender), 0);
+            assertEquals(appender.close(), 0);
+            appender.destroy();
         }
     }
 
@@ -675,14 +666,10 @@ public class TestBindings {
             stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');");
             stmt.execute("CREATE TABLE tab1(col1 mood)");
 
-            ByteBuffer[] out = new ByteBuffer[1];
-            int state =
-                duckdb_appender_create_ext(conn.connRef, "memory".getBytes(UTF_8), null, "tab1".getBytes(UTF_8), out);
-            assertEquals(state, 0);
-            ByteBuffer appender = out[0];
+            DuckDBV2Appender appender = DuckDBV2Appender.create(conn, "memory", null, "tab1");
             assertNotNull(appender);
 
-            ByteBuffer enumType = duckdb_appender_column_type(appender, 0);
+            ByteBuffer enumType = appender.columnType(0);
             assertEquals(duckdb_enum_internal_type(enumType), DUCKDB_TYPE_UTINYINT.typeId);
             assertEquals(duckdb_enum_dictionary_size(enumType), 3L);
             assertEquals(duckdb_enum_dictionary_value(enumType, 0), "sad".getBytes(UTF_8));

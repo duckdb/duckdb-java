@@ -1,5 +1,4 @@
 #include "bindings.hpp"
-#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "util.hpp"

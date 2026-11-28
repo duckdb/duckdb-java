@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import java.io.FileNotFoundException;
@@ -131,110 +132,100 @@ final class DuckDBNative {
      * the C header. CMake does this as well
      */
 
-    // results ConnectionHolder reference object
-    static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props,
-                                                 boolean cache_instance) throws SQLException;
-
-    // returns conn_ref connection reference object
-    static native ByteBuffer duckdb_jdbc_connect(ByteBuffer conn_ref) throws SQLException;
-
-    static native ByteBuffer duckdb_jdbc_create_db_ref(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_destroy_db_ref(ByteBuffer db_ref) throws SQLException;
-
-    /** Returns the native address of the underlying DuckDB instance as a stable identity key. */
-    static native long duckdb_jdbc_db_address(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
-
-    static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref) throws SQLException;
-
-    static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
-
-    static native void duckdb_jdbc_set_schema(ByteBuffer conn_ref, String schema);
-
-    static native void duckdb_jdbc_set_catalog(ByteBuffer conn_ref, String catalog);
-
-    static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
-
-    static native String duckdb_jdbc_get_catalog(ByteBuffer conn_ref);
+    // The statements, queries and results are implemented in Java on top of the C API v2 entry points of
+    // DuckDBBindings, see DuckDBCore
 
     // returns stmt_ref result reference object
-    static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
+    static DuckDBCore.StatementRef duckdb_jdbc_prepare(DuckDBConnection conn, byte[] query) throws SQLException {
+        return DuckDBCore.prepare(conn, query);
+    }
 
-    static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
+    static void duckdb_jdbc_release(DuckDBCore.StatementRef stmt_ref) {
+        try {
+            DuckDBCore.release(stmt_ref);
+        } catch (SQLException e) {
+            // the statement is released, nothing else can be done
+        }
+    }
 
-    static native DuckDBResultSetMetaData duckdb_jdbc_query_result_meta(ByteBuffer result_ref) throws SQLException;
+    static DuckDBResultSetMetaData duckdb_jdbc_query_result_meta(DuckDBCore.ResultRef result_ref) throws SQLException {
+        return DuckDBCore.queryResultMeta(result_ref);
+    }
 
-    static native DuckDBResultSetMetaData duckdb_jdbc_prepared_statement_meta(ByteBuffer stmt_ref) throws SQLException;
+    static DuckDBResultSetMetaData duckdb_jdbc_prepared_statement_meta(DuckDBCore.StatementRef stmt_ref)
+        throws SQLException {
+        return DuckDBCore.preparedStatementMeta(stmt_ref);
+    }
 
     // returns res_ref result reference object
-    static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params) throws SQLException;
+    static DuckDBCore.ResultRef duckdb_jdbc_execute(DuckDBCore.StatementRef stmt_ref, Object[] params)
+        throws SQLException {
+        return DuckDBCore.execute(stmt_ref, params);
+    }
 
-    static native ByteBuffer duckdb_jdbc_execute_capi(ByteBuffer stmt_ref, Object[] params) throws SQLException;
+    static ByteBuffer duckdb_jdbc_execute_capi(DuckDBCore.StatementRef stmt_ref, Object[] params) throws SQLException {
+        return DuckDBCore.executeChunked(stmt_ref, params);
+    }
 
-    static native ByteBuffer duckdb_jdbc_pending_query(ByteBuffer conn_ref, byte[] query) throws SQLException;
+    static DuckDBCore.PendingRef duckdb_jdbc_pending_query(DuckDBConnection conn, byte[] query) throws SQLException {
+        return DuckDBCore.pendingQuery(conn, query);
+    }
 
-    static native ByteBuffer duckdb_jdbc_execute_pending(ByteBuffer pending_ref) throws SQLException;
+    static DuckDBCore.ResultRef duckdb_jdbc_execute_pending(DuckDBCore.PendingRef pending_ref) throws SQLException {
+        return DuckDBCore.executePending(pending_ref);
+    }
 
-    static native void duckdb_jdbc_release_pending(ByteBuffer pending_ref) throws SQLException;
+    static void duckdb_jdbc_release_pending(DuckDBCore.PendingRef pending_ref) throws SQLException {
+        DuckDBCore.releasePending(pending_ref);
+    }
 
-    static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
+    static void duckdb_jdbc_free_result(DuckDBCore.ResultRef res_ref) {
+        try {
+            DuckDBCore.freeResult(res_ref);
+        } catch (SQLException e) {
+            // the result is freed, nothing else can be done
+        }
+    }
 
-    static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref, ByteBuffer conn_ref) throws SQLException;
+    static DuckDBVector[] duckdb_jdbc_fetch(DuckDBCore.ResultRef res_ref, ByteBuffer conn_ref) throws SQLException {
+        return DuckDBCore.fetch(res_ref);
+    }
 
-    static native String[] duckdb_jdbc_cast_result_to_strings(ByteBuffer res_ref, ByteBuffer conn_ref, long col_idx)
-        throws SQLException;
+    static String[] duckdb_jdbc_cast_result_to_strings(DuckDBCore.ResultRef res_ref, ByteBuffer conn_ref, long col_idx)
+        throws SQLException {
+        return DuckDBCore.castResultToStrings(res_ref, col_idx);
+    }
 
-    static native int duckdb_jdbc_fetch_size();
+    static long duckdb_jdbc_arrow_stream(DuckDBCore.ResultRef res_ref, DuckDBConnection conn, long batch_size)
+        throws SQLException {
+        return DuckDBCore.exportArrow(res_ref, conn, batch_size);
+    }
 
-    static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, ByteBuffer conn_ref, long batch_size);
+    static void duckdb_jdbc_arrow_register(DuckDBConnection conn, long arrow_array_stream_pointer, String name)
+        throws SQLException {
+        DuckDBCore.registerArrowStream(conn, arrow_array_stream_pointer, name);
+    }
 
-    static native void duckdb_jdbc_arrow_register(ByteBuffer conn_ref, long arrow_array_stream_pointer, byte[] name);
+    static void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref) {
+        DuckDBBindings.duckdb_v2_arrow_close_streams(conn_ref);
+    }
 
-    static native void duckdb_jdbc_arrow_close_streams(ByteBuffer conn_ref);
+    static int duckdb_jdbc_fetch_size() {
+        return (int) DuckDBBindings.duckdb_vector_size();
+    }
 
-    static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name)
-        throws SQLException;
+    static void duckdb_jdbc_interrupt(ByteBuffer conn_ref) throws SQLException {
+        DuckDBBindings.duckdb_v2_connection_interrupt(conn_ref);
+    }
 
-    static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref) throws SQLException;
+    static QueryProgress duckdb_jdbc_query_progress(ByteBuffer conn_ref) throws SQLException {
+        return DuckDBBindings.duckdb_v2_connection_progress_get(conn_ref);
+    }
 
-    static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_interrupt(ByteBuffer conn_ref);
-
-    static native QueryProgress duckdb_jdbc_query_progress(ByteBuffer conn_ref);
-
-    static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_byte(ByteBuffer appender_ref, byte value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_short(ByteBuffer appender_ref, short value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_float(ByteBuffer appender_ref, float value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_bytes(ByteBuffer appender_ref, byte[] value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value) throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_decimal(ByteBuffer appender_ref, BigDecimal value)
-        throws SQLException;
-
-    static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
-
-    protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
-                                                                         ProfilerPrintFormat format)
-        throws SQLException;
+    protected static String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref, ProfilerPrintFormat format)
+        throws SQLException {
+        String name = "default".equals(format.getName()) ? "" : format.getName();
+        return new String(DuckDBBindings.duckdb_v2_connection_get_profiling_information(conn_ref, name.getBytes(UTF_8)),
+                          UTF_8);
+    }
 }

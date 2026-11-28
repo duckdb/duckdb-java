@@ -89,7 +89,7 @@ public class DuckDBAppender implements AutoCloseable {
     private final String schema;
     private final String table;
 
-    private ByteBuffer appenderRef;
+    private DuckDBV2Appender appenderRef;
     private final Lock appenderRefLock = new ReentrantLock();
 
     private final ByteBuffer chunkRef;
@@ -110,7 +110,7 @@ public class DuckDBAppender implements AutoCloseable {
         this.schema = schema;
         this.table = table;
 
-        ByteBuffer appenderRef = null;
+        DuckDBV2Appender appenderRef = null;
         ByteBuffer[] colTypes = null;
         ByteBuffer chunkRef = null;
         List<Column> cols = null;
@@ -131,7 +131,7 @@ public class DuckDBAppender implements AutoCloseable {
                 }
             }
             if (null != appenderRef) {
-                duckdb_appender_destroy(appenderRef);
+                appenderRef.destroy();
             }
             throw createAppenderException(e.getMessage(), ErrorCode.APPENDER_CONVERSION, e);
         }
@@ -258,16 +258,16 @@ public class DuckDBAppender implements AutoCloseable {
 
             duckdb_data_chunk_set_size(chunkRef, rowIdx);
 
-            int appendState = duckdb_append_data_chunk(appenderRef, chunkRef);
+            int appendState = appenderRef.appendChunk(chunkRef);
             if (0 != appendState) {
-                byte[] errorUTF8 = duckdb_appender_error(appenderRef);
+                byte[] errorUTF8 = appenderRef.error();
                 String error = strFromUTF8(errorUTF8);
                 throw createSQLException(error, null);
             }
 
-            int flushState = duckdb_appender_flush(appenderRef);
+            int flushState = appenderRef.flush();
             if (0 != flushState) {
-                byte[] errorUTF8 = duckdb_appender_error(appenderRef);
+                byte[] errorUTF8 = appenderRef.error();
                 String error = strFromUTF8(errorUTF8);
                 throw createSQLException(error, null);
             }
@@ -310,8 +310,8 @@ public class DuckDBAppender implements AutoCloseable {
                 col.destroy();
             }
             duckdb_destroy_data_chunk(chunkRef);
-            duckdb_appender_close(appenderRef);
-            duckdb_appender_destroy(appenderRef);
+            appenderRef.close();
+            appenderRef.destroy();
 
             // Untrack the appender from parent connection,
             // if 'closing' flag is set it means that the parent connection itself
@@ -964,7 +964,9 @@ public class DuckDBAppender implements AutoCloseable {
         appenderRefLock.lock();
         try {
             checkOpen();
-            duckdb_append_default_to_chunk(appenderRef, chunkRef, col.idx, rowIdx);
+            if (0 != appenderRef.appendDefaultToChunk(chunkRef, col.idx, rowIdx)) {
+                throw createSQLException(strFromUTF8(appenderRef.error()), null);
+            }
         } finally {
             appenderRefLock.unlock();
         }
@@ -2262,25 +2264,24 @@ public class DuckDBAppender implements AutoCloseable {
 
     // static methods
 
-    private static ByteBuffer createAppender(DuckDBConnection conn, String catalog, String schema, String table)
+    private static DuckDBV2Appender createAppender(DuckDBConnection conn, String catalog, String schema, String table)
         throws SQLException {
         conn.checkOpen();
         Lock connRefLock = conn.connRefLock;
         connRefLock.lock();
         try {
-            ByteBuffer[] out = new ByteBuffer[1];
-            int state = duckdb_appender_create_ext(conn.connRef, utf8(catalog), utf8(schema), utf8(table), out);
-            if (0 != state) {
+            try {
+                return DuckDBV2Appender.create(conn, catalog, schema, table);
+            } catch (SQLException e) {
                 throw createSQLException("duckdb_appender_create_ext error", ErrorCode.APPENDER_RAW_ERROR);
             }
-            return out[0];
         } finally {
             connRefLock.unlock();
         }
     }
 
-    private static ByteBuffer[] readTableTypes(ByteBuffer appenderRef) throws SQLException {
-        long colCountLong = duckdb_appender_column_count(appenderRef);
+    private static ByteBuffer[] readTableTypes(DuckDBV2Appender appenderRef) throws SQLException {
+        long colCountLong = appenderRef.columnCount();
         if (colCountLong > Integer.MAX_VALUE || colCountLong < 0) {
             throw createSQLException("invalid columns count: " + colCountLong, ErrorCode.APPENDER_PARAM);
         }
@@ -2289,7 +2290,7 @@ public class DuckDBAppender implements AutoCloseable {
         ByteBuffer[] res = new ByteBuffer[colCount];
 
         for (int i = 0; i < colCount; i++) {
-            ByteBuffer colType = duckdb_appender_column_type(appenderRef, i);
+            ByteBuffer colType = appenderRef.columnType(i);
             if (null == colType) {
                 throw createSQLException("cannot get logical type for column: " + i, ErrorCode.APPENDER_CHUNK);
             }

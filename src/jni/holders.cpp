@@ -4,85 +4,17 @@
 #include <iostream>
 #include <stdexcept>
 
-ConnectionHolder *get_connection_ref(JNIEnv *env, jobject conn_ref_buf) {
-	if (!conn_ref_buf) {
-		throw duckdb::ConnectionException("Invalid connection buffer ref");
-	}
-	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
-	if (!conn_holder) {
-		throw duckdb::ConnectionException("Invalid connection buffer");
-	}
-	return conn_holder;
-}
-
-void ConnectionHolder::track_arrow_stream(duckdb::shared_ptr<ArrowStreamState> state) {
-	std::lock_guard<std::mutex> guard(arrow_streams_lock);
-	auto expired = [](const duckdb::weak_ptr<ArrowStreamState> &weak) {
-		return weak.expired();
-	};
-	arrow_streams.erase(std::remove_if(arrow_streams.begin(), arrow_streams.end(), expired), arrow_streams.end());
-	arrow_streams.emplace_back(std::move(state));
-}
-
-void ConnectionHolder::close_arrow_streams() {
-	duckdb::vector<duckdb::shared_ptr<ArrowStreamState>> live;
-	{
-		std::lock_guard<std::mutex> guard(arrow_streams_lock);
-		// Last stream created is first closed
-		for (auto it = arrow_streams.rbegin(); it != arrow_streams.rend(); ++it) {
-			auto state = it->lock();
-			if (state) {
-				live.emplace_back(std::move(state));
-			}
-		}
-		arrow_streams.clear();
-	}
-	for (auto &state : live) {
-		state->Close();
-	}
-}
-
-/**
- * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
- */
-duckdb::Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	auto conn_holder = get_connection_ref(env, conn_ref_buf);
-	auto conn_ref = conn_holder->connection.get();
-	if (!conn_ref || !conn_ref->context) {
-		throw duckdb::ConnectionException("Invalid connection");
-	}
-
-	return conn_ref;
-}
-
-static duckdb::capiv2::CV2Connection *conn_ref_buf_to_v2_conn(JNIEnv *env, jobject conn_ref_buf) {
+duckdb_v2_connection_handle conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
 	if (conn_ref_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid connection buffer");
 		return nullptr;
 	}
-	auto conn_holder = reinterpret_cast<ConnectionHolder *>(env->GetDirectBufferAddress(conn_ref_buf));
-	if (conn_holder == nullptr) {
-		env->ThrowNew(J_SQLException, "Invalid connection holder");
-		return nullptr;
-	}
-	auto conn_ref = conn_holder->connection.get();
-	if (conn_ref == nullptr || conn_ref->context == nullptr) {
+	auto conn = reinterpret_cast<duckdb_v2_connection_handle>(env->GetDirectBufferAddress(conn_ref_buf));
+	if (conn == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
 		return nullptr;
 	}
-	return conn_ref;
-}
-
-duckdb_v2_connection_handle conn_ref_buf_to_conn(JNIEnv *env, jobject conn_ref_buf) {
-	auto conn_ref = conn_ref_buf_to_v2_conn(env, conn_ref_buf);
-	if (conn_ref == nullptr) {
-		return nullptr;
-	}
-	return duckdb::capiv2::Convert(conn_ref);
-}
-
-duckdb::Connection *conn_ref_buf_to_engine_conn(JNIEnv *env, jobject conn_ref_buf) {
-	return conn_ref_buf_to_v2_conn(env, conn_ref_buf);
+	return conn;
 }
 
 ChunkedResultHolder::ChunkedResultHolder(duckdb_v2_result_handle result_p) : result(result_p) {

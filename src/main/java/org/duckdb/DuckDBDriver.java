@@ -40,7 +40,7 @@ public class DuckDBDriver implements java.sql.Driver {
 
     static final ScheduledThreadPoolExecutor scheduler;
 
-    private static final LinkedHashMap<String, ByteBuffer> pinnedDbRefs = new LinkedHashMap<>();
+    private static final LinkedHashMap<String, DuckDBInstances.InstanceRef> pinnedDbRefs = new LinkedHashMap<>();
     private static final ReentrantLock pinnedDbRefsLock = new ReentrantLock();
     private static boolean pinnedDbRefsShutdownHookRegistered = false;
     private static boolean pinnedDbRefsShutdownHookRun = false;
@@ -246,7 +246,7 @@ public class DuckDBDriver implements java.sql.Driver {
             }
             // No need to hold connRef lock here, this connection is not
             // yet available to client at this point, so it cannot be closed.
-            ByteBuffer dbRef = DuckDBNative.duckdb_jdbc_create_db_ref(conn.connRef);
+            DuckDBInstances.InstanceRef dbRef = conn.instanceRef.retain();
             pinnedDbRefs.put(dbName, dbRef);
 
             if (!pinnedDbRefsShutdownHookRegistered) {
@@ -265,11 +265,11 @@ public class DuckDBDriver implements java.sql.Driver {
                 return false;
             }
             String dbName = dbNameFromUrl(url);
-            ByteBuffer dbRef = pinnedDbRefs.remove(dbName);
+            DuckDBInstances.InstanceRef dbRef = pinnedDbRefs.remove(dbName);
             if (null == dbRef) {
                 return false;
             }
-            DuckDBNative.duckdb_jdbc_destroy_db_ref(dbRef);
+            dbRef.release();
             return true;
         } finally {
             pinnedDbRefsLock.unlock();
@@ -503,14 +503,12 @@ public class DuckDBDriver implements java.sql.Driver {
         public void run() {
             pinnedDbRefsLock.lock();
             try {
-                List<ByteBuffer> dbRefsList = new ArrayList<>(pinnedDbRefs.values());
+                List<DuckDBInstances.InstanceRef> dbRefsList = new ArrayList<>(pinnedDbRefs.values());
                 Collections.reverse(dbRefsList);
-                for (ByteBuffer dbRef : dbRefsList) {
-                    DuckDBNative.duckdb_jdbc_destroy_db_ref(dbRef);
+                for (DuckDBInstances.InstanceRef dbRef : dbRefsList) {
+                    dbRef.release();
                 }
                 pinnedDbRefsShutdownHookRun = true;
-            } catch (SQLException e) {
-                e.printStackTrace();
             } finally {
                 pinnedDbRefsLock.unlock();
             }
