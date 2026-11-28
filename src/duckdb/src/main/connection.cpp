@@ -1,8 +1,10 @@
 #include "duckdb/main/connection.hpp"
 
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -38,6 +40,19 @@ Connection Connection::CreateInternal(ClientContext &caller) {
 	return con;
 }
 
+Connection Connection::CreateInTransaction(ClientContext &context) {
+	Connection con(*context.db);
+	auto &new_context = *con.context;
+	new_context.base_context = context.base_context ? context.base_context : context.shared_from_this();
+	new_context.internal_depth = context.internal_depth + 1;
+	new_context.transaction.InheritTransaction(context);
+	// names resolve as they do for the context: through the same search path
+	auto &search_path = *ClientData::Get(context).catalog_search_path;
+	ClientData::Get(new_context).catalog_search_path =
+	    make_uniq<CatalogSearchPath>(new_context, search_path.GetSetPaths());
+	return con;
+}
+
 Connection::Connection(Connection &&other) noexcept {
 	std::swap(context, other.context);
 	std::swap(connection_id, other.connection_id);
@@ -54,6 +69,8 @@ Connection::~Connection() {
 		return;
 	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
+	// outstanding results can keep the context alive, but the connection stops participating in a shared transaction
+	context->LeaveSharedTransaction();
 }
 
 string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {

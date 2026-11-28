@@ -480,24 +480,18 @@ int8_t ParquetCrypto::GetModuleHeader(const ColumnChunk &chunk, uint16_t page_or
 		// always return data page header if ordinal > 0
 		return DATA_PAGE_HEADER;
 	}
-	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
+	// There is at maximum 1 dictionary or index page header per column chunk.
+	// Bloom filters are not interleaved with the pages: they are read separately via bloom_filter_offset.
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
 		return DICTIONARY_PAGE_HEADER;
 	} else if (chunk.meta_data.__isset.index_page_offset) {
 		return OFFSET_INDEX;
-	} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-		return ParquetCrypto::BLOOM_FILTER_HEADER;
 	}
 
 	return DATA_PAGE_HEADER;
 }
 
-int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal) {
-	if (chunk.meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
-		// return bitset if it is the first page ordinal
-		return ParquetCrypto::BLOOM_FILTER_BITSET;
-	}
-
+int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type) {
 	switch (page_type) {
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2:
@@ -514,6 +508,15 @@ int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_ty
 	}
 }
 
+static int16_t CheckedPageOrdinal(uint16_t page_ordinal) {
+	if (page_ordinal > NumericCast<uint16_t>(NumericLimits<int16_t>::Maximum())) {
+		throw InvalidInputException("An encrypted column chunk has more than %d data pages, exceeding the maximum "
+		                            "page ordinal supported by Parquet modular encryption",
+		                            NumericLimits<int16_t>::Maximum() + 1);
+	}
+	return NumericCast<int16_t>(page_ordinal);
+}
+
 int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal) {
 	switch (module) {
 	case DATA_PAGE_HEADER:
@@ -521,12 +524,10 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 			page_ordinal -= 1;
 		} else if (chunk.meta_data.__isset.index_page_offset) {
 			page_ordinal -= 1;
-		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-			page_ordinal -= 1;
 		}
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	case DATA_PAGE:
-		return NumericCast<int16_t>(page_ordinal);
+		return CheckedPageOrdinal(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

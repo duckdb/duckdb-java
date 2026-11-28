@@ -4,6 +4,8 @@
 
 #include "src/planner/filter/constant_filter.cpp"
 
+#include "src/planner/filter/constant_filter_combiner.cpp"
+
 #include "src/planner/filter/dynamic_filter.cpp"
 
 #include "src/planner/filter/expression_filter.cpp"

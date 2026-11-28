@@ -12,3 +12,5 @@
 
 #include "src/common/types/variant/variant_value_convert.cpp"
 
+#include "src/common/types/variant/variant_writer.cpp"
+

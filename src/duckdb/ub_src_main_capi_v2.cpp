@@ -20,6 +20,8 @@
 
 #include "src/main/capi/v2/capi_v2_data_chunk.cpp"
 
+#include "src/main/capi/v2/capi_v2_data_source.cpp"
+
 #include "src/main/capi/v2/capi_v2_environment.cpp"
 
 #include "src/main/capi/v2/capi_v2_error.cpp"
@@ -65,6 +67,8 @@
 #include "src/main/capi/v2/capi_v2_logical_type.cpp"
 
 #include "src/main/capi/v2/capi_v2_object_cache.cpp"
+
+#include "src/main/capi/v2/capi_v2_operator.cpp"
 
 #include "src/main/capi/v2/capi_v2_option.cpp"
 

@@ -482,6 +482,8 @@ class CV2Connection : public Connection {
 public:
 	explicit CV2Connection(DuckDB &database) : Connection(database), context_handle(*context) {
 	}
+	explicit CV2Connection(Connection &&connection) : Connection(std::move(connection)), context_handle(*context) {
+	}
 
 	CV2ConnectionContext context_handle;
 };
@@ -512,6 +514,8 @@ auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader &;
 //! capi_v2_func_properties.cpp and shared by the scalar and aggregate set_property entry points.
 void SetScalarFunctionProperty(FunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
                                DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
+void SetTableFunctionProperty(FunctionStability &stability, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
+                              DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
 void SetAggregateFunctionProperty(AggregateFunctionProperties &props, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
                                   DUCKDB_V2_FUNCTION_PROPERTY_VALUE value);
 //! Set / get a generic, named function property; shared by the scalar and aggregate entry points

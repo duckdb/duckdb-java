@@ -10,5 +10,7 @@
 
 #include "src/function/scalar/system/parse_log_message.cpp"
 
+#include "src/function/scalar/system/share_transaction.cpp"
+
 #include "src/function/scalar/system/write_log.cpp"
 

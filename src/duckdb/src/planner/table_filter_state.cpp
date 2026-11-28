@@ -3,6 +3,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/string_comparison.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/selection_helpers.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -219,7 +220,8 @@ static FilterCacheProperties GetCacheProperties(const Expression &expression) {
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional);
+                                                                  bool inside_selectivity_optional,
+                                                                  optional_ptr<idx_t> cost = nullptr);
 
 static void InitializeExecutor(Context &context, const Expression &expression, ExpressionFilterState &state) {
 	state.executor = make_uniq<ExpressionExecutor>(context);
@@ -430,6 +432,12 @@ public:
 	}
 
 private:
+	template <class T, class OP>
+	static constexpr bool UseSelectionBatch() {
+		return UseBooleanSelectionBatch<T>() || std::is_same_v<OP, InlinedStringEquals> ||
+		       std::is_same_v<OP, InlinedStringNotEquals>;
+	}
+
 	template <class T, class OP, bool CAN_HAVE_NULL>
 	idx_t TemplatedSelect(const UnifiedVectorFormat &vdata, T predicate, const SelectionVector &sel,
 	                      idx_t approved_tuple_count) {
@@ -437,7 +445,7 @@ private:
 		auto &mask = vdata.validity;
 		idx_t result_count = 0;
 		idx_t i = 0;
-		if constexpr (UseBooleanSelectionBatch<T>() && !CAN_HAVE_NULL) {
+		if constexpr (UseSelectionBatch<T, OP>() && !CAN_HAVE_NULL) {
 			if (!sel.IsSet() && !vdata.sel->IsSet()) {
 				array_ptr<sel_t> output(result_sel.data(), result_sel.Capacity());
 				for (; i + 64 <= approved_tuple_count; i += 64) {
@@ -470,21 +478,43 @@ private:
 		return TemplatedSelect<T, OP, true>(vdata, predicate, sel, approved_tuple_count);
 	}
 
+	template <class T, class OP>
+	idx_t SelectEquality(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			if (constant.GetValueUnsafe<string_t>().IsInlined()) {
+				using INLINED_OP = typename InlinedStringEqualityOperator<OP>::OPERATOR;
+				return SelectOperation<string_t, INLINED_OP>(vdata, sel, approved_tuple_count);
+			}
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
+	template <class T, class OP>
+	idx_t SelectOrdering(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
+		if constexpr (std::is_same_v<T, string_t>) {
+			auto mode =
+			    StringComparison::SelectMode(vdata, constant.GetValueUnsafe<string_t>(), sel, approved_tuple_count);
+			return StringComparison::Dispatch<OP>(
+			    mode, [&](auto op) { return SelectOperation<T, decltype(op)>(vdata, sel, approved_tuple_count); });
+		}
+		return SelectOperation<T, OP>(vdata, sel, approved_tuple_count);
+	}
+
 	template <class T>
 	idx_t SelectTyped(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t approved_tuple_count) {
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
-			return SelectOperation<T, Equals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, Equals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_NOTEQUAL:
-			return SelectOperation<T, NotEquals>(vdata, sel, approved_tuple_count);
+			return SelectEquality<T, NotEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHAN:
-			return SelectOperation<T, GreaterThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SelectOperation<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, GreaterThanEquals>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHAN:
-			return SelectOperation<T, LessThan>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThan>(vdata, sel, approved_tuple_count);
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SelectOperation<T, LessThanEquals>(vdata, sel, approved_tuple_count);
+			return SelectOrdering<T, LessThanEquals>(vdata, sel, approved_tuple_count);
 		default:
 			InternalException::Throw("Unsupported comparison type for comparison filter executor");
 		}
@@ -1096,31 +1126,19 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateComparisonExecutor(const Bo
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateInExecutor(const BoundOperatorExpression &expr) {
-	auto &expressions = expr.GetChildren();
-	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN || expressions.size() < 2 ||
-	    !IsColumnReferenceExpression(*expressions[0])) {
-		return nullptr;
-	}
-	const auto type = expressions[0]->GetReturnType().InternalType();
-	if (!IsSupportedComparisonType(type)) {
+	if (!ExpressionFilter::IsNativeInFilter(expr)) {
 		return nullptr;
 	}
 	vector<Value> constants;
-	for (idx_t i = 1; i < expressions.size(); i++) {
-		if (expressions[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-			return nullptr;
-		}
-		const auto &constant = expressions[i]->Cast<BoundConstantExpression>().GetValue();
-		if (constant.type().InternalType() != type) {
-			return nullptr;
-		}
-		constants.push_back(constant);
+	for (idx_t i = 1; i < expr.GetChildren().size(); i++) {
+		constants.push_back(expr.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue());
 	}
 	return make_uniq<InFilterExecutor>(std::move(constants));
 }
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const BoundFunctionExpression &func,
-                                                                      bool inside_selectivity_optional) {
+                                                                      bool inside_selectivity_optional,
+                                                                      optional_ptr<idx_t> cost) {
 	if (func.GetChildren().size() == 2 && BoundComparisonExpression::IsComparison(func.GetExpressionType())) {
 		return TryCreateComparisonExecutor(func);
 	}
@@ -1137,7 +1155,7 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 		if (!optional_child) {
 			return make_uniq<OptionalFilterExecutor>();
 		}
-		auto child = TryCreateFastExecutor(*optional_child, true);
+		auto child = TryCreateFastExecutor(*optional_child, true, cost);
 		if (!child) {
 			return nullptr;
 		}
@@ -1162,11 +1180,14 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 	return nullptr;
 }
 
-static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
-                                                                  bool inside_selectivity_optional) {
+static unique_ptr<ExpressionFilterExecutor>
+TryCreateFastExecutor(const Expression &expression, bool inside_selectivity_optional, optional_ptr<idx_t> cost) {
+	if (cost) {
+		*cost = ExpressionHeuristics::Cost(expression);
+	}
 	switch (expression.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
-		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional);
+		return TryCreateFunctionExecutor(expression.Cast<BoundFunctionExpression>(), inside_selectivity_optional, cost);
 	case ExpressionClass::BOUND_OPERATOR:
 		return TryCreateInExecutor(expression.Cast<BoundOperatorExpression>());
 	case ExpressionClass::BOUND_CONJUNCTION: {
@@ -1181,14 +1202,35 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expressi
 		};
 		vector<FilterCost> filters;
 		const auto is_and = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+		idx_t row_filter_count = 0;
+		idx_t row_filter_index = 0;
 		for (auto &child_expr : conjunction.GetChildren()) {
-			auto child_executor = TryCreateFastExecutor(*child_expr, inside_selectivity_optional);
+			idx_t child_cost = 0;
+			auto child_executor =
+			    TryCreateFastExecutor(*child_expr, inside_selectivity_optional, is_and ? &child_cost : nullptr);
 			if (!child_executor) {
 				return nullptr;
 			}
-			filters.push_back({std::move(child_executor), is_and ? ExpressionHeuristics::Cost(*child_expr) : 0});
+			if (is_and && !ExpressionFilter::IsPruningOnlyExpression(*child_expr)) {
+				row_filter_count++;
+				row_filter_index = filters.size();
+			}
+			filters.push_back({std::move(child_executor), child_cost});
 		}
 		if (is_and) {
+			// Keep pruning hints in the expression, but avoid an AND executor for zero or one row filter.
+			if (row_filter_count == 0) {
+				if (cost) {
+					*cost = 0;
+				}
+				return make_uniq<OptionalFilterExecutor>();
+			}
+			if (row_filter_count == 1) {
+				if (cost) {
+					*cost = filters[row_filter_index].cost;
+				}
+				return std::move(filters[row_filter_index].executor);
+			}
 			std::stable_sort(filters.begin(), filters.end(),
 			                 [](const FilterCost &left, const FilterCost &right) { return left.cost < right.cost; });
 		}
