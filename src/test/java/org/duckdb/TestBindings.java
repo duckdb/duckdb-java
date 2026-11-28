@@ -82,7 +82,7 @@ public class TestBindings {
         }
 
         assertThrows(() -> { DuckDBLogicalType.of(null); }, SQLException.class);
-        assertThrows(() -> { DuckDBLogicalType.decimal(39, 0); }, SQLException.class);
+        assertThrows(() -> { DuckDBLogicalType.decimal(0, 0); }, SQLException.class);
         assertThrows(() -> { DuckDBLogicalType.decimal(10, 11); }, SQLException.class);
     }
 
@@ -663,7 +663,7 @@ public class TestBindings {
 
     public static void test_bindings_decimal_type_validation() throws Exception {
         assertThrows(() -> { duckdb_create_decimal_type(0, 0); }, SQLException.class);
-        assertThrows(() -> { duckdb_create_decimal_type(39, 0); }, SQLException.class);
+        assertThrows(() -> { duckdb_create_decimal_type(-1, 0); }, SQLException.class);
         assertThrows(() -> { duckdb_create_decimal_type(10, -1); }, SQLException.class);
         assertThrows(() -> { duckdb_create_decimal_type(10, 11); }, SQLException.class);
     }

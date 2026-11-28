@@ -52,6 +52,8 @@ extern jfieldID J_HugeInt_lower;
 extern jfieldID J_HugeInt_upper;
 extern jmethodID J_HugeInt_toBigInteger;
 extern jmethodID J_HugeInt_toBigDecimal;
+extern jclass J_Bignum;
+extern jmethodID J_Bignum_toBigDecimal;
 
 extern jclass J_DuckResultSetMeta;
 extern jmethodID J_DuckResultSetMeta_init;

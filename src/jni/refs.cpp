@@ -55,6 +55,8 @@ jfieldID J_HugeInt_lower;
 jfieldID J_HugeInt_upper;
 jmethodID J_HugeInt_toBigInteger;
 jmethodID J_HugeInt_toBigDecimal;
+jclass J_Bignum;
+jmethodID J_Bignum_toBigDecimal;
 
 jclass J_DuckResultSetMeta;
 jmethodID J_DuckResultSetMeta_init;
@@ -284,6 +286,8 @@ void create_refs(JNIEnv *env) {
 	J_HugeInt_upper = get_field_id(env, J_HugeInt, "upper", "J");
 	J_HugeInt_toBigInteger = get_static_method_id(env, J_HugeInt, "toBigInteger", "(JJ)Ljava/math/BigInteger;");
 	J_HugeInt_toBigDecimal = get_static_method_id(env, J_HugeInt, "toBigDecimal", "(JJI)Ljava/math/BigDecimal;");
+	J_Bignum = make_class_ref(env, "org/duckdb/DuckDBBignum");
+	J_Bignum_toBigDecimal = get_static_method_id(env, J_Bignum, "toBigDecimal", "([BI)Ljava/math/BigDecimal;");
 
 	J_DuckResultSetMeta = make_class_ref(env, "org/duckdb/DuckDBResultSetMetaData");
 	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",

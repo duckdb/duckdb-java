@@ -208,6 +208,9 @@ class DuckDBVector {
         }
         if (isType(DuckDBColumnType.DECIMAL)) {
             switch (meta.type_size) {
+            case DuckDBColumnTypeMetaData.VARIABLE_TYPE_SIZE:
+                // wider than 38 digits, the unscaled value arrives as a BIGNUM blob
+                return DuckDBBignum.toBigDecimal((byte[]) varlen_data[idx], meta.scale);
             case 16:
                 return new BigDecimal((int) getbuf(idx, 2).getShort()).scaleByPowerOfTen(meta.scale * -1);
             case 32:

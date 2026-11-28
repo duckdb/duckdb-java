@@ -76,9 +76,11 @@ final class DuckDBVectorTypeInfo {
             case DUCKDB_TYPE_DECIMAL: {
                 DuckDBBindings.CAPIType internalType =
                     DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_decimal_internal_type(logicalType));
+                // decimals wider than 38 digits are stored as BIGNUM blobs that have no fixed size
+                boolean wide = internalType == DuckDBBindings.CAPIType.DUCKDB_TYPE_VARINT;
+                int typeSize = wide ? DuckDBColumnTypeMetaData.VARIABLE_TYPE_SIZE : (int) (internalType.widthBytes * 8);
                 DuckDBColumnTypeMetaData decimalMeta = new DuckDBColumnTypeMetaData(
-                    (short) (internalType.widthBytes * 8), (short) duckdb_decimal_width(logicalType),
-                    (short) duckdb_decimal_scale(logicalType));
+                    typeSize, duckdb_decimal_width(logicalType), duckdb_decimal_scale(logicalType));
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.DECIMAL, capiType, internalType,
                                                 (int) internalType.widthBytes, decimalMeta);
             }

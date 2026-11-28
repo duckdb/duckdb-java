@@ -2,6 +2,7 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstdint>
 #include <cstring>
 #include <vector>
 
@@ -79,6 +80,13 @@ static uint32_t get_decimal_param(duckdb_v2_logical_type_handle lt, idx_t index)
 		return 0;
 	}
 	return res;
+}
+
+/*
+ * The width and the scale of a DECIMAL are 32-bit unsigned, the values that do not fit a Java int are clamped.
+ */
+static jint decimal_param_to_jint(uint32_t param) {
+	return param > static_cast<uint32_t>(INT32_MAX) ? INT32_MAX : static_cast<jint>(param);
 }
 
 /*
@@ -177,8 +185,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1logical
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1decimal_1type(JNIEnv *env, jclass, jint width,
                                                                                        jint scale) {
 
-	if (width < 1 || width > 38) {
-		env->ThrowNew(J_SQLException, "Invalid decimal width: expected 1..38");
+	if (width < 1) {
+		env->ThrowNew(J_SQLException, "Invalid decimal width: expected at least 1");
 		return nullptr;
 	}
 	if (scale < 0 || scale > width) {
@@ -187,8 +195,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1decimal
 	}
 	auto factory = default_factory();
 	std::vector<v2_value> values(2);
-	duckdb_v2_value_create_utinyint(factory, static_cast<uint8_t>(width), values[0].out(), nullptr);
-	duckdb_v2_value_create_utinyint(factory, static_cast<uint8_t>(scale), values[1].out(), nullptr);
+	duckdb_v2_value_create_uint(factory, static_cast<uint32_t>(width), values[0].out(), nullptr);
+	duckdb_v2_value_create_uint(factory, static_cast<uint32_t>(scale), values[1].out(), nullptr);
 	auto lt = create_type(factory, DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL, {}, std::move(values));
 	return make_logical_type_buf(env, lt);
 }
@@ -224,9 +232,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1decimal_1width(JNI
 	if (logical_type_to_capi(lt) != capi_type::DECIMAL) {
 		return 0;
 	}
-	uint32_t width = get_decimal_param(lt, 0);
-	// same as in C API v1, wider decimals report 0
-	return width > UINT8_MAX ? 0 : static_cast<jint>(width);
+	return decimal_param_to_jint(get_decimal_param(lt, 0));
 }
 
 /*
@@ -245,11 +251,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1decimal_1scale(JNI
 	if (logical_type_to_capi(lt) != capi_type::DECIMAL) {
 		return 0;
 	}
-	if (get_decimal_param(lt, 0) > UINT8_MAX) {
-		return 0;
-	}
-	uint32_t scale = get_decimal_param(lt, 1);
-	return scale > UINT8_MAX ? 0 : static_cast<jint>(scale);
+	return decimal_param_to_jint(get_decimal_param(lt, 1));
 }
 
 /*

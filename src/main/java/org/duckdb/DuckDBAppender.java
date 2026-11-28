@@ -1354,6 +1354,12 @@ public class DuckDBAppender implements AutoCloseable {
             putDecimal(col, vectorIdx, lower, upper);
             break;
         }
+        case DUCKDB_TYPE_VARINT: {
+            // wider than 38 digits, the unscaled value is stored as a BIGNUM blob
+            byte[] blob = DuckDBBignum.fromBigInteger(value.unscaledValue());
+            putStringOrBlob(col, vectorIdx, blob);
+            break;
+        }
         default:
             throw createAppenderException("invalid decimal internal type: '" + col.decimalInternalType + "'",
                                           ErrorCode.APPENDER_CONVERSION);
@@ -1362,7 +1368,7 @@ public class DuckDBAppender implements AutoCloseable {
 
     private void putStringOrBlob(Column col, long vectorIdx, byte[] bytes) throws SQLException {
         if (writeInlinedStrings && bytes.length < STRING_MAX_INLINE_BYTES) {
-            int pos = (int) (vectorIdx * col.colType.widthBytes);
+            int pos = (int) (vectorIdx * col.widthBytes());
             col.data.position(pos);
             col.data.putInt(bytes.length);
             if (bytes.length > 0) {
