@@ -376,7 +376,7 @@ jobs:
       - name: Build (patched)
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
-          patch -p1 < ./data/asan/appender_asan_failure.patch
+          patch -p1 < ./data/asan/jni_asan_failure.patch
           git diff HEAD
           make sanitized
 
@@ -399,13 +399,13 @@ jobs:
             || true
           cat asan_patched.log
           grep heap-use-after-free asan_patched.log
-          grep Java_org_duckdb_DuckDBBindings_duckdb_1appender_1create_1ext asan_patched.log
+          grep Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1execute asan_patched.log
           grep ABORTING asan_patched.log
 
       - name: Build
         if: ${{ inputs.skip_tests != 'true' }}
         run: |
-          git checkout src/jni/bindings_appender.cpp
+          git checkout src/jni/bindings_v2.cpp
           git status
           make sanitized
 

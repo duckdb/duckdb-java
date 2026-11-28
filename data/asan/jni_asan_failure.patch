@@ -1,0 +1,17 @@
+diff --git a/src/jni/bindings_v2.cpp b/src/jni/bindings_v2.cpp
+index 81f201760..17982a77c 100644
+--- a/src/jni/bindings_v2.cpp
++++ b/src/jni/bindings_v2.cpp
+@@ -163,6 +163,12 @@ static bool read_values(JNIEnv *env, jobjectArray values_j, std::vector<duckdb_v
+ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1v2_1prepared_1statement_1execute(
+     JNIEnv *env, jclass, jobject prepared_buf, jobjectArray values_j) {
+ 	CHECK_BUF_RET(prepared, prepared_buf, duckdb_v2_prepared_statement_handle, "prepared statement", nullptr);
++
++	// asan failure snippet
++	int *x = reinterpret_cast<int *>(malloc(10 * sizeof(int *)));
++	free(x);
++	x[5] = 42;
++
+ 	std::vector<duckdb_v2_value_handle> values;
+ 	if (!read_values(env, values_j, values)) {
+ 		return nullptr;
